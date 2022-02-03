@@ -1,0 +1,348 @@
+From p@tr|ck@g|r@udoux @end|ng |rom un|v-|comte@|r  Tue Feb  1 16:16:47 2022
+From: p@tr|ck@g|r@udoux @end|ng |rom un|v-|comte@|r (Patrick Giraudoux)
+Date: Tue, 1 Feb 2022 16:16:47 +0100
+Subject: [Rd] 
+ =?utf-8?q?trouble_with_package_loading=3A_Function_found_wh?=
+ =?utf-8?q?en_exporting_methods_from_the_namespace_=E2=80=98raster?=
+ =?utf-8?b?4oCZIHdoaWNoIGlzIG5vdCBTNCBnZW5lcmljOiDigJhhbGwuZXF1YWzigJk=?=
+In-Reply-To: <SV0P279MB04758AD91D4739D2BAA5F067EE259@SV0P279MB0475.NORP279.PROD.OUTLOOK.COM>
+References: <SV0P279MB04758AD91D4739D2BAA5F067EE259@SV0P279MB0475.NORP279.PROD.OUTLOOK.COM>
+Message-ID: <d18b5037-d2a2-3d1e-1400-b2bc2f29f5b5@univ-fcomte.fr>
+
+A Master student of? us has just send us the way he has found to get out 
+of the problem met. Here is the translation of his mail:
+
+I have updated R to 4.1.2 using updateR() of the package installr from 
+the R consol, specifying I want to keep the packages.
+
+I have installed Rtools from there: 
+https://cran.rstudio.com/bin/windows/Rtools/rtools40.html
+
+Then I have opened the consol and applied:
+
+write('PATH="${RTOOLS40_HOME}\\usr\\bin;${PATH}"', file = "~/.Renviron", 
+append = TRUE)
+
+then restarted R, and checked the RTools path applying:
+
+Restart R, and verify that make can be found, which should show the path 
+to your Rtools installation.
+
+Sys.which("make")
+## "C:\\rtools40\\usr\\bin\\make.exe"
+
+then install.packages("terra", type = "source")
+
+It has solved the problem, pgirmess work without trouble now.
+
+This fit with Roger's info about late updates from *.tar.gz and *.zip? 
+on CRAN messing a standard installation.
+
+Best,
+
+Patrick
+
+	[[alternative HTML version deleted]]
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Tue Feb  1 18:58:54 2022
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Tue, 1 Feb 2022 18:58:54 +0100
+Subject: [Rd] inconsistency between as.list(df) and as.list(mat) with
+ mode(mat) == "list"
+In-Reply-To: <CAD4oTHFotrgFG6m4oL7EsxdFjf=_4b485kgLzVNifwLZgGiOOA@mail.gmail.com>
+References: <CAD4oTHFotrgFG6m4oL7EsxdFjf=_4b485kgLzVNifwLZgGiOOA@mail.gmail.com>
+Message-ID: <25081.29918.780598.770679@stat.math.ethz.ch>
+
+>>>>> Gabriel Becker 
+>>>>>     on Mon, 31 Jan 2022 12:11:10 -0800 writes:
+
+  (using an HTMLifying mail client .... so I've manually pretty edited a bit)
+
+    > Hi All,
+
+    > I ran into the following the other day:
+
+    >> mat <- matrix(1:6, nrow = 2)
+    >> as.list(mat)
+    > [[1]]
+    > [1] 1
+
+    > *<snip>*
+
+    > [[6]]
+    > [1] 6
+
+    >> mat2 <- mat
+    >> mode(mat2) <- "list"
+    >> as.list(mat2)
+    >   [,1] [,2] [,3]
+    > [1,] 1    3    5
+    > [2,] 2    4    6
+
+
+    > I realize this is not guaranteed by the documentation, and the behavior is
+    > technically (if I would argue fairly subtly) as documented. Generally,
+    > however, as.list returns something without dimensions (other than length),
+    > regardless of the dimensions of the input.
+
+    > Furthermore, this behavior agrees with neither the data.frame (which are
+    > lists) method nor the non-list-mode matrix behavior which comes from the
+    > default behavior. Both result in a non-dimensioned object (the data.frame
+    > method explicitly and intentionally so).
+
+    > Matrices of mode "list" are fairly rare, in practice, I would think, but I
+    > wonder if the as.list behavior for them should agree with that of similar
+    > dimensioned objects (data.frames and non-list-mode matrices). As a user, I
+    > certainly expected it to, and had to read the docs with a careful eye
+    > before I realized what was happening and why.
+
+    > For the record, as.vector  does not drop dimension (or anything else) from
+    > data.frames nor list-matrices, so there the behaviors agree, although we do
+    > get:
+
+    >> is.vector(mat)
+    > [1] FALSE
+
+    >> is.vector(mat2)
+    > [1] FALSE
+
+    >> is.vector(mtcars)
+    > [1] FALSE
+
+
+    > Which does make the fact that for the latter two as.vector returns the
+    > objects unmodified somewhat puzzling.
+
+    > I wonder if as.list and as.vector could get a strict argument - it could
+    > default to FALSE for a deprecation period, or forever if preferred by
+    > R-core -  where attributes are always stripped for 'strict' conversions.
+
+    > Also, as a final aside, the documentation at ?as.list says:
+
+    > Attributes may be
+    > dropped unless the argument already is a list or expression.
+
+    > (This is inconsistent with functions such as ?as.character? which
+    > always drop attributes, *and is for efficiency since lists can be*
+    > *     expensive to copy.*)
+
+    > (emphasis mine). Is this still the case with shallow duplication? I was
+    > under the impression that it was not.
+
+Well, you are entering the topic Kurt Hornik and I  tried to
+improve on, 2  months ago  and then had to give up (for the time
+being) with only a small step of progress;  at the time
+producing extra work for CRAN team members who saw many dozens
+of CRAN package failing just because we tried to change
+is.vector() / as.vector()  to become slightly less inconsistent.
+
+There were many misuse problems in these CRAN packages,
+which basically used  is.vector(obj) to check if `obj` was not
+a matrix.
+
+During ca. one week in early December 2021, we (mostly me) tried
+several things and had to conditionalize (via a 
+environment variable you must set *before* starting R) in the
+end most of the change, because we saw too much R code out
+there, being based on wrong assumptions ...
+------------------------------------------------------------------------
+r81299 | maechler | 2021-12-06 13:21:26 +0100 (Mon, 06. Dec 2021) | 1 Zeile
+Ge?nderte Pfade:
+   M /trunk/doc/NEWS.Rd
+   M /trunk/src/library/base/man/vector.Rd
+   M /trunk/src/main/coerce.c
+   M /trunk/tests/demos.Rout.save
+   M /trunk/tests/reg-tests-1d.R
+
+conditionalize most as.vector/is.vector changes from 81252,81270,81274,81285-6
+------------------------------------------------------------------------
+
+I mentioned above that one problem that useRs use is.vector() when they
+shouldn't -- because they are not aware that list() and
+expression()s  also fulfill `is.vector()`.
+I would have recommended to use (is.atomic() && !is.array())
+instead conceptually called is.simplevector() in my mind.
+
+But there's another fact which dirties the water further:
+is.atomic() actually does *not* check for atomic vectors,
+but for  "atomic vector _OR_ NULL"  which I've found unfortunate.
+
+Since then, I've contemplated introducing a new primitive
+is.atomicV()  which really is true only if its argument is an
+atomic vector.
+One thing not so nice is its name. To make that even longer is
+strongly against my taste ("testing for 'atom' should be short
+and succinct ")  so maybe people would agree with   is.atom()
+
+... yes, I've somewhat hijacked your thread to talk about part
+of the underlying problem(s) that I would like to address first.
+
+
+Martin
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Tue Feb  1 21:17:08 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 1 Feb 2022 15:17:08 -0500
+Subject: [Rd] inconsistency between as.list(df) and as.list(mat) with
+ mode(mat) == "list"
+In-Reply-To: <25081.29918.780598.770679@stat.math.ethz.ch>
+References: <CAD4oTHFotrgFG6m4oL7EsxdFjf=_4b485kgLzVNifwLZgGiOOA@mail.gmail.com>
+ <25081.29918.780598.770679@stat.math.ethz.ch>
+Message-ID: <35724075-cbcf-b5cb-3001-fe186273ab9b@gmail.com>
+
+The definitions of is.vector() etc. are now so old, it's probably 
+hopeless to change them.  But there are already some definitions in the 
+rlang package that look more consistent and rational.  For example, 
+is_atomic() and is_vector() fix the issues you were complaining about.
+
+The rlang package doesn't have many hard dependencies (just utils), so 
+you could easily use it instead of the base test functions.  On the 
+other hand:  It does have a long list of packages in Suggests,
+and it doesn't really fix Gabe's issue:  as_list is more consistent than 
+as.list, but it gives a deprecation warning:
+
+Warning message:
+`as_list()` is deprecated as of rlang 0.4.0
+Please use `vctrs::vec_cast()` instead.
+This warning is displayed once per session.
+
+My conclusion is that it would make more sense to import a subset of the 
+definitions and names from rlang into base R.
+
+Duncan Murdoch
+
+On 01/02/2022 12:58 p.m., Martin Maechler wrote:
+>>>>>> Gabriel Becker
+>>>>>>      on Mon, 31 Jan 2022 12:11:10 -0800 writes:
+> 
+>    (using an HTMLifying mail client .... so I've manually pretty edited a bit)
+> 
+>      > Hi All,
+> 
+>      > I ran into the following the other day:
+> 
+>      >> mat <- matrix(1:6, nrow = 2)
+>      >> as.list(mat)
+>      > [[1]]
+>      > [1] 1
+> 
+>      > *<snip>*
+> 
+>      > [[6]]
+>      > [1] 6
+> 
+>      >> mat2 <- mat
+>      >> mode(mat2) <- "list"
+>      >> as.list(mat2)
+>      >   [,1] [,2] [,3]
+>      > [1,] 1    3    5
+>      > [2,] 2    4    6
+> 
+> 
+>      > I realize this is not guaranteed by the documentation, and the behavior is
+>      > technically (if I would argue fairly subtly) as documented. Generally,
+>      > however, as.list returns something without dimensions (other than length),
+>      > regardless of the dimensions of the input.
+> 
+>      > Furthermore, this behavior agrees with neither the data.frame (which are
+>      > lists) method nor the non-list-mode matrix behavior which comes from the
+>      > default behavior. Both result in a non-dimensioned object (the data.frame
+>      > method explicitly and intentionally so).
+> 
+>      > Matrices of mode "list" are fairly rare, in practice, I would think, but I
+>      > wonder if the as.list behavior for them should agree with that of similar
+>      > dimensioned objects (data.frames and non-list-mode matrices). As a user, I
+>      > certainly expected it to, and had to read the docs with a careful eye
+>      > before I realized what was happening and why.
+> 
+>      > For the record, as.vector  does not drop dimension (or anything else) from
+>      > data.frames nor list-matrices, so there the behaviors agree, although we do
+>      > get:
+> 
+>      >> is.vector(mat)
+>      > [1] FALSE
+> 
+>      >> is.vector(mat2)
+>      > [1] FALSE
+> 
+>      >> is.vector(mtcars)
+>      > [1] FALSE
+> 
+> 
+>      > Which does make the fact that for the latter two as.vector returns the
+>      > objects unmodified somewhat puzzling.
+> 
+>      > I wonder if as.list and as.vector could get a strict argument - it could
+>      > default to FALSE for a deprecation period, or forever if preferred by
+>      > R-core -  where attributes are always stripped for 'strict' conversions.
+> 
+>      > Also, as a final aside, the documentation at ?as.list says:
+> 
+>      > Attributes may be
+>      > dropped unless the argument already is a list or expression.
+> 
+>      > (This is inconsistent with functions such as ?as.character? which
+>      > always drop attributes, *and is for efficiency since lists can be*
+>      > *     expensive to copy.*)
+> 
+>      > (emphasis mine). Is this still the case with shallow duplication? I was
+>      > under the impression that it was not.
+> 
+> Well, you are entering the topic Kurt Hornik and I  tried to
+> improve on, 2  months ago  and then had to give up (for the time
+> being) with only a small step of progress;  at the time
+> producing extra work for CRAN team members who saw many dozens
+> of CRAN package failing just because we tried to change
+> is.vector() / as.vector()  to become slightly less inconsistent.
+> 
+> There were many misuse problems in these CRAN packages,
+> which basically used  is.vector(obj) to check if `obj` was not
+> a matrix.
+> 
+> During ca. one week in early December 2021, we (mostly me) tried
+> several things and had to conditionalize (via a
+> environment variable you must set *before* starting R) in the
+> end most of the change, because we saw too much R code out
+> there, being based on wrong assumptions ...
+> ------------------------------------------------------------------------
+> r81299 | maechler | 2021-12-06 13:21:26 +0100 (Mon, 06. Dec 2021) | 1 Zeile
+> Ge?nderte Pfade:
+>     M /trunk/doc/NEWS.Rd
+>     M /trunk/src/library/base/man/vector.Rd
+>     M /trunk/src/main/coerce.c
+>     M /trunk/tests/demos.Rout.save
+>     M /trunk/tests/reg-tests-1d.R
+> 
+> conditionalize most as.vector/is.vector changes from 81252,81270,81274,81285-6
+> ------------------------------------------------------------------------
+> 
+> I mentioned above that one problem that useRs use is.vector() when they
+> shouldn't -- because they are not aware that list() and
+> expression()s  also fulfill `is.vector()`.
+> I would have recommended to use (is.atomic() && !is.array())
+> instead conceptually called is.simplevector() in my mind.
+> 
+> But there's another fact which dirties the water further:
+> is.atomic() actually does *not* check for atomic vectors,
+> but for  "atomic vector _OR_ NULL"  which I've found unfortunate.
+> 
+> Since then, I've contemplated introducing a new primitive
+> is.atomicV()  which really is true only if its argument is an
+> atomic vector.
+> One thing not so nice is its name. To make that even longer is
+> strongly against my taste ("testing for 'atom' should be short
+> and succinct ")  so maybe people would agree with   is.atom()
+> 
+> ... yes, I've somewhat hijacked your thread to talk about part
+> of the underlying problem(s) that I would like to address first.
+> 
+> 
+> Martin
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
