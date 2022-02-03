@@ -1,0 +1,3779 @@
+From jeroen @end|ng |rom berke|ey@edu  Wed Jul  1 16:41:00 2020
+From: jeroen @end|ng |rom berke|ey@edu (Jeroen Ooms)
+Date: Wed, 1 Jul 2020 16:41:00 +0200
+Subject: [Rd] Changes in MiKTeX
+Message-ID: <CABFfbXtp96g=Za0WzzVtq4B6rDNQz0ZfAJkwj6wCQNjhbZQ2-Q@mail.gmail.com>
+
+MiKTeX released a major new version this week, with some breaking
+changes that may be important for Windows users and sysadmins.
+
+The MiKTeX versioning has changed to a date-based scheme. The previous
+version was called 2.9, the distribution is now called miktex-20.6.
+
+The default installation path has changed from "C:/Program
+Files/MiKTeX 2.9/" to "C:/Program Files/MiKTeX/". Hence this may
+require updating scripts that set the PATH to pdflatex and others. I
+have updated the r-base build script, so people that use this to build
+R locally need to make sure MikTeX is available at the new path.
+
+Finally, the 20.6 release contains a bad bug that causes pdftex to not
+work at all, including failing to build R manuals:
+https://github.com/MiKTeX/miktex/issues/568 . It seems to have been
+fixed and a new pdftex is rolled out via the miktex package manager,
+so make sure to update the miktex packages after installing
+miktex-20.6 (or wait for the 20.7 release).
+
+
+From v|ncent@gou|et @end|ng |rom me@com  Wed Jul  8 17:28:10 2020
+From: v|ncent@gou|et @end|ng |rom me@com (Vincent Goulet)
+Date: Wed, 8 Jul 2020 11:28:10 -0400
+Subject: [Rd] Adding RtangleRuncode and RtangleFinish to exports of utils
+Message-ID: <B217C0E6-360B-4732-9FEB-BB4A4BFB80A3@me.com>
+
+Hi,
+
+Could R-Core consider adding 'RtangleRuncode' and 'RtangleFinish' to the exports of utils. Their weave equivalent 'makeRweaveLatexCodeRunner' and ?'RweaveLatexFinish' are exported, as well as the other tangle utility functions 'RtangleSetup' and 'RtangleWritedoc'.
+
+The rationale is not just symmetry. ;-) 
+
+I'm finishing a small package that will provide "enhanced" drivers for Sweave that are heavily based on the standard RweaveLatex and Rtangle drivers. So much so that I can reuse most of the utiity functions called by RweaveLatex() and Rtangle(). Now, 'RtangleRuncode' and 'RtangleFinish' are not exported and 'R CMD check' really does not like that I use the ::: operator to reach the functions.
+
+The alternative is to duplicate the code verbatim in my package. This does not seem very sensible, especially since I would then need to track any changes to the aforementioned functions to remain in line.
+
+Here is the proposed patch against the current r-devel tree:
+
+Index: src/library/utils/NAMESPACE
+===================================================================
+--- src/library/utils/NAMESPACE	(revision 78794)
++++ src/library/utils/NAMESPACE	(working copy)
+@@ -166,9 +166,9 @@
+        Sweave, SweaveSyntConv, SweaveSyntaxLatex, SweaveSyntaxNoweb,
+        RtangleWritedoc, RweaveChunkPrefix, RweaveEvalWithOpt,
+        RweaveTryStop, SweaveHooks, RweaveLatexWritedoc,
+-       RweaveLatexOptions, RweaveLatexFinish,
++       RweaveLatexOptions, RweaveLatexFinish, RtangleFinish,
+        .RtangleCodeLabel,
+-       makeRweaveLatexCodeRunner)
++       makeRweaveLatexCodeRunner, RtangleRuncode)
+ 
+ if(tools:::.OStype() == "unix") {
+ export(nsl)
+
+Best,
+
+v.
+
+From We|g@nd@Stephen @end|ng |rom m@yo@edu  Wed Jul  8 20:44:40 2020
+From: We|g@nd@Stephen @end|ng |rom m@yo@edu (Weigand, Stephen D.)
+Date: Wed, 08 Jul 2020 18:44:40 +0000
+Subject: [Rd] 
+ [EXTERNAL] Adding RtangleRuncode and RtangleFinish to exports
+ of utils
+In-Reply-To: <B217C0E6-360B-4732-9FEB-BB4A4BFB80A3@me.com>
+References: <B217C0E6-360B-4732-9FEB-BB4A4BFB80A3@me.com>
+Message-ID: <28fddd$e3767p@ironport10.mayo.edu>
+
+Hi,
+For what it's worth, I would like to second this.  I have a small Sweave driver (https://r-forge.r-project.org/R/?group_id=1857) that uses:
+
+RtangleRtf <- function(){
+    list(setup = RtangleSetup,
+         runcode = utils:::RtangleRuncode, # <---
+         writedoc = RtangleWritedoc,
+         finish = utils:::RtangleFinish, # <---
+         checkopts = RweaveRtfOptions)    
+}
+
+And of course using ':::' generates warnings.  Elsewhere I use
+
+utils:::SweaveParseOptions(opts, object$options,
+                                                     RweaveRtfOptions)
+
+and so if it is sensible to also export 'SweaveParseOptions' then that would be great.
+
+With appreciation,
+Stephen
+
+-----Original Message-----
+From: R-devel [mailto:r-devel-bounces at r-project.org] On Behalf Of Vincent Goulet via R-devel
+Sent: Wednesday, July 08, 2020 10:28 AM
+To: R-devel at r-project.org
+Subject: [EXTERNAL] [Rd] Adding RtangleRuncode and RtangleFinish to exports of utils
+
+Hi,
+
+Could R-Core consider adding 'RtangleRuncode' and 'RtangleFinish' to the exports of utils. Their weave equivalent 'makeRweaveLatexCodeRunner' and ?'RweaveLatexFinish' are exported, as well as the other tangle utility functions 'RtangleSetup' and 'RtangleWritedoc'.
+
+The rationale is not just symmetry. ;-) 
+
+I'm finishing a small package that will provide "enhanced" drivers for Sweave that are heavily based on the standard RweaveLatex and Rtangle drivers. So much so that I can reuse most of the utiity functions called by RweaveLatex() and Rtangle(). Now, 'RtangleRuncode' and 'RtangleFinish' are not exported and 'R CMD check' really does not like that I use the ::: operator to reach the functions.
+
+The alternative is to duplicate the code verbatim in my package. This does not seem very sensible, especially since I would then need to track any changes to the aforementioned functions to remain in line.
+
+Here is the proposed patch against the current r-devel tree:
+
+Index: src/library/utils/NAMESPACE
+===================================================================
+--- src/library/utils/NAMESPACE	(revision 78794)
++++ src/library/utils/NAMESPACE	(working copy)
+@@ -166,9 +166,9 @@
+        Sweave, SweaveSyntConv, SweaveSyntaxLatex, SweaveSyntaxNoweb,
+        RtangleWritedoc, RweaveChunkPrefix, RweaveEvalWithOpt,
+        RweaveTryStop, SweaveHooks, RweaveLatexWritedoc,
+-       RweaveLatexOptions, RweaveLatexFinish,
++       RweaveLatexOptions, RweaveLatexFinish, RtangleFinish,
+        .RtangleCodeLabel,
+-       makeRweaveLatexCodeRunner)
++       makeRweaveLatexCodeRunner, RtangleRuncode)
+ 
+ if(tools:::.OStype() == "unix") {
+ export(nsl)
+
+Best,
+
+v.
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+From @hot@och|1990 @end|ng |rom gm@||@com  Thu Jul  9 22:21:06 2020
+From: @hot@och|1990 @end|ng |rom gm@||@com (=?UTF-8?B?44Kq44OB44K344On44Km44K/?=)
+Date: Fri, 10 Jul 2020 05:21:06 +0900
+Subject: [Rd] Is this surprising behavior of tkimage.create function a bug?
+Message-ID: <CANOYX1QL4N=9gYTCDTy3pwHWHCB33rpJ67ABMJeoF-VHUFNY-w@mail.gmail.com>
+
+tkimage.create function can read some images but can't read the other
+images.
+We can reproduce it by running the code below.
+-------------------------------------------------------------------------------------
+library(tcltk)
+library(magick)
+
+# works fine
+tmp <- tempfile(fileext = ".gif")
+image_write(logo, tmp)
+image_tcl <- tkimage.create("photo", "image_tcl", file = tmp)
+
+# doesn't work fine
+logo2 <- image_convert(logo, format = "jpeg")
+tmp2 <- tempfile(fileext = ".jpg")
+image_write(logo2, tmp2)
+image_tcl <- tkimage.create("photo", "image_tcl2", file = tmp2)
+------------------------------------------------------------------------------------
+
+The last line returns an error below.
+> Error in structure(.External(.C_dotTclObjv, objv), class = "tclObj") :
+  [tcl] couldn't recognize data in image file
+"C:\Users\shota\AppData\Local\Temp\RtmpmmOriu\filed04c9e079d4.jpg".
+
+Is this a bug?
+
+ My session info is shown below.
+> R Under development (unstable) (2020-07-08 r78794)
+Platform: x86_64-w64-mingw32/x64 (64-bit)
+Running under: Windows 10 x64 (build 18362)
+
+Matrix products: default
+
+locale:
+[1] LC_COLLATE=Japanese_Japan.932  LC_CTYPE=Japanese_Japan.932
+[3] LC_MONETARY=Japanese_Japan.932 LC_NUMERIC=C
+[5] LC_TIME=Japanese_Japan.932
+
+attached base packages:
+[1] tcltk     stats     graphics  grDevices utils     datasets
+[7] methods   base
+
+other attached packages:
+[1] magick_2.4.0
+
+loaded via a namespace (and not attached):
+[1] compiler_4.1.0 magrittr_1.5   Rcpp_1.0.5
+
+	[[alternative HTML version deleted]]
+
+
+From co|e@m|||er42 @end|ng |rom gm@||@com  Fri Jul 10 02:38:10 2020
+From: co|e@m|||er42 @end|ng |rom gm@||@com (Cole Miller)
+Date: Thu, 9 Jul 2020 20:38:10 -0400
+Subject: [Rd] lapply and vapply Primitive Documentation
+Message-ID: <CAAat6s6ruojRSRdjN_OAzGwUFcH8XaB6sQGuZRL6jTT-fs0dDA@mail.gmail.com>
+
+The documentation of ?lapply includes:
+
+> lapply and vapply are primitive functions.
+
+However, both evaluate to FALSE in `is.primitive()`:
+
+    is.primitive(vapply)
+    #FALSE
+
+    is.primitive(lapply)
+    #FALSE
+
+It appears that they are not primitives and that the documentation
+might be outdated. Thank you for your time and work.
+
+Cole Miller
+
+P.S. During research, my favorite `help()` is `?.Internal()`: "Only
+true R wizards should even consider using this function..." Thanks
+again!
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Fri Jul 10 09:51:57 2020
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Fri, 10 Jul 2020 09:51:57 +0200
+Subject: [Rd] lapply and vapply Primitive Documentation
+In-Reply-To: <CAAat6s6ruojRSRdjN_OAzGwUFcH8XaB6sQGuZRL6jTT-fs0dDA@mail.gmail.com>
+References: <CAAat6s6ruojRSRdjN_OAzGwUFcH8XaB6sQGuZRL6jTT-fs0dDA@mail.gmail.com>
+Message-ID: <24328.7709.465307.799026@stat.math.ethz.ch>
+
+>>>>> Cole Miller 
+>>>>>     on Thu, 9 Jul 2020 20:38:10 -0400 writes:
+
+    > The documentation of ?lapply includes:
+    >> lapply and vapply are primitive functions.
+
+    > However, both evaluate to FALSE in `is.primitive()`:
+
+    >     is.primitive(vapply) #FALSE
+
+    >     is.primitive(lapply) #FALSE
+
+    > It appears that they are not primitives and that the
+    > documentation might be outdated. Thank you for your time
+    > and work.
+
+Thank you, Cole.
+Indeed, they were primitive originally (but e.g. lapply() seems
+to have become .Internal with
+   r7885 | ripley | 2000-01-31 08:58:59 +0100 
+i.e. about 4 weeks *before* release of R 1.0.0
+
+Changes made to both 'R-devel' and 'R-patched'.
+Martin
+
+
+    > Cole Miller
+
+    > P.S. During research, my favorite `help()` is
+    > `?.Internal()`: "Only true R wizards should even consider
+    > using this function..." Thanks again!
+
+;-)
+
+
+From mtmorg@n@b|oc @end|ng |rom gm@||@com  Fri Jul 10 10:16:37 2020
+From: mtmorg@n@b|oc @end|ng |rom gm@||@com (Martin Morgan)
+Date: Fri, 10 Jul 2020 08:16:37 +0000
+Subject: [Rd] lapply and vapply Primitive Documentation
+In-Reply-To: <24328.7709.465307.799026@stat.math.ethz.ch>
+References: <CAAat6s6ruojRSRdjN_OAzGwUFcH8XaB6sQGuZRL6jTT-fs0dDA@mail.gmail.com>
+ <24328.7709.465307.799026@stat.math.ethz.ch>
+Message-ID: <BL0PR04MB6609C94F6DA2295210C3A4AEF9650@BL0PR04MB6609.namprd04.prod.outlook.com>
+
+Was hoping for an almost record old bug fix (older than some R users!), but apparently the documentation bug is only a decade old (maybe only older than some precious R users)
+
+  https://github.com/wch/r-source/blame/2118f1d0ff70c1ebd06148b6cb7659efe5ff4d99/src/library/base/man/lapply.Rd#L116
+
+(I don't see lapply / vapply referenced as primitive in the original text changed by the commit).
+
+Martin Morgan
+
+?On 7/10/20, 3:52 AM, "R-devel on behalf of Martin Maechler" <r-devel-bounces at r-project.org on behalf of maechler at stat.math.ethz.ch> wrote:
+
+    >>>>> Cole Miller 
+    >>>>>     on Thu, 9 Jul 2020 20:38:10 -0400 writes:
+
+        > The documentation of ?lapply includes:
+        >> lapply and vapply are primitive functions.
+
+        > However, both evaluate to FALSE in `is.primitive()`:
+
+        >     is.primitive(vapply) #FALSE
+
+        >     is.primitive(lapply) #FALSE
+
+        > It appears that they are not primitives and that the
+        > documentation might be outdated. Thank you for your time
+        > and work.
+
+    Thank you, Cole.
+    Indeed, they were primitive originally (but e.g. lapply() seems
+    to have become .Internal with
+       r7885 | ripley | 2000-01-31 08:58:59 +0100 
+    i.e. about 4 weeks *before* release of R 1.0.0
+
+    Changes made to both 'R-devel' and 'R-patched'.
+    Martin
+
+
+        > Cole Miller
+
+        > P.S. During research, my favorite `help()` is
+        > `?.Internal()`: "Only true R wizards should even consider
+        > using this function..." Thanks again!
+
+    ;-)
+
+    ______________________________________________
+    R-devel at r-project.org mailing list
+    https://stat.ethz.ch/mailman/listinfo/r-devel
+
+From @tephen@peder@on @end|ng |rom @de|@|de@edu@@u  Fri Jul 10 17:54:02 2020
+From: @tephen@peder@on @end|ng |rom @de|@|de@edu@@u (Stephen Martin Pederson)
+Date: Fri, 10 Jul 2020 15:54:02 +0000
+Subject: [Rd] Strange behaviour of methods::slot() when returning a tibble
+In-Reply-To: <ME2P282MB0116BCAB37495E9A8687290FD4650@ME2P282MB0116.AUSP282.PROD.OUTLOOK.COM>
+References: <ME2P282MB0116BCAB37495E9A8687290FD4650@ME2P282MB0116.AUSP282.PROD.OUTLOOK.COM>
+Message-ID: <ME2P282MB011640F08A60CA1274597A34D4650@ME2P282MB0116.AUSP282.PROD.OUTLOOK.COM>
+
+I have an S4 object class defined in a Bioconductor package which contains multiple slots, some of which are tibbles, whilst others are vectors. If I call
+
+slot(object, name)
+
+where 'name' is an slot that contains a vector, everything works as expected. However, when I call slot(object, name) where 'name' is an slot that contains a tibble I get the following warning:
+
+
+Warning message:
+`...` is not empty.
+
+We detected these problematic arguments:
+* `needs_dots`
+
+These dots only exist to allow future extensions and should be empty.
+Did you misspecify an argument?
+Making 'packages.html' ... done
+
+Wrapping the call in suppressWarnings() doesn't stop this, and this warning is printed every time the resultant object is called, e.g. df <- slot(object, name); df, would not print the error on the first call, but would print the warning every time df is  printed.
+
+For an MWE
+
+
+setClass("track", slots = c(x="numeric", y="data.frame"))
+myTrack <- new("track", x = -4:4, y = tibble(y = 1))
+
+myTrack
+
+df <- slot(myTrack, "y")
+df
+
+The package passes R CMD check even though this warning is produced in most examples. Changing to a generic S3 data.frame also doesn't produce this error. I'm running the following configuration:
+
+
+R version 4.0.2 (2020-06-22)
+Platform: x86_64-pc-linux-gnu (64-bit)
+Running under: Ubuntu 18.04.4 LTS
+
+Matrix products: default
+BLAS:   /usr/lib/x86_64-linux-gnu/blas/libblas.so.3.7.1
+LAPACK: /usr/lib/x86_64-linux-gnu/lapack/liblapack.so.3.7.1
+
+locale:
+ [1] LC_CTYPE=en_AU.UTF-8       LC_NUMERIC=C               LC_TIME=en_AU.UTF-8
+ [4] LC_COLLATE=en_AU.UTF-8     LC_MONETARY=en_AU.UTF-8    LC_MESSAGES=en_AU.UTF-8
+ [7] LC_PAPER=en_AU.UTF-8       LC_NAME=C                  LC_ADDRESS=C
+[10] LC_TELEPHONE=C             LC_MEASUREMENT=en_AU.UTF-8 LC_IDENTIFICATION=C
+
+attached base packages:
+[1] parallel  stats     graphics  grDevices utils     datasets  methods   base
+
+other attached packages:
+[1] ngsReports_1.5.3    tibble_3.0.2        ggplot2_3.3.2       BiocGenerics_0.34.0
+
+Thanks in advance,
+
+Steve
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Fri Jul 10 18:08:24 2020
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Fri, 10 Jul 2020 12:08:24 -0400
+Subject: [Rd] 
+ Strange behaviour of methods::slot() when returning a tibble
+In-Reply-To: <ME2P282MB011640F08A60CA1274597A34D4650@ME2P282MB0116.AUSP282.PROD.OUTLOOK.COM>
+References: <ME2P282MB0116BCAB37495E9A8687290FD4650@ME2P282MB0116.AUSP282.PROD.OUTLOOK.COM>
+ <ME2P282MB011640F08A60CA1274597A34D4650@ME2P282MB0116.AUSP282.PROD.OUTLOOK.COM>
+Message-ID: <bd38e1d3-e965-21f0-28d3-769d26217872@gmail.com>
+
+I don't get any warning (but am using slightly different versions of 
+everything than you are).
+
+You can find where that message is coming from by running 
+options(warn=2) first, which will convert it to an error.
+
+Duncan Murdoch
+
+On 10/07/2020 11:54 a.m., Stephen Martin Pederson wrote:
+> I have an S4 object class defined in a Bioconductor package which contains multiple slots, some of which are tibbles, whilst others are vectors. If I call
+> 
+> slot(object, name)
+> 
+> where 'name' is an slot that contains a vector, everything works as expected. However, when I call slot(object, name) where 'name' is an slot that contains a tibble I get the following warning:
+> 
+> 
+> Warning message:
+> `...` is not empty.
+> 
+> We detected these problematic arguments:
+> * `needs_dots`
+> 
+> These dots only exist to allow future extensions and should be empty.
+> Did you misspecify an argument?
+> Making 'packages.html' ... done
+> 
+> Wrapping the call in suppressWarnings() doesn't stop this, and this warning is printed every time the resultant object is called, e.g. df <- slot(object, name); df, would not print the error on the first call, but would print the warning every time df is  printed.
+> 
+> For an MWE
+> 
+> 
+> setClass("track", slots = c(x="numeric", y="data.frame"))
+> myTrack <- new("track", x = -4:4, y = tibble(y = 1))
+> 
+> myTrack
+> 
+> df <- slot(myTrack, "y")
+> df
+> 
+> The package passes R CMD check even though this warning is produced in most examples. Changing to a generic S3 data.frame also doesn't produce this error. I'm running the following configuration:
+> 
+> 
+> R version 4.0.2 (2020-06-22)
+> Platform: x86_64-pc-linux-gnu (64-bit)
+> Running under: Ubuntu 18.04.4 LTS
+> 
+> Matrix products: default
+> BLAS:   /usr/lib/x86_64-linux-gnu/blas/libblas.so.3.7.1
+> LAPACK: /usr/lib/x86_64-linux-gnu/lapack/liblapack.so.3.7.1
+> 
+> locale:
+>   [1] LC_CTYPE=en_AU.UTF-8       LC_NUMERIC=C               LC_TIME=en_AU.UTF-8
+>   [4] LC_COLLATE=en_AU.UTF-8     LC_MONETARY=en_AU.UTF-8    LC_MESSAGES=en_AU.UTF-8
+>   [7] LC_PAPER=en_AU.UTF-8       LC_NAME=C                  LC_ADDRESS=C
+> [10] LC_TELEPHONE=C             LC_MEASUREMENT=en_AU.UTF-8 LC_IDENTIFICATION=C
+> 
+> attached base packages:
+> [1] parallel  stats     graphics  grDevices utils     datasets  methods   base
+> 
+> other attached packages:
+> [1] ngsReports_1.5.3    tibble_3.0.2        ggplot2_3.3.2       BiocGenerics_0.34.0
+> 
+> Thanks in advance,
+> 
+> Steve
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From @tephen@peder@on @end|ng |rom @de|@|de@edu@@u  Fri Jul 10 18:16:25 2020
+From: @tephen@peder@on @end|ng |rom @de|@|de@edu@@u (Stephen Martin Pederson)
+Date: Fri, 10 Jul 2020 16:16:25 +0000
+Subject: [Rd] 
+ Strange behaviour of methods::slot() when returning a tibble
+In-Reply-To: <bd38e1d3-e965-21f0-28d3-769d26217872@gmail.com>
+References: <ME2P282MB0116BCAB37495E9A8687290FD4650@ME2P282MB0116.AUSP282.PROD.OUTLOOK.COM>
+ <ME2P282MB011640F08A60CA1274597A34D4650@ME2P282MB0116.AUSP282.PROD.OUTLOOK.COM>,
+ <bd38e1d3-e965-21f0-28d3-769d26217872@gmail.com>
+Message-ID: <ME2P282MB01162B5DAD92A6443870B71CD4650@ME2P282MB0116.AUSP282.PROD.OUTLOOK.COM>
+
+Thanks Duncan. Much appreciated & I can now see it's ellipsis::check_dots_empty() causing the trouble. I'll take the question to the github issues page for that package.
+
+All the best,
+
+Steve
+________________________________
+From: Duncan Murdoch <murdoch.duncan at gmail.com>
+Sent: Saturday, 11 July 2020 1:38 AM
+To: Stephen Martin Pederson <stephen.pederson at adelaide.edu.au>; r-devel at r-project.org <r-devel at r-project.org>
+Subject: Re: [Rd] Strange behaviour of methods::slot() when returning a tibble
+
+I don't get any warning (but am using slightly different versions of
+everything than you are).
+
+You can find where that message is coming from by running
+options(warn=2) first, which will convert it to an error.
+
+Duncan Murdoch
+
+On 10/07/2020 11:54 a.m., Stephen Martin Pederson wrote:
+> I have an S4 object class defined in a Bioconductor package which contains multiple slots, some of which are tibbles, whilst others are vectors. If I call
+>
+> slot(object, name)
+>
+> where 'name' is an slot that contains a vector, everything works as expected. However, when I call slot(object, name) where 'name' is an slot that contains a tibble I get the following warning:
+>
+>
+> Warning message:
+> `...` is not empty.
+>
+> We detected these problematic arguments:
+> * `needs_dots`
+>
+> These dots only exist to allow future extensions and should be empty.
+> Did you misspecify an argument?
+> Making 'packages.html' ... done
+>
+> Wrapping the call in suppressWarnings() doesn't stop this, and this warning is printed every time the resultant object is called, e.g. df <- slot(object, name); df, would not print the error on the first call, but would print the warning every time df is  printed.
+>
+> For an MWE
+>
+>
+> setClass("track", slots = c(x="numeric", y="data.frame"))
+> myTrack <- new("track", x = -4:4, y = tibble(y = 1))
+>
+> myTrack
+>
+> df <- slot(myTrack, "y")
+> df
+>
+> The package passes R CMD check even though this warning is produced in most examples. Changing to a generic S3 data.frame also doesn't produce this error. I'm running the following configuration:
+>
+>
+> R version 4.0.2 (2020-06-22)
+> Platform: x86_64-pc-linux-gnu (64-bit)
+> Running under: Ubuntu 18.04.4 LTS
+>
+> Matrix products: default
+> BLAS:   /usr/lib/x86_64-linux-gnu/blas/libblas.so.3.7.1
+> LAPACK: /usr/lib/x86_64-linux-gnu/lapack/liblapack.so.3.7.1
+>
+> locale:
+>   [1] LC_CTYPE=en_AU.UTF-8       LC_NUMERIC=C               LC_TIME=en_AU.UTF-8
+>   [4] LC_COLLATE=en_AU.UTF-8     LC_MONETARY=en_AU.UTF-8    LC_MESSAGES=en_AU.UTF-8
+>   [7] LC_PAPER=en_AU.UTF-8       LC_NAME=C                  LC_ADDRESS=C
+> [10] LC_TELEPHONE=C             LC_MEASUREMENT=en_AU.UTF-8 LC_IDENTIFICATION=C
+>
+> attached base packages:
+> [1] parallel  stats     graphics  grDevices utils     datasets  methods   base
+>
+> other attached packages:
+> [1] ngsReports_1.5.3    tibble_3.0.2        ggplot2_3.3.2       BiocGenerics_0.34.0
+>
+> Thanks in advance,
+>
+> Steve
+>
+>        [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+	[[alternative HTML version deleted]]
+
+
+From wc@rdoen @end|ng |rom gm@||@com  Fri Jul 10 20:59:37 2020
+From: wc@rdoen @end|ng |rom gm@||@com (Wim R. Cardoen)
+Date: Fri, 10 Jul 2020 12:59:37 -0600
+Subject: [Rd] Compilation error for R 4.0.2
+Message-ID: <CABNPx=zNLOiO=bHGhkW9nvP26OMMVjRp=rTiL0YgBf1=sm3tiA@mail.gmail.com>
+
+Hello,
+
+I experienced a compiler error when I tried to compile the latest version
+of R i.e. R4.0.2
+making iosupport.d from iosupport.c
+making lapack.d from lapack.c
+making list.d from list.c
+making localecharset.d from localecharset.c
+grep.c(74): catastrophic error: cannot open source file "pcre2.h"
+  # include<pcre2.h>
+(The pcre2.h header file is actually present!)
+
+
+I used the following compiler flags:
+# PCRE2:
+# -----
+setenv CC gcc
+setenv CFLAGS " -O2 -fPIC "
+./configure --prefix=/uufs/chpc.utah.edu/sys/installdir/pcre2/10.35 \
+            --enable-pcre2-16 --enable-pcre2-32 --with-pic
+
+module purge
+module load intel/2019.5.281
+
+# USe a modern version of curl & pcre2 (The current one on Centos 7 is TOO
+old)
+setenv CURLDIR "/uufs/chpc.utah.edu/sys/installdir/curl/7.65.3"
+setenv PCRE2DIR "/uufs/chpc.utah.edu/sys/installdir/pcre2/10.35"
+
+setenv PATH ${PCRE2DIR}/bin:$PATH
+
+ Setting Compiler & linker flags:
+setenv CC icc
+setenv CXX icpc
+setenv F77 ifort
+setenv FC ifort
+setenv CFLAGS   " -axCORE-AVX512,CORE-AVX2,AVX,SSE4.2 -O3 -qopenmp
+-fp-model precise -fPIC -I${MKLROOT}/include -I${CURLDIR}/include
+                  -I${PCRE2DIR}/include "
+setenv CXXFLAGS " ${CFLAGS} "
+setenv FFLAGS   " ${CFLAGS} "
+setenv FCFLAGS  " ${CFLAGS} "
+setenv LDFLAGS  " -Wl,-rpath=${MKLROOT}/lib/intel64_lin
+-L${MKLROOT}/lib/intel64_lin -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core
+                  -Wl,-rpath=/uufs/
+chpc.utah.edu/sys/installdir/intel/compilers_and_libraries_2019.5.281/linux/compiler/lib/intel64_lin
+                           -L/uufs/
+chpc.utah.edu/sys/installdir/intel/compilers_and_libraries_2019.5.281/linux/compiler/lib/intel64_lin
+                           -liomp5 -lpthread -ldl -Wl,-rpath=${CURLDIR}/lib
+-L${CURLDIR}/lib -lcurl
+                           -Wl,-rpath=${PCRE2DIR}/lib -L${PCRE2DIR}/lib
+ -lpcre2-8 -lpcre2-posix "
+
+./configure --prefix=/uufs/chpc.utah.edu/sys/installdir/R/4.0.2i
+--enable-R-profiling --enable-R-shlib --enable-memory-profiling
+--enable-java --enable-shared=yes --with-blas="$LDFLAGS" --with-readline
+--with-cairo --with-tcltk --with-libpng --with-jpeglib --with-libtiff
+--with-ICU --with-pic --with-x --with-lapack --with-pcre2
+
+I also appended the corresponding config.log:
+
+Thank you,
+
+Wim
+
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Sat Jul 11 12:47:16 2020
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Sat, 11 Jul 2020 12:47:16 +0200
+Subject: [Rd] Compilation error for R 4.0.2
+In-Reply-To: <CABNPx=zNLOiO=bHGhkW9nvP26OMMVjRp=rTiL0YgBf1=sm3tiA@mail.gmail.com>
+References: <CABNPx=zNLOiO=bHGhkW9nvP26OMMVjRp=rTiL0YgBf1=sm3tiA@mail.gmail.com>
+Message-ID: <24329.39092.235031.880505@hornik.net>
+
+>>>>> Wim R Cardoen writes:
+
+> Hello,
+> I experienced a compiler error when I tried to compile the latest version
+> of R i.e. R4.0.2
+> making iosupport.d from iosupport.c
+> making lapack.d from lapack.c
+> making list.d from list.c
+> making localecharset.d from localecharset.c
+> grep.c(74): catastrophic error: cannot open source file "pcre2.h"
+>   # include<pcre2.h>
+> (The pcre2.h header file is actually present!)
+
+
+> I used the following compiler flags:
+> # PCRE2:
+> # -----
+> setenv CC gcc
+> setenv CFLAGS " -O2 -fPIC "
+> ./configure --prefix=/uufs/chpc.utah.edu/sys/installdir/pcre2/10.35 \
+>             --enable-pcre2-16 --enable-pcre2-32 --with-pic
+
+> module purge
+> module load intel/2019.5.281
+
+> # USe a modern version of curl & pcre2 (The current one on Centos 7 is TOO
+> old)
+> setenv CURLDIR "/uufs/chpc.utah.edu/sys/installdir/curl/7.65.3"
+> setenv PCRE2DIR "/uufs/chpc.utah.edu/sys/installdir/pcre2/10.35"
+
+> setenv PATH ${PCRE2DIR}/bin:$PATH
+
+>  Setting Compiler & linker flags:
+> setenv CC icc
+> setenv CXX icpc
+> setenv F77 ifort
+> setenv FC ifort
+> setenv CFLAGS   " -axCORE-AVX512,CORE-AVX2,AVX,SSE4.2 -O3 -qopenmp
+> -fp-model precise -fPIC -I${MKLROOT}/include -I${CURLDIR}/include
+>                   -I${PCRE2DIR}/include "
+
+What I guess you should do is
+
+ /path/to/configure CPPFLAGS="-I${PCRE2DIR}/include ......"
+ make
+
+Hth
+-k
+
+
+> setenv CXXFLAGS " ${CFLAGS} "
+> setenv FFLAGS   " ${CFLAGS} "
+> setenv FCFLAGS  " ${CFLAGS} "
+> setenv LDFLAGS  " -Wl,-rpath=${MKLROOT}/lib/intel64_lin
+> -L${MKLROOT}/lib/intel64_lin -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core
+>                   -Wl,-rpath=/uufs/
+> chpc.utah.edu/sys/installdir/intel/compilers_and_libraries_2019.5.281/linux/compiler/lib/intel64_lin
+>                            -L/uufs/
+> chpc.utah.edu/sys/installdir/intel/compilers_and_libraries_2019.5.281/linux/compiler/lib/intel64_lin
+>                            -liomp5 -lpthread -ldl -Wl,-rpath=${CURLDIR}/lib
+> -L${CURLDIR}/lib -lcurl
+>                            -Wl,-rpath=${PCRE2DIR}/lib -L${PCRE2DIR}/lib
+>  -lpcre2-8 -lpcre2-posix "
+
+> ./configure --prefix=/uufs/chpc.utah.edu/sys/installdir/R/4.0.2i
+> --enable-R-profiling --enable-R-shlib --enable-memory-profiling
+> --enable-java --enable-shared=yes --with-blas="$LDFLAGS" --with-readline
+> --with-cairo --with-tcltk --with-libpng --with-jpeglib --with-libtiff
+> --with-ICU --with-pic --with-x --with-lapack --with-pcre2
+
+> I also appended the corresponding config.log:
+
+> Thank you,
+
+> Wim
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From r|p|ey @end|ng |rom @t@t@@ox@@c@uk  Sat Jul 11 13:01:06 2020
+From: r|p|ey @end|ng |rom @t@t@@ox@@c@uk (Prof Brian Ripley)
+Date: Sat, 11 Jul 2020 12:01:06 +0100
+Subject: [Rd] Compilation error for R 4.0.2
+In-Reply-To: <24329.39092.235031.880505@hornik.net>
+References: <CABNPx=zNLOiO=bHGhkW9nvP26OMMVjRp=rTiL0YgBf1=sm3tiA@mail.gmail.com>
+ <24329.39092.235031.880505@hornik.net>
+Message-ID: <751ad0f1-1762-89a8-eb6c-7b46ff49491f@stats.ox.ac.uk>
+
+On 11/07/2020 11:47, Kurt Hornik wrote:
+>>>>>> Wim R Cardoen writes:
+> 
+>> Hello,
+>> I experienced a compiler error when I tried to compile the latest version
+>> of R i.e. R4.0.2
+>> making iosupport.d from iosupport.c
+>> making lapack.d from lapack.c
+>> making list.d from list.c
+>> making localecharset.d from localecharset.c
+>> grep.c(74): catastrophic error: cannot open source file "pcre2.h"
+>>    # include<pcre2.h>
+>> (The pcre2.h header file is actually present!)
+> 
+> 
+>> I used the following compiler flags:
+>> # PCRE2:
+>> # -----
+>> setenv CC gcc
+>> setenv CFLAGS " -O2 -fPIC "
+>> ./configure --prefix=/uufs/chpc.utah.edu/sys/installdir/pcre2/10.35 \
+>>              --enable-pcre2-16 --enable-pcre2-32 --with-pic
+> 
+>> module purge
+>> module load intel/2019.5.281
+> 
+>> # USe a modern version of curl & pcre2 (The current one on Centos 7 is TOO
+>> old)
+>> setenv CURLDIR "/uufs/chpc.utah.edu/sys/installdir/curl/7.65.3"
+>> setenv PCRE2DIR "/uufs/chpc.utah.edu/sys/installdir/pcre2/10.35"
+> 
+>> setenv PATH ${PCRE2DIR}/bin:$PATH
+> 
+>>   Setting Compiler & linker flags:
+>> setenv CC icc
+>> setenv CXX icpc
+>> setenv F77 ifort
+>> setenv FC ifort
+>> setenv CFLAGS   " -axCORE-AVX512,CORE-AVX2,AVX,SSE4.2 -O3 -qopenmp
+>> -fp-model precise -fPIC -I${MKLROOT}/include -I${CURLDIR}/include
+>>                    -I${PCRE2DIR}/include "
+> 
+> What I guess you should do is
+> 
+>   /path/to/configure CPPFLAGS="-I${PCRE2DIR}/include ......"
+>   make
+
+Or use a config.site file for all of these settings.
+
+On some systems (including some Linux systems I have used and current 
+macOS), setting too much in the environment (usually caused by long 
+values) has caused software to malfunction, including to segfault so it 
+is ingrained in me to avoid it.
+
+>> setenv CXXFLAGS " ${CFLAGS} "
+>> setenv FFLAGS   " ${CFLAGS} "
+>> setenv FCFLAGS  " ${CFLAGS} "
+>> setenv LDFLAGS  " -Wl,-rpath=${MKLROOT}/lib/intel64_lin
+>> -L${MKLROOT}/lib/intel64_lin -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core
+>>                    -Wl,-rpath=/uufs/
+>> chpc.utah.edu/sys/installdir/intel/compilers_and_libraries_2019.5.281/linux/compiler/lib/intel64_lin
+>>                             -L/uufs/
+>> chpc.utah.edu/sys/installdir/intel/compilers_and_libraries_2019.5.281/linux/compiler/lib/intel64_lin
+>>                             -liomp5 -lpthread -ldl -Wl,-rpath=${CURLDIR}/lib
+>> -L${CURLDIR}/lib -lcurl
+>>                             -Wl,-rpath=${PCRE2DIR}/lib -L${PCRE2DIR}/lib
+>>   -lpcre2-8 -lpcre2-posix "
+> 
+>> ./configure --prefix=/uufs/chpc.utah.edu/sys/installdir/R/4.0.2i
+>> --enable-R-profiling --enable-R-shlib --enable-memory-profiling
+>> --enable-java --enable-shared=yes --with-blas="$LDFLAGS" --with-readline
+>> --with-cairo --with-tcltk --with-libpng --with-jpeglib --with-libtiff
+>> --with-ICU --with-pic --with-x --with-lapack --with-pcre2
+> 
+>> I also appended the corresponding config.log:
+
+It did not get through the filters.
+
+> 
+>> Thank you,
+> 
+>> Wim
+
+
+-- 
+Brian D. Ripley,                  ripley at stats.ox.ac.uk
+Emeritus Professor of Applied Statistics, University of Oxford
+
+
+From |uc@r @end|ng |rom |edor@project@org  Fri Jul 17 22:01:15 2020
+From: |uc@r @end|ng |rom |edor@project@org (=?UTF-8?Q?I=C3=B1aki_Ucar?=)
+Date: Fri, 17 Jul 2020 22:01:15 +0200
+Subject: [Rd] Restrict package to load-only access - prevent attempts to
+ attach it
+In-Reply-To: <CAFDcVCRWv4jSnU4WfG-32GbDD=GLBjW4yDRmqcq6=r8zaW4ceQ@mail.gmail.com>
+References: <CAFDcVCRWv4jSnU4WfG-32GbDD=GLBjW4yDRmqcq6=r8zaW4ceQ@mail.gmail.com>
+Message-ID: <CALEXWq3o9C9c0dCbGorB12j2_CWrOFnWSW=7BEBAK+F7r328-A@mail.gmail.com>
+
+Hi Henrik,
+
+A bit late, but you can take a look at smbache's {import} package [1]
+in case you didn't know it. I believe it does what you are describing.
+
+[1] https://github.com/smbache/import
+
+I?aki
+
+On Tue, 23 Jun 2020 at 22:21, Henrik Bengtsson
+<henrik.bengtsson at gmail.com> wrote:
+>
+> Hi,
+>
+> I'm developing a package whose API is only meant to be used in other
+> packages via imports or pkg::foo().  There should be no need to attach
+> this package so that its API appears on the search() path. As a
+> maintainer, I want to avoid having it appear in search() conflicts by
+> mistake.
+>
+> This means that, for instance, other packages should declare this
+> package under 'Imports' or 'Suggests' but never under 'Depends'.  I
+> can document this and hope that's how it's going to be used.  But, I'd
+> like to make it explicit that this API should be used via imports or
+> ::.  One approach I've considered is:
+>
+> .onAttach <- function(libname, pkgname) {
+>    if (nzchar(Sys.getenv("R_CMD"))) return()
+>    stop("Package ", sQuote(pkgname), " must not be attached")
+> }
+>
+> This would produce an error if the package is attached.  It's
+> conditioned on the environment variable 'R_CMD' set by R itself
+> whenever 'R CMD ...' runs.  This is done to avoid errors in 'R CMD
+> INSTALL' and 'R CMD check' "load tests", which formally are *attach*
+> tests.  The above approach passes all the tests and checks I'm aware
+> of and on all platforms.
+>
+> Before I ping the CRAN team explicitly, does anyone know whether this
+> is a valid approach?  Do you know if there are alternatives for
+> asserting that a package is never attached.  Maybe this is more
+> philosophical where the package "contract" is such that all packages
+> should be attachable and, if not, then it's not a valid R package.
+>
+> This is a non-critical topic but if it can be done it would be useful.
+>
+> Thanks,
+>
+> Henrik
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+
+-- 
+I?aki ?car
+
+
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Fri Jul 17 22:56:03 2020
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Fri, 17 Jul 2020 13:56:03 -0700
+Subject: [Rd] Restrict package to load-only access - prevent attempts to
+ attach it
+In-Reply-To: <CALEXWq3o9C9c0dCbGorB12j2_CWrOFnWSW=7BEBAK+F7r328-A@mail.gmail.com>
+References: <CAFDcVCRWv4jSnU4WfG-32GbDD=GLBjW4yDRmqcq6=r8zaW4ceQ@mail.gmail.com>
+ <CALEXWq3o9C9c0dCbGorB12j2_CWrOFnWSW=7BEBAK+F7r328-A@mail.gmail.com>
+Message-ID: <CAFDcVCQcYP3KpVS5YnQiHM13KoNLfn_n7+q8Z47EvUwzgTDdyQ@mail.gmail.com>
+
+Thanks. Though, AFAIU, that addresses another use case/need.
+
+I want reverse package dependencies to be able to import functions
+from my package using standard R namespace mechanisms, e.g. import()
+and importFrom().  The only thing I want to prevent is relying on it
+being *attached* to the search() path and access functions that way.
+So, basically, all usage should be via import(), importFrom()
+NAMESPACE statements or pkg::fcn() calls.  All for the purpose of
+avoiding the package being used outside of other packages.
+
+I've got a few suggestions offline in addition to the above comments
+including allowing the package to be attached but having .onAttach()
+wipe the attached environment so it effectively adds zero objects to
+the search() path.  This is a non-critical feature for me but
+nevertheless an interesting one.
+
+/Henrik
+
+On Fri, Jul 17, 2020 at 1:01 PM I?aki Ucar <iucar at fedoraproject.org> wrote:
+>
+> Hi Henrik,
+>
+> A bit late, but you can take a look at smbache's {import} package [1]
+> in case you didn't know it. I believe it does what you are describing.
+>
+> [1] https://github.com/smbache/import
+>
+> I?aki
+>
+> On Tue, 23 Jun 2020 at 22:21, Henrik Bengtsson
+> <henrik.bengtsson at gmail.com> wrote:
+> >
+> > Hi,
+> >
+> > I'm developing a package whose API is only meant to be used in other
+> > packages via imports or pkg::foo().  There should be no need to attach
+> > this package so that its API appears on the search() path. As a
+> > maintainer, I want to avoid having it appear in search() conflicts by
+> > mistake.
+> >
+> > This means that, for instance, other packages should declare this
+> > package under 'Imports' or 'Suggests' but never under 'Depends'.  I
+> > can document this and hope that's how it's going to be used.  But, I'd
+> > like to make it explicit that this API should be used via imports or
+> > ::.  One approach I've considered is:
+> >
+> > .onAttach <- function(libname, pkgname) {
+> >    if (nzchar(Sys.getenv("R_CMD"))) return()
+> >    stop("Package ", sQuote(pkgname), " must not be attached")
+> > }
+> >
+> > This would produce an error if the package is attached.  It's
+> > conditioned on the environment variable 'R_CMD' set by R itself
+> > whenever 'R CMD ...' runs.  This is done to avoid errors in 'R CMD
+> > INSTALL' and 'R CMD check' "load tests", which formally are *attach*
+> > tests.  The above approach passes all the tests and checks I'm aware
+> > of and on all platforms.
+> >
+> > Before I ping the CRAN team explicitly, does anyone know whether this
+> > is a valid approach?  Do you know if there are alternatives for
+> > asserting that a package is never attached.  Maybe this is more
+> > philosophical where the package "contract" is such that all packages
+> > should be attachable and, if not, then it's not a valid R package.
+> >
+> > This is a non-critical topic but if it can be done it would be useful.
+> >
+> > Thanks,
+> >
+> > Henrik
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+>
+>
+> --
+> I?aki ?car
+
+
+From wc@rdoen @end|ng |rom gm@||@com  Sat Jul 18 21:08:52 2020
+From: wc@rdoen @end|ng |rom gm@||@com (Wim R. Cardoen)
+Date: Sat, 18 Jul 2020 13:08:52 -0600
+Subject: [Rd] Compilation error for R 4.0.2
+In-Reply-To: <24329.39092.235031.880505@hornik.net>
+References: <CABNPx=zNLOiO=bHGhkW9nvP26OMMVjRp=rTiL0YgBf1=sm3tiA@mail.gmail.com>
+ <24329.39092.235031.880505@hornik.net>
+Message-ID: <CABNPx=w8Qh+SY+iakcw0hNudLFgjOvMGZX=KuiQBRUSxJjSzLA@mail.gmail.com>
+
+Dear Kurt,
+
+Your suggestion worked.
+
+Thank you,
+Wim
+
+
+On Sat, Jul 11, 2020 at 4:47 AM Kurt Hornik <Kurt.Hornik at wu.ac.at> wrote:
+
+> >>>>> Wim R Cardoen writes:
+>
+> > Hello,
+> > I experienced a compiler error when I tried to compile the latest version
+> > of R i.e. R4.0.2
+> > making iosupport.d from iosupport.c
+> > making lapack.d from lapack.c
+> > making list.d from list.c
+> > making localecharset.d from localecharset.c
+> > grep.c(74): catastrophic error: cannot open source file "pcre2.h"
+> >   # include<pcre2.h>
+> > (The pcre2.h header file is actually present!)
+>
+>
+> > I used the following compiler flags:
+> > # PCRE2:
+> > # -----
+> > setenv CC gcc
+> > setenv CFLAGS " -O2 -fPIC "
+> > ./configure --prefix=/uufs/chpc.utah.edu/sys/installdir/pcre2/10.35 \
+> >             --enable-pcre2-16 --enable-pcre2-32 --with-pic
+>
+> > module purge
+> > module load intel/2019.5.281
+>
+> > # USe a modern version of curl & pcre2 (The current one on Centos 7 is
+> TOO
+> > old)
+> > setenv CURLDIR "/uufs/chpc.utah.edu/sys/installdir/curl/7.65.3"
+> > setenv PCRE2DIR "/uufs/chpc.utah.edu/sys/installdir/pcre2/10.35"
+>
+> > setenv PATH ${PCRE2DIR}/bin:$PATH
+>
+> >  Setting Compiler & linker flags:
+> > setenv CC icc
+> > setenv CXX icpc
+> > setenv F77 ifort
+> > setenv FC ifort
+> > setenv CFLAGS   " -axCORE-AVX512,CORE-AVX2,AVX,SSE4.2 -O3 -qopenmp
+> > -fp-model precise -fPIC -I${MKLROOT}/include -I${CURLDIR}/include
+> >                   -I${PCRE2DIR}/include "
+>
+> What I guess you should do is
+>
+>  /path/to/configure CPPFLAGS="-I${PCRE2DIR}/include ......"
+>  make
+>
+> Hth
+> -k
+>
+>
+> > setenv CXXFLAGS " ${CFLAGS} "
+> > setenv FFLAGS   " ${CFLAGS} "
+> > setenv FCFLAGS  " ${CFLAGS} "
+> > setenv LDFLAGS  " -Wl,-rpath=${MKLROOT}/lib/intel64_lin
+> > -L${MKLROOT}/lib/intel64_lin -lmkl_intel_lp64 -lmkl_intel_thread
+> -lmkl_core
+> >                   -Wl,-rpath=/uufs/
+> >
+> chpc.utah.edu/sys/installdir/intel/compilers_and_libraries_2019.5.281/linux/compiler/lib/intel64_lin
+> >                            -L/uufs/
+> >
+> chpc.utah.edu/sys/installdir/intel/compilers_and_libraries_2019.5.281/linux/compiler/lib/intel64_lin
+> >                            -liomp5 -lpthread -ldl
+> -Wl,-rpath=${CURLDIR}/lib
+> > -L${CURLDIR}/lib -lcurl
+> >                            -Wl,-rpath=${PCRE2DIR}/lib -L${PCRE2DIR}/lib
+> >  -lpcre2-8 -lpcre2-posix "
+>
+> > ./configure --prefix=/uufs/chpc.utah.edu/sys/installdir/R/4.0.2i
+> > --enable-R-profiling --enable-R-shlib --enable-memory-profiling
+> > --enable-java --enable-shared=yes --with-blas="$LDFLAGS" --with-readline
+> > --with-cairo --with-tcltk --with-libpng --with-jpeglib --with-libtiff
+> > --with-ICU --with-pic --with-x --with-lapack --with-pcre2
+>
+> > I also appended the corresponding config.log:
+>
+> > Thank you,
+>
+> > Wim
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From m@r|o@@nn@u @end|ng |rom gm@||@com  Sun Jul 19 17:50:21 2020
+From: m@r|o@@nn@u @end|ng |rom gm@||@com (Mario Annau)
+Date: Sun, 19 Jul 2020 17:50:21 +0200
+Subject: [Rd] Speed-up/Cache loadNamespace()
+Message-ID: <CALUQZLwKCy5Wvmw10VSr=CvV5XUJ7AnG4davKS4XtmqvNK84PA@mail.gmail.com>
+
+Dear all,
+
+in our current setting we have our packages stored on a (rather slow)
+network drive and need to invoke short R scripts (using RScript) in a
+timely manner. Most of the script's runtime is spent with package loading
+using library() (or loadNamespace to be precise).
+
+Is there a way to cache the package namespaces as listed in
+loadedNamespaces() and load them into memory before the script is executed?
+
+My first simplistic attempt was to serialize the environment output
+from loadNamespace() to a file and load it before the script is started.
+However, loading the object automatically also loads all the referenced
+namespaces (from the slow network share) which is undesirable for this use
+case.
+
+Cheers,
+Mario
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sun Jul 19 18:02:27 2020
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sun, 19 Jul 2020 12:02:27 -0400
+Subject: [Rd] Speed-up/Cache loadNamespace()
+In-Reply-To: <CALUQZLwKCy5Wvmw10VSr=CvV5XUJ7AnG4davKS4XtmqvNK84PA@mail.gmail.com>
+References: <CALUQZLwKCy5Wvmw10VSr=CvV5XUJ7AnG4davKS4XtmqvNK84PA@mail.gmail.com>
+Message-ID: <5e4a5c1e-53a8-2412-e0e1-d556dcab081f@gmail.com>
+
+On 19/07/2020 11:50 a.m., Mario Annau wrote:
+> Dear all,
+> 
+> in our current setting we have our packages stored on a (rather slow)
+> network drive and need to invoke short R scripts (using RScript) in a
+> timely manner. Most of the script's runtime is spent with package loading
+> using library() (or loadNamespace to be precise).
+> 
+> Is there a way to cache the package namespaces as listed in
+> loadedNamespaces() and load them into memory before the script is executed?
+> 
+> My first simplistic attempt was to serialize the environment output
+> from loadNamespace() to a file and load it before the script is started.
+> However, loading the object automatically also loads all the referenced
+> namespaces (from the slow network share) which is undesirable for this use
+> case.
+
+I don't think there is, but I doubt if it would help much. 
+loadNamespace will be slow if loading the package is slow, and you can't 
+avoid doing that once.  (If you call loadNamespace twice on the same 
+package, the second one does nothing, and is really quick.)
+
+I think the only savings you might get is the effort of merging various 
+tables (e.g. the ones for dispatching S3 and S4 methods), and I wouldn't 
+think that would take a really substantial amount of time.
+
+One thing you could do is to create a library on a faster drive, and 
+install the minimal set of packages there.  Then if that library comes 
+first in .libPaths(), you'll never hit the slow network drive.
+
+Duncan Murdoch
+
+
+From hugh@p@r@on@ge @end|ng |rom gm@||@com  Sun Jul 19 20:11:13 2020
+From: hugh@p@r@on@ge @end|ng |rom gm@||@com (Hugh Parsonage)
+Date: Mon, 20 Jul 2020 04:11:13 +1000
+Subject: [Rd] Speed-up/Cache loadNamespace()
+In-Reply-To: <CALUQZLwKCy5Wvmw10VSr=CvV5XUJ7AnG4davKS4XtmqvNK84PA@mail.gmail.com>
+References: <CALUQZLwKCy5Wvmw10VSr=CvV5XUJ7AnG4davKS4XtmqvNK84PA@mail.gmail.com>
+Message-ID: <CAJmOi+OXie+z2V8M4+WN47xPksDD3E1wV64Gz41LShEY_nRcaw@mail.gmail.com>
+
+My advice would be to avoid the network in one of the following ways
+
+1. Store installed packages on your local drive
+2. Copy the installed packages to a tempdir on your local drive each time
+the script is executed
+3. Keep an R session running in perpetuity and source the scripts within
+that everlasting session
+4. Rewrite your scripts to use base R only.
+
+I suspect this solution list is exhaustive.
+
+On Mon, 20 Jul 2020 at 1:50 am, Mario Annau <mario.annau at gmail.com> wrote:
+
+> Dear all,
+>
+> in our current setting we have our packages stored on a (rather slow)
+> network drive and need to invoke short R scripts (using RScript) in a
+> timely manner. Most of the script's runtime is spent with package loading
+> using library() (or loadNamespace to be precise).
+>
+> Is there a way to cache the package namespaces as listed in
+> loadedNamespaces() and load them into memory before the script is executed?
+>
+> My first simplistic attempt was to serialize the environment output
+> from loadNamespace() to a file and load it before the script is started.
+> However, loading the object automatically also loads all the referenced
+> namespaces (from the slow network share) which is undesirable for this use
+> case.
+>
+> Cheers,
+> Mario
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From m@r|o@@nn@u @end|ng |rom gm@||@com  Sun Jul 19 20:47:09 2020
+From: m@r|o@@nn@u @end|ng |rom gm@||@com (Mario Annau)
+Date: Sun, 19 Jul 2020 20:47:09 +0200
+Subject: [Rd] Speed-up/Cache loadNamespace()
+In-Reply-To: <CAJmOi+OXie+z2V8M4+WN47xPksDD3E1wV64Gz41LShEY_nRcaw@mail.gmail.com>
+References: <CALUQZLwKCy5Wvmw10VSr=CvV5XUJ7AnG4davKS4XtmqvNK84PA@mail.gmail.com>
+ <CAJmOi+OXie+z2V8M4+WN47xPksDD3E1wV64Gz41LShEY_nRcaw@mail.gmail.com>
+Message-ID: <CALUQZLz_joz1wCrt+62DW+uj4Y+ErWHDH4+gL4uSdyAE=c4qFA@mail.gmail.com>
+
+Thanks for the quick responses. As you both suggested storing the packages
+to local drive is feasible but comes with a size restriction I wanted to
+avoid. I'll keep this in mind as plan B.
+@Hugh: 2. would impose even greater slowdowns and 4. is just not feasible.
+However, 3. sounds interesting - how would this work in a Linux environment?
+
+Thank you,
+Mario
+
+
+Am So., 19. Juli 2020 um 20:11 Uhr schrieb Hugh Parsonage <
+hugh.parsonage at gmail.com>:
+
+> My advice would be to avoid the network in one of the following ways
+>
+> 1. Store installed packages on your local drive
+> 2. Copy the installed packages to a tempdir on your local drive each time
+> the script is executed
+> 3. Keep an R session running in perpetuity and source the scripts within
+> that everlasting session
+> 4. Rewrite your scripts to use base R only.
+>
+> I suspect this solution list is exhaustive.
+>
+> On Mon, 20 Jul 2020 at 1:50 am, Mario Annau <mario.annau at gmail.com> wrote:
+>
+>> Dear all,
+>>
+>> in our current setting we have our packages stored on a (rather slow)
+>> network drive and need to invoke short R scripts (using RScript) in a
+>> timely manner. Most of the script's runtime is spent with package loading
+>> using library() (or loadNamespace to be precise).
+>>
+>> Is there a way to cache the package namespaces as listed in
+>> loadedNamespaces() and load them into memory before the script is
+>> executed?
+>>
+>> My first simplistic attempt was to serialize the environment output
+>> from loadNamespace() to a file and load it before the script is started.
+>> However, loading the object automatically also loads all the referenced
+>> namespaces (from the slow network share) which is undesirable for this use
+>> case.
+>>
+>> Cheers,
+>> Mario
+>>
+>>         [[alternative HTML version deleted]]
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+
+	[[alternative HTML version deleted]]
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Sun Jul 19 22:07:42 2020
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Mon, 20 Jul 2020 08:07:42 +1200
+Subject: [Rd] Speed-up/Cache loadNamespace()
+In-Reply-To: <CALUQZLz_joz1wCrt+62DW+uj4Y+ErWHDH4+gL4uSdyAE=c4qFA@mail.gmail.com>
+References: <CALUQZLwKCy5Wvmw10VSr=CvV5XUJ7AnG4davKS4XtmqvNK84PA@mail.gmail.com>
+ <CAJmOi+OXie+z2V8M4+WN47xPksDD3E1wV64Gz41LShEY_nRcaw@mail.gmail.com>
+ <CALUQZLz_joz1wCrt+62DW+uj4Y+ErWHDH4+gL4uSdyAE=c4qFA@mail.gmail.com>
+Message-ID: <373122A1-4597-4F07-86AB-9B03562EACD0@R-project.org>
+
+Mario,
+
+On unix if you use Rseve you can pre-load all packages in the server (via eval config directive or by running Rserve::run.Rserve() from a session that has everything loaded) and all client connections will have the packages already loaded and available* immediately. You could replace Rscript call with a very tiny Rserve client program which just calls source(""). I can give you more details if you're interested.
+
+Cheers,
+Simon
+
+
+* - there are some packages that are inherently incompatible with fork() - e.g. you cannot fork Java JVM or open connections.
+
+
+> On Jul 20, 2020, at 6:47 AM, Mario Annau <mario.annau at gmail.com> wrote:
+> 
+> Thanks for the quick responses. As you both suggested storing the packages
+> to local drive is feasible but comes with a size restriction I wanted to
+> avoid. I'll keep this in mind as plan B.
+> @Hugh: 2. would impose even greater slowdowns and 4. is just not feasible.
+> However, 3. sounds interesting - how would this work in a Linux environment?
+> 
+> Thank you,
+> Mario
+> 
+> 
+> Am So., 19. Juli 2020 um 20:11 Uhr schrieb Hugh Parsonage <
+> hugh.parsonage at gmail.com>:
+> 
+>> My advice would be to avoid the network in one of the following ways
+>> 
+>> 1. Store installed packages on your local drive
+>> 2. Copy the installed packages to a tempdir on your local drive each time
+>> the script is executed
+>> 3. Keep an R session running in perpetuity and source the scripts within
+>> that everlasting session
+>> 4. Rewrite your scripts to use base R only.
+>> 
+>> I suspect this solution list is exhaustive.
+>> 
+>> On Mon, 20 Jul 2020 at 1:50 am, Mario Annau <mario.annau at gmail.com> wrote:
+>> 
+>>> Dear all,
+>>> 
+>>> in our current setting we have our packages stored on a (rather slow)
+>>> network drive and need to invoke short R scripts (using RScript) in a
+>>> timely manner. Most of the script's runtime is spent with package loading
+>>> using library() (or loadNamespace to be precise).
+>>> 
+>>> Is there a way to cache the package namespaces as listed in
+>>> loadedNamespaces() and load them into memory before the script is
+>>> executed?
+>>> 
+>>> My first simplistic attempt was to serialize the environment output
+>>> from loadNamespace() to a file and load it before the script is started.
+>>> However, loading the object automatically also loads all the referenced
+>>> namespaces (from the slow network share) which is undesirable for this use
+>>> case.
+>>> 
+>>> Cheers,
+>>> Mario
+>>> 
+>>>        [[alternative HTML version deleted]]
+>>> 
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>> 
+>> 
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
+From edd @end|ng |rom deb|@n@org  Sun Jul 19 22:09:24 2020
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Sun, 19 Jul 2020 15:09:24 -0500
+Subject: [Rd] Speed-up/Cache loadNamespace()
+In-Reply-To: <CALUQZLz_joz1wCrt+62DW+uj4Y+ErWHDH4+gL4uSdyAE=c4qFA@mail.gmail.com>
+References: <CALUQZLwKCy5Wvmw10VSr=CvV5XUJ7AnG4davKS4XtmqvNK84PA@mail.gmail.com>
+ <CAJmOi+OXie+z2V8M4+WN47xPksDD3E1wV64Gz41LShEY_nRcaw@mail.gmail.com>
+ <CALUQZLz_joz1wCrt+62DW+uj4Y+ErWHDH4+gL4uSdyAE=c4qFA@mail.gmail.com>
+Message-ID: <24340.43124.706979.559866@rob.eddelbuettel.com>
+
+
+On 19 July 2020 at 20:47, Mario Annau wrote:
+| Am So., 19. Juli 2020 um 20:11 Uhr schrieb Hugh Parsonage <
+| hugh.parsonage at gmail.com>:
+| > 3. Keep an R session running in perpetuity and source the scripts within
+| > that everlasting session
+| However, 3. sounds interesting - how would this work in a Linux environment?
+
+You had Rserve by Simon for close to 20 years. There isn't much in terms of
+fancy docs but it has been widely used. In essence, R runs "headless" and
+connect to it (think "telnet" or "ssh", but programmatically), fire off
+request and get results with zero startup latency.  But more work to build
+the access layer.
+
+And Rserve is also underneath RestRserve which allows you to query a running
+server vai REST / modern web stack tech. (Think "plumber", but in C++ and
+faster / more scaleable).
+
+Lastly, there is Jeroen's OpenCPU.
+
+Dirk
+
+-- 
+https://dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From tob|@@@verbeke @end|ng |rom open@n@|yt|c@@eu  Sun Jul 19 22:38:35 2020
+From: tob|@@@verbeke @end|ng |rom open@n@|yt|c@@eu (Tobias Verbeke)
+Date: Sun, 19 Jul 2020 22:38:35 +0200 (CEST)
+Subject: [Rd] Speed-up/Cache loadNamespace()
+In-Reply-To: <24340.43124.706979.559866@rob.eddelbuettel.com>
+References: <CALUQZLwKCy5Wvmw10VSr=CvV5XUJ7AnG4davKS4XtmqvNK84PA@mail.gmail.com>
+ <CAJmOi+OXie+z2V8M4+WN47xPksDD3E1wV64Gz41LShEY_nRcaw@mail.gmail.com>
+ <CALUQZLz_joz1wCrt+62DW+uj4Y+ErWHDH4+gL4uSdyAE=c4qFA@mail.gmail.com>
+ <24340.43124.706979.559866@rob.eddelbuettel.com>
+Message-ID: <1798447043.22235.1595191115891.JavaMail.zimbra@openanalytics.eu>
+
+----- Original Message -----
+> From: "Dirk Eddelbuettel" <edd at debian.org>
+> To: "Mario Annau" <mario.annau at gmail.com>
+> Cc: "r-devel at r-project.org" <r-devel at r-project.org>
+> Sent: Sunday, July 19, 2020 10:09:24 PM
+> Subject: Re: [Rd] Speed-up/Cache loadNamespace()
+
+> On 19 July 2020 at 20:47, Mario Annau wrote:
+>| Am So., 19. Juli 2020 um 20:11 Uhr schrieb Hugh Parsonage <
+>| hugh.parsonage at gmail.com>:
+>| > 3. Keep an R session running in perpetuity and source the scripts within
+>| > that everlasting session
+>| However, 3. sounds interesting - how would this work in a Linux environment?
+> 
+> You had Rserve by Simon for close to 20 years. There isn't much in terms of
+> fancy docs but it has been widely used. In essence, R runs "headless" and
+> connect to it (think "telnet" or "ssh", but programmatically), fire off
+> request and get results with zero startup latency.  But more work to build
+> the access layer.
+> 
+> And Rserve is also underneath RestRserve which allows you to query a running
+> server vai REST / modern web stack tech. (Think "plumber", but in C++ and
+> faster / more scaleable).
+> 
+> Lastly, there is Jeroen's OpenCPU.
+
+Or... lastly, the R Service Bus which has been used in production since 2010 and got a maintenance release (6.4.0) last week:
+
+https://rservicebus.io/
+
+For REST (both asynchronous and synchronous APIs are available), you can start here: https://rservicebus.io/api/introduction/
+
+Best,
+Tobias
+
+
+From @purd|e@@ @end|ng |rom gm@||@com  Mon Jul 20 10:15:07 2020
+From: @purd|e@@ @end|ng |rom gm@||@com (Abby Spurdle)
+Date: Mon, 20 Jul 2020 20:15:07 +1200
+Subject: [Rd] Speed-up/Cache loadNamespace()
+In-Reply-To: <CALUQZLwKCy5Wvmw10VSr=CvV5XUJ7AnG4davKS4XtmqvNK84PA@mail.gmail.com>
+References: <CALUQZLwKCy5Wvmw10VSr=CvV5XUJ7AnG4davKS4XtmqvNK84PA@mail.gmail.com>
+Message-ID: <CAB8pepz59QBmxebu_LFdo-K+RDvK8U248RhqRH6X=TL0yb9GPQ@mail.gmail.com>
+
+It's possible to run R (or a c parent process) as a background process
+via a named pipe, and then write script files to the named pipe.
+However, the details depend on what shell you use.
+
+The last time I tried (which was a long time ago), I created a small c
+program to run R, read from the named pipe from within c, then wrote
+it's contents to R's standard in.
+
+It might be possible to do it without the c program.
+Haven't checked.
+
+
+On Mon, Jul 20, 2020 at 3:50 AM Mario Annau <mario.annau at gmail.com> wrote:
+>
+> Dear all,
+>
+> in our current setting we have our packages stored on a (rather slow)
+> network drive and need to invoke short R scripts (using RScript) in a
+> timely manner. Most of the script's runtime is spent with package loading
+> using library() (or loadNamespace to be precise).
+>
+> Is there a way to cache the package namespaces as listed in
+> loadedNamespaces() and load them into memory before the script is executed?
+>
+> My first simplistic attempt was to serialize the environment output
+> from loadNamespace() to a file and load it before the script is started.
+> However, loading the object automatically also loads all the referenced
+> namespaces (from the slow network share) which is undesirable for this use
+> case.
+>
+> Cheers,
+> Mario
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From c@@rd|@g@bor @end|ng |rom gm@||@com  Mon Jul 20 10:21:37 2020
+From: c@@rd|@g@bor @end|ng |rom gm@||@com (=?UTF-8?B?R8OhYm9yIENzw6FyZGk=?=)
+Date: Mon, 20 Jul 2020 09:21:37 +0100
+Subject: [Rd] Speed-up/Cache loadNamespace()
+In-Reply-To: <CAB8pepz59QBmxebu_LFdo-K+RDvK8U248RhqRH6X=TL0yb9GPQ@mail.gmail.com>
+References: <CALUQZLwKCy5Wvmw10VSr=CvV5XUJ7AnG4davKS4XtmqvNK84PA@mail.gmail.com>
+ <CAB8pepz59QBmxebu_LFdo-K+RDvK8U248RhqRH6X=TL0yb9GPQ@mail.gmail.com>
+Message-ID: <CABtg=K=xQgUQCjQfRw+_N2VOLUPpTEvkhRZJiWzfCFgPwBme_A@mail.gmail.com>
+
+On Mon, Jul 20, 2020 at 9:15 AM Abby Spurdle <spurdle.a at gmail.com> wrote:
+>
+> It's possible to run R (or a c parent process) as a background process
+> via a named pipe, and then write script files to the named pipe.
+> However, the details depend on what shell you use.
+
+I would use screen or tmux for this, if this is an R process that you
+want to interact with, and you want to keep it running after a SIGHUP.
+
+Gabor
+
+[...]
+
+
+From @oko| @end|ng |rom |n@@-tou|ou@e@|r  Mon Jul 20 11:54:13 2020
+From: @oko| @end|ng |rom |n@@-tou|ou@e@|r (Serguei Sokol)
+Date: Mon, 20 Jul 2020 11:54:13 +0200
+Subject: [Rd] Speed-up/Cache loadNamespace()
+In-Reply-To: <CAB8pepz59QBmxebu_LFdo-K+RDvK8U248RhqRH6X=TL0yb9GPQ@mail.gmail.com>
+References: <CALUQZLwKCy5Wvmw10VSr=CvV5XUJ7AnG4davKS4XtmqvNK84PA@mail.gmail.com>
+ <CAB8pepz59QBmxebu_LFdo-K+RDvK8U248RhqRH6X=TL0yb9GPQ@mail.gmail.com>
+Message-ID: <6bba4941-c87c-1bee-9745-c8b7dc0b69c2@insa-toulouse.fr>
+
+Le 20/07/2020 ? 10:15, Abby Spurdle a ?crit?:
+> It's possible to run R (or a c parent process) as a background process
+> via a named pipe, and then write script files to the named pipe.
+> However, the details depend on what shell you use.
+>
+> The last time I tried (which was a long time ago), I created a small c
+> program to run R, read from the named pipe from within c, then wrote
+> it's contents to R's standard in.
+>
+> It might be possible to do it without the c program.
+> Haven't checked.
+For testing purposes, you can do:
+
+- in a shell 1:
+ ?mkfifo rpipe
+ ?exec 3>rpipe # without this trick, Rscript will end after the first 
+"echo" hereafter or at the end of your first script.
+
+- in a shell 2:
+ ?Rscript rfifo
+
+- in a shell 3:
+ ?echo "print('hello')" > rpipe
+ ?echo "print('hello again')" > rpipe
+
+Then in the shell 2, you will see the output:
+[1] "hello"
+[1] "hello again"
+etc.
+
+If your R scripts contain "stop()" or "q('yes')" or any other error, it 
+will end the Rscript process. Kind of watch-dog can be set for automatic 
+relaunching if needed. Another way to stop the Rscript process is to 
+kill the "exec 3>rpipe" one. You can find its PID with "fuser rpipe"
+
+Best,
+Serguei.
+
+>
+>
+> On Mon, Jul 20, 2020 at 3:50 AM Mario Annau <mario.annau at gmail.com> wrote:
+>> Dear all,
+>>
+>> in our current setting we have our packages stored on a (rather slow)
+>> network drive and need to invoke short R scripts (using RScript) in a
+>> timely manner. Most of the script's runtime is spent with package loading
+>> using library() (or loadNamespace to be precise).
+>>
+>> Is there a way to cache the package namespaces as listed in
+>> loadedNamespaces() and load them into memory before the script is executed?
+>>
+>> My first simplistic attempt was to serialize the environment output
+>> from loadNamespace() to a file and load it before the script is started.
+>> However, loading the object automatically also loads all the referenced
+>> namespaces (from the slow network share) which is undesirable for this use
+>> case.
+>>
+>> Cheers,
+>> Mario
+>>
+>>          [[alternative HTML version deleted]]
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+-- 
+Serguei Sokol
+Ingenieur de recherche INRAE
+
+Cellule math?matiques
+TBI, INSA/INRAE UMR 792, INSA/CNRS UMR 5504
+135 Avenue de Rangueil
+31077 Toulouse Cedex 04
+
+tel: +33 5 61 55 98 49
+email: sokol at insa-toulouse.fr
+http://www.toulouse-biotechnology-institute.fr/
+
+
+From joh@nne@@r@nke @end|ng |rom jrwb@de  Mon Jul 20 11:12:25 2020
+From: joh@nne@@r@nke @end|ng |rom jrwb@de (Johannes Ranke)
+Date: Mon, 20 Jul 2020 11:12:25 +0200
+Subject: [Rd] Methods for objects inheriting from lme (nlme package)
+Message-ID: <5019627.8Pp4mzHinf@ryz>
+
+Dear R developers,
+
+One function in my mkin package [1] returns an object that is originally 
+created by nlme(), but contains some additional information. Its class is 
+c("mmkin.nlme", "nlme", "lme").
+
+Now I would like to use the anova() method for lme objects for comparing such 
+S3 objects. Unfortunately, anova.lme currently does not check for inheritance, 
+but checks the  first element of the class attribute (as obtained by 
+data.class()) against a hardcoded list of classes in order to decide if it 
+will work or not.
+
+Therefore, I created a bug report [2], containing a patch [3] for nlme that 
+makes anova.lme check for inheritance.
+
+Encouraged by a kind comment by Elin Waring in the BTS, I have now revisited 
+my bug report, and discovered that the help page for data.class() claims that 
+its return value (the first element of the class attribute vector) is "what is 
+typically useful for method dispatching".
+
+However, I think that this use case illustrates that it would be useful not 
+only to check for the primary class, but rather for class inheritance.
+
+Do you agree that it is preferable for the S3 method to check for inheritance 
+instead of checking against a hardcoded list in this case?
+
+Kind regards,
+
+Johannes Ranke
+
+
+[1]  https://github.com/jranke/mkin/blob/master/R/nlme.mmkin.R
+[2]  https://bugs.r-project.org/bugzilla/show_bug.cgi?id=17761
+[3]  https://bugs.r-project.org/bugzilla/attachment.cgi?id=2578
+
+
+From joh@nne@@r@nke @end|ng |rom jrwb@de  Mon Jul 20 13:20:24 2020
+From: joh@nne@@r@nke @end|ng |rom jrwb@de (Johannes Ranke)
+Date: Mon, 20 Jul 2020 13:20:24 +0200
+Subject: [Rd] Methods for objects inheriting from lme (nlme package)
+In-Reply-To: <5019627.8Pp4mzHinf@ryz>
+References: <5019627.8Pp4mzHinf@ryz>
+Message-ID: <2301783.djfvXRnzWp@ryz>
+
+Am Montag, 20. Juli 2020, 11:12:25 CEST schrieb Johannes Ranke:
+> Dear R developers,
+> 
+> One function in my mkin package [1] returns an object that is originally
+> created by nlme(), but contains some additional information. Its class is
+> c("mmkin.nlme", "nlme", "lme").
+> 
+> Now I would like to use the anova() method for lme objects for comparing
+> such S3 objects. Unfortunately, anova.lme currently does not check for
+> inheritance, but checks the  first element of the class attribute (as
+> obtained by data.class()) against a hardcoded list of classes in order to
+> decide if it will work or not.
+> 
+> Therefore, I created a bug report [2], containing a patch [3] for nlme that
+> makes anova.lme check for inheritance.
+> 
+> Encouraged by a kind comment by Elin Waring in the BTS, I have now revisited
+> my bug report, and discovered that the help page for data.class() claims
+> that its return value (the first element of the class attribute vector) is
+> "what is typically useful for method dispatching".
+> 
+> However, I think that this use case illustrates that it would be useful not
+> only to check for the primary class, but rather for class inheritance.
+> 
+> Do you agree that it is preferable for the S3 method to check for
+> inheritance instead of checking against a hardcoded list in this case?
+> 
+> Kind regards,
+> 
+> Johannes Ranke
+> 
+> 
+> [1]  https://github.com/jranke/mkin/blob/master/R/nlme.mmkin.R
+> [2]  https://bugs.r-project.org/bugzilla/show_bug.cgi?id=17761
+> [3]  https://bugs.r-project.org/bugzilla/attachment.cgi?id=2578
+
+P.S.: I have updated the patch [4] based on comments provided by Sebastian 
+Meyer.
+
+[4] https://bugs.r-project.org/bugzilla/attachment.cgi?id=2656
+	[[alternative HTML version deleted]]
+
+
+From @purd|e@@ @end|ng |rom gm@||@com  Mon Jul 20 23:58:27 2020
+From: @purd|e@@ @end|ng |rom gm@||@com (Abby Spurdle)
+Date: Tue, 21 Jul 2020 09:58:27 +1200
+Subject: [Rd] Speed-up/Cache loadNamespace()
+In-Reply-To: <6bba4941-c87c-1bee-9745-c8b7dc0b69c2@insa-toulouse.fr>
+References: <CALUQZLwKCy5Wvmw10VSr=CvV5XUJ7AnG4davKS4XtmqvNK84PA@mail.gmail.com>
+ <CAB8pepz59QBmxebu_LFdo-K+RDvK8U248RhqRH6X=TL0yb9GPQ@mail.gmail.com>
+ <6bba4941-c87c-1bee-9745-c8b7dc0b69c2@insa-toulouse.fr>
+Message-ID: <CAB8pepzgaVRP4w5hSMEbciXq5kK9ZPJUdph+h_eLSV-noJr9UQ@mail.gmail.com>
+
+Thank you Serguei and Gabor.
+Great suggestions.
+
+> If your R scripts contain "stop()" or "q('yes')" or any other error, it
+> will end the Rscript process. Kind of watch-dog can be set for automatic
+> relaunching if needed.
+
+It should be possible to change the error handling behavior.
+>From within R:
+
+    options (error = function () NULL)
+
+Or something better...
+
+Also, it may be desirable to wipe the global environment (or parts of
+it), after each script:
+
+    remove (list = ls (envir=.GlobalEnv, all.names=TRUE) )
+
+
+From g@bembecker @end|ng |rom gm@||@com  Tue Jul 21 01:31:04 2020
+From: g@bembecker @end|ng |rom gm@||@com (Gabriel Becker)
+Date: Mon, 20 Jul 2020 16:31:04 -0700
+Subject: [Rd] Speed-up/Cache loadNamespace()
+In-Reply-To: <CAB8pepzgaVRP4w5hSMEbciXq5kK9ZPJUdph+h_eLSV-noJr9UQ@mail.gmail.com>
+References: <CALUQZLwKCy5Wvmw10VSr=CvV5XUJ7AnG4davKS4XtmqvNK84PA@mail.gmail.com>
+ <CAB8pepz59QBmxebu_LFdo-K+RDvK8U248RhqRH6X=TL0yb9GPQ@mail.gmail.com>
+ <6bba4941-c87c-1bee-9745-c8b7dc0b69c2@insa-toulouse.fr>
+ <CAB8pepzgaVRP4w5hSMEbciXq5kK9ZPJUdph+h_eLSV-noJr9UQ@mail.gmail.com>
+Message-ID: <CAD4oTHFOZ_mNhLrPysy8sdvXe0g0Q=HRTAVw=mUEs9HmyypGEA@mail.gmail.com>
+
+Mario, Abby, et al.
+
+Note that there is no fully safe way of unloading packages which register
+methods (as answered by Luke Tierney here:
+https://bugs.r-project.org/bugzilla/show_bug.cgi?id=16644 ) which makes the
+single R session running arbitrary different scripts thing pretty iffy over
+the long term. Even swtichr (which tries hard to support something based on
+this) only gets "pretty close".
+
+If the scripts are always the same (up to bugfixes, etc) and most
+importantly require the same loaded packages then the above won't be an
+issue, of course. Just something to be aware of when planning something
+like this.
+
+Best,
+~G
+
+On Mon, Jul 20, 2020 at 2:59 PM Abby Spurdle <spurdle.a at gmail.com> wrote:
+
+> Thank you Serguei and Gabor.
+> Great suggestions.
+>
+> > If your R scripts contain "stop()" or "q('yes')" or any other error, it
+> > will end the Rscript process. Kind of watch-dog can be set for automatic
+> > relaunching if needed.
+>
+> It should be possible to change the error handling behavior.
+> From within R:
+>
+>     options (error = function () NULL)
+>
+> Or something better...
+>
+> Also, it may be desirable to wipe the global environment (or parts of
+> it), after each script:
+>
+>     remove (list = ls (envir=.GlobalEnv, all.names=TRUE) )
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From bbo|ker @end|ng |rom gm@||@com  Tue Jul 21 02:11:04 2020
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Mon, 20 Jul 2020 20:11:04 -0400
+Subject: [Rd] trivial typo in ?Matrix::sparse.model.matrix.Rd
+Message-ID: <41d4bdcb-e5b9-8bc3-f62e-7540ec73c2bd@gmail.com>
+
+ ? "form" -> "from". Diff against latest SVN:
+
+Index: sparse.model.matrix.Rd
+===================================================================
+--- sparse.model.matrix.Rd??? (revision 3336)
++++ sparse.model.matrix.Rd??? (working copy)
+@@ -4,7 +4,7 @@
+ ?\alias{fac2sparse}
+ ?\alias{fac2Sparse}
+ ?\description{Construct a sparse model or \dQuote{design} matrix,
+-? form a formula and data frame (\code{sparse.model.matrix}) or a single
++? from a formula and data frame (\code{sparse.model.matrix}) or a single
+ ?? factor (\code{fac2sparse}).
+
+ ?? The \code{fac2[Ss]parse()} functions are utilities, also used
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Tue Jul 21 11:33:13 2020
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Tue, 21 Jul 2020 11:33:13 +0200
+Subject: [Rd] trivial typo in ?Matrix::sparse.model.matrix.Rd
+In-Reply-To: <41d4bdcb-e5b9-8bc3-f62e-7540ec73c2bd@gmail.com>
+References: <41d4bdcb-e5b9-8bc3-f62e-7540ec73c2bd@gmail.com>
+Message-ID: <24342.46681.797215.722544@stat.math.ethz.ch>
+
+>>>>> Ben Bolker 
+>>>>>     on Mon, 20 Jul 2020 20:11:04 -0400 writes:
+
+> ? "form" -> "from". Diff against latest SVN:
+> Index: sparse.model.matrix.Rd
+> ===================================================================
+> --- sparse.model.matrix.Rd??? (revision 3336)
+> +++ sparse.model.matrix.Rd??? (working copy)
+> @@ -4,7 +4,7 @@
+> ?\alias{fac2sparse}
+> ?\alias{fac2Sparse}
+> ?\description{Construct a sparse model or \dQuote{design} matrix,
+> -? form a formula and data frame (\code{sparse.model.matrix}) or a single
+> +? from a formula and data frame (\code{sparse.model.matrix}) or a single
+> ?? factor (\code{fac2sparse}).
+
+> ?? The \code{fac2[Ss]parse()} functions are utilities, also used
+
+Thank you, Ben; corrected in my (not yet committed) development
+version.
+
+BTW, there will be another improvement there,
+ deprecating  'giveCsparse = TRUE'
+ and replacing it by 'repr = "C"'
+
+the latter allowing all three kind of sparseMatrix formats
+("C", "R", "T")  instead of just Csparse* and Tsparse*.
+
+Best regards,
+Martin
+
+
+From @pencer@gr@ve@ @end|ng |rom prod@y@e@com  Tue Jul 21 13:29:20 2020
+From: @pencer@gr@ve@ @end|ng |rom prod@y@e@com (Spencer Graves)
+Date: Tue, 21 Jul 2020 06:29:20 -0500
+Subject: [Rd] trivial typo in ?Matrix::sparse.model.matrix.Rd
+In-Reply-To: <24342.46681.797215.722544@stat.math.ethz.ch>
+References: <41d4bdcb-e5b9-8bc3-f62e-7540ec73c2bd@gmail.com>
+ <24342.46681.797215.722544@stat.math.ethz.ch>
+Message-ID: <fdfdf622-1910-867c-4c46-90f881560786@prodsyse.com>
+
+Hi, Martin, Ben, et al.:
+
+
+On 2020-07-21 04:33, Martin Maechler wrote:
+>>>>>> Ben Bolker
+>>>>>>      on Mon, 20 Jul 2020 20:11:04 -0400 writes:
+>>  ? "form" -> "from". Diff against latest SVN:
+>> Index: sparse.model.matrix.Rd
+>> ===================================================================
+>> --- sparse.model.matrix.Rd??? (revision 3336)
+>> +++ sparse.model.matrix.Rd??? (working copy)
+>> @@ -4,7 +4,7 @@
+>>  ?\alias{fac2sparse}
+>>  ?\alias{fac2Sparse}
+>>  ?\description{Construct a sparse model or \dQuote{design} matrix,
+>> -? form a formula and data frame (\code{sparse.model.matrix}) or a single
+>> +? from a formula and data frame (\code{sparse.model.matrix}) or a single
+>>  ?? factor (\code{fac2sparse}).
+>>  ?? The \code{fac2[Ss]parse()} functions are utilities, also used
+> Thank you, Ben; corrected in my (not yet committed) development
+> version.
+>
+> BTW, there will be another improvement there,
+>   deprecating  'giveCsparse = TRUE'
+>   and replacing it by 'repr = "C"'
+>
+> the latter allowing all three kind of sparseMatrix formats
+> ("C", "R", "T")  instead of just Csparse* and Tsparse*.
+
+
+ ????? How I can learn more about this, including (a) 'repr = ("C", "R", 
+"T")', (b) how it creeps into my code, and (c) when I can expect to see it?
+
+
+ ????? I'm running R 4.0.2, and "?sparse.model.matrix" on a fresh 
+session generates "No documentation for ?sparse.model.matrix? in 
+specified packages and libraries", but it's there after 
+"library(Ecfun)".? I find that interesting, because "Matrix" does not 
+appear in the Ecfun DESCRIPTION file.? AND I don't see 'repr = ("C", 
+"R", "T")' in the "sparse.model.matrix" help file I do see.
+
+
+ ?????? Thanks,
+ ????? Spencer Graves
+>
+> Best regards,
+> Martin
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From jeroen @end|ng |rom berke|ey@edu  Tue Jul 21 13:55:16 2020
+From: jeroen @end|ng |rom berke|ey@edu (Jeroen Ooms)
+Date: Tue, 21 Jul 2020 13:55:16 +0200
+Subject: [Rd] Experimental CI tool for R
+Message-ID: <CABFfbXuWP=SMLB6b1RPvC2rb3eOk11f4w-N1XsaAdyv0wBuAjg@mail.gmail.com>
+
+Based on ideas from the R-core discussion panel at useR2020, I created
+a little CI tool to make it easier to follow changes in R-devel, and
+to write/test patches for R.
+
+The tool is based on a Github mirror of the SVN, where each new commit
+triggers a full make-check on 8 different system configurations. The
+results are published on: https://r-devel.github.io which gives an
+overview of the most recent revisions, including links to the build
+logs, and a link to the (unsigned) Windows installer. As of yesterday,
+it should be possible to inspect the build logs without signing in to
+GitHub.
+
+The system can also be used to develop and test patches for base-R.
+Anyone can send pull-requests, which will trigger the same set of
+builds. The check results and link to Windows installer will appear
+under your pull request. Finally, GitHub makes it very easy to export
+a pull request as a patch file, which is the format that R-core
+members still like to use. More instructions are available on:
+https://github.com/r-devel/r-svn#readme
+
+I hope this tool can make cross-platform testing and contributing of
+base-R slightly less painful, while we are still on SVN.
+
+
+From @purd|e@@ @end|ng |rom gm@||@com  Tue Jul 21 14:28:12 2020
+From: @purd|e@@ @end|ng |rom gm@||@com (Abby Spurdle)
+Date: Wed, 22 Jul 2020 00:28:12 +1200
+Subject: [Rd] trivial typo in ?Matrix::sparse.model.matrix.Rd
+In-Reply-To: <fdfdf622-1910-867c-4c46-90f881560786@prodsyse.com>
+References: <41d4bdcb-e5b9-8bc3-f62e-7540ec73c2bd@gmail.com>
+ <24342.46681.797215.722544@stat.math.ethz.ch>
+ <fdfdf622-1910-867c-4c46-90f881560786@prodsyse.com>
+Message-ID: <CAB8pepzkJkZKcGwfpnRyxiCE0MqKmUhb_yCjyBz=iHF+aF7iwA@mail.gmail.com>
+
+> "No documentation for ?sparse.model.matrix? in
+> specified packages and libraries", but it's there after
+> "library(Ecfun)".  I find that interesting, because "Matrix" does not
+> appear in the Ecfun DESCRIPTION file.
+
+Not interesting.
+Note the imports and depends fields.
+(Of your own packages).
+
+> AND I don't see 'repr = ("C",
+> "R", "T")' in the "sparse.model.matrix" help file I do see.
+
+Martin's comment used future tense.
+
+
+From jr@| @end|ng |rom po@teo@no  Tue Jul 21 15:19:39 2020
+From: jr@| @end|ng |rom po@teo@no (Rasmus Liland)
+Date: Tue, 21 Jul 2020 15:19:39 +0200
+Subject: [Rd] trivial typo in ?Matrix::sparse.model.matrix.Rd
+In-Reply-To: <CAB8pepzkJkZKcGwfpnRyxiCE0MqKmUhb_yCjyBz=iHF+aF7iwA@mail.gmail.com>
+References: <41d4bdcb-e5b9-8bc3-f62e-7540ec73c2bd@gmail.com>
+ <24342.46681.797215.722544@stat.math.ethz.ch>
+ <fdfdf622-1910-867c-4c46-90f881560786@prodsyse.com>
+ <CAB8pepzkJkZKcGwfpnRyxiCE0MqKmUhb_yCjyBz=iHF+aF7iwA@mail.gmail.com>
+Message-ID: <20200721131939.GA18604@posteo.no>
+
+On 2020-07-22 00:28 +1200, Abby Spurdle wrote:
+| On 2020-07-21 06:29 -0500, Spencer Graves wrote:
+| | 
+| | I'm running R 4.0.2, and 
+| | "?sparse.model.matrix" 
+| 
+| Not interesting.
+| Note the imports and depends fields.
+| (Of your own packages).
+
+Spencer, you need to specify the package 
+the function belong to, 
+?Matrix::sparse.model.matrix, or import 
+library(Matrix) ...
+
+| | How I can learn more about this, 
+| | including (a) 'repr = ("C", "R", 
+| | "T")', (b) how it creeps into my 
+| | code, and (c) when I can expect to 
+| | see it?
+
+I don't know the answer to these three.
+
+-------------- next part --------------
+A non-text attachment was scrubbed...
+Name: signature.asc
+Type: application/pgp-signature
+Size: 833 bytes
+Desc: not available
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20200721/f26bc769/attachment.sig>
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Tue Jul 21 16:00:12 2020
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Tue, 21 Jul 2020 16:00:12 +0200
+Subject: [Rd] trivial typo in ?Matrix::sparse.model.matrix.Rd
+In-Reply-To: <CAB8pepzkJkZKcGwfpnRyxiCE0MqKmUhb_yCjyBz=iHF+aF7iwA@mail.gmail.com>
+References: <41d4bdcb-e5b9-8bc3-f62e-7540ec73c2bd@gmail.com>
+ <24342.46681.797215.722544@stat.math.ethz.ch>
+ <fdfdf622-1910-867c-4c46-90f881560786@prodsyse.com>
+ <CAB8pepzkJkZKcGwfpnRyxiCE0MqKmUhb_yCjyBz=iHF+aF7iwA@mail.gmail.com>
+Message-ID: <24342.62700.615144.276918@stat.math.ethz.ch>
+
+>>>>> "AS" == Abby Spurdle 
+>>>>>     on Wed, 22 Jul 2020 00:28:12 +1200 writes:
+
+    >> "No documentation for ?sparse.model.matrix? in
+    >> specified packages and libraries", but it's there after
+    >> "library(Ecfun)".  I find that interesting, because "Matrix" does not
+    >> appear in the Ecfun DESCRIPTION file.
+
+    AS> Not interesting.
+    AS> Note the imports and depends fields.
+    AS> (Of your own packages).
+
+    >> AND I don't see 'repr = ("C",
+    >> "R", "T")' in the "sparse.model.matrix" help file I do see.
+
+    AS> Martin's comment used future tense.
+
+Indeed. It's not even yet in the *development* version of Matrix
+on R-forge, see 
+        packageDescription("Matrix")[["URL"]]
+but it probably will be "real soon now".
+
+The problem with that R-forge version (1.3-0) of Matrix is that
+half a dozen CRAN packages at least need to be slightly fixed
+before that Matrix version becomes default on CRAN,  as these
+packages make assumptions about unspecified behavior of some
+Matrix functions, notably  Matrix::Matrix()  which in that next version
+of Matrix  will produce  "diagonalMatrix" instead of
+"CsparseMatrix" objects in more cases....  a good thing, but not
+what those packages have assumed...
+
+@Spencer:  Are you actively using  'giveCsparse = ..' somewhere
+	   in your code?
+ If not, why would you be interested in the details of the changes
+ (which would be entirely invisible to you as user) ?
+
+
+Martin
+
+
+From @pencer@gr@ve@ @end|ng |rom prod@y@e@com  Tue Jul 21 16:34:19 2020
+From: @pencer@gr@ve@ @end|ng |rom prod@y@e@com (Spencer Graves)
+Date: Tue, 21 Jul 2020 09:34:19 -0500
+Subject: [Rd] trivial typo in ?Matrix::sparse.model.matrix.Rd
+In-Reply-To: <24342.62700.615144.276918@stat.math.ethz.ch>
+References: <41d4bdcb-e5b9-8bc3-f62e-7540ec73c2bd@gmail.com>
+ <24342.46681.797215.722544@stat.math.ethz.ch>
+ <fdfdf622-1910-867c-4c46-90f881560786@prodsyse.com>
+ <CAB8pepzkJkZKcGwfpnRyxiCE0MqKmUhb_yCjyBz=iHF+aF7iwA@mail.gmail.com>
+ <24342.62700.615144.276918@stat.math.ethz.ch>
+Message-ID: <b512b53a-bb5d-d07c-089a-13dc252d7748@prodsyse.com>
+
+
+
+On 2020-07-21 09:00, Martin Maechler wrote:
+>>>>>> "AS" == Abby Spurdle
+>>>>>>      on Wed, 22 Jul 2020 00:28:12 +1200 writes:
+>      >> "No documentation for ?sparse.model.matrix? in
+>      >> specified packages and libraries", but it's there after
+>      >> "library(Ecfun)".  I find that interesting, because "Matrix" does not
+>      >> appear in the Ecfun DESCRIPTION file.
+>
+>      AS> Not interesting.
+>      AS> Note the imports and depends fields.
+>      AS> (Of your own packages).
+>
+>      >> AND I don't see 'repr = ("C",
+>      >> "R", "T")' in the "sparse.model.matrix" help file I do see.
+>
+>      AS> Martin's comment used future tense.
+>
+> Indeed. It's not even yet in the *development* version of Matrix
+> on R-forge, see
+>          packageDescription("Matrix")[["URL"]]
+> but it probably will be "real soon now".
+>
+> The problem with that R-forge version (1.3-0) of Matrix is that
+> half a dozen CRAN packages at least need to be slightly fixed
+> before that Matrix version becomes default on CRAN,  as these
+> packages make assumptions about unspecified behavior of some
+> Matrix functions, notably  Matrix::Matrix()  which in that next version
+> of Matrix  will produce  "diagonalMatrix" instead of
+> "CsparseMatrix" objects in more cases....  a good thing, but not
+> what those packages have assumed...
+>
+> @Spencer:  Are you actively using  'giveCsparse = ..' somewhere
+> 	   in your code?
+>   If not, why would you be interested in the details of the changes
+>   (which would be entirely invisible to you as user) ?
+
+
+ ????? Jim Ramsay is rewriting the code for fda::fRegress.? It requires 
+a double iteration, which is already fairly expensive and often involves 
+large matrices, especially if you want to estimate, e.g., more spline 
+coefficients than observations by using some smoothness criterion to 
+make the problem estimable.? I suggested he consider a singular value 
+decomposition, which would preserve numerical precision AND maybe 
+transform the problem into a series of univariate optimization problems.
+
+
+ ????? By the way, Ecfun includes some 32 "suggests" and "imports". 
+"Matrix" is not one of them, but it must be called by something else 
+that's loaded by Ecfun, to get the result I got.
+
+
+ ????? Thanks,
+ ????? Spencer
+>
+> Martin
+
+
+From @purd|e@@ @end|ng |rom gm@||@com  Tue Jul 21 22:42:40 2020
+From: @purd|e@@ @end|ng |rom gm@||@com (Abby Spurdle)
+Date: Wed, 22 Jul 2020 08:42:40 +1200
+Subject: [Rd] trivial typo in ?Matrix::sparse.model.matrix.Rd
+In-Reply-To: <b512b53a-bb5d-d07c-089a-13dc252d7748@prodsyse.com>
+References: <41d4bdcb-e5b9-8bc3-f62e-7540ec73c2bd@gmail.com>
+ <24342.46681.797215.722544@stat.math.ethz.ch>
+ <fdfdf622-1910-867c-4c46-90f881560786@prodsyse.com>
+ <CAB8pepzkJkZKcGwfpnRyxiCE0MqKmUhb_yCjyBz=iHF+aF7iwA@mail.gmail.com>
+ <24342.62700.615144.276918@stat.math.ethz.ch>
+ <b512b53a-bb5d-d07c-089a-13dc252d7748@prodsyse.com>
+Message-ID: <CAB8pepzBOPHpvjn1JKBgy_kOQ1je3igVGmcZ4AT3Mj2Utny3CA@mail.gmail.com>
+
+>  By the way, Ecfun includes some 32 "suggests" and "imports".
+> "Matrix" is not one of them, but it must be called by something else
+> that's loaded by Ecfun, to get the result I got.
+
+Spencer, I find some of your comments/questions on R packages, extremely basic.
+(Sorry, if that sounds condescending, but I'm wondering if your
+comments/questions would be better R-package-devel?).
+
+You need to look at the imports and depends fields.
+(As stated in my previous post).
+
+The *first* package on the Ecfun imports list, is fda, which is *your*
+package (technically, contributor), and it has a dependency on the
+Matrix package.
+
+I'd recommend you read the documentation on writing R packages, and on
+how package namespaces are handled.
+
+
+From @purd|e@@ @end|ng |rom gm@||@com  Wed Jul 22 09:06:50 2020
+From: @purd|e@@ @end|ng |rom gm@||@com (Abby Spurdle)
+Date: Wed, 22 Jul 2020 19:06:50 +1200
+Subject: [Rd] trivial typo in ?Matrix::sparse.model.matrix.Rd
+In-Reply-To: <CAB8pepzBOPHpvjn1JKBgy_kOQ1je3igVGmcZ4AT3Mj2Utny3CA@mail.gmail.com>
+References: <41d4bdcb-e5b9-8bc3-f62e-7540ec73c2bd@gmail.com>
+ <24342.46681.797215.722544@stat.math.ethz.ch>
+ <fdfdf622-1910-867c-4c46-90f881560786@prodsyse.com>
+ <CAB8pepzkJkZKcGwfpnRyxiCE0MqKmUhb_yCjyBz=iHF+aF7iwA@mail.gmail.com>
+ <24342.62700.615144.276918@stat.math.ethz.ch>
+ <b512b53a-bb5d-d07c-089a-13dc252d7748@prodsyse.com>
+ <CAB8pepzBOPHpvjn1JKBgy_kOQ1je3igVGmcZ4AT3Mj2Utny3CA@mail.gmail.com>
+Message-ID: <CAB8pepxPiTRf7kR+6wvVmSOPpXWJY0SzijDEby9AfPP_-MXuJQ@mail.gmail.com>
+
+> The *first* package on the Ecfun imports list, is fda, which is *your*
+> package (technically, contributor), and it has a dependency on the
+> Matrix package.
+
+My post this morning might have come across the wrong way.
+It's good that you're interested in software for numerical linear algebra.
+(I only just worked the importance of this, about a year ago).
+And I may also have a closer look at the Matrix package, in the near future.
+
+
+From konto7628845339 @end|ng |rom gm@||@com  Wed Jul 22 21:29:53 2020
+From: konto7628845339 @end|ng |rom gm@||@com (Pan Domu)
+Date: Wed, 22 Jul 2020 21:29:53 +0200
+Subject: [Rd] Invisible names problem
+Message-ID: <CAKAZgmJyR8kQFHTPQsZzy=D13hToGSmfkX+vb9XGtSRGLNJ9jQ@mail.gmail.com>
+
+I ran into strange behavior when removing names.
+
+Two ways of removing names:
+
+    i <- rep(1:4, length.out=20000)
+    k <- c(a=1, b=2, c=3, d=4)
+
+    x1 <- unname(k[i])
+    x2 <- k[i]
+    x2 <- unname(x2)
+
+Are they identical?
+
+    identical(x1,x2) # TRUE
+
+but no
+
+    identical(serialize(x1,NULL),serialize(x2,NULL)) # FALSE
+
+But problem is with serialization type 3, cause:
+
+    identical(serialize(x1,NULL,version = 2),serialize(x2,NULL,version =
+2)) # TRUE
+
+It seems that the second one keeps names somewhere invisibly.
+
+Some function can lost them, e.g. head:
+
+    identical(serialize(head(x1, 20001),NULL),serialize(head(x2,
+20001),NULL)) # TRUE
+
+But not saveRDS (so files are bigger), tibble family keeps them but base
+data.frame seems to drop them.
+
+>From my test invisible names are in following cases:
+
+   x1 <- k[i] %>% unname()
+   x3 <- k[i]; x3 <- unname(x3)
+   x5 <- k[i]; x5 <- `names<-`(x5, NULL)
+   x6 <- k[i]; x6 <- unname(x6)
+
+but not in this one
+   x2 <- unname(k[i])
+   x4 <- k[i]; names(x4) <- NULL
+
+What kind of magick is that?
+
+It hits us when we upgrade from 3.5 (when serialization changed) and had
+impact on parallelization (cause serialized objects were bigger).
+
+	[[alternative HTML version deleted]]
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Wed Jul 22 22:59:08 2020
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Thu, 23 Jul 2020 08:59:08 +1200
+Subject: [Rd] Invisible names problem
+In-Reply-To: <CAKAZgmJyR8kQFHTPQsZzy=D13hToGSmfkX+vb9XGtSRGLNJ9jQ@mail.gmail.com>
+References: <CAKAZgmJyR8kQFHTPQsZzy=D13hToGSmfkX+vb9XGtSRGLNJ9jQ@mail.gmail.com>
+Message-ID: <49357159-69C3-4902-A42B-54CD61F8F4F0@R-project.org>
+
+Very interesting:
+
+> .Internal(inspect(k[i]))
+@10a4bc000 14 REALSXP g0c7 [ATT] (len=20000, tl=0) 1,2,3,4,1,...
+ATTRIB:
+  @7fa24f07fa58 02 LISTSXP g0c0 [REF(1)] 
+    TAG: @7fa24b803e90 01 SYMSXP g0c0 [MARK,REF(5814),LCK,gp=0x6000] "names" (has value)
+    @10a4e4000 16 STRSXP g0c7 [REF(1)] (len=20000, tl=0)
+      @7fa24ba575c8 09 CHARSXP g0c1 [MARK,REF(35005),gp=0x61] [ASCII] [cached] "a"
+      @7fa24be24428 09 CHARSXP g0c1 [MARK,REF(35010),gp=0x61] [ASCII] [cached] "b"
+      @7fa24b806ec0 09 CHARSXP g0c1 [MARK,REF(35082),gp=0x61] [ASCII] [cached] "c"
+      @7fa24bcc6af0 09 CHARSXP g0c1 [MARK,REF(35003),gp=0x61] [ASCII] [cached] "d"
+      @7fa24ba575c8 09 CHARSXP g0c1 [MARK,REF(35005),gp=0x61] [ASCII] [cached] "a"
+      ...
+
+> .Internal(inspect(unname(k[i])))
+@10a50c000 14 REALSXP g0c7 [] (len=20000, tl=0) 1,2,3,4,1,...
+
+> .Internal(inspect(x2))
+@7fa24fc692d8 14 REALSXP g0c0 [REF(1)]  wrapper [srt=-2147483648,no_na=0]
+  @10a228000 14 REALSXP g0c7 [REF(1),ATT] (len=20000, tl=0) 1,2,3,4,1,...
+  ATTRIB:
+    @7fa24fc69850 02 LISTSXP g0c0 [REF(1)] 
+      TAG: @7fa24b803e90 01 SYMSXP g0c0 [MARK,REF(5797),LCK,gp=0x4000] "names" (has value)
+      @10a250000 16 STRSXP g0c7 [REF(65535)] (len=20000, tl=0)
+	@7fa24ba575c8 09 CHARSXP g0c1 [MARK,REF(10005),gp=0x61] [ASCII] [cached] "a"
+	@7fa24be24428 09 CHARSXP g0c1 [MARK,REF(10010),gp=0x61] [ASCII] [cached] "b"
+	@7fa24b806ec0 09 CHARSXP g0c1 [MARK,REF(10077),gp=0x61] [ASCII] [cached] "c"
+	@7fa24bcc6af0 09 CHARSXP g0c1 [MARK,REF(10003),gp=0x61] [ASCII] [cached] "d"
+	@7fa24ba575c8 09 CHARSXP g0c1 [MARK,REF(10005),gp=0x61] [ASCII] [cached] "a"
+	...
+
+If you don't assign the intermediate result things are simple as R knows there are no references so the names can be simply removed. However, if you assign the result that is not possible as there is still the reference in x2 at the time when unname() creates its own local temporary variable obj to do what probably most of us would use which is names(obj) <- NULL (i.e. names(x2) <- NULL avoids that problem.since you don't need both x2 and obj).
+
+To be precise, when you use unname() on an assigned object, R has to technically keep two copies - one for the existing x2 and a second in unname() for obj so it can call names(obj)<-NULL for the modification. To avoid that R instead creates a wrapper for the original x2 which says "like x2 but names are NULL". The rationale is that for large vector it is better to keep records of metadata changes rather than duplicating the object. This way the vector is stored only once. However, as you blow way the original x2, all that is left is k[I] with the extra information "don't use the names". Unfortunately, R cannot know that you will eventually only keep the version without the names - at which point it could strip the names since they are not referenced anymore.
+
+I'm not sure what is the best solution here. In theory, if the wrapper found out that the object it is wrapping has no more references it could remove the names, but I'm sure that would only solve some cases (what if you duplicated the wrapper and thus there were multiple wrappers referencing it?) and not sure if it has a way to find out. The other way to deal with that would be at serialization time if it could be detected such that it can remove the wrapper. Since the intersection of serialization experts and ALTREP experts is exactly one, I'll leave it to that set to comment further ;).
+
+Cheers,
+Simon
+
+
+
+> On Jul 23, 2020, at 07:29, Pan Domu <konto7628845339 at gmail.com> wrote:
+> 
+> I ran into strange behavior when removing names.
+> 
+> Two ways of removing names:
+> 
+>    i <- rep(1:4, length.out=20000)
+>    k <- c(a=1, b=2, c=3, d=4)
+> 
+>    x1 <- unname(k[i])
+>    x2 <- k[i]
+>    x2 <- unname(x2)
+> 
+> Are they identical?
+> 
+>    identical(x1,x2) # TRUE
+> 
+> but no
+> 
+>    identical(serialize(x1,NULL),serialize(x2,NULL)) # FALSE
+> 
+> But problem is with serialization type 3, cause:
+> 
+>    identical(serialize(x1,NULL,version = 2),serialize(x2,NULL,version =
+> 2)) # TRUE
+> 
+> It seems that the second one keeps names somewhere invisibly.
+> 
+> Some function can lost them, e.g. head:
+> 
+>    identical(serialize(head(x1, 20001),NULL),serialize(head(x2,
+> 20001),NULL)) # TRUE
+> 
+> But not saveRDS (so files are bigger), tibble family keeps them but base
+> data.frame seems to drop them.
+> 
+> From my test invisible names are in following cases:
+> 
+>   x1 <- k[i] %>% unname()
+>   x3 <- k[i]; x3 <- unname(x3)
+>   x5 <- k[i]; x5 <- `names<-`(x5, NULL)
+>   x6 <- k[i]; x6 <- unname(x6)
+> 
+> but not in this one
+>   x2 <- unname(k[i])
+>   x4 <- k[i]; names(x4) <- NULL
+> 
+> What kind of magick is that?
+> 
+> It hits us when we upgrade from 3.5 (when serialization changed) and had
+> impact on parallelization (cause serialized objects were bigger).
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Wed Jul 22 23:29:38 2020
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Wed, 22 Jul 2020 17:29:38 -0400
+Subject: [Rd] Invisible names problem
+In-Reply-To: <CAKAZgmJyR8kQFHTPQsZzy=D13hToGSmfkX+vb9XGtSRGLNJ9jQ@mail.gmail.com>
+References: <CAKAZgmJyR8kQFHTPQsZzy=D13hToGSmfkX+vb9XGtSRGLNJ9jQ@mail.gmail.com>
+Message-ID: <6bd9a2ff-1b43-8e9d-5a03-8789a4484063@gmail.com>
+
+On 22/07/2020 3:29 p.m., Pan Domu wrote:
+> I ran into strange behavior when removing names.
+> 
+> Two ways of removing names:
+> 
+>      i <- rep(1:4, length.out=20000)
+>      k <- c(a=1, b=2, c=3, d=4)
+> 
+>      x1 <- unname(k[i])
+>      x2 <- k[i]
+>      x2 <- unname(x2)
+> 
+> Are they identical?
+> 
+>      identical(x1,x2) # TRUE
+> 
+> but no
+> 
+>      identical(serialize(x1,NULL),serialize(x2,NULL)) # FALSE
+> 
+> But problem is with serialization type 3, cause:
+> 
+>      identical(serialize(x1,NULL,version = 2),serialize(x2,NULL,version =
+> 2)) # TRUE
+> 
+> It seems that the second one keeps names somewhere invisibly.
+> 
+> Some function can lost them, e.g. head:
+> 
+>      identical(serialize(head(x1, 20001),NULL),serialize(head(x2,
+> 20001),NULL)) # TRUE
+> 
+> But not saveRDS (so files are bigger), tibble family keeps them but base
+> data.frame seems to drop them.
+> 
+>  From my test invisible names are in following cases:
+> 
+>     x1 <- k[i] %>% unname()
+>     x3 <- k[i]; x3 <- unname(x3)
+>     x5 <- k[i]; x5 <- `names<-`(x5, NULL)
+>     x6 <- k[i]; x6 <- unname(x6)
+> 
+> but not in this one
+>     x2 <- unname(k[i])
+>     x4 <- k[i]; names(x4) <- NULL
+> 
+> What kind of magick is that?
+> 
+> It hits us when we upgrade from 3.5 (when serialization changed) and had
+> impact on parallelization (cause serialized objects were bigger).
+
+You can use .Internal(inspect(x1)) and .Internal(inspect(x2)) to see 
+that the two objects are not identical:
+
+ > .Internal(inspect(x1))
+@1116b7000 14 REALSXP g0c7 [REF(2)] (len=20000, tl=0) 1,2,3,4,1,...
+ > .Internal(inspect(x2))
+@7f9c77664ce8 14 REALSXP g0c0 [REF(2)]  wrapper [srt=-2147483648,no_na=0]
+   @10e7b7000 14 REALSXP g0c7 [REF(6),ATT] (len=20000, tl=0) 1,2,3,4,1,...
+   ATTRIB:
+     @7f9c77664738 02 LISTSXP g0c0 [REF(1)]
+       TAG: @7f9c6c027890 01 SYMSXP g1c0 [MARK,REF(65535),LCK,gp=0x4000] 
+"names" (has value)
+       @10e3ac000 16 STRSXP g0c7 [REF(65535)] (len=20000, tl=0)
+	@7f9c6ab531c8 09 CHARSXP g1c1 [MARK,REF(10066),gp=0x61] [ASCII] 
+[cached] "a"
+	@7f9c6ae9a678 09 CHARSXP g1c1 [MARK,REF(10013),gp=0x61] [ASCII] 
+[cached] "b"
+	@7f9c6c0496c0 09 CHARSXP g1c1 [MARK,REF(10568),gp=0x61,ATT] [ASCII] 
+[cached] "c"
+	@7f9c6ad3df40 09 CHARSXP g1c1 [MARK,REF(10029),gp=0x61,ATT] [ASCII] 
+[cached] "d"
+	@7f9c6ab531c8 09 CHARSXP g1c1 [MARK,REF(10066),gp=0x61] [ASCII] 
+[cached] "a"
+	...
+
+
+It looks as though x2 is a tiny ALTREP object acting as a wrapper on the 
+original k[i], but I might be misinterpreting those displays.  I don't 
+know how to force ALTREP objects to standard representation: 
+unserializing the serialized x2 gives something like x2, not like x1. 
+Maybe you want to look at one of the contributed low level packages. 
+The stringfish package has a "materialize" function that is advertised 
+to convert anything to standard format, but it doesn't change x2.
+
+Duncan Murdoch
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Thu Jul 23 00:00:16 2020
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Wed, 22 Jul 2020 17:00:16 -0500 (CDT)
+Subject: [Rd] [External] Re:  Invisible names problem
+In-Reply-To: <49357159-69C3-4902-A42B-54CD61F8F4F0@R-project.org>
+References: <CAKAZgmJyR8kQFHTPQsZzy=D13hToGSmfkX+vb9XGtSRGLNJ9jQ@mail.gmail.com>
+ <49357159-69C3-4902-A42B-54CD61F8F4F0@R-project.org>
+Message-ID: <alpine.DEB.2.21.2007221646040.3754@luke-Latitude-7480>
+
+On Wed, 22 Jul 2020, Simon Urbanek wrote:
+
+> Very interesting:
+>
+>> .Internal(inspect(k[i]))
+> @10a4bc000 14 REALSXP g0c7 [ATT] (len=20000, tl=0) 1,2,3,4,1,...
+> ATTRIB:
+>  @7fa24f07fa58 02 LISTSXP g0c0 [REF(1)]
+>    TAG: @7fa24b803e90 01 SYMSXP g0c0 [MARK,REF(5814),LCK,gp=0x6000] "names" (has value)
+>    @10a4e4000 16 STRSXP g0c7 [REF(1)] (len=20000, tl=0)
+>      @7fa24ba575c8 09 CHARSXP g0c1 [MARK,REF(35005),gp=0x61] [ASCII] [cached] "a"
+>      @7fa24be24428 09 CHARSXP g0c1 [MARK,REF(35010),gp=0x61] [ASCII] [cached] "b"
+>      @7fa24b806ec0 09 CHARSXP g0c1 [MARK,REF(35082),gp=0x61] [ASCII] [cached] "c"
+>      @7fa24bcc6af0 09 CHARSXP g0c1 [MARK,REF(35003),gp=0x61] [ASCII] [cached] "d"
+>      @7fa24ba575c8 09 CHARSXP g0c1 [MARK,REF(35005),gp=0x61] [ASCII] [cached] "a"
+>      ...
+>
+>> .Internal(inspect(unname(k[i])))
+> @10a50c000 14 REALSXP g0c7 [] (len=20000, tl=0) 1,2,3,4,1,...
+>
+>> .Internal(inspect(x2))
+> @7fa24fc692d8 14 REALSXP g0c0 [REF(1)]  wrapper [srt=-2147483648,no_na=0]
+>  @10a228000 14 REALSXP g0c7 [REF(1),ATT] (len=20000, tl=0) 1,2,3,4,1,...
+>  ATTRIB:
+>    @7fa24fc69850 02 LISTSXP g0c0 [REF(1)]
+>      TAG: @7fa24b803e90 01 SYMSXP g0c0 [MARK,REF(5797),LCK,gp=0x4000] "names" (has value)
+>      @10a250000 16 STRSXP g0c7 [REF(65535)] (len=20000, tl=0)
+> 	@7fa24ba575c8 09 CHARSXP g0c1 [MARK,REF(10005),gp=0x61] [ASCII] [cached] "a"
+> 	@7fa24be24428 09 CHARSXP g0c1 [MARK,REF(10010),gp=0x61] [ASCII] [cached] "b"
+> 	@7fa24b806ec0 09 CHARSXP g0c1 [MARK,REF(10077),gp=0x61] [ASCII] [cached] "c"
+> 	@7fa24bcc6af0 09 CHARSXP g0c1 [MARK,REF(10003),gp=0x61] [ASCII] [cached] "d"
+> 	@7fa24ba575c8 09 CHARSXP g0c1 [MARK,REF(10005),gp=0x61] [ASCII] [cached] "a"
+> 	...
+>
+> If you don't assign the intermediate result things are simple as R knows there are no references so the names can be simply removed. However, if you assign the result that is not possible as there is still the reference in x2 at the time when unname() creates its own local temporary variable obj to do what probably most of us would use which is names(obj) <- NULL (i.e. names(x2) <- NULL avoids that problem.since you don't need both x2 and obj).
+>
+> To be precise, when you use unname() on an assigned object, R has to technically keep two copies - one for the existing x2 and a second in unname() for obj so it can call names(obj)<-NULL for the modification. To avoid that R instead creates a wrapper for the original x2 which says "like x2 but names are NULL". The rationale is that for large vector it is better to keep records of metadata changes rather than duplicating the object. This way the vector is stored only once. However, as you blow way the original x2, all that is left is k[I] with the extra information "don't use the names". Unfortunately, R cannot know that you will eventually only keep the version without the names - at which point it could strip the names since they are not referenced anymore.
+>
+> I'm not sure what is the best solution here. In theory, if the wrapper found out that the object it is wrapping has no more references it could remove the names, but I'm sure that would only solve some cases (what if you duplicated the wrapper and thus there were multiple wrappers referencing it?) and not sure if it has a way to find out. The other way to deal with that would be at serialization time if it could be detected such that it can remove the wrapper. Since the intersection of serialization experts and ALTREP experts is exactly one, I'll leave it to that set to comment further ;).
+
+Currently the wrapper serialization mechanism just serializes the
+wrapped object and unserialize re-wraps it at the other end.
+
+If there is only one reference to the wrapped value then we know the
+attributes can't be accessed from the R level anymore, so it would be
+safe to remove the attributes before passing it off for serializing.
+Unless I'm missing something that would be an easy change. But it
+would be good to know if it would really make a difference in
+realistic situations.
+
+[Dropping attributes could be done at other times as well if there is
+only one reference, e.g. on accessing the data, but that is not likely
+to be worth while within a single R session.]
+
+If there is more than one reference to the wrapped object, then things
+is more complicated. We could duplicate the payload and send that off
+for serialization (and install it in the wrapper), but that could be a
+bad idea of the object is large.
+
+A tighter integration of ALTREP serialization with the serialization
+internals might allow and ALTREP's serialization method to write
+directly to the serialization stream, but that would make things much
+harder to maintain.
+
+Best,
+
+luke
+
+>
+> Cheers,
+> Simon
+>
+>
+>
+>> On Jul 23, 2020, at 07:29, Pan Domu <konto7628845339 at gmail.com> wrote:
+>>
+>> I ran into strange behavior when removing names.
+>>
+>> Two ways of removing names:
+>>
+>>    i <- rep(1:4, length.out=20000)
+>>    k <- c(a=1, b=2, c=3, d=4)
+>>
+>>    x1 <- unname(k[i])
+>>    x2 <- k[i]
+>>    x2 <- unname(x2)
+>>
+>> Are they identical?
+>>
+>>    identical(x1,x2) # TRUE
+>>
+>> but no
+>>
+>>    identical(serialize(x1,NULL),serialize(x2,NULL)) # FALSE
+>>
+>> But problem is with serialization type 3, cause:
+>>
+>>    identical(serialize(x1,NULL,version = 2),serialize(x2,NULL,version =
+>> 2)) # TRUE
+>>
+>> It seems that the second one keeps names somewhere invisibly.
+>>
+>> Some function can lost them, e.g. head:
+>>
+>>    identical(serialize(head(x1, 20001),NULL),serialize(head(x2,
+>> 20001),NULL)) # TRUE
+>>
+>> But not saveRDS (so files are bigger), tibble family keeps them but base
+>> data.frame seems to drop them.
+>>
+>> From my test invisible names are in following cases:
+>>
+>>   x1 <- k[i] %>% unname()
+>>   x3 <- k[i]; x3 <- unname(x3)
+>>   x5 <- k[i]; x5 <- `names<-`(x5, NULL)
+>>   x6 <- k[i]; x6 <- unname(x6)
+>>
+>> but not in this one
+>>   x2 <- unname(k[i])
+>>   x4 <- k[i]; names(x4) <- NULL
+>>
+>> What kind of magick is that?
+>>
+>> It hits us when we upgrade from 3.5 (when serialization changed) and had
+>> impact on parallelization (cause serialized objects were bigger).
+>>
+>> 	[[alternative HTML version deleted]]
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+
+
+From wdun|@p @end|ng |rom t|bco@com  Thu Jul 23 01:29:33 2020
+From: wdun|@p @end|ng |rom t|bco@com (William Dunlap)
+Date: Wed, 22 Jul 2020 16:29:33 -0700
+Subject: [Rd] CAR0 vs. EXTPTR_PTR
+Message-ID: <CAF8bMcbW0fOiST3dcVL9sC6V6r5wCqQ3QZpJuf3AiY1y=b_47Q@mail.gmail.com>
+
+I know that binary packages are R-version specific, but it was a bit
+surprising that Rcpp 1.0.5 built with R-4.0.2 cannot be loaded into
+R-4.0.0.
+
+% R-4.0.0 --quiet
+> library(Rcpp, lib="lib-4.0.2")
+Error: package or namespace load failed for ?Rcpp? in dyn.load(file,
+DLLpath = DLLpath, ...):
+ unable to load shared object '/tmp/bill/lib-4.0.2/Rcpp/libs/Rcpp.so':
+  /tmp/bill/lib-4.0.2/Rcpp/libs/Rcpp.so: undefined symbol: EXTPTR_PTR
+In addition: Warning message:
+package ?Rcpp? was built under R version 4.0.2
+
+It looks like R's include/Rinternals.h was rejiggered so the function
+EXTPTR_PTR is called when CAR0 used to be.   (I think they do the same
+thing.)
+
+Bill Dunlap
+TIBCO Software
+wdunlap tibco.com
+
+
+From edd @end|ng |rom deb|@n@org  Thu Jul 23 01:52:48 2020
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Wed, 22 Jul 2020 18:52:48 -0500
+Subject: [Rd] CAR0 vs. EXTPTR_PTR
+In-Reply-To: <CAF8bMcbW0fOiST3dcVL9sC6V6r5wCqQ3QZpJuf3AiY1y=b_47Q@mail.gmail.com>
+References: <CAF8bMcbW0fOiST3dcVL9sC6V6r5wCqQ3QZpJuf3AiY1y=b_47Q@mail.gmail.com>
+Message-ID: <24344.53584.717367.647775@rob.eddelbuettel.com>
+
+
+On 22 July 2020 at 16:29, William Dunlap via R-devel wrote:
+| I know that binary packages are R-version specific, but it was a bit
+| surprising that Rcpp 1.0.5 built with R-4.0.2 cannot be loaded into
+| R-4.0.0.
+| 
+| % R-4.0.0 --quiet
+| > library(Rcpp, lib="lib-4.0.2")
+| Error: package or namespace load failed for ?Rcpp? in dyn.load(file,
+| DLLpath = DLLpath, ...):
+|  unable to load shared object '/tmp/bill/lib-4.0.2/Rcpp/libs/Rcpp.so':
+|   /tmp/bill/lib-4.0.2/Rcpp/libs/Rcpp.so: undefined symbol: EXTPTR_PTR
+| In addition: Warning message:
+| package ?Rcpp? was built under R version 4.0.2
+| 
+| It looks like R's include/Rinternals.h was rejiggered so the function
+| EXTPTR_PTR is called when CAR0 used to be.   (I think they do the same
+| thing.)
+
+AFAIK it is not so much that you cannot take a 4.0.2 binary "back" to an
+older R version, it is more that 4.0.0/4.0.1 had an inadvertent change that
+broke things.
+
+This came up a few times already on a few of the lists and on stackoverflow.
+
+And simply running R 4.0.2 and building on R 4.0.2 is the safest bet.
+
+Dirk
+
+-- 
+https://dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From @|mon@urb@nek @end|ng |rom r-project@org  Thu Jul 23 23:57:13 2020
+From: @|mon@urb@nek @end|ng |rom r-project@org (Simon Urbanek)
+Date: Fri, 24 Jul 2020 09:57:13 +1200
+Subject: [Rd] Experimental CI tool for R
+In-Reply-To: <CABFfbXuWP=SMLB6b1RPvC2rb3eOk11f4w-N1XsaAdyv0wBuAjg@mail.gmail.com>
+References: <CABFfbXuWP=SMLB6b1RPvC2rb3eOk11f4w-N1XsaAdyv0wBuAjg@mail.gmail.com>
+Message-ID: <AC265884-C772-4980-A6DD-587956701668@r-project.org>
+
+Jeroen,
+
+This is great! It is definitely a good basis to build on.
+
+However, I wonder why your macOS setup is so extremely stripped down (not even Cairo, tcltk nor X11 - and not TeX, either) and as far from what we actually use as possible (using gcc instead of clang, openblas etc.). 
+
+How do you plan to go about managing the build flavors? I think it would be great if there was a process whereby the builds could be updated so they are more realistic and thus more helpful, but since the repo is completely anonymous, it's unclear how one would go about that nor how it would be governed (and where to put documentation). For obvious reasons the Windows one is the only complete one, but given the requests for Homebrew-based package testing (independent of CRAN) it would be useful to publish the artefacts as well so that they could be used by GH action workflows for packages. Cleary we could just fork it, but I guess it would make more sense if this was a coordinated effort.
+
+Cheers,
+Simon
+
+
+> On Jul 21, 2020, at 23:55, Jeroen Ooms <jeroen at berkeley.edu> wrote:
+> 
+> Based on ideas from the R-core discussion panel at useR2020, I created
+> a little CI tool to make it easier to follow changes in R-devel, and
+> to write/test patches for R.
+> 
+> The tool is based on a Github mirror of the SVN, where each new commit
+> triggers a full make-check on 8 different system configurations. The
+> results are published on: https://r-devel.github.io which gives an
+> overview of the most recent revisions, including links to the build
+> logs, and a link to the (unsigned) Windows installer. As of yesterday,
+> it should be possible to inspect the build logs without signing in to
+> GitHub.
+> 
+> The system can also be used to develop and test patches for base-R.
+> Anyone can send pull-requests, which will trigger the same set of
+> builds. The check results and link to Windows installer will appear
+> under your pull request. Finally, GitHub makes it very easy to export
+> a pull request as a patch file, which is the format that R-core
+> members still like to use. More instructions are available on:
+> https://github.com/r-devel/r-svn#readme
+> 
+> I hope this tool can make cross-platform testing and contributing of
+> base-R slightly less painful, while we are still on SVN.
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
+From m@rco@@tzer| @end|ng |rom gm@||@com  Sat Jul 25 10:11:49 2020
+From: m@rco@@tzer| @end|ng |rom gm@||@com (Marco Atzeri)
+Date: Sat, 25 Jul 2020 10:11:49 +0200
+Subject: [Rd] configure failed with curl 7.71.1
+Message-ID: <a4adebbe-1aa1-0b76-257b-b8c0c565158c@gmail.com>
+
+Hi dev,
+
+can someone confirm if it is a general R 4.0.4 problem
+or it is happening only on cygwin ?
+
+checking for curl/curl.h... yes
+checking if libcurl is version 7 and >= 7.28.0...
+configure: error: libcurl >= 7.28.0 library and headers are required 
+with support for https
+*** ERROR: configure failed
+
+but https is available on curl:
+
+$ curl --version
+curl 7.71.1 (x86_64-pc-cygwin) libcurl/7.71.1 OpenSSL/1.1.1f zlib/1.2.11 
+brotli/1.0.7 libidn2/2.2.0 libpsl/0.21.0 (+libidn2/2.0.4) 
+libssh/0.8.7/openssl/zlib nghttp2/1.37.0
+Release-Date: 2020-07-01
+Protocols: dict file ftp ftps gopher http https imap imaps ldap ldaps 
+pop3 pop3s rtsp scp sftp smb smbs smtp smtps telnet tftp
+Features: AsynchDNS brotli Debug HTTP2 HTTPS-proxy IDN IPv6 Largefile 
+libz NTLM NTLM_WB PSL SSL TLS-SRP TrackMemory UnixSockets
+
+$ cygcheck -l libcurl-devel
+/usr/bin/curl-config
+/usr/include/curl/curl.h
+/usr/include/curl/curlver.h
+/usr/include/curl/easy.h
+/usr/include/curl/mprintf.h
+/usr/include/curl/multi.h
+/usr/include/curl/stdcheaders.h
+/usr/include/curl/system.h
+/usr/include/curl/typecheck-gcc.h
+/usr/include/curl/urlapi.h
+/usr/lib/libcurl.dll.a
+/usr/lib/pkgconfig/libcurl.pc
+/usr/share/aclocal/libcurl.m4
+/usr/share/man/man1/curl-config.1.gz
+
+Regards
+Marco
+
+
+From jeroenoom@ @end|ng |rom gm@||@com  Sat Jul 25 11:59:11 2020
+From: jeroenoom@ @end|ng |rom gm@||@com (Jeroen Ooms)
+Date: Sat, 25 Jul 2020 11:59:11 +0200
+Subject: [Rd] configure failed with curl 7.71.1
+In-Reply-To: <a4adebbe-1aa1-0b76-257b-b8c0c565158c@gmail.com>
+References: <a4adebbe-1aa1-0b76-257b-b8c0c565158c@gmail.com>
+Message-ID: <CABFfbXuJkVAo+eB53JqqvfRCPevsiLyS8ZmMKop9Lkm10_ygEg@mail.gmail.com>
+
+On Sat, Jul 25, 2020 at 10:12 AM Marco Atzeri <marco.atzeri at gmail.com> wrote:
+>
+> Hi dev,
+>
+> can someone confirm if it is a general R 4.0.4 problem
+> or it is happening only on cygwin ?
+>
+> checking for curl/curl.h... yes
+> checking if libcurl is version 7 and >= 7.28.0...
+> configure: error: libcurl >= 7.28.0 library and headers are required
+> with support for https
+> *** ERROR: configure failed
+>
+> but https is available on curl
+
+You should inspect the config.log or config.status file to see why the
+version check is failing.
+
+
+From @osp@m m@iii@g oii @itieid-im@de  Sat Jul 25 22:48:33 2020
+From: @osp@m m@iii@g oii @itieid-im@de (@osp@m m@iii@g oii @itieid-im@de)
+Date: Sat, 25 Jul 2020 22:48:33 +0200
+Subject: [Rd] Guidelines when to use LF vs CRLF ("\n" vs. "\r\n") on Windows
+ for new lines (line endings)?
+Message-ID: <8c1faae50eb4c48ac03d154e666f1bbba2f60a4b.camel@altfeld-im.de>
+
+Dear R developers,
+
+I am developing an R package which returns strings with new line codes.
+I am not sure if I should use "\r\n" or "\n" in my returned strings on Windows platforms.
+
+What is the recommended best practice for package developers (and code in base R) for coding new lines in strings?
+
+And just out of curiosity: What is the reason (or history) for preferring "\n" in R even on Windows (see examples below)?
+
+Best regards
+
+J?rgen
+
+PS: Examples from base R:
+
+R seems to use (almost) only "\n" for new lines internally - even on Windows platforms, eg.:
+
+    charToRaw(paste0("a", "\n", "b"))
+    [1] 61 0a 62
+
+    # eol default is "\n"
+    write.table(x, file = "", append = FALSE, quote = TRUE, sep = " ",
+                eol = "\n", na = "NA", dec = ".", row.names = TRUE,
+                col.names = TRUE, qmethod = c("escape", "double"),
+                fileEncoding = "")
+
+On the other hand some external interfaces require Windows-style new lines ("\r\n"), eg. text file outputs seen ti care internally:
+
+    writeLines(text, con = stdout(), sep = "\n", useBytes = FALSE)
+    # Excerpt from the documentation:
+    #     Normally writeLines is used with a text-mode connection,
+    #     and the default separator is converted to the normal separator
+    #     for that platform (LF on Unix/Linux, CRLF on Windows).
+
+    # calls internally do_writelines():
+    # https://github.com/wch/r-source/blob/8db7b85953127f364f52d201ec057911db4601e5/src/main/connections.c#L4023
+    # But: Where is the conversion done (hidden in the call to Riconv()?)
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sat Jul 25 23:39:04 2020
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sat, 25 Jul 2020 17:39:04 -0400
+Subject: [Rd] 
+ Guidelines when to use LF vs CRLF ("\n" vs. "\r\n") on Windows
+ for new lines (line endings)?
+In-Reply-To: <8c1faae50eb4c48ac03d154e666f1bbba2f60a4b.camel@altfeld-im.de>
+References: <8c1faae50eb4c48ac03d154e666f1bbba2f60a4b.camel@altfeld-im.de>
+Message-ID: <74822365-6889-6f8c-3fa6-ac4f401351e6@gmail.com>
+
+On 25/07/2020 4:48 p.m., nospam at altfeld-im.de wrote:
+> Dear R developers,
+> 
+> I am developing an R package which returns strings with new line codes.
+> I am not sure if I should use "\r\n" or "\n" in my returned strings on Windows platforms.
+> 
+> What is the recommended best practice for package developers (and code in base R) for coding new lines in strings?
+> 
+> And just out of curiosity: What is the reason (or history) for preferring "\n" in R even on Windows (see examples below)?
+
+Most Windows run-times (including the version of MSVCRT that R uses) 
+convert \n to \r\n on text files, so you rarely need an explicit \r\n. 
+That's the difference between type text and type binary on connections.
+
+Duncan Murdoch
+
+
+> 
+> Best regards
+> 
+> J?rgen
+> 
+> PS: Examples from base R:
+> 
+> R seems to use (almost) only "\n" for new lines internally - even on Windows platforms, eg.:
+> 
+>      charToRaw(paste0("a", "\n", "b"))
+>      [1] 61 0a 62
+> 
+>      # eol default is "\n"
+>      write.table(x, file = "", append = FALSE, quote = TRUE, sep = " ",
+>                  eol = "\n", na = "NA", dec = ".", row.names = TRUE,
+>                  col.names = TRUE, qmethod = c("escape", "double"),
+>                  fileEncoding = "")
+> 
+> On the other hand some external interfaces require Windows-style new lines ("\r\n"), eg. text file outputs seen ti care internally:
+> 
+>      writeLines(text, con = stdout(), sep = "\n", useBytes = FALSE)
+>      # Excerpt from the documentation:
+>      #     Normally writeLines is used with a text-mode connection,
+>      #     and the default separator is converted to the normal separator
+>      #     for that platform (LF on Unix/Linux, CRLF on Windows).
+> 
+>      # calls internally do_writelines():
+>      # https://github.com/wch/r-source/blob/8db7b85953127f364f52d201ec057911db4601e5/src/main/connections.c#L4023
+>      # But: Where is the conversion done (hidden in the call to Riconv()?)
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From znmeb @end|ng |rom znmeb@net  Sun Jul 26 00:11:45 2020
+From: znmeb @end|ng |rom znmeb@net (M. Edward (Ed) Borasky)
+Date: Sat, 25 Jul 2020 15:11:45 -0700
+Subject: [Rd] 
+ Guidelines when to use LF vs CRLF ("\n" vs. "\r\n") on Windows
+ for new lines (line endings)?
+In-Reply-To: <74822365-6889-6f8c-3fa6-ac4f401351e6@gmail.com>
+References: <8c1faae50eb4c48ac03d154e666f1bbba2f60a4b.camel@altfeld-im.de>
+ <74822365-6889-6f8c-3fa6-ac4f401351e6@gmail.com>
+Message-ID: <CAHkRx6Gbi=0UotGoWxPwSbGNp2dEC8p=or69mQEtf4a7jPOf0w@mail.gmail.com>
+
+I will also add that shell scripts that are in Docker containers will
+often crash with confusing error messages if they have Windows line
+endings.
+
+On Sat, Jul 25, 2020 at 2:39 PM Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+>
+> On 25/07/2020 4:48 p.m., nospam at altfeld-im.de wrote:
+> > Dear R developers,
+> >
+> > I am developing an R package which returns strings with new line codes.
+> > I am not sure if I should use "\r\n" or "\n" in my returned strings on Windows platforms.
+> >
+> > What is the recommended best practice for package developers (and code in base R) for coding new lines in strings?
+> >
+> > And just out of curiosity: What is the reason (or history) for preferring "\n" in R even on Windows (see examples below)?
+>
+> Most Windows run-times (including the version of MSVCRT that R uses)
+> convert \n to \r\n on text files, so you rarely need an explicit \r\n.
+> That's the difference between type text and type binary on connections.
+>
+> Duncan Murdoch
+>
+>
+> >
+> > Best regards
+> >
+> > J?rgen
+> >
+> > PS: Examples from base R:
+> >
+> > R seems to use (almost) only "\n" for new lines internally - even on Windows platforms, eg.:
+> >
+> >      charToRaw(paste0("a", "\n", "b"))
+> >      [1] 61 0a 62
+> >
+> >      # eol default is "\n"
+> >      write.table(x, file = "", append = FALSE, quote = TRUE, sep = " ",
+> >                  eol = "\n", na = "NA", dec = ".", row.names = TRUE,
+> >                  col.names = TRUE, qmethod = c("escape", "double"),
+> >                  fileEncoding = "")
+> >
+> > On the other hand some external interfaces require Windows-style new lines ("\r\n"), eg. text file outputs seen ti care internally:
+> >
+> >      writeLines(text, con = stdout(), sep = "\n", useBytes = FALSE)
+> >      # Excerpt from the documentation:
+> >      #     Normally writeLines is used with a text-mode connection,
+> >      #     and the default separator is converted to the normal separator
+> >      #     for that platform (LF on Unix/Linux, CRLF on Windows).
+> >
+> >      # calls internally do_writelines():
+> >      # https://github.com/wch/r-source/blob/8db7b85953127f364f52d201ec057911db4601e5/src/main/connections.c#L4023
+> >      # But: Where is the conversion done (hidden in the call to Riconv()?)
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+
+-- 
+Borasky Research Journal https://www.znmeb.mobi
+
+Markovs of the world, unite! You have nothing to lose but your chains!
+
+
+From jone@@tho@@w @end|ng |rom gm@||@com  Thu Jul 30 21:05:11 2020
+From: jone@@tho@@w @end|ng |rom gm@||@com (Tommy Jones)
+Date: Thu, 30 Jul 2020 15:05:11 -0400
+Subject: [Rd] Seeding non-R RNG with numbers from R's RNG stream
+Message-ID: <CAO=bFwnaB=tTyhgzPVkjfQiu0RKxKURdQqYK=m8uP_vkUsd+rg@mail.gmail.com>
+
+Hi,
+
+I am constructing a function that does sampling in C++ using a non-R RNG
+stream for thread safety reasons. This C++ function is wrapped by an R
+function, which is user facing. The R wrapper does some sampling itself to
+initialize some variables before passing them off to C++. So that my users
+do not have to manage two mechanisms to set random seeds, I've constructed
+a solution (shown below) that allows both RNGs to be seeded with set.seed
+and respond to the state of R's RNG stream.
+
+I believe the below works. However, I am hoping to get feedback from more
+experienced useRs as to whether or not the below approach is unsafe in ways
+that may affect reproducibility, modify global variables in bad ways, or
+have other unintended consequences I have not anticipated.
+
+Could I trouble one or more folks on this list to weigh in on the safety
+(or perceived wisdom) of using R's internal RNG stream to seed an RNG
+external to R? Many thanks in advance.
+
+This relates to a Stackoverflow question here:
+https://stackoverflow.com/questions/63165955/is-there-a-best-practice-for-using-non-r-rngs-in-rcpp-code
+
+Pseudocode of a trivial facsimile of my current approach is below.
+
+--Tommy
+
+sample_wrapper <- function() {
+  # initialize a variable to pass to C++
+  init_var <- runif(1)
+
+  # get current state of RNG stream
+  # first entry of .Random.seed is an integer representing the algorithm used
+  # second entry is current position in RNG stream
+  # subsequent entries are pseudorandom numbers
+  seed_pos <- .Random.seed[2]
+
+  seed <- .Random.seed[seed_pos + 2]
+
+  out <- sample_cpp(init_var = init_var, seed = seed)
+
+  # move R's position in the RNG stream forward by 1 with a throw away sample
+  runif(1)
+
+  # return the output
+  out}
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Thu Jul 30 21:36:12 2020
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Thu, 30 Jul 2020 15:36:12 -0400
+Subject: [Rd] Seeding non-R RNG with numbers from R's RNG stream
+In-Reply-To: <CAO=bFwnaB=tTyhgzPVkjfQiu0RKxKURdQqYK=m8uP_vkUsd+rg@mail.gmail.com>
+References: <CAO=bFwnaB=tTyhgzPVkjfQiu0RKxKURdQqYK=m8uP_vkUsd+rg@mail.gmail.com>
+Message-ID: <d62af1e2-c977-4357-bfee-23f4e61bf4f6@gmail.com>
+
+I wouldn't trust the C++ generator to be as good if you seed it this way 
+as if you just seeded it once with your phone number (or any other fixed 
+value) and let it run, because it's probably never been tested to be 
+good when run this way.  Is it good enough for the way you plan to use 
+it?  Maybe.
+
+Duncan Murdoch
+
+On 30/07/2020 3:05 p.m., Tommy Jones wrote:
+> Hi,
+> 
+> I am constructing a function that does sampling in C++ using a non-R RNG
+> stream for thread safety reasons. This C++ function is wrapped by an R
+> function, which is user facing. The R wrapper does some sampling itself to
+> initialize some variables before passing them off to C++. So that my users
+> do not have to manage two mechanisms to set random seeds, I've constructed
+> a solution (shown below) that allows both RNGs to be seeded with set.seed
+> and respond to the state of R's RNG stream.
+> 
+> I believe the below works. However, I am hoping to get feedback from more
+> experienced useRs as to whether or not the below approach is unsafe in ways
+> that may affect reproducibility, modify global variables in bad ways, or
+> have other unintended consequences I have not anticipated.
+> 
+> Could I trouble one or more folks on this list to weigh in on the safety
+> (or perceived wisdom) of using R's internal RNG stream to seed an RNG
+> external to R? Many thanks in advance.
+> 
+> This relates to a Stackoverflow question here:
+> https://stackoverflow.com/questions/63165955/is-there-a-best-practice-for-using-non-r-rngs-in-rcpp-code
+> 
+> Pseudocode of a trivial facsimile of my current approach is below.
+> 
+> --Tommy
+> 
+> sample_wrapper <- function() {
+>    # initialize a variable to pass to C++
+>    init_var <- runif(1)
+> 
+>    # get current state of RNG stream
+>    # first entry of .Random.seed is an integer representing the algorithm used
+>    # second entry is current position in RNG stream
+>    # subsequent entries are pseudorandom numbers
+>    seed_pos <- .Random.seed[2]
+> 
+>    seed <- .Random.seed[seed_pos + 2]
+> 
+>    out <- sample_cpp(init_var = init_var, seed = seed)
+> 
+>    # move R's position in the RNG stream forward by 1 with a throw away sample
+>    runif(1)
+> 
+>    # return the output
+>    out}
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From jone@@tho@@w @end|ng |rom gm@||@com  Thu Jul 30 22:30:21 2020
+From: jone@@tho@@w @end|ng |rom gm@||@com (Tommy Jones)
+Date: Thu, 30 Jul 2020 16:30:21 -0400
+Subject: [Rd] Seeding non-R RNG with numbers from R's RNG stream
+In-Reply-To: <d62af1e2-c977-4357-bfee-23f4e61bf4f6@gmail.com>
+References: <CAO=bFwnaB=tTyhgzPVkjfQiu0RKxKURdQqYK=m8uP_vkUsd+rg@mail.gmail.com>
+ <d62af1e2-c977-4357-bfee-23f4e61bf4f6@gmail.com>
+Message-ID: <CAO=bFw=dkOkPms-jKW1SNGVPzhdi_ko=OvauJMf_np=qSK2Wzg@mail.gmail.com>
+
+Thank you for this. I'd like to be sure I understand the
+intuition correctly. Is the following true from what you said?
+
+I can just fix the seed at the C++ level and the results will still be
+(pseudo) random because the initialization at the R level is (pseudo)
+random.
+
+On Thu, Jul 30, 2020 at 3:36 PM Duncan Murdoch <murdoch.duncan at gmail.com>
+wrote:
+
+> I wouldn't trust the C++ generator to be as good if you seed it this way
+> as if you just seeded it once with your phone number (or any other fixed
+> value) and let it run, because it's probably never been tested to be
+> good when run this way.  Is it good enough for the way you plan to use
+> it?  Maybe.
+>
+> Duncan Murdoch
+>
+> On 30/07/2020 3:05 p.m., Tommy Jones wrote:
+> > Hi,
+> >
+> > I am constructing a function that does sampling in C++ using a non-R RNG
+> > stream for thread safety reasons. This C++ function is wrapped by an R
+> > function, which is user facing. The R wrapper does some sampling itself
+> to
+> > initialize some variables before passing them off to C++. So that my
+> users
+> > do not have to manage two mechanisms to set random seeds, I've
+> constructed
+> > a solution (shown below) that allows both RNGs to be seeded with set.seed
+> > and respond to the state of R's RNG stream.
+> >
+> > I believe the below works. However, I am hoping to get feedback from more
+> > experienced useRs as to whether or not the below approach is unsafe in
+> ways
+> > that may affect reproducibility, modify global variables in bad ways, or
+> > have other unintended consequences I have not anticipated.
+> >
+> > Could I trouble one or more folks on this list to weigh in on the safety
+> > (or perceived wisdom) of using R's internal RNG stream to seed an RNG
+> > external to R? Many thanks in advance.
+> >
+> > This relates to a Stackoverflow question here:
+> >
+> https://stackoverflow.com/questions/63165955/is-there-a-best-practice-for-using-non-r-rngs-in-rcpp-code
+> >
+> > Pseudocode of a trivial facsimile of my current approach is below.
+> >
+> > --Tommy
+> >
+> > sample_wrapper <- function() {
+> >    # initialize a variable to pass to C++
+> >    init_var <- runif(1)
+> >
+> >    # get current state of RNG stream
+> >    # first entry of .Random.seed is an integer representing the
+> algorithm used
+> >    # second entry is current position in RNG stream
+> >    # subsequent entries are pseudorandom numbers
+> >    seed_pos <- .Random.seed[2]
+> >
+> >    seed <- .Random.seed[seed_pos + 2]
+> >
+> >    out <- sample_cpp(init_var = init_var, seed = seed)
+> >
+> >    # move R's position in the RNG stream forward by 1 with a throw away
+> sample
+> >    runif(1)
+> >
+> >    # return the output
+> >    out}
+> >
+> >       [[alternative HTML version deleted]]
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+>
+>
+
+	[[alternative HTML version deleted]]
+
+
+From g@bembecker @end|ng |rom gm@||@com  Thu Jul 30 22:36:56 2020
+From: g@bembecker @end|ng |rom gm@||@com (Gabriel Becker)
+Date: Thu, 30 Jul 2020 13:36:56 -0700
+Subject: [Rd] Seeding non-R RNG with numbers from R's RNG stream
+In-Reply-To: <CAO=bFw=dkOkPms-jKW1SNGVPzhdi_ko=OvauJMf_np=qSK2Wzg@mail.gmail.com>
+References: <CAO=bFwnaB=tTyhgzPVkjfQiu0RKxKURdQqYK=m8uP_vkUsd+rg@mail.gmail.com>
+ <d62af1e2-c977-4357-bfee-23f4e61bf4f6@gmail.com>
+ <CAO=bFw=dkOkPms-jKW1SNGVPzhdi_ko=OvauJMf_np=qSK2Wzg@mail.gmail.com>
+Message-ID: <CAD4oTHF4-ay5WUjMav09ze1WaCU6xntKdxqUG0sAKiUteELHow@mail.gmail.com>
+
+Tommy,
+
+I'm not Duncan (and am not nor claim to be an RNG expert) but I believe RNG
+streams are designed and thus tested, to be used as streams. Repeatedly
+setting the seed after small numbers of samples from them does not fit the
+designed usecase (And also doesn't match the test criteria by which they
+are evaluated/validated, which is what I believe Duncan was saying).
+
+(Anything Duncan or another RNG expert says that contradicts the above
+should be taken as correct instead of what I Said).
+
+Best,
+~G
+
+On Thu, Jul 30, 2020 at 1:30 PM Tommy Jones <jones.thos.w at gmail.com> wrote:
+
+> Thank you for this. I'd like to be sure I understand the
+> intuition correctly. Is the following true from what you said?
+>
+> I can just fix the seed at the C++ level and the results will still be
+> (pseudo) random because the initialization at the R level is (pseudo)
+> random.
+>
+> On Thu, Jul 30, 2020 at 3:36 PM Duncan Murdoch <murdoch.duncan at gmail.com>
+> wrote:
+>
+> > I wouldn't trust the C++ generator to be as good if you seed it this way
+> > as if you just seeded it once with your phone number (or any other fixed
+> > value) and let it run, because it's probably never been tested to be
+> > good when run this way.  Is it good enough for the way you plan to use
+> > it?  Maybe.
+> >
+> > Duncan Murdoch
+> >
+> > On 30/07/2020 3:05 p.m., Tommy Jones wrote:
+> > > Hi,
+> > >
+> > > I am constructing a function that does sampling in C++ using a non-R
+> RNG
+> > > stream for thread safety reasons. This C++ function is wrapped by an R
+> > > function, which is user facing. The R wrapper does some sampling itself
+> > to
+> > > initialize some variables before passing them off to C++. So that my
+> > users
+> > > do not have to manage two mechanisms to set random seeds, I've
+> > constructed
+> > > a solution (shown below) that allows both RNGs to be seeded with
+> set.seed
+> > > and respond to the state of R's RNG stream.
+> > >
+> > > I believe the below works. However, I am hoping to get feedback from
+> more
+> > > experienced useRs as to whether or not the below approach is unsafe in
+> > ways
+> > > that may affect reproducibility, modify global variables in bad ways,
+> or
+> > > have other unintended consequences I have not anticipated.
+> > >
+> > > Could I trouble one or more folks on this list to weigh in on the
+> safety
+> > > (or perceived wisdom) of using R's internal RNG stream to seed an RNG
+> > > external to R? Many thanks in advance.
+> > >
+> > > This relates to a Stackoverflow question here:
+> > >
+> >
+> https://stackoverflow.com/questions/63165955/is-there-a-best-practice-for-using-non-r-rngs-in-rcpp-code
+> > >
+> > > Pseudocode of a trivial facsimile of my current approach is below.
+> > >
+> > > --Tommy
+> > >
+> > > sample_wrapper <- function() {
+> > >    # initialize a variable to pass to C++
+> > >    init_var <- runif(1)
+> > >
+> > >    # get current state of RNG stream
+> > >    # first entry of .Random.seed is an integer representing the
+> > algorithm used
+> > >    # second entry is current position in RNG stream
+> > >    # subsequent entries are pseudorandom numbers
+> > >    seed_pos <- .Random.seed[2]
+> > >
+> > >    seed <- .Random.seed[seed_pos + 2]
+> > >
+> > >    out <- sample_cpp(init_var = init_var, seed = seed)
+> > >
+> > >    # move R's position in the RNG stream forward by 1 with a throw away
+> > sample
+> > >    runif(1)
+> > >
+> > >    # return the output
+> > >    out}
+> > >
+> > >       [[alternative HTML version deleted]]
+> > >
+> > > ______________________________________________
+> > > R-devel at r-project.org mailing list
+> > > https://stat.ethz.ch/mailman/listinfo/r-devel
+> > >
+> >
+> >
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Thu Jul 30 22:49:23 2020
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Thu, 30 Jul 2020 16:49:23 -0400
+Subject: [Rd] Seeding non-R RNG with numbers from R's RNG stream
+In-Reply-To: <CAO=bFw=dkOkPms-jKW1SNGVPzhdi_ko=OvauJMf_np=qSK2Wzg@mail.gmail.com>
+References: <CAO=bFwnaB=tTyhgzPVkjfQiu0RKxKURdQqYK=m8uP_vkUsd+rg@mail.gmail.com>
+ <d62af1e2-c977-4357-bfee-23f4e61bf4f6@gmail.com>
+ <CAO=bFw=dkOkPms-jKW1SNGVPzhdi_ko=OvauJMf_np=qSK2Wzg@mail.gmail.com>
+Message-ID: <dd26c64f-17e3-5979-a67e-8b69fdc7e73a@gmail.com>
+
+On 30/07/2020 4:30 p.m., Tommy Jones wrote:
+> Thank you for this. I'd like to be sure I understand the 
+> intuition?correctly. Is the following true from what you said?
+> 
+> I can just fix the seed at the C++ level and the results will still be 
+> (pseudo) random because the initialization at the R level is (pseudo) 
+> random.
+
+No, that's not quite right.  Let me try again:
+
+You can fix the seed at the C++ level and the results will be 
+pseudo-random because you have chosen to use a good pseudo-random 
+generator.
+
+  - R has nothing to do with it.
+  - If you haven't actually chosen a good generator, then seeding from R 
+won't necessarily help.
+  - If you re-seed too frequently, you might break even a good generator.
+
+For an example of the latter:  consider re-seeding with the current time 
+(to the nearest second) with every draw.  If you draw more than once per 
+second, you'll get exact repeats.
+
+The scheme you chose won't be so obviously wrong, but there could still 
+be interactions between the R generator and the C++ generator.  For 
+example, maybe the C++ generator is based on a similar algorithm to the 
+R generator.  If you re-seed it every tenth draw, and only draw one 
+value from R, it might happen that you effectively take 9 steps back 
+with each re-seeding, so again you'll get exact repeats.
+
+The real effect, if there is one, is likely to be much more subtle and 
+hard to detect.  In fact, it might be so hard to detect that there 
+really isn't a problem!  The practical issue is that by effectively 
+inventing your own algorithm, you can't rely on the accumulated 
+experience of everyone else to know whether the generator is good.
+
+Duncan Murdoch
+
+
+> 
+> On Thu, Jul 30, 2020 at 3:36 PM Duncan Murdoch <murdoch.duncan at gmail.com 
+> <mailto:murdoch.duncan at gmail.com>> wrote:
+> 
+>     I wouldn't trust the C++ generator to be as good if you seed it this
+>     way
+>     as if you just seeded it once with your phone number (or any other
+>     fixed
+>     value) and let it run, because it's probably never been tested to be
+>     good when run this way.? Is it good enough for the way you plan to use
+>     it?? Maybe.
+> 
+>     Duncan Murdoch
+> 
+>     On 30/07/2020 3:05 p.m., Tommy Jones wrote:
+>      > Hi,
+>      >
+>      > I am constructing a function that does sampling in C++ using a
+>     non-R RNG
+>      > stream for thread safety reasons. This C++ function is wrapped by
+>     an R
+>      > function, which is user facing. The R wrapper does some sampling
+>     itself to
+>      > initialize some variables before passing them off to C++. So that
+>     my users
+>      > do not have to manage two mechanisms to set random seeds, I've
+>     constructed
+>      > a solution (shown below) that allows both RNGs to be seeded with
+>     set.seed
+>      > and respond to the state of R's RNG stream.
+>      >
+>      > I believe the below works. However, I am hoping to get feedback
+>     from more
+>      > experienced useRs as to whether or not the below approach is
+>     unsafe in ways
+>      > that may affect reproducibility, modify global variables in bad
+>     ways, or
+>      > have other unintended consequences I have not anticipated.
+>      >
+>      > Could I trouble one or more folks on this list to weigh in on the
+>     safety
+>      > (or perceived wisdom) of using R's internal RNG stream to seed an RNG
+>      > external to R? Many thanks in advance.
+>      >
+>      > This relates to a Stackoverflow question here:
+>      >
+>     https://stackoverflow.com/questions/63165955/is-there-a-best-practice-for-using-non-r-rngs-in-rcpp-code
+>      >
+>      > Pseudocode of a trivial facsimile of my current approach is below.
+>      >
+>      > --Tommy
+>      >
+>      > sample_wrapper <- function() {
+>      >? ? # initialize a variable to pass to C++
+>      >? ? init_var <- runif(1)
+>      >
+>      >? ? # get current state of RNG stream
+>      >? ? # first entry of .Random.seed is an integer representing the
+>     algorithm used
+>      >? ? # second entry is current position in RNG stream
+>      >? ? # subsequent entries are pseudorandom numbers
+>      >? ? seed_pos <- .Random.seed[2]
+>      >
+>      >? ? seed <- .Random.seed[seed_pos + 2]
+>      >
+>      >? ? out <- sample_cpp(init_var = init_var, seed = seed)
+>      >
+>      >? ? # move R's position in the RNG stream forward by 1 with a
+>     throw away sample
+>      >? ? runif(1)
+>      >
+>      >? ? # return the output
+>      >? ? out}
+>      >
+>      >? ? ? ?[[alternative HTML version deleted]]
+>      >
+>      > ______________________________________________
+>      > R-devel at r-project.org <mailto:R-devel at r-project.org> mailing list
+>      > https://stat.ethz.ch/mailman/listinfo/r-devel
+>      >
+>
+
+
+From jone@@tho@@w @end|ng |rom gm@||@com  Thu Jul 30 23:41:21 2020
+From: jone@@tho@@w @end|ng |rom gm@||@com (Tommy Jones)
+Date: Thu, 30 Jul 2020 17:41:21 -0400
+Subject: [Rd] Seeding non-R RNG with numbers from R's RNG stream
+In-Reply-To: <dd26c64f-17e3-5979-a67e-8b69fdc7e73a@gmail.com>
+References: <CAO=bFwnaB=tTyhgzPVkjfQiu0RKxKURdQqYK=m8uP_vkUsd+rg@mail.gmail.com>
+ <d62af1e2-c977-4357-bfee-23f4e61bf4f6@gmail.com>
+ <CAO=bFw=dkOkPms-jKW1SNGVPzhdi_ko=OvauJMf_np=qSK2Wzg@mail.gmail.com>
+ <dd26c64f-17e3-5979-a67e-8b69fdc7e73a@gmail.com>
+Message-ID: <CAO=bFw=v4FyTW+mtVczEDBZJ_dFd3DwwZt4dDou-Za2446FVRQ@mail.gmail.com>
+
+Thank you Duncan and Gabriel.
+
+I think that my trivial example was a little too trivial and is causing
+some confusion. What's happening in the real function I'm writing is...
+
+1. In R: Draw tens-of-thousands of times from a handful to Gamma RVs with
+different parameters to initialize some variables. (Technically, I'm
+calling gtools::rdirichlet which calls stats::rgamma)
+2. Transfer the initialized variables to a function in C++
+3. In C++: Draw millions of times from a Categorical(p) distribution, where
+"p" is recalculated after each draw based on the current state of the RVs
+in my system. (The heart of this is actually a Uniform(0,1) from the
+ Xoshiro256+ generator as provided in the dqrng package.)
+4. In R: post-process the results from the transformed space back to the
+space of the parameters I'm estimating.
+5. Still in R: call stats::runif to change the position in R's RNG stream
+so that if the user calls the function 2 times in a row without setting the
+seed, they'll still get pseudorandom results by providing the C++ RNG with
+a different seed.
+
+So, a single call to the user-facing function results in many many draws
+from both RNG streams.
+
+The true "problem" spawning my question is that I'd like my users to be
+able to reproduce their results and calling set.seed() once seems more
+"user friendly" than having them control two seeds, one with set.seed and
+one with a seed argument. But I acknowledge that having the user have to
+set both is the "safest" option.
+
+My instinct is that the effects of this are so subtle as to not really be a
+problem as you suggest, Duncan. But I am now thinking I'll need to
+explicitly run some experiments to validate that.
+
+I'm 100% in agreement about not reinventing the wheel, but instead relying
+on the accumulated experience of the folks that are writing these RNGs.
+
+Knowing more about the bigger use, does this still strike you as obviously
+problematic?
+
+Best,
+Tommy
+
+On Thu, Jul 30, 2020 at 4:49 PM Duncan Murdoch <murdoch.duncan at gmail.com>
+wrote:
+
+> On 30/07/2020 4:30 p.m., Tommy Jones wrote:
+> > Thank you for this. I'd like to be sure I understand the
+> > intuition correctly. Is the following true from what you said?
+> >
+> > I can just fix the seed at the C++ level and the results will still be
+> > (pseudo) random because the initialization at the R level is (pseudo)
+> > random.
+>
+> No, that's not quite right.  Let me try again:
+>
+> You can fix the seed at the C++ level and the results will be
+> pseudo-random because you have chosen to use a good pseudo-random
+> generator.
+>
+>   - R has nothing to do with it.
+>   - If you haven't actually chosen a good generator, then seeding from R
+> won't necessarily help.
+>   - If you re-seed too frequently, you might break even a good generator.
+>
+> For an example of the latter:  consider re-seeding with the current time
+> (to the nearest second) with every draw.  If you draw more than once per
+> second, you'll get exact repeats.
+>
+> The scheme you chose won't be so obviously wrong, but there could still
+> be interactions between the R generator and the C++ generator.  For
+> example, maybe the C++ generator is based on a similar algorithm to the
+> R generator.  If you re-seed it every tenth draw, and only draw one
+> value from R, it might happen that you effectively take 9 steps back
+> with each re-seeding, so again you'll get exact repeats.
+>
+> The real effect, if there is one, is likely to be much more subtle and
+> hard to detect.  In fact, it might be so hard to detect that there
+> really isn't a problem!  The practical issue is that by effectively
+> inventing your own algorithm, you can't rely on the accumulated
+> experience of everyone else to know whether the generator is good.
+>
+> Duncan Murdoch
+>
+>
+> >
+> > On Thu, Jul 30, 2020 at 3:36 PM Duncan Murdoch <murdoch.duncan at gmail.com
+> > <mailto:murdoch.duncan at gmail.com>> wrote:
+> >
+> >     I wouldn't trust the C++ generator to be as good if you seed it this
+> >     way
+> >     as if you just seeded it once with your phone number (or any other
+> >     fixed
+> >     value) and let it run, because it's probably never been tested to be
+> >     good when run this way.  Is it good enough for the way you plan to
+> use
+> >     it?  Maybe.
+> >
+> >     Duncan Murdoch
+> >
+> >     On 30/07/2020 3:05 p.m., Tommy Jones wrote:
+> >      > Hi,
+> >      >
+> >      > I am constructing a function that does sampling in C++ using a
+> >     non-R RNG
+> >      > stream for thread safety reasons. This C++ function is wrapped by
+> >     an R
+> >      > function, which is user facing. The R wrapper does some sampling
+> >     itself to
+> >      > initialize some variables before passing them off to C++. So that
+> >     my users
+> >      > do not have to manage two mechanisms to set random seeds, I've
+> >     constructed
+> >      > a solution (shown below) that allows both RNGs to be seeded with
+> >     set.seed
+> >      > and respond to the state of R's RNG stream.
+> >      >
+> >      > I believe the below works. However, I am hoping to get feedback
+> >     from more
+> >      > experienced useRs as to whether or not the below approach is
+> >     unsafe in ways
+> >      > that may affect reproducibility, modify global variables in bad
+> >     ways, or
+> >      > have other unintended consequences I have not anticipated.
+> >      >
+> >      > Could I trouble one or more folks on this list to weigh in on the
+> >     safety
+> >      > (or perceived wisdom) of using R's internal RNG stream to seed an
+> RNG
+> >      > external to R? Many thanks in advance.
+> >      >
+> >      > This relates to a Stackoverflow question here:
+> >      >
+> >
+> https://stackoverflow.com/questions/63165955/is-there-a-best-practice-for-using-non-r-rngs-in-rcpp-code
+> >      >
+> >      > Pseudocode of a trivial facsimile of my current approach is below.
+> >      >
+> >      > --Tommy
+> >      >
+> >      > sample_wrapper <- function() {
+> >      >    # initialize a variable to pass to C++
+> >      >    init_var <- runif(1)
+> >      >
+> >      >    # get current state of RNG stream
+> >      >    # first entry of .Random.seed is an integer representing the
+> >     algorithm used
+> >      >    # second entry is current position in RNG stream
+> >      >    # subsequent entries are pseudorandom numbers
+> >      >    seed_pos <- .Random.seed[2]
+> >      >
+> >      >    seed <- .Random.seed[seed_pos + 2]
+> >      >
+> >      >    out <- sample_cpp(init_var = init_var, seed = seed)
+> >      >
+> >      >    # move R's position in the RNG stream forward by 1 with a
+> >     throw away sample
+> >      >    runif(1)
+> >      >
+> >      >    # return the output
+> >      >    out}
+> >      >
+> >      >       [[alternative HTML version deleted]]
+> >      >
+> >      > ______________________________________________
+> >      > R-devel at r-project.org <mailto:R-devel at r-project.org> mailing list
+> >      > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >      >
+> >
+>
+>
+
+	[[alternative HTML version deleted]]
+
+
+From @purd|e@@ @end|ng |rom gm@||@com  Fri Jul 31 06:00:40 2020
+From: @purd|e@@ @end|ng |rom gm@||@com (Abby Spurdle)
+Date: Fri, 31 Jul 2020 16:00:40 +1200
+Subject: [Rd] Seeding non-R RNG with numbers from R's RNG stream
+In-Reply-To: <CAO=bFw=v4FyTW+mtVczEDBZJ_dFd3DwwZt4dDou-Za2446FVRQ@mail.gmail.com>
+References: <CAO=bFwnaB=tTyhgzPVkjfQiu0RKxKURdQqYK=m8uP_vkUsd+rg@mail.gmail.com>
+ <d62af1e2-c977-4357-bfee-23f4e61bf4f6@gmail.com>
+ <CAO=bFw=dkOkPms-jKW1SNGVPzhdi_ko=OvauJMf_np=qSK2Wzg@mail.gmail.com>
+ <dd26c64f-17e3-5979-a67e-8b69fdc7e73a@gmail.com>
+ <CAO=bFw=v4FyTW+mtVczEDBZJ_dFd3DwwZt4dDou-Za2446FVRQ@mail.gmail.com>
+Message-ID: <CAB8pepzjydQNLUauzFmt1zwG0QFULgE1KSAfC3oqwQhhX6E15A@mail.gmail.com>
+
+> 3. In C++: Draw millions of times from a Categorical(p) distribution, where
+> "p" is recalculated after each draw
+
+I don't see the need here.
+It should be possible to generate all the random numbers , *in R*, and
+in *one line* of R code.
+Easy...
+
+Then standard inversion sampling, can be used to transform the random
+numbers, as necessary.
+This may (?) benefit from a C/C++ implementation, but that can be kept
+separate from the random number generation.
+i.e. The C++ function takes a vector of random numbers from a uniform
+distribution, then computes "draws" (from the desired distribution),
+iteratively.
+
+
+From jone@@tho@@w @end|ng |rom gm@||@com  Fri Jul 31 06:22:30 2020
+From: jone@@tho@@w @end|ng |rom gm@||@com (Tommy Jones)
+Date: Fri, 31 Jul 2020 00:22:30 -0400
+Subject: [Rd] Seeding non-R RNG with numbers from R's RNG stream
+In-Reply-To: <CAB8pepzjydQNLUauzFmt1zwG0QFULgE1KSAfC3oqwQhhX6E15A@mail.gmail.com>
+References: <CAO=bFwnaB=tTyhgzPVkjfQiu0RKxKURdQqYK=m8uP_vkUsd+rg@mail.gmail.com>
+ <d62af1e2-c977-4357-bfee-23f4e61bf4f6@gmail.com>
+ <CAO=bFw=dkOkPms-jKW1SNGVPzhdi_ko=OvauJMf_np=qSK2Wzg@mail.gmail.com>
+ <dd26c64f-17e3-5979-a67e-8b69fdc7e73a@gmail.com>
+ <CAO=bFw=v4FyTW+mtVczEDBZJ_dFd3DwwZt4dDou-Za2446FVRQ@mail.gmail.com>
+ <CAB8pepzjydQNLUauzFmt1zwG0QFULgE1KSAfC3oqwQhhX6E15A@mail.gmail.com>
+Message-ID: <CAO=bFwkvcpP528hn6=tHCsutUgTYFwF4XR3PUJv_dMkby-9=ng@mail.gmail.com>
+
+Abby, that is a fantastic suggestion! It seems obvious now that you've said
+it. Why didn't I think of that?
+
+Thank you,
+Tommy
+
+On Fri, Jul 31, 2020 at 12:01 AM Abby Spurdle <spurdle.a at gmail.com> wrote:
+
+> > 3. In C++: Draw millions of times from a Categorical(p) distribution,
+> where
+> > "p" is recalculated after each draw
+>
+> I don't see the need here.
+> It should be possible to generate all the random numbers , *in R*, and
+> in *one line* of R code.
+> Easy...
+>
+> Then standard inversion sampling, can be used to transform the random
+> numbers, as necessary.
+> This may (?) benefit from a C/C++ implementation, but that can be kept
+> separate from the random number generation.
+> i.e. The C++ function takes a vector of random numbers from a uniform
+> distribution, then computes "draws" (from the desired distribution),
+> iteratively.
+>
+
+	[[alternative HTML version deleted]]
+
+
+From jeroen @end|ng |rom berke|ey@edu  Fri Jul 31 14:08:00 2020
+From: jeroen @end|ng |rom berke|ey@edu (Jeroen Ooms)
+Date: Fri, 31 Jul 2020 14:08:00 +0200
+Subject: [Rd] Experimental CI tool for R
+In-Reply-To: <AC265884-C772-4980-A6DD-587956701668@r-project.org>
+References: <CABFfbXuWP=SMLB6b1RPvC2rb3eOk11f4w-N1XsaAdyv0wBuAjg@mail.gmail.com>
+ <AC265884-C772-4980-A6DD-587956701668@r-project.org>
+Message-ID: <CABFfbXviXFpa1ot49hE1U2CwnwSCssk2+ZAb0BxiqMHQECSDSw@mail.gmail.com>
+
+On Thu, Jul 23, 2020 at 11:57 PM Simon Urbanek
+<simon.urbanek at r-project.org> wrote:
+>
+> This is great! It is definitely a good basis to build on.
+> I wonder why your macOS setup is so extremely stripped down (not even Cairo, tcltk nor X11 - and not TeX, either) and as far from what we actually use as possible (using gcc instead of clang, openblas etc.).
+> How do you plan to go about managing the build flavors? I think it would be great if there was a process whereby the builds could be updated so they are more realistic and thus more helpful, but since the repo is completely anonymous, it's unclear how one would go about that nor how it would be governed (and where to put documentation).
+
+Thanks for having a look at this.
+
+Build scripts for GitHub actions are always stored in the workflows
+directory in the same repository. The build-svn.yaml file contains the
+commands used to prepare the server and build R on each of the
+platforms. Here you can easily enable/disable features, or add another
+flavor. In the same way you can test patches, you can use pull
+requests to suggest changes to the build matrix. I have also added a
+note about this in the readme.
+
+On MacOS currently indeed we test a minimal configuration which
+matches homebrew:
+https://github.com/homebrew/homebrew-core/blob/master/Formula/r.rb#L35-L47
+. The main reason is to minimize random build failures that we were
+getting when downloading xquartz and mactex during the build process
+(these are not preinstalled on the GHA builders, anc MacTex).
+
+It would be great if you can help with adding a flavor to build a
+cran-like MacOS installer.
+
+
+> For obvious reasons the Windows one is the only complete one, but given the requests for Homebrew-based package testing (independent of CRAN) it would be useful to publish the artefacts as well so that they could be used by GH action workflows for packages. Cleary we could just fork it, but I guess it would make more sense if this was a coordinated effort.
+
+Of course, 100% agree this should be a coordinated effort.  Ideally we
+hope some modern tooling can be adopted upstream, as for most other
+open source projects, where CI is a standard part of the development
+process, such that cross-platform building and testing is automated
+and transparent.
+
+

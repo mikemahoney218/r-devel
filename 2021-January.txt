@@ -1,0 +1,5223 @@
+From @nto|ne@|@br| @end|ng |rom gm@||@com  Sat Jan  2 20:15:40 2021
+From: @nto|ne@|@br| @end|ng |rom gm@||@com (Antoine Fabri)
+Date: Sat, 2 Jan 2021 20:15:40 +0100
+Subject: [Rd] `merge()` not consistent in how it treats list columns
+Message-ID: <CAEKh8ujHeMMYHrN3kZcn5JXxMacs5hOW6cWRB1Z9HGuSKTEMAA@mail.gmail.com>
+
+Dear R-devel,
+
+When trying to merge 2 data frames by an "id" column, with this column a
+character in one of them, and a list of character in the other, merge
+behaves differently depending which is given first.
+
+Example :
+
+```
+df1 <- data.frame(a=1)
+df2 <- data.frame(b=2)
+df1$id <- "ID"
+df2$id <- list("ID")
+
+# these print in a similar way, so the upcoming error will be hard to
+diagnose
+df1
+#>   a id
+#> 1 1 ID
+df2
+#>   b id
+#> 1 2 ID
+
+# especially as this works well, df2$id is treated as an atomic vector
+merge(df1, df2)
+#>   id a b
+#> 1 ID 1 2
+
+# But this fails with a cryptic error message
+merge(df2, df1)
+#> Error in sort.list(bx[m$xi]): 'x' must be atomic for 'sort.list', method
+"shell" and "quick"
+#> Have you called 'sort' on a list?
+```
+
+I believe that if we let it work one way it should work the other, and that
+if it works neither an explicit error  mentioning how we can't join by list
+column would be helpful.
+
+Many thanks and happy new year to all the R community,
+
+Antoine
+
+	[[alternative HTML version deleted]]
+
+
+From @v|gro@@ @end|ng |rom ver|zon@net  Sat Jan  2 21:56:35 2021
+From: @v|gro@@ @end|ng |rom ver|zon@net (Avi Gross)
+Date: Sat, 2 Jan 2021 15:56:35 -0500
+Subject: [Rd] `merge()` not consistent in how it treats list columns
+In-Reply-To: <CAEKh8ujHeMMYHrN3kZcn5JXxMacs5hOW6cWRB1Z9HGuSKTEMAA@mail.gmail.com>
+References: <CAEKh8ujHeMMYHrN3kZcn5JXxMacs5hOW6cWRB1Z9HGuSKTEMAA@mail.gmail.com>
+Message-ID: <073f01d6e149$c21226c0$46367440$@verizon.net>
+
+Antoine,
+
+Have you considered converting the non-list to a list explicitly so this
+does not matter?
+
+For a long time, few people used lists in this context, albeit in the
+tidyverse it is now better supported and probably more common.
+
+This is an area many have found annoying when you have implicit conversions.
+What if one ID field was character and the other was numeric? In some
+languages the conversion always goes to character (as in R) but in some it
+might go numeric in one direction and in some it may refuse and demand you
+convert it yourself. 
+
+Do you suggest that a unique solution exists for complex cases so that the
+software should know you want to convert a vector to list? What if one side
+is a list containing a list containing a list, many levels deep and the
+other has no or fewer or more levels. Is it obvious to take the deepest case
+and change all others to match? Do you lose things in the process?
+
+When things may not work, sure you can suggest someone change, but you can
+consider it as a case where YOU should make sure the types are compatible
+before a merge. 
+
+
+
+-----Original Message-----
+From: R-devel <r-devel-bounces at r-project.org> On Behalf Of Antoine Fabri
+Sent: Saturday, January 2, 2021 2:16 PM
+To: R-devel <r-devel at r-project.org>
+Subject: [Rd] `merge()` not consistent in how it treats list columns
+
+Dear R-devel,
+
+When trying to merge 2 data frames by an "id" column, with this column a
+character in one of them, and a list of character in the other, merge
+behaves differently depending which is given first.
+
+Example :
+
+```
+df1 <- data.frame(a=1)
+df2 <- data.frame(b=2)
+df1$id <- "ID"
+df2$id <- list("ID")
+
+# these print in a similar way, so the upcoming error will be hard to
+diagnose
+df1
+#>   a id
+#> 1 1 ID
+df2
+#>   b id
+#> 1 2 ID
+
+# especially as this works well, df2$id is treated as an atomic vector
+merge(df1, df2)
+#>   id a b
+#> 1 ID 1 2
+
+# But this fails with a cryptic error message merge(df2, df1) #> Error in
+sort.list(bx[m$xi]): 'x' must be atomic for 'sort.list', method "shell" and
+"quick"
+#> Have you called 'sort' on a list?
+```
+
+I believe that if we let it work one way it should work the other, and that
+if it works neither an explicit error  mentioning how we can't join by list
+column would be helpful.
+
+Many thanks and happy new year to all the R community,
+
+Antoine
+
+	[[alternative HTML version deleted]]
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From g@bembecker @end|ng |rom gm@||@com  Sun Jan  3 03:58:47 2021
+From: g@bembecker @end|ng |rom gm@||@com (Gabriel Becker)
+Date: Sat, 2 Jan 2021 18:58:47 -0800
+Subject: [Rd] `merge()` not consistent in how it treats list columns
+In-Reply-To: <CAEKh8ujHeMMYHrN3kZcn5JXxMacs5hOW6cWRB1Z9HGuSKTEMAA@mail.gmail.com>
+References: <CAEKh8ujHeMMYHrN3kZcn5JXxMacs5hOW6cWRB1Z9HGuSKTEMAA@mail.gmail.com>
+Message-ID: <CAD4oTHG2cxgBzYwg1-Rkm3pfVwZ3GzWNv_UTtuFVu-+S+juBVQ@mail.gmail.com>
+
+Hi Antoine,
+
+
+On Sat, Jan 2, 2021 at 11:16 AM Antoine Fabri <antoine.fabri at gmail.com>
+wrote:
+
+> Dear R-devel,
+>
+> When trying to merge 2 data frames by an "id" column, with this column a
+> character in one of them, and a list of character in the other, merge
+> behaves differently depending which is given first.
+>
+> Example :
+>
+> ```
+> df1 <- data.frame(a=1)
+> df2 <- data.frame(b=2)
+> df1$id <- "ID"
+> df2$id <- list("ID")
+>
+> # these print in a similar way, so the upcoming error will be hard to
+> diagnose
+> df1
+> #>   a id
+> #> 1 1 ID
+> df2
+> #>   b id
+> #> 1 2 ID
+>
+> # especially as this works well, df2$id is treated as an atomic vector
+> merge(df1, df2)
+> #>   id a b
+> #> 1 ID 1 2
+>
+
+Well, sure but that is because it happens to be a list with each element
+having length one. In which case, it really should not have been a list at
+all, and the fact that it was seems a deeper problem that should likely be
+resolved instead of treating the symptom, in my opinion.
+
+ > df1 <- data.frame(a=1)
+
+> df2 <- data.frame(b=2)
+
+> df1$id <- "ID"
+
+> df2$id <- list(c("ID", "ID2"))
+
+> merge(df1, df2)
+
+[1] id a  b
+
+<0 rows> (or 0-length row.names)
+
+
+Thats probably not what you wanted it to do, right? Or maybe it is, it
+depends, right?. And therein lies the rub.
+
+
+I have to be honest, as a developer, I really wish this, even in your
+example case, threw an error. Anything else just looks to me like a
+debugging nightmare looming in the wings waiting to strike.
+
+
+
+
+
+> # But this fails with a cryptic error message
+> merge(df2, df1)
+> #> Error in sort.list(bx[m$xi]): 'x' must be atomic for 'sort.list', method
+> "shell" and "quick"
+> #> Have you called 'sort' on a list?
+> ```
+>
+> I believe that if we let it work one way it should work the other, and that
+> if it works neither an explicit error  mentioning how we can't join by list
+> column would be helpful.
+>
+
+There's no reason (in principle) you wouldn't be able to join by a list
+column, they should just both have to be list columns, in my ideal (but
+admittedly unlikely) world.  Id rather the atomic-vector/list mismatch case
+throw an error, myself.
+
+
+Now I kind of doubt we can change the behavior that works now, but as Avi
+points out, I think this is something that is complicated and case specific
+enough that it really ought to be your job as the coder to take care of
+what should happen when you try to merge on columns that are fundamentally
+different types.
+
+
+Plus, having an id column as a list, unless it was really explicitly
+intentional, seems very likely to be a bug to me. (I mean id column in the
+you want to use it to merge things, not the fact that itw as called "id",
+though admittedly those are likely to go together...
+
+Best,
+~G
+
+
+>
+> Many thanks and happy new year to all the R community,
+>
+> Antoine
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From @nto|ne@|@br| @end|ng |rom gm@||@com  Sun Jan  3 11:14:57 2021
+From: @nto|ne@|@br| @end|ng |rom gm@||@com (Antoine Fabri)
+Date: Sun, 3 Jan 2021 11:14:57 +0100
+Subject: [Rd] `merge()` not consistent in how it treats list columns
+In-Reply-To: <CAD4oTHG2cxgBzYwg1-Rkm3pfVwZ3GzWNv_UTtuFVu-+S+juBVQ@mail.gmail.com>
+References: <CAEKh8ujHeMMYHrN3kZcn5JXxMacs5hOW6cWRB1Z9HGuSKTEMAA@mail.gmail.com>
+ <CAD4oTHG2cxgBzYwg1-Rkm3pfVwZ3GzWNv_UTtuFVu-+S+juBVQ@mail.gmail.com>
+Message-ID: <CAEKh8ugf1fUViQn-uVszzizy8PdyN14P357LHPHR1tVa8upuVA@mail.gmail.com>
+
+Hi Gabe,
+
+
+>  [... ]
+> Well, sure but that is because it happens to be a list with each element
+> having length one. In which case, it really should not have been a list at
+> all, and the fact that it was seems a deeper problem that should likely be
+> resolved instead of treating the symptom, in my opinion.
+>
+
+I wouldn't mind it explicitly failing on the ground that you don't join a
+list column on a character column, and I wouldn't mind it succeeding
+either, because it's consistent with `c("a", "b") == list("a", "b")`  and
+`c("a", "b") %in% list("a", "b")` returning `c(TRUE, TRUE)`. But I feel
+strongly that it shouldn't behave differently depending on which data frame
+is provided first to the function, and I do think that if we do make it an
+error, it is worth making it understandable.
+
+
+>
+>  > df1 <- data.frame(a=1)
+>
+> > df2 <- data.frame(b=2)
+>
+> > df1$id <- "ID"
+>
+> > df2$id <- list(c("ID", "ID2"))
+>
+> > merge(df1, df2)
+>
+> [1] id a  b
+>
+> <0 rows> (or 0-length row.names)
+>
+>
+> Thats probably not what you wanted it to do, right? Or maybe it is, it
+> depends, right?. And therein lies the rub.
+>
+>
+> I have to be honest, as a developer, I really wish this, even in your
+> example case, threw an error. Anything else just looks to me like a
+> debugging nightmare looming in the wings waiting to strike.
+>
+>
+>
+What I did wrong in my real case, to provide context, is compute `df2$id <-
+lapply(x, fun)`, which was a mistake, but looked ok when printing, `vapply`
+solved the issue, `sapply` would still have been problematic because
+`df2$id` would be an emply list for a `x` of length 0.
+
+After correcting my mistake I tried to isolate the error and had trouble
+reproducing it with my simple case because I was inverting both data frames
+argument. This is how the inconsistency +  cryptic message caused me more
+trouble than I think it should have.
+
+Imagine that I can have production code work for years with `merge(df1,
+df2)`, maybe not written by me, I change it to `merge(df2, df1)` for some
+reason and all breaks loose with `Error in sort.list(bx[m$xi]): 'x' must be
+atomic for 'sort.list', method "shell" and "quick"`. If I'm not familiar
+with list columns and that they can print just like character columns I
+might have a rough day.
+
+Here's another oddity that I think is worth fixing :
+
+df1 <- data.frame(a=1, id = "ID")
+df3 <- data.frame(c=character(), id = list())
+merge(df3, df1)
+#> [1] x[FALSE, ] a          id
+#> <0 lignes> (ou 'row.names' de longueur nulle)
+merge(df1, df3)
+#> [1] a          id         y[FALSE, ]
+#> <0 lignes> (ou 'row.names' de longueur nulle)
+
+ [...]
+>
+
+
+> There's no reason (in principle) you wouldn't be able to join by a list
+> column, they should just both have to be list columns, in my ideal (but
+> admittedly unlikely) world.  Id rather the atomic-vector/list mismatch case
+> throw an error, myself.
+>
+
+The doc does say that "This is intended to work with data frames with
+vector-like columns" in a note at the bottom, so anything we do is
+consistent with the doc, and fine by me if it fails (that's how {dplyr}
+joins work), but let the order of the data frames not matter. A warning is
+another option.
+
+
+> Now I kind of doubt we can change the behavior that works now, but as Avi
+> points out, I think this is something that is complicated and case specific
+> enough that it really ought to be your job as the coder to take care of
+> what should happen when you try to merge on columns that are fundamentally
+> different types.
+>
+
+Well yes, one can always say it's the developer's fault, but we all
+appreciate a software that guides us toward the light. List columns are not
+a rare thing at all anymore and using an `lapply` call instad of `sapply`
+or `vapply` is probably not a rare mistake. And again, the inconsistency is
+wrong in any case.
+
+I'll read other answers when I get the digest.
+
+Thanks,
+
+Antoine
+
+	[[alternative HTML version deleted]]
+
+
+From d@v|dvonpku @end|ng |rom gm@||@com  Wed Jan  6 10:59:50 2021
+From: d@v|dvonpku @end|ng |rom gm@||@com (Jitao David Zhang)
+Date: Wed, 6 Jan 2021 10:59:50 +0100
+Subject: [Rd] Demo for linking native routines between R packages
+Message-ID: <CA+Qy-8KawmW79xuSteeNQk1gMvc33EUSjkALsHVqJH+KS0S=YQ@mail.gmail.com>
+
+Dear Davis, Dirk, Jan, and r-devel subscribers,
+
+I hope you have had a good start in the new year.
+
+For your information: I have updated the GitHub repository to demonstrate
+linking native routines between R packages (
+https://github.com/Accio/demo-linking-native), especially by listing the
+prior art and the project by Davis to give the readers more background and
+history of the topic. And I took the liberty to acknowledge your
+contribution, criticism and help to improve this baby project.
+
+In any case, I wish there is a link from WRE to a small demo (not
+necessarily mine!) where linking native routine is implemented in a
+minimalistic example for teaching and demonstration purposes. That will
+help people a lot in my opinion.
+
+Best regards,
+David
+
+-- 
+Jitao David Zhang
+
+http://jdzhang.me/
+mail at jdzhang.me
+
+Sch?tzengasse 20
+4125 Riehen, Switzerland
+
+	[[alternative HTML version deleted]]
+
+
+From m|kko@korpe|@ @end|ng |rom m@@nm|tt@u@|@|to@@||  Thu Jan  7 12:07:45 2021
+From: m|kko@korpe|@ @end|ng |rom m@@nm|tt@u@|@|to@@|| (Korpela Mikko (MML))
+Date: Thu, 7 Jan 2021 11:07:45 +0000
+Subject: [Rd] Printing Unicode escapes with 6 digits may be problematic
+Message-ID: <7d4242f53d9b499b914b835de92a9974@maanmittauslaitos.fi>
+
+I see that this was only a passing issue. R-devel r79638 and greater (also tested with r79801) print six digits inside curly brace delimiters, like so: "\U{016fe4}1" (using the example below). This ensures compatibility between output and input.
+
+- Mikko
+
+-----Alkuper?inen viesti-----
+L?hett?j?: R-devel <r-devel-bounces at r-project.org> Puolesta Korpela Mikko (MML)
+L?hetetty: maanantai 14. joulukuuta 2020 11.51
+Vastaanottaja: r-devel <r-devel at r-project.org>
+Aihe: [Rd] Printing Unicode escapes with 6 digits may be problematic
+
+A recent R-devel commit introduces a change in the way non-printable Unicode characters are shown as an escape code. Whereas large code points were previously printed using an escape code of 8 hexadecimal digits, with initial zeros, the present code (tested with R-devel r79623 on Ubuntu Linux) only prints 6 hex digits. I think this may be problematic: it is now possible that R prints a character string which is not valid when reused as an input. See the following example.
+
+"\U{16FE4}1"
+# [1] "\U016fe41"
+"\U016fe41"
+# Error: invalid \Uxxxxxxxx value 16fe41 (line 1)
+
+Best regards,
+- Mikko Korpela
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From kr|m|r+r @end|ng |rom m@||box@org  Thu Jan  7 12:14:02 2021
+From: kr|m|r+r @end|ng |rom m@||box@org (=?UTF-8?Q?Kirill_M=c3=bcller?=)
+Date: Thu, 7 Jan 2021 12:14:02 +0100
+Subject: [Rd] URL checks
+Message-ID: <86862a3d-ee6b-4511-7207-e7a655ba3565@mailbox.org>
+
+Hi
+
+
+The URL checks in R CMD check test all links in the README and vignettes 
+for broken or redirected links. In many cases this improves 
+documentation, I see problems with this approach which I have detailed 
+below.
+
+I'm writing to this mailing list because I think the change needs to 
+happen in R's check routines. I propose to introduce an "allow-list" for 
+URLs, to reduce the burden on both CRAN and package maintainers.
+
+Comments are greatly appreciated.
+
+
+Best regards
+
+Kirill
+
+
+# Problems with the detection of broken/redirected URLs
+
+## 301 should often be 307, how to change?
+
+Many web sites use a 301 redirection code that probably should be a 307. 
+For example, https://www.oracle.com and https://www.oracle.com/ both 
+redirect to https://www.oracle.com/index.html with a 301. I suspect the 
+company still wants oracle.com to be recognized as the primary entry 
+point of their web presence (to reserve the right to move the 
+redirection to a different location later), I haven't checked with their 
+PR department though. If that's true, the redirect probably should be a 
+307, which should be fixed by their IT department which I haven't 
+contacted yet either.
+
+$ curl -i https://www.oracle.com
+HTTP/2 301
+server: AkamaiGHost
+content-length: 0
+location: https://www.oracle.com/index.html
+...
+
+## User agent detection
+
+twitter.com responds with a 400 error for requests without a user agent 
+string hinting at an accepted browser.
+
+$ curl -i https://twitter.com/
+HTTP/2 400
+...
+<body>...<p>Please switch to a supported browser...</p>...</body>
+
+$ curl -s -i https://twitter.com/ -A "Mozilla/5.0 (X11; Ubuntu; Linux 
+x86_64; rv:84.0) Gecko/20100101 Firefox/84.0" | head -n 1
+HTTP/2 200
+
+# Impact
+
+While the latter problem *could* be fixed by supplying a browser-like 
+user agent string, the former problem is virtually unfixable -- so many 
+web sites should use 307 instead of 301 but don't. The above list is 
+also incomplete -- think of unreliable links, HTTP links, other failure 
+modes...
+
+This affects me as a package maintainer, I have the choice to either 
+change the links to incorrect versions, or remove them altogether.
+
+I can also choose to explain each broken link to CRAN, this subjects the 
+team to undue burden I think. Submitting a package with NOTEs delays the 
+release for a package which I must release very soon to avoid having it 
+pulled from CRAN, I'd rather not risk that -- hence I need to remove the 
+link and put it back later.
+
+I'm aware of https://github.com/r-lib/urlchecker, this alleviates the 
+problem but ultimately doesn't solve it.
+
+# Proposed solution
+
+## Allow-list
+
+A file inst/URL that lists all URLs where failures are allowed -- 
+possibly with a list of the HTTP codes accepted for that link.
+
+Example:
+
+https://oracle.com/ 301
+https://twitter.com/drob/status/1224851726068527106 400
+
+
+From kr|m|r+m| @end|ng |rom m@||box@org  Thu Jan  7 15:45:39 2021
+From: kr|m|r+m| @end|ng |rom m@||box@org (=?UTF-8?Q?Kirill_M=c3=bcller?=)
+Date: Thu, 7 Jan 2021 15:45:39 +0100
+Subject: [Rd] URL checks
+In-Reply-To: <86862a3d-ee6b-4511-7207-e7a655ba3565@mailbox.org>
+References: <86862a3d-ee6b-4511-7207-e7a655ba3565@mailbox.org>
+Message-ID: <da33c7f9-d3da-d5c5-8307-ebb5d723ef07@mailbox.org>
+
+One other failure mode: SSL certificates trusted by browsers that are 
+not installed on the check machine, e.g. the "GEANT Vereniging" 
+certificate from https://relational.fit.cvut.cz/ .
+
+
+K
+
+
+On 07.01.21 12:14, Kirill M?ller via R-devel wrote:
+> Hi
+>
+>
+> The URL checks in R CMD check test all links in the README and 
+> vignettes for broken or redirected links. In many cases this improves 
+> documentation, I see problems with this approach which I have detailed 
+> below.
+>
+> I'm writing to this mailing list because I think the change needs to 
+> happen in R's check routines. I propose to introduce an "allow-list" 
+> for URLs, to reduce the burden on both CRAN and package maintainers.
+>
+> Comments are greatly appreciated.
+>
+>
+> Best regards
+>
+> Kirill
+>
+>
+> # Problems with the detection of broken/redirected URLs
+>
+> ## 301 should often be 307, how to change?
+>
+> Many web sites use a 301 redirection code that probably should be a 
+> 307. For example, https://www.oracle.com and https://www.oracle.com/ 
+> both redirect to https://www.oracle.com/index.html with a 301. I 
+> suspect the company still wants oracle.com to be recognized as the 
+> primary entry point of their web presence (to reserve the right to 
+> move the redirection to a different location later), I haven't checked 
+> with their PR department though. If that's true, the redirect probably 
+> should be a 307, which should be fixed by their IT department which I 
+> haven't contacted yet either.
+>
+> $ curl -i https://www.oracle.com
+> HTTP/2 301
+> server: AkamaiGHost
+> content-length: 0
+> location: https://www.oracle.com/index.html
+> ...
+>
+> ## User agent detection
+>
+> twitter.com responds with a 400 error for requests without a user 
+> agent string hinting at an accepted browser.
+>
+> $ curl -i https://twitter.com/
+> HTTP/2 400
+> ...
+> <body>...<p>Please switch to a supported browser...</p>...</body>
+>
+> $ curl -s -i https://twitter.com/ -A "Mozilla/5.0 (X11; Ubuntu; Linux 
+> x86_64; rv:84.0) Gecko/20100101 Firefox/84.0" | head -n 1
+> HTTP/2 200
+>
+> # Impact
+>
+> While the latter problem *could* be fixed by supplying a browser-like 
+> user agent string, the former problem is virtually unfixable -- so 
+> many web sites should use 307 instead of 301 but don't. The above list 
+> is also incomplete -- think of unreliable links, HTTP links, other 
+> failure modes...
+>
+> This affects me as a package maintainer, I have the choice to either 
+> change the links to incorrect versions, or remove them altogether.
+>
+> I can also choose to explain each broken link to CRAN, this subjects 
+> the team to undue burden I think. Submitting a package with NOTEs 
+> delays the release for a package which I must release very soon to 
+> avoid having it pulled from CRAN, I'd rather not risk that -- hence I 
+> need to remove the link and put it back later.
+>
+> I'm aware of https://github.com/r-lib/urlchecker, this alleviates the 
+> problem but ultimately doesn't solve it.
+>
+> # Proposed solution
+>
+> ## Allow-list
+>
+> A file inst/URL that lists all URLs where failures are allowed -- 
+> possibly with a list of the HTTP codes accepted for that link.
+>
+> Example:
+>
+> https://oracle.com/ 301
+> https://twitter.com/drob/status/1224851726068527106 400
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From hugo@gru@on+R @end|ng |rom norm@|e@up@org  Thu Jan  7 16:53:56 2021
+From: hugo@gru@on+R @end|ng |rom norm@|e@up@org (Hugo Gruson)
+Date: Thu, 7 Jan 2021 16:53:56 +0100
+Subject: [Rd] URL checks
+In-Reply-To: <da33c7f9-d3da-d5c5-8307-ebb5d723ef07@mailbox.org>
+References: <86862a3d-ee6b-4511-7207-e7a655ba3565@mailbox.org>
+ <da33c7f9-d3da-d5c5-8307-ebb5d723ef07@mailbox.org>
+Message-ID: <4abf9069-cfef-c933-3fbc-5e2f1b77b919-5849@normalesup.org>
+
+
+I encountered the same issue today with https://astrostatistics.psu.edu/.
+
+This is a trust chain issue, as explained here: 
+https://whatsmychaincert.com/?astrostatistics.psu.edu.
+
+I've worked for a couple of years on a project to increase HTTPS 
+adoption on the web and we noticed that this type of error is very 
+common, and that website maintainers are often unresponsive to requests 
+to fix this issue.
+
+Therefore, I totally agree with Kirill that a list of known 
+false-positive/exceptions would be a great addition to save time to both 
+the CRAN team and package developers.
+
+Hugo
+
+On 07/01/2021 15:45, Kirill M?ller via R-devel wrote:
+> One other failure mode: SSL certificates trusted by browsers that are 
+> not installed on the check machine, e.g. the "GEANT Vereniging" 
+> certificate from https://relational.fit.cvut.cz/ .
+> 
+> 
+> K
+> 
+> 
+> On 07.01.21 12:14, Kirill M?ller via R-devel wrote:
+>> Hi
+>>
+>>
+>> The URL checks in R CMD check test all links in the README and 
+>> vignettes for broken or redirected links. In many cases this improves 
+>> documentation, I see problems with this approach which I have detailed 
+>> below.
+>>
+>> I'm writing to this mailing list because I think the change needs to 
+>> happen in R's check routines. I propose to introduce an "allow-list" 
+>> for URLs, to reduce the burden on both CRAN and package maintainers.
+>>
+>> Comments are greatly appreciated.
+>>
+>>
+>> Best regards
+>>
+>> Kirill
+>>
+>>
+>> # Problems with the detection of broken/redirected URLs
+>>
+>> ## 301 should often be 307, how to change?
+>>
+>> Many web sites use a 301 redirection code that probably should be a 
+>> 307. For example, https://www.oracle.com and https://www.oracle.com/ 
+>> both redirect to https://www.oracle.com/index.html with a 301. I 
+>> suspect the company still wants oracle.com to be recognized as the 
+>> primary entry point of their web presence (to reserve the right to 
+>> move the redirection to a different location later), I haven't checked 
+>> with their PR department though. If that's true, the redirect probably 
+>> should be a 307, which should be fixed by their IT department which I 
+>> haven't contacted yet either.
+>>
+>> $ curl -i https://www.oracle.com
+>> HTTP/2 301
+>> server: AkamaiGHost
+>> content-length: 0
+>> location: https://www.oracle.com/index.html
+>> ...
+>>
+>> ## User agent detection
+>>
+>> twitter.com responds with a 400 error for requests without a user 
+>> agent string hinting at an accepted browser.
+>>
+>> $ curl -i https://twitter.com/
+>> HTTP/2 400
+>> ...
+>> <body>...<p>Please switch to a supported browser...</p>...</body>
+>>
+>> $ curl -s -i https://twitter.com/ -A "Mozilla/5.0 (X11; Ubuntu; Linux 
+>> x86_64; rv:84.0) Gecko/20100101 Firefox/84.0" | head -n 1
+>> HTTP/2 200
+>>
+>> # Impact
+>>
+>> While the latter problem *could* be fixed by supplying a browser-like 
+>> user agent string, the former problem is virtually unfixable -- so 
+>> many web sites should use 307 instead of 301 but don't. The above list 
+>> is also incomplete -- think of unreliable links, HTTP links, other 
+>> failure modes...
+>>
+>> This affects me as a package maintainer, I have the choice to either 
+>> change the links to incorrect versions, or remove them altogether.
+>>
+>> I can also choose to explain each broken link to CRAN, this subjects 
+>> the team to undue burden I think. Submitting a package with NOTEs 
+>> delays the release for a package which I must release very soon to 
+>> avoid having it pulled from CRAN, I'd rather not risk that -- hence I 
+>> need to remove the link and put it back later.
+>>
+>> I'm aware of https://github.com/r-lib/urlchecker, this alleviates the 
+>> problem but ultimately doesn't solve it.
+>>
+>> # Proposed solution
+>>
+>> ## Allow-list
+>>
+>> A file inst/URL that lists all URLs where failures are allowed -- 
+>> possibly with a list of the HTTP codes accepted for that link.
+>>
+>> Example:
+>>
+>> https://oracle.com/ 301
+>> https://twitter.com/drob/status/1224851726068527106 400
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @pencer@gr@ve@ @end|ng |rom prod@y@e@com  Fri Jan  8 13:04:13 2021
+From: @pencer@gr@ve@ @end|ng |rom prod@y@e@com (Spencer Graves)
+Date: Fri, 8 Jan 2021 06:04:13 -0600
+Subject: [Rd] URL checks
+In-Reply-To: <4abf9069-cfef-c933-3fbc-5e2f1b77b919-5849@normalesup.org>
+References: <86862a3d-ee6b-4511-7207-e7a655ba3565@mailbox.org>
+ <da33c7f9-d3da-d5c5-8307-ebb5d723ef07@mailbox.org>
+ <4abf9069-cfef-c933-3fbc-5e2f1b77b919-5849@normalesup.org>
+Message-ID: <a4b67099-b7c1-1c4b-e3f1-61ba1bb1fdd6@prodsyse.com>
+
+	  I also would be pleased to be allowed to provide "a list of known 
+false-positive/exceptions" to the URL tests.  I've been challenged 
+multiple times regarding URLs that worked fine when I checked them.  We 
+should not be required to do a partial lobotomy to pass R CMD check ;-)
+
+
+	  Spencer Graves
+
+
+On 2021-01-07 09:53, Hugo Gruson wrote:
+> 
+> I encountered the same issue today with https://astrostatistics.psu.edu/.
+> 
+> This is a trust chain issue, as explained here: 
+> https://whatsmychaincert.com/?astrostatistics.psu.edu.
+> 
+> I've worked for a couple of years on a project to increase HTTPS 
+> adoption on the web and we noticed that this type of error is very 
+> common, and that website maintainers are often unresponsive to requests 
+> to fix this issue.
+> 
+> Therefore, I totally agree with Kirill that a list of known 
+> false-positive/exceptions would be a great addition to save time to both 
+> the CRAN team and package developers.
+> 
+> Hugo
+> 
+> On 07/01/2021 15:45, Kirill M?ller via R-devel wrote:
+>> One other failure mode: SSL certificates trusted by browsers that are 
+>> not installed on the check machine, e.g. the "GEANT Vereniging" 
+>> certificate from https://relational.fit.cvut.cz/ .
+>>
+>>
+>> K
+>>
+>>
+>> On 07.01.21 12:14, Kirill M?ller via R-devel wrote:
+>>> Hi
+>>>
+>>>
+>>> The URL checks in R CMD check test all links in the README and 
+>>> vignettes for broken or redirected links. In many cases this improves 
+>>> documentation, I see problems with this approach which I have 
+>>> detailed below.
+>>>
+>>> I'm writing to this mailing list because I think the change needs to 
+>>> happen in R's check routines. I propose to introduce an "allow-list" 
+>>> for URLs, to reduce the burden on both CRAN and package maintainers.
+>>>
+>>> Comments are greatly appreciated.
+>>>
+>>>
+>>> Best regards
+>>>
+>>> Kirill
+>>>
+>>>
+>>> # Problems with the detection of broken/redirected URLs
+>>>
+>>> ## 301 should often be 307, how to change?
+>>>
+>>> Many web sites use a 301 redirection code that probably should be a 
+>>> 307. For example, https://www.oracle.com and https://www.oracle.com/ 
+>>> both redirect to https://www.oracle.com/index.html with a 301. I 
+>>> suspect the company still wants oracle.com to be recognized as the 
+>>> primary entry point of their web presence (to reserve the right to 
+>>> move the redirection to a different location later), I haven't 
+>>> checked with their PR department though. If that's true, the redirect 
+>>> probably should be a 307, which should be fixed by their IT 
+>>> department which I haven't contacted yet either.
+>>>
+>>> $ curl -i https://www.oracle.com
+>>> HTTP/2 301
+>>> server: AkamaiGHost
+>>> content-length: 0
+>>> location: https://www.oracle.com/index.html
+>>> ...
+>>>
+>>> ## User agent detection
+>>>
+>>> twitter.com responds with a 400 error for requests without a user 
+>>> agent string hinting at an accepted browser.
+>>>
+>>> $ curl -i https://twitter.com/
+>>> HTTP/2 400
+>>> ...
+>>> <body>...<p>Please switch to a supported browser...</p>...</body>
+>>>
+>>> $ curl -s -i https://twitter.com/ -A "Mozilla/5.0 (X11; Ubuntu; Linux 
+>>> x86_64; rv:84.0) Gecko/20100101 Firefox/84.0" | head -n 1
+>>> HTTP/2 200
+>>>
+>>> # Impact
+>>>
+>>> While the latter problem *could* be fixed by supplying a browser-like 
+>>> user agent string, the former problem is virtually unfixable -- so 
+>>> many web sites should use 307 instead of 301 but don't. The above 
+>>> list is also incomplete -- think of unreliable links, HTTP links, 
+>>> other failure modes...
+>>>
+>>> This affects me as a package maintainer, I have the choice to either 
+>>> change the links to incorrect versions, or remove them altogether.
+>>>
+>>> I can also choose to explain each broken link to CRAN, this subjects 
+>>> the team to undue burden I think. Submitting a package with NOTEs 
+>>> delays the release for a package which I must release very soon to 
+>>> avoid having it pulled from CRAN, I'd rather not risk that -- hence I 
+>>> need to remove the link and put it back later.
+>>>
+>>> I'm aware of https://github.com/r-lib/urlchecker, this alleviates the 
+>>> problem but ultimately doesn't solve it.
+>>>
+>>> # Proposed solution
+>>>
+>>> ## Allow-list
+>>>
+>>> A file inst/URL that lists all URLs where failures are allowed -- 
+>>> possibly with a list of the HTTP codes accepted for that link.
+>>>
+>>> Example:
+>>>
+>>> https://oracle.com/ 301
+>>> https://twitter.com/drob/status/1224851726068527106 400
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From jo@h@m@u|r|ch @end|ng |rom gm@||@com  Sat Jan  9 17:45:27 2021
+From: jo@h@m@u|r|ch @end|ng |rom gm@||@com (Joshua Ulrich)
+Date: Sat, 9 Jan 2021 10:45:27 -0600
+Subject: [Rd] Demo for linking native routines between R packages
+In-Reply-To: <CA+Qy-8KawmW79xuSteeNQk1gMvc33EUSjkALsHVqJH+KS0S=YQ@mail.gmail.com>
+References: <CA+Qy-8KawmW79xuSteeNQk1gMvc33EUSjkALsHVqJH+KS0S=YQ@mail.gmail.com>
+Message-ID: <CAPPM_gQHt1HMRUKshiKRg=W3OLjQaU67hU=-+dtRP6zy7rLpPA@mail.gmail.com>
+
+Hi David,
+
+On Wed, Jan 6, 2021 at 4:00 AM Jitao David Zhang <davidvonpku at gmail.com> wrote:
+>
+> Dear Davis, Dirk, Jan, and r-devel subscribers,
+>
+> I hope you have had a good start in the new year.
+>
+> For your information: I have updated the GitHub repository to demonstrate
+> linking native routines between R packages (
+> https://github.com/Accio/demo-linking-native), especially by listing the
+> prior art and the project by Davis to give the readers more background and
+> history of the topic. And I took the liberty to acknowledge your
+> contribution, criticism and help to improve this baby project.
+>
+> In any case, I wish there is a link from WRE to a small demo (not
+> necessarily mine!) where linking native routine is implemented in a
+> minimalistic example for teaching and demonstration purposes. That will
+> help people a lot in my opinion.
+>
+R-core will probably be reluctant to link to an external example they
+have very little control over. For example, what if the process
+changes and the external source doesn't get updated?
+
+That said, WRE does list two packages that register native routines
+from other packages:
+https://cran.r-project.org/doc/manuals/r-release/R-exts.html#Linking-to-native-routines-in-other-packages
+
+I'd be open to including a vignette in xts that discusses the process
+of linking to zoo. That would have the benefit of needing to be
+updated if the process changes. We can discuss off-list if you're
+interested in collaborating on it.
+
+> Best regards,
+> David
+>
+> --
+> Jitao David Zhang
+>
+> http://jdzhang.me/
+> mail at jdzhang.me
+>
+> Sch?tzengasse 20
+> 4125 Riehen, Switzerland
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+
+-- 
+Joshua Ulrich  |  about.me/joshuaulrich
+FOSS Trading  |  www.fosstrading.com
+
+
+From c@@rd|@g@bor @end|ng |rom gm@||@com  Sat Jan  9 18:23:25 2021
+From: c@@rd|@g@bor @end|ng |rom gm@||@com (=?UTF-8?B?R8OhYm9yIENzw6FyZGk=?=)
+Date: Sat, 9 Jan 2021 17:23:25 +0000
+Subject: [Rd] Demo for linking native routines between R packages
+In-Reply-To: <CAPPM_gQHt1HMRUKshiKRg=W3OLjQaU67hU=-+dtRP6zy7rLpPA@mail.gmail.com>
+References: <CA+Qy-8KawmW79xuSteeNQk1gMvc33EUSjkALsHVqJH+KS0S=YQ@mail.gmail.com>
+ <CAPPM_gQHt1HMRUKshiKRg=W3OLjQaU67hU=-+dtRP6zy7rLpPA@mail.gmail.com>
+Message-ID: <CABtg=Knib5t7dEYodn_jzdxQsC4ZJp=qzN_8AoXChsZ8k57t2g@mail.gmail.com>
+
+On Sat, Jan 9, 2021 at 4:45 PM Joshua Ulrich <josh.m.ulrich at gmail.com>
+wrote:
+[...]
+
+>
+> That said, WRE does list two packages that register native routines
+> from other packages:
+>
+> https://cran.r-project.org/doc/manuals/r-release/R-exts.html#Linking-to-native-routines-in-other-packages
+>
+>
+There are a bunch more, see here:
+https://github.com/search?q=org%3Acran+R_RegisterCCallable&type=code
+
+Here is another very minimal example:
+https://github.com/DavisVaughan/cexport#cexport
+
+Gabor
+
+[...]
+
+	[[alternative HTML version deleted]]
+
+
+From edd @end|ng |rom deb|@n@org  Sat Jan  9 18:34:45 2021
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Sat, 9 Jan 2021 11:34:45 -0600
+Subject: [Rd] URL checks
+In-Reply-To: <a4b67099-b7c1-1c4b-e3f1-61ba1bb1fdd6@prodsyse.com>
+References: <86862a3d-ee6b-4511-7207-e7a655ba3565@mailbox.org>
+ <da33c7f9-d3da-d5c5-8307-ebb5d723ef07@mailbox.org>
+ <4abf9069-cfef-c933-3fbc-5e2f1b77b919-5849@normalesup.org>
+ <a4b67099-b7c1-1c4b-e3f1-61ba1bb1fdd6@prodsyse.com>
+Message-ID: <24569.59701.853035.931125@rob.eddelbuettel.com>
+
+
+The idea of 'white lists' to prevent known (and 'tolerated') issues, note,
+warnings, ... from needlessly reappearing is very powerful and general, and
+can go much further than just URL checks.
+
+I suggested several times in the past that we can look at the format Debian
+uses in its 'lintian' package checker and its override files -- which are
+used across thousands of packages there.  But that went nowhere so I stopped.
+
+This issue needs a champion or two to implement a prototype as well as a
+potential R Core / CRAN sponsor to adopt it.  But in all those years no smoke
+has come out of any chimneys so ...  ?\_(?)_/? is all we get.
+
+Dirk
+
+-- 
+https://dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From pro|jcn@@h @end|ng |rom gm@||@com  Sat Jan  9 19:31:02 2021
+From: pro|jcn@@h @end|ng |rom gm@||@com (J C Nash)
+Date: Sat, 9 Jan 2021 13:31:02 -0500
+Subject: [Rd] URL checks
+In-Reply-To: <24569.59701.853035.931125@rob.eddelbuettel.com>
+References: <86862a3d-ee6b-4511-7207-e7a655ba3565@mailbox.org>
+ <da33c7f9-d3da-d5c5-8307-ebb5d723ef07@mailbox.org>
+ <4abf9069-cfef-c933-3fbc-5e2f1b77b919-5849@normalesup.org>
+ <a4b67099-b7c1-1c4b-e3f1-61ba1bb1fdd6@prodsyse.com>
+ <24569.59701.853035.931125@rob.eddelbuettel.com>
+Message-ID: <138e3853-d9a6-ba86-6d0b-a53b929412d0@gmail.com>
+
+Is this a topic for Google Summer of Code? See
+https://github.com/rstats-gsoc/gsoc2021/wiki
+
+
+On 2021-01-09 12:34 p.m., Dirk Eddelbuettel wrote:
+> 
+> The idea of 'white lists' to prevent known (and 'tolerated') issues, note,
+> warnings, ... from needlessly reappearing is very powerful and general, and
+> can go much further than just URL checks.
+> 
+> I suggested several times in the past that we can look at the format Debian
+> uses in its 'lintian' package checker and its override files -- which are
+> used across thousands of packages there.  But that went nowhere so I stopped.
+> 
+> This issue needs a champion or two to implement a prototype as well as a
+> potential R Core / CRAN sponsor to adopt it.  But in all those years no smoke
+> has come out of any chimneys so ...  ?\_(?)_/? is all we get.
+> 
+> Dirk
+>
+
+
+From wo||g@ng@v|echtb@uer @end|ng |rom m@@@tr|chtun|ver@|ty@n|  Fri Jan  8 14:50:14 2021
+From: wo||g@ng@v|echtb@uer @end|ng |rom m@@@tr|chtun|ver@|ty@n| (Viechtbauer, Wolfgang (SP))
+Date: Fri, 8 Jan 2021 13:50:14 +0000
+Subject: [Rd] URL checks
+In-Reply-To: <a4b67099-b7c1-1c4b-e3f1-61ba1bb1fdd6@prodsyse.com>
+References: <86862a3d-ee6b-4511-7207-e7a655ba3565@mailbox.org>
+ <da33c7f9-d3da-d5c5-8307-ebb5d723ef07@mailbox.org>
+ <4abf9069-cfef-c933-3fbc-5e2f1b77b919-5849@normalesup.org>
+ <a4b67099-b7c1-1c4b-e3f1-61ba1bb1fdd6@prodsyse.com>
+Message-ID: <5fe854d5f3c64941806dbc8f0004fff6-1303@UM-MAIL3214.unimaas.nl>
+
+Instead of a separate file to store such a list, would it be an idea to add versions of the \href{}{} and \url{} markup commands that are skipped by the URL checks?
+
+Best,
+Wolfgang
+
+>-----Original Message-----
+>From: R-devel [mailto:r-devel-bounces at r-project.org] On Behalf Of Spencer
+>Graves
+>Sent: Friday, 08 January, 2021 13:04
+>To: r-devel at r-project.org
+>Subject: Re: [Rd] URL checks
+>
+>	  I also would be pleased to be allowed to provide "a list of known
+>false-positive/exceptions" to the URL tests.  I've been challenged
+>multiple times regarding URLs that worked fine when I checked them.  We
+>should not be required to do a partial lobotomy to pass R CMD check ;-)
+>
+>	  Spencer Graves
+>
+>On 2021-01-07 09:53, Hugo Gruson wrote:
+>>
+>> I encountered the same issue today with https://astrostatistics.psu.edu/.
+>>
+>> This is a trust chain issue, as explained here:
+>> https://whatsmychaincert.com/?astrostatistics.psu.edu.
+>>
+>> I've worked for a couple of years on a project to increase HTTPS
+>> adoption on the web and we noticed that this type of error is very
+>> common, and that website maintainers are often unresponsive to requests
+>> to fix this issue.
+>>
+>> Therefore, I totally agree with Kirill that a list of known
+>> false-positive/exceptions would be a great addition to save time to both
+>> the CRAN team and package developers.
+>>
+>> Hugo
+>>
+>> On 07/01/2021 15:45, Kirill M?ller via R-devel wrote:
+>>> One other failure mode: SSL certificates trusted by browsers that are
+>>> not installed on the check machine, e.g. the "GEANT Vereniging"
+>>> certificate from https://relational.fit.cvut.cz/ .
+>>>
+>>> K
+>>>
+>>> On 07.01.21 12:14, Kirill M?ller via R-devel wrote:
+>>>> Hi
+>>>>
+>>>> The URL checks in R CMD check test all links in the README and
+>>>> vignettes for broken or redirected links. In many cases this improves
+>>>> documentation, I see problems with this approach which I have
+>>>> detailed below.
+>>>>
+>>>> I'm writing to this mailing list because I think the change needs to
+>>>> happen in R's check routines. I propose to introduce an "allow-list"
+>>>> for URLs, to reduce the burden on both CRAN and package maintainers.
+>>>>
+>>>> Comments are greatly appreciated.
+>>>>
+>>>> Best regards
+>>>>
+>>>> Kirill
+>>>>
+>>>> # Problems with the detection of broken/redirected URLs
+>>>>
+>>>> ## 301 should often be 307, how to change?
+>>>>
+>>>> Many web sites use a 301 redirection code that probably should be a
+>>>> 307. For example, https://www.oracle.com and https://www.oracle.com/
+>>>> both redirect to https://www.oracle.com/index.html with a 301. I
+>>>> suspect the company still wants oracle.com to be recognized as the
+>>>> primary entry point of their web presence (to reserve the right to
+>>>> move the redirection to a different location later), I haven't
+>>>> checked with their PR department though. If that's true, the redirect
+>>>> probably should be a 307, which should be fixed by their IT
+>>>> department which I haven't contacted yet either.
+>>>>
+>>>> $ curl -i https://www.oracle.com
+>>>> HTTP/2 301
+>>>> server: AkamaiGHost
+>>>> content-length: 0
+>>>> location: https://www.oracle.com/index.html
+>>>> ...
+>>>>
+>>>> ## User agent detection
+>>>>
+>>>> twitter.com responds with a 400 error for requests without a user
+>>>> agent string hinting at an accepted browser.
+>>>>
+>>>> $ curl -i https://twitter.com/
+>>>> HTTP/2 400
+>>>> ...
+>>>> <body>...<p>Please switch to a supported browser...</p>...</body>
+>>>>
+>>>> $ curl -s -i https://twitter.com/ -A "Mozilla/5.0 (X11; Ubuntu; Linux
+>>>> x86_64; rv:84.0) Gecko/20100101 Firefox/84.0" | head -n 1
+>>>> HTTP/2 200
+>>>>
+>>>> # Impact
+>>>>
+>>>> While the latter problem *could* be fixed by supplying a browser-like
+>>>> user agent string, the former problem is virtually unfixable -- so
+>>>> many web sites should use 307 instead of 301 but don't. The above
+>>>> list is also incomplete -- think of unreliable links, HTTP links,
+>>>> other failure modes...
+>>>>
+>>>> This affects me as a package maintainer, I have the choice to either
+>>>> change the links to incorrect versions, or remove them altogether.
+>>>>
+>>>> I can also choose to explain each broken link to CRAN, this subjects
+>>>> the team to undue burden I think. Submitting a package with NOTEs
+>>>> delays the release for a package which I must release very soon to
+>>>> avoid having it pulled from CRAN, I'd rather not risk that -- hence I
+>>>> need to remove the link and put it back later.
+>>>>
+>>>> I'm aware of https://github.com/r-lib/urlchecker, this alleviates the
+>>>> problem but ultimately doesn't solve it.
+>>>>
+>>>> # Proposed solution
+>>>>
+>>>> ## Allow-list
+>>>>
+>>>> A file inst/URL that lists all URLs where failures are allowed --
+>>>> possibly with a list of the HTTP codes accepted for that link.
+>>>>
+>>>> Example:
+>>>>
+>>>> https://oracle.com/ 301
+>>>> https://twitter.com/drob/status/1224851726068527106 400
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Mon Jan 11 10:51:43 2021
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Mon, 11 Jan 2021 10:51:43 +0100
+Subject: [Rd] URL checks
+In-Reply-To: <5fe854d5f3c64941806dbc8f0004fff6-1303@UM-MAIL3214.unimaas.nl>
+References: <86862a3d-ee6b-4511-7207-e7a655ba3565@mailbox.org>
+ <da33c7f9-d3da-d5c5-8307-ebb5d723ef07@mailbox.org>
+ <4abf9069-cfef-c933-3fbc-5e2f1b77b919-5849@normalesup.org>
+ <a4b67099-b7c1-1c4b-e3f1-61ba1bb1fdd6@prodsyse.com>
+ <5fe854d5f3c64941806dbc8f0004fff6-1303@UM-MAIL3214.unimaas.nl>
+Message-ID: <24572.8111.414992.898239@stat.math.ethz.ch>
+
+>>>>> Viechtbauer, Wolfgang (SP) 
+>>>>>     on Fri, 8 Jan 2021 13:50:14 +0000 writes:
+
+    > Instead of a separate file to store such a list, would it be an idea to add versions of the \href{}{} and \url{} markup commands that are skipped by the URL checks?
+    > Best,
+    > Wolfgang
+
+I think John Nash and you misunderstood -- or then I
+misunderstood -- the original proposal:
+
+I've been understanding that there should be a  "central repository" of URL
+exceptions that is maintained by volunteers.
+
+And rather *not* that package authors should get ways to skip
+URL checking..
+
+Martin
+
+
+    >> -----Original Message-----
+    >> From: R-devel [mailto:r-devel-bounces at r-project.org] On Behalf Of Spencer
+    >> Graves
+    >> Sent: Friday, 08 January, 2021 13:04
+    >> To: r-devel at r-project.org
+    >> Subject: Re: [Rd] URL checks
+    >> 
+    >> I also would be pleased to be allowed to provide "a list of known
+    >> false-positive/exceptions" to the URL tests.  I've been challenged
+    >> multiple times regarding URLs that worked fine when I checked them.  We
+    >> should not be required to do a partial lobotomy to pass R CMD check ;-)
+    >> 
+    >> Spencer Graves
+    >> 
+    >> On 2021-01-07 09:53, Hugo Gruson wrote:
+    >>> 
+    >>> I encountered the same issue today with https://astrostatistics.psu.edu/.
+    >>> 
+    >>> This is a trust chain issue, as explained here:
+    >>> https://whatsmychaincert.com/?astrostatistics.psu.edu.
+    >>> 
+    >>> I've worked for a couple of years on a project to increase HTTPS
+    >>> adoption on the web and we noticed that this type of error is very
+    >>> common, and that website maintainers are often unresponsive to requests
+    >>> to fix this issue.
+    >>> 
+    >>> Therefore, I totally agree with Kirill that a list of known
+    >>> false-positive/exceptions would be a great addition to save time to both
+    >>> the CRAN team and package developers.
+    >>> 
+    >>> Hugo
+    >>> 
+    >>> On 07/01/2021 15:45, Kirill M?ller via R-devel wrote:
+    >>>> One other failure mode: SSL certificates trusted by browsers that are
+    >>>> not installed on the check machine, e.g. the "GEANT Vereniging"
+    >>>> certificate from https://relational.fit.cvut.cz/ .
+    >>>> 
+    >>>> K
+    >>>> 
+    >>>> On 07.01.21 12:14, Kirill M?ller via R-devel wrote:
+    >>>>> Hi
+    >>>>> 
+    >>>>> The URL checks in R CMD check test all links in the README and
+    >>>>> vignettes for broken or redirected links. In many cases this improves
+    >>>>> documentation, I see problems with this approach which I have
+    >>>>> detailed below.
+    >>>>> 
+    >>>>> I'm writing to this mailing list because I think the change needs to
+    >>>>> happen in R's check routines. I propose to introduce an "allow-list"
+    >>>>> for URLs, to reduce the burden on both CRAN and package maintainers.
+    >>>>> 
+    >>>>> Comments are greatly appreciated.
+    >>>>> 
+    >>>>> Best regards
+    >>>>> 
+    >>>>> Kirill
+    >>>>> 
+    >>>>> # Problems with the detection of broken/redirected URLs
+    >>>>> 
+    >>>>> ## 301 should often be 307, how to change?
+    >>>>> 
+    >>>>> Many web sites use a 301 redirection code that probably should be a
+    >>>>> 307. For example, https://www.oracle.com and https://www.oracle.com/
+    >>>>> both redirect to https://www.oracle.com/index.html with a 301. I
+    >>>>> suspect the company still wants oracle.com to be recognized as the
+    >>>>> primary entry point of their web presence (to reserve the right to
+    >>>>> move the redirection to a different location later), I haven't
+    >>>>> checked with their PR department though. If that's true, the redirect
+    >>>>> probably should be a 307, which should be fixed by their IT
+    >>>>> department which I haven't contacted yet either.
+    >>>>> 
+    >>>>> $ curl -i https://www.oracle.com
+    >>>>> HTTP/2 301
+    >>>>> server: AkamaiGHost
+    >>>>> content-length: 0
+    >>>>> location: https://www.oracle.com/index.html
+    >>>>> ...
+    >>>>> 
+    >>>>> ## User agent detection
+    >>>>> 
+    >>>>> twitter.com responds with a 400 error for requests without a user
+    >>>>> agent string hinting at an accepted browser.
+    >>>>> 
+    >>>>> $ curl -i https://twitter.com/
+    >>>>> HTTP/2 400
+    >>>>> ...
+    >>>>> <body>...<p>Please switch to a supported browser...</p>...</body>
+    >>>>> 
+    >>>>> $ curl -s -i https://twitter.com/ -A "Mozilla/5.0 (X11; Ubuntu; Linux
+    >>>>> x86_64; rv:84.0) Gecko/20100101 Firefox/84.0" | head -n 1
+    >>>>> HTTP/2 200
+    >>>>> 
+    >>>>> # Impact
+    >>>>> 
+    >>>>> While the latter problem *could* be fixed by supplying a browser-like
+    >>>>> user agent string, the former problem is virtually unfixable -- so
+    >>>>> many web sites should use 307 instead of 301 but don't. The above
+    >>>>> list is also incomplete -- think of unreliable links, HTTP links,
+    >>>>> other failure modes...
+    >>>>> 
+    >>>>> This affects me as a package maintainer, I have the choice to either
+    >>>>> change the links to incorrect versions, or remove them altogether.
+    >>>>> 
+    >>>>> I can also choose to explain each broken link to CRAN, this subjects
+    >>>>> the team to undue burden I think. Submitting a package with NOTEs
+    >>>>> delays the release for a package which I must release very soon to
+    >>>>> avoid having it pulled from CRAN, I'd rather not risk that -- hence I
+    >>>>> need to remove the link and put it back later.
+    >>>>> 
+    >>>>> I'm aware of https://github.com/r-lib/urlchecker, this alleviates the
+    >>>>> problem but ultimately doesn't solve it.
+    >>>>> 
+    >>>>> # Proposed solution
+    >>>>> 
+    >>>>> ## Allow-list
+    >>>>> 
+    >>>>> A file inst/URL that lists all URLs where failures are allowed --
+    >>>>> possibly with a list of the HTTP codes accepted for that link.
+    >>>>> 
+    >>>>> Example:
+    >>>>> 
+    >>>>> https://oracle.com/ 301
+    >>>>> https://twitter.com/drob/status/1224851726068527106 400
+    > ______________________________________________
+    > R-devel at r-project.org mailing list
+    > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From wo||g@ng@v|echtb@uer @end|ng |rom m@@@tr|chtun|ver@|ty@n|  Mon Jan 11 11:41:03 2021
+From: wo||g@ng@v|echtb@uer @end|ng |rom m@@@tr|chtun|ver@|ty@n| (Viechtbauer, Wolfgang (SP))
+Date: Mon, 11 Jan 2021 10:41:03 +0000
+Subject: [Rd] URL checks
+In-Reply-To: <24572.8111.414992.898239@stat.math.ethz.ch>
+References: <86862a3d-ee6b-4511-7207-e7a655ba3565@mailbox.org>
+ <da33c7f9-d3da-d5c5-8307-ebb5d723ef07@mailbox.org>
+ <4abf9069-cfef-c933-3fbc-5e2f1b77b919-5849@normalesup.org>
+ <a4b67099-b7c1-1c4b-e3f1-61ba1bb1fdd6@prodsyse.com>
+ <5fe854d5f3c64941806dbc8f0004fff6-1303@UM-MAIL3214.unimaas.nl>
+ <24572.8111.414992.898239@stat.math.ethz.ch>
+Message-ID: <4d52fd5a060f4cabbe42cfdce86a07b5@UM-MAIL3214.unimaas.nl>
+
+>>>>>> Viechtbauer, Wolfgang (SP)
+>>>>>>     on Fri, 8 Jan 2021 13:50:14 +0000 writes:
+>
+>    > Instead of a separate file to store such a list, would it be an idea
+>to add versions of the \href{}{} and \url{} markup commands that are skipped
+>by the URL checks?
+>    > Best,
+>    > Wolfgang
+>
+>I think John Nash and you misunderstood -- or then I
+>misunderstood -- the original proposal:
+>
+>I've been understanding that there should be a  "central repository" of URL
+>exceptions that is maintained by volunteers.
+>
+>And rather *not* that package authors should get ways to skip
+>URL checking..
+>
+>Martin
+
+Hi Martin,
+
+Kirill suggested: "A file inst/URL that lists all URLs where failures are allowed -- possibly with a list of the HTTP codes accepted for that link."
+
+So, if it is a file in inst/, then this sounds to me like this is part of the package and not part of some central repository.
+
+Best,
+Wolfgang
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Mon Jan 11 12:29:00 2021
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Mon, 11 Jan 2021 12:29:00 +0100
+Subject: [Rd] URL checks
+In-Reply-To: <4d52fd5a060f4cabbe42cfdce86a07b5@UM-MAIL3214.unimaas.nl>
+References: <86862a3d-ee6b-4511-7207-e7a655ba3565@mailbox.org>
+ <da33c7f9-d3da-d5c5-8307-ebb5d723ef07@mailbox.org>
+ <4abf9069-cfef-c933-3fbc-5e2f1b77b919-5849@normalesup.org>
+ <a4b67099-b7c1-1c4b-e3f1-61ba1bb1fdd6@prodsyse.com>
+ <5fe854d5f3c64941806dbc8f0004fff6-1303@UM-MAIL3214.unimaas.nl>
+ <24572.8111.414992.898239@stat.math.ethz.ch>
+ <4d52fd5a060f4cabbe42cfdce86a07b5@UM-MAIL3214.unimaas.nl>
+Message-ID: <24572.13948.413081.344007@stat.math.ethz.ch>
+
+>>>>> Viechtbauer, Wolfgang (SP) 
+>>>>>     on Mon, 11 Jan 2021 10:41:03 +0000 writes:
+
+    >>>>>>> Viechtbauer, Wolfgang (SP)
+    >>>>>>> on Fri, 8 Jan 2021 13:50:14 +0000 writes:
+    >> 
+    >> > Instead of a separate file to store such a list, would it be an idea
+    >> to add versions of the \href{}{} and \url{} markup commands that are skipped
+    >> by the URL checks?
+    >> > Best,
+    >> > Wolfgang
+    >> 
+    >> I think John Nash and you misunderstood -- or then I
+    >> misunderstood -- the original proposal:
+    >> 
+    >> I've been understanding that there should be a  "central repository" of URL
+    >> exceptions that is maintained by volunteers.
+    >> 
+    >> And rather *not* that package authors should get ways to skip
+    >> URL checking..
+    >> 
+    >> Martin
+
+    > Hi Martin,
+
+    > Kirill suggested: "A file inst/URL that lists all URLs where failures are allowed -- possibly with a list of the HTTP codes accepted for that link."
+
+    > So, if it is a file in inst/, then this sounds to me like this is part of the package and not part of some central repository.
+
+    > Best,
+    > Wolfgang
+
+Dear Wolfgang,
+you are right and indeed it's *me* who misunderstood.
+
+But then I don't think it's a particularly good idea: From a
+CRAN point of view it is important that URLs in documents it
+hosts do not raise errors (*), hence the validity checking of URLs.
+
+So, CRAN (and other repository hosts) would need another option
+to still check all URLs .. and definitely would want to do that before
+accepting a package and also regularly do such checks on a per
+package basis in a way that it is reported as part of the CRAN checks of
+the respective package, right?
+
+So this will get envolved, ... and maybe it *is* good idea for a
+Google Summer of Code (GSoC) project ... well *if* it that is
+supervised by someone who's in close contact with CRAN or Bioc
+maintainer teams.
+
+Martin
+
+--
+*) Such URL errors then lead to e-mails or other reports of web
+ site checking engines reporting that you are hosting (too)
+ (many) web pages with invalid links.
+
+
+From pro|jcn@@h @end|ng |rom gm@||@com  Mon Jan 11 15:41:49 2021
+From: pro|jcn@@h @end|ng |rom gm@||@com (J C Nash)
+Date: Mon, 11 Jan 2021 09:41:49 -0500
+Subject: [Rd] URL checks
+In-Reply-To: <24572.8111.414992.898239@stat.math.ethz.ch>
+References: <86862a3d-ee6b-4511-7207-e7a655ba3565@mailbox.org>
+ <da33c7f9-d3da-d5c5-8307-ebb5d723ef07@mailbox.org>
+ <4abf9069-cfef-c933-3fbc-5e2f1b77b919-5849@normalesup.org>
+ <a4b67099-b7c1-1c4b-e3f1-61ba1bb1fdd6@prodsyse.com>
+ <5fe854d5f3c64941806dbc8f0004fff6-1303@UM-MAIL3214.unimaas.nl>
+ <24572.8111.414992.898239@stat.math.ethz.ch>
+Message-ID: <0af15511-fc6e-15a0-c37e-53f17dd80254-664@gmail.com>
+
+
+Sorry, Martin, but I've NOT commented on this matter, unless someone has been impersonating me.
+Someone else?
+
+JN
+
+
+On 2021-01-11 4:51 a.m., Martin Maechler wrote:
+>>>>>> Viechtbauer, Wolfgang (SP) 
+>>>>>>     on Fri, 8 Jan 2021 13:50:14 +0000 writes:
+> 
+>     > Instead of a separate file to store such a list, would it be an idea to add versions of the \href{}{} and \url{} markup commands that are skipped by the URL checks?
+>     > Best,
+>     > Wolfgang
+> 
+> I think John Nash and you misunderstood -- or then I
+> misunderstood -- the original proposal:
+> 
+> I've been understanding that there should be a  "central repository" of URL
+> exceptions that is maintained by volunteers.
+> 
+> And rather *not* that package authors should get ways to skip
+> URL checking..
+> 
+> Martin
+> 
+> 
+>     >> -----Original Message-----
+>     >> From: R-devel [mailto:r-devel-bounces at r-project.org] On Behalf Of Spencer
+>     >> Graves
+>     >> Sent: Friday, 08 January, 2021 13:04
+>     >> To: r-devel at r-project.org
+>     >> Subject: Re: [Rd] URL checks
+>     >> 
+>     >> I also would be pleased to be allowed to provide "a list of known
+>     >> false-positive/exceptions" to the URL tests.  I've been challenged
+>     >> multiple times regarding URLs that worked fine when I checked them.  We
+>     >> should not be required to do a partial lobotomy to pass R CMD check ;-)
+>     >> 
+>     >> Spencer Graves
+>     >> 
+>     >> On 2021-01-07 09:53, Hugo Gruson wrote:
+>     >>> 
+>     >>> I encountered the same issue today with https://astrostatistics.psu.edu/.
+>     >>> 
+>     >>> This is a trust chain issue, as explained here:
+>     >>> https://whatsmychaincert.com/?astrostatistics.psu.edu.
+>     >>> 
+>     >>> I've worked for a couple of years on a project to increase HTTPS
+>     >>> adoption on the web and we noticed that this type of error is very
+>     >>> common, and that website maintainers are often unresponsive to requests
+>     >>> to fix this issue.
+>     >>> 
+>     >>> Therefore, I totally agree with Kirill that a list of known
+>     >>> false-positive/exceptions would be a great addition to save time to both
+>     >>> the CRAN team and package developers.
+>     >>> 
+>     >>> Hugo
+>     >>> 
+>     >>> On 07/01/2021 15:45, Kirill M?ller via R-devel wrote:
+>     >>>> One other failure mode: SSL certificates trusted by browsers that are
+>     >>>> not installed on the check machine, e.g. the "GEANT Vereniging"
+>     >>>> certificate from https://relational.fit.cvut.cz/ .
+>     >>>> 
+>     >>>> K
+>     >>>> 
+>     >>>> On 07.01.21 12:14, Kirill M?ller via R-devel wrote:
+>     >>>>> Hi
+>     >>>>> 
+>     >>>>> The URL checks in R CMD check test all links in the README and
+>     >>>>> vignettes for broken or redirected links. In many cases this improves
+>     >>>>> documentation, I see problems with this approach which I have
+>     >>>>> detailed below.
+>     >>>>> 
+>     >>>>> I'm writing to this mailing list because I think the change needs to
+>     >>>>> happen in R's check routines. I propose to introduce an "allow-list"
+>     >>>>> for URLs, to reduce the burden on both CRAN and package maintainers.
+>     >>>>> 
+>     >>>>> Comments are greatly appreciated.
+>     >>>>> 
+>     >>>>> Best regards
+>     >>>>> 
+>     >>>>> Kirill
+>     >>>>> 
+>     >>>>> # Problems with the detection of broken/redirected URLs
+>     >>>>> 
+>     >>>>> ## 301 should often be 307, how to change?
+>     >>>>> 
+>     >>>>> Many web sites use a 301 redirection code that probably should be a
+>     >>>>> 307. For example, https://www.oracle.com and https://www.oracle.com/
+>     >>>>> both redirect to https://www.oracle.com/index.html with a 301. I
+>     >>>>> suspect the company still wants oracle.com to be recognized as the
+>     >>>>> primary entry point of their web presence (to reserve the right to
+>     >>>>> move the redirection to a different location later), I haven't
+>     >>>>> checked with their PR department though. If that's true, the redirect
+>     >>>>> probably should be a 307, which should be fixed by their IT
+>     >>>>> department which I haven't contacted yet either.
+>     >>>>> 
+>     >>>>> $ curl -i https://www.oracle.com
+>     >>>>> HTTP/2 301
+>     >>>>> server: AkamaiGHost
+>     >>>>> content-length: 0
+>     >>>>> location: https://www.oracle.com/index.html
+>     >>>>> ...
+>     >>>>> 
+>     >>>>> ## User agent detection
+>     >>>>> 
+>     >>>>> twitter.com responds with a 400 error for requests without a user
+>     >>>>> agent string hinting at an accepted browser.
+>     >>>>> 
+>     >>>>> $ curl -i https://twitter.com/
+>     >>>>> HTTP/2 400
+>     >>>>> ...
+>     >>>>> <body>...<p>Please switch to a supported browser...</p>...</body>
+>     >>>>> 
+>     >>>>> $ curl -s -i https://twitter.com/ -A "Mozilla/5.0 (X11; Ubuntu; Linux
+>     >>>>> x86_64; rv:84.0) Gecko/20100101 Firefox/84.0" | head -n 1
+>     >>>>> HTTP/2 200
+>     >>>>> 
+>     >>>>> # Impact
+>     >>>>> 
+>     >>>>> While the latter problem *could* be fixed by supplying a browser-like
+>     >>>>> user agent string, the former problem is virtually unfixable -- so
+>     >>>>> many web sites should use 307 instead of 301 but don't. The above
+>     >>>>> list is also incomplete -- think of unreliable links, HTTP links,
+>     >>>>> other failure modes...
+>     >>>>> 
+>     >>>>> This affects me as a package maintainer, I have the choice to either
+>     >>>>> change the links to incorrect versions, or remove them altogether.
+>     >>>>> 
+>     >>>>> I can also choose to explain each broken link to CRAN, this subjects
+>     >>>>> the team to undue burden I think. Submitting a package with NOTEs
+>     >>>>> delays the release for a package which I must release very soon to
+>     >>>>> avoid having it pulled from CRAN, I'd rather not risk that -- hence I
+>     >>>>> need to remove the link and put it back later.
+>     >>>>> 
+>     >>>>> I'm aware of https://github.com/r-lib/urlchecker, this alleviates the
+>     >>>>> problem but ultimately doesn't solve it.
+>     >>>>> 
+>     >>>>> # Proposed solution
+>     >>>>> 
+>     >>>>> ## Allow-list
+>     >>>>> 
+>     >>>>> A file inst/URL that lists all URLs where failures are allowed --
+>     >>>>> possibly with a list of the HTTP codes accepted for that link.
+>     >>>>> 
+>     >>>>> Example:
+>     >>>>> 
+>     >>>>> https://oracle.com/ 301
+>     >>>>> https://twitter.com/drob/status/1224851726068527106 400
+>     > ______________________________________________
+>     > R-devel at r-project.org mailing list
+>     > https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Tue Jan 12 20:23:06 2021
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Tue, 12 Jan 2021 13:23:06 -0600 (CST)
+Subject: [Rd] [External]  brief update on the pipe operator in R-devel
+In-Reply-To: <alpine.DEB.2.21.2012221624270.3391@luke-Latitude-7480>
+References: <alpine.DEB.2.21.2012221624270.3391@luke-Latitude-7480>
+Message-ID: <alpine.DEB.2.21.2101121317310.3211@luke-Latitude-7480>
+
+After some discussions we've settled on a syntax of the form
+
+     mtcars |> subset(cyl == 4) |> d => lm(mpg ~ disp, data = d)
+
+to handle cases where the pipe lhs needs to be passed to an argument
+other than the first of the function called on the rhs. This seems a
+to be a reasonable balance between making these non-standard cases
+easy to see but still easy to write. This is now committed to R-devel.
+
+Best,
+
+luke
+
+On Tue, 22 Dec 2020, luke-tierney at uiowa.edu wrote:
+
+> It turns out that allowing a bare function expression on the
+> right-hand side (RHS) of a pipe creates opportunities for confusion
+> and mistakes that are too risky. So we will be dropping support for
+> this from the pipe operator.
+>
+> The case of a RHS call that wants to receive the LHS result in an
+> argument other than the first can be handled with just implicit first
+> argument passing along the lines of
+>
+>    mtcars |> subset(cyl == 4) |> (\(d) lm(mpg ~ disp, data = d))()
+>
+> It was hoped that allowing a bare function expression would make this
+> more convenient, but it has issues as outlined below. We are exploring
+> some alternatives, and will hopefully settle on one soon after the
+> holidays.
+>
+> The basic problem, pointed out in a comment on Twitter, is that in
+> expressions of the form
+>
+>    1 |> \(x) x + 1 -> y
+>    1 |> \(x) x + 1 |> \(y) x + y
+>
+> everything after the \(x) is parsed as part of the body of the
+> function.  So these are parsed along the lines of
+>
+>    1 |> \(x) { x + 1 -> y }
+>    1 |> \(x) { x + 1 |> \(y) x + y }
+>
+> In the first case the result is assigned to a (useless) local
+> variable.  Someone writing this is more likely to have intended to
+> assign the result to a global variable, as this would:
+>
+>    (1 |> \(x) x + 1) -> y
+>
+> In the second case the 'x' in 'x + y' refers to the local variable 'x'
+> in the first RHS function. Someone writing this is more likely to have
+> meant
+>
+>    (1 |> \(x) x + 1) |> \(y) x + y
+>
+> with 'x' in 'x + y' now referring to a global variable:
+>
+>    > x <- 2
+>    > 1 |> \(x) x + 1 |> \(y) x + y
+>    [1] 3
+>    > (1 |> \(x) x + 1) |> \(y) x + y
+>    [1] 4
+>
+> These issues arise with any approach in R that allows a bare function
+> expression on the RHS of a pipe operation. It also arises in other
+> languages with pipe operators. For example, here is the last example
+> in Julia:
+>
+>    julia> x = 2
+>    2
+>    julia> 1 |> x -> x + 1 |> y -> x + y
+>    3
+>    julia> ( 1 |> x -> x + 1 ) |> y -> x + y
+>    4
+>
+> Even though proper use of parentheses can work around these issues,
+> the likelihood of making mistakes that are hard to track down is too
+> high. So we will disallow the use of bare function expressions on the
+> right hand side of a pipe.
+>
+> Best,
+>
+> luke
+>
+>
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+
+
+From |uc@r @end|ng |rom |edor@project@org  Tue Jan 12 20:38:38 2021
+From: |uc@r @end|ng |rom |edor@project@org (=?UTF-8?Q?I=C3=B1aki_Ucar?=)
+Date: Tue, 12 Jan 2021 20:38:38 +0100
+Subject: [Rd] [External] brief update on the pipe operator in R-devel
+In-Reply-To: <alpine.DEB.2.21.2101121317310.3211@luke-Latitude-7480>
+References: <alpine.DEB.2.21.2012221624270.3391@luke-Latitude-7480>
+ <alpine.DEB.2.21.2101121317310.3211@luke-Latitude-7480>
+Message-ID: <CALEXWq13odcpMsW_e+7e_Vvonx0pCmZHM=t6XNKRubhP4bKxGw@mail.gmail.com>
+
+On Tue, 12 Jan 2021 at 20:23, <luke-tierney at uiowa.edu> wrote:
+>
+> After some discussions we've settled on a syntax of the form
+>
+>      mtcars |> subset(cyl == 4) |> d => lm(mpg ~ disp, data = d)
+>
+> to handle cases where the pipe lhs needs to be passed to an argument
+> other than the first of the function called on the rhs. This seems a
+> to be a reasonable balance between making these non-standard cases
+> easy to see but still easy to write. This is now committed to R-devel.
+
+Interesting. Is the use of "d =>" restricted to pipelines? In other
+words, I think that it shouldn't be equivalent to "function(d)", i.e.,
+that this:
+
+x <- d => lm(mpg ~ disp, data = d)
+
+shouldn't work.
+
+-- 
+I?aki ?car
+
+
+From edd @end|ng |rom deb|@n@org  Tue Jan 12 21:00:43 2021
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Tue, 12 Jan 2021 14:00:43 -0600
+Subject: [Rd] [External] brief update on the pipe operator in R-devel
+In-Reply-To: <CALEXWq13odcpMsW_e+7e_Vvonx0pCmZHM=t6XNKRubhP4bKxGw@mail.gmail.com>
+References: <alpine.DEB.2.21.2012221624270.3391@luke-Latitude-7480>
+ <alpine.DEB.2.21.2101121317310.3211@luke-Latitude-7480>
+ <CALEXWq13odcpMsW_e+7e_Vvonx0pCmZHM=t6XNKRubhP4bKxGw@mail.gmail.com>
+Message-ID: <24573.65515.749231.597977@rob.eddelbuettel.com>
+
+
+On 12 January 2021 at 20:38, I?aki Ucar wrote:
+| On Tue, 12 Jan 2021 at 20:23, <luke-tierney at uiowa.edu> wrote:
+| >
+| > After some discussions we've settled on a syntax of the form
+| >
+| >      mtcars |> subset(cyl == 4) |> d => lm(mpg ~ disp, data = d)
+| >
+| > to handle cases where the pipe lhs needs to be passed to an argument
+| > other than the first of the function called on the rhs. This seems a
+| > to be a reasonable balance between making these non-standard cases
+| > easy to see but still easy to write. This is now committed to R-devel.
+| 
+| Interesting. Is the use of "d =>" restricted to pipelines? In other
+| words, I think that it shouldn't be equivalent to "function(d)", i.e.,
+| that this:
+| 
+| x <- d => lm(mpg ~ disp, data = d)
+| 
+| shouldn't work.
+
+Looks like your wish was already granted:
+
+  > mtcars |> subset(cyl == 4) |> d => lm(mpg ~ disp, data = d)
+  
+  Call:
+  lm(formula = mpg ~ disp, data = subset(mtcars, cyl == 4))
+  
+  Coefficients:
+  (Intercept)         disp  
+       40.872       -0.135  
+  
+  > d => lm(mpg ~ disp, data = d)
+  Error in `=>`(d, lm(mpg ~ disp, data = d)) : could not find function "=>"
+  > x <- d => lm(mpg ~ disp, data = d)
+  Error in `=>`(d, lm(mpg ~ disp, data = d)) : could not find function "=>"
+  > 
+  
+Dirk
+
+-- 
+https://dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From w||||@mwdun|@p @end|ng |rom gm@||@com  Tue Jan 12 21:52:10 2021
+From: w||||@mwdun|@p @end|ng |rom gm@||@com (Bill Dunlap)
+Date: Tue, 12 Jan 2021 12:52:10 -0800
+Subject: [Rd] [External] brief update on the pipe operator in R-devel
+In-Reply-To: <24573.65515.749231.597977@rob.eddelbuettel.com>
+References: <alpine.DEB.2.21.2012221624270.3391@luke-Latitude-7480>
+ <alpine.DEB.2.21.2101121317310.3211@luke-Latitude-7480>
+ <CALEXWq13odcpMsW_e+7e_Vvonx0pCmZHM=t6XNKRubhP4bKxGw@mail.gmail.com>
+ <24573.65515.749231.597977@rob.eddelbuettel.com>
+Message-ID: <CAHqSRuRn9snhctc9gKd7PU_gqNUdq=My+Mjmf_tZuim5+O55OQ@mail.gmail.com>
+
+'=>' can be defined as a function.  E.g., it could be the logical "implies"
+function:
+    > `=>` <- function(x, y) !x | y
+    > TRUE => FALSE
+    [1] FALSE
+    > FALSE => TRUE
+    [1] TRUE
+It might be nice then to have deparse() display it as an infix operator
+instead of the current prefix:
+    > deparse(quote(p => q))
+    [1] "`=>`(p, q)"
+There was a user who recently wrote asking for an infix operator like -> or
+=> that would deparse nicely for use in some sort of model specification.
+
+When used with |>, the parser will turn the |> and => into an ordinary
+looking function call so deparsing is irrelevant.
+    > deparse(quote(x |> tmp => f(7,arg2=tmp)))
+    [1] "f(7, arg2 = x)"
+
+-Bill
+
+On Tue, Jan 12, 2021 at 12:01 PM Dirk Eddelbuettel <edd at debian.org> wrote:
+
+>
+> On 12 January 2021 at 20:38, I?aki Ucar wrote:
+> | On Tue, 12 Jan 2021 at 20:23, <luke-tierney at uiowa.edu> wrote:
+> | >
+> | > After some discussions we've settled on a syntax of the form
+> | >
+> | >      mtcars |> subset(cyl == 4) |> d => lm(mpg ~ disp, data = d)
+> | >
+> | > to handle cases where the pipe lhs needs to be passed to an argument
+> | > other than the first of the function called on the rhs. This seems a
+> | > to be a reasonable balance between making these non-standard cases
+> | > easy to see but still easy to write. This is now committed to R-devel.
+> |
+> | Interesting. Is the use of "d =>" restricted to pipelines? In other
+> | words, I think that it shouldn't be equivalent to "function(d)", i.e.,
+> | that this:
+> |
+> | x <- d => lm(mpg ~ disp, data = d)
+> |
+> | shouldn't work.
+>
+> Looks like your wish was already granted:
+>
+>   > mtcars |> subset(cyl == 4) |> d => lm(mpg ~ disp, data = d)
+>
+>   Call:
+>   lm(formula = mpg ~ disp, data = subset(mtcars, cyl == 4))
+>
+>   Coefficients:
+>   (Intercept)         disp
+>        40.872       -0.135
+>
+>   > d => lm(mpg ~ disp, data = d)
+>   Error in `=>`(d, lm(mpg ~ disp, data = d)) : could not find function "=>"
+>   > x <- d => lm(mpg ~ disp, data = d)
+>   Error in `=>`(d, lm(mpg ~ disp, data = d)) : could not find function "=>"
+>   >
+>
+> Dirk
+>
+> --
+> https://dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Tue Jan 12 22:16:20 2021
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 12 Jan 2021 16:16:20 -0500
+Subject: [Rd] [External] brief update on the pipe operator in R-devel
+In-Reply-To: <CAHqSRuRn9snhctc9gKd7PU_gqNUdq=My+Mjmf_tZuim5+O55OQ@mail.gmail.com>
+References: <alpine.DEB.2.21.2012221624270.3391@luke-Latitude-7480>
+ <alpine.DEB.2.21.2101121317310.3211@luke-Latitude-7480>
+ <CALEXWq13odcpMsW_e+7e_Vvonx0pCmZHM=t6XNKRubhP4bKxGw@mail.gmail.com>
+ <24573.65515.749231.597977@rob.eddelbuettel.com>
+ <CAHqSRuRn9snhctc9gKd7PU_gqNUdq=My+Mjmf_tZuim5+O55OQ@mail.gmail.com>
+Message-ID: <a4738f6b-7a8e-91f0-7975-2cfc61fc054f@gmail.com>
+
+On 12/01/2021 3:52 p.m., Bill Dunlap wrote:
+> '=>' can be defined as a function.  E.g., it could be the logical "implies"
+> function:
+>      > `=>` <- function(x, y) !x | y
+>      > TRUE => FALSE
+>      [1] FALSE
+>      > FALSE => TRUE
+>      [1] TRUE
+> It might be nice then to have deparse() display it as an infix operator
+> instead of the current prefix:
+>      > deparse(quote(p => q))
+>      [1] "`=>`(p, q)"
+> There was a user who recently wrote asking for an infix operator like -> or
+> => that would deparse nicely for use in some sort of model specification.
+
+The precedence of it as an operator is determined by what makes sense in 
+the pipe construction.  Currently precedence appears to be
+
+
+:: :::	access variables in a namespace
+$ @	component / slot extraction
+[ [[	indexing
+^	exponentiation (right to left)
+- +	unary minus and plus
+:	sequence operator
+%any%	special operators (including %% and %/%)
+* /	multiply, divide
++ -	(binary) add, subtract
+< > <= >= == !=	ordering and comparison
+!	negation
+& &&	and
+| ||	or
+=>      PIPE BIND
+|>      PIPE
+~	as in formulae
+-> ->>	rightwards assignment
+<- <<-	assignment (right to left)
+=	assignment (right to left)
+?	help (unary and binary)
+
+(Most of this is taken from ?Syntax, but I added the new operators in 
+based on the gram.y file).  So
+
+A & B => C & D
+
+would appear to be parsed as
+
+(A & B) => (C & D)
+
+I think this also makes sense; do you?
+
+Duncan Murdoch
+
+
+> 
+> When used with |>, the parser will turn the |> and => into an ordinary
+> looking function call so deparsing is irrelevant.
+>      > deparse(quote(x |> tmp => f(7,arg2=tmp)))
+>      [1] "f(7, arg2 = x)"
+> 
+> -Bill
+> 
+> On Tue, Jan 12, 2021 at 12:01 PM Dirk Eddelbuettel <edd at debian.org> wrote:
+> 
+>>
+>> On 12 January 2021 at 20:38, I?aki Ucar wrote:
+>> | On Tue, 12 Jan 2021 at 20:23, <luke-tierney at uiowa.edu> wrote:
+>> | >
+>> | > After some discussions we've settled on a syntax of the form
+>> | >
+>> | >      mtcars |> subset(cyl == 4) |> d => lm(mpg ~ disp, data = d)
+>> | >
+>> | > to handle cases where the pipe lhs needs to be passed to an argument
+>> | > other than the first of the function called on the rhs. This seems a
+>> | > to be a reasonable balance between making these non-standard cases
+>> | > easy to see but still easy to write. This is now committed to R-devel.
+>> |
+>> | Interesting. Is the use of "d =>" restricted to pipelines? In other
+>> | words, I think that it shouldn't be equivalent to "function(d)", i.e.,
+>> | that this:
+>> |
+>> | x <- d => lm(mpg ~ disp, data = d)
+>> |
+>> | shouldn't work.
+>>
+>> Looks like your wish was already granted:
+>>
+>>    > mtcars |> subset(cyl == 4) |> d => lm(mpg ~ disp, data = d)
+>>
+>>    Call:
+>>    lm(formula = mpg ~ disp, data = subset(mtcars, cyl == 4))
+>>
+>>    Coefficients:
+>>    (Intercept)         disp
+>>         40.872       -0.135
+>>
+>>    > d => lm(mpg ~ disp, data = d)
+>>    Error in `=>`(d, lm(mpg ~ disp, data = d)) : could not find function "=>"
+>>    > x <- d => lm(mpg ~ disp, data = d)
+>>    Error in `=>`(d, lm(mpg ~ disp, data = d)) : could not find function "=>"
+>>    >
+>>
+>> Dirk
+>>
+>> --
+>> https://dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From w||||@mwdun|@p @end|ng |rom gm@||@com  Wed Jan 13 18:19:35 2021
+From: w||||@mwdun|@p @end|ng |rom gm@||@com (Bill Dunlap)
+Date: Wed, 13 Jan 2021 09:19:35 -0800
+Subject: [Rd] [External] brief update on the pipe operator in R-devel
+In-Reply-To: <a4738f6b-7a8e-91f0-7975-2cfc61fc054f@gmail.com>
+References: <alpine.DEB.2.21.2012221624270.3391@luke-Latitude-7480>
+ <alpine.DEB.2.21.2101121317310.3211@luke-Latitude-7480>
+ <CALEXWq13odcpMsW_e+7e_Vvonx0pCmZHM=t6XNKRubhP4bKxGw@mail.gmail.com>
+ <24573.65515.749231.597977@rob.eddelbuettel.com>
+ <CAHqSRuRn9snhctc9gKd7PU_gqNUdq=My+Mjmf_tZuim5+O55OQ@mail.gmail.com>
+ <a4738f6b-7a8e-91f0-7975-2cfc61fc054f@gmail.com>
+Message-ID: <CAHqSRuQ_HYgVKEjzb=geoabxmSLup37q_DYdAJbHSMLSxn5rAQ@mail.gmail.com>
+
+I agree that the precedence looks reasonable.  E.g.,
+
+> str.language(quote(A > 0 & A<=B & B <= C => A <= C & 0 < C))
+language: `=>`(A > 0 & A <= B & B <= C, A <= C ...
+  symbol: =>
+  language: A > 0 & A <= B & B <= C
+    symbol: &
+    language: A > 0 & A <= B
+      symbol: &
+      language: A > 0
+        symbol: >
+        symbol: A
+        double: 0
+      language: A <= B
+        symbol: <=
+        symbol: A
+        symbol: B
+    language: B <= C
+      symbol: <=
+      symbol: B
+      symbol: C
+  language: A <= C & 0 < C
+    symbol: &
+    language: A <= C
+      symbol: <=
+      symbol: A
+      symbol: C
+    language: 0 < C
+      symbol: <
+      double: 0
+      symbol: C
+> str.language(quote(data |> tmp1 => f1(x, arg1=tmp1) |> f2(y) |> tmp3 =>
+f3(z, arg3=tmp3)))
+language: f3(z, arg3 = f2(f1(x, arg1 = data), y))
+  symbol: f3
+  symbol: z
+  language: arg3 = f2(f1(x, arg1 = data), y)
+    symbol: f2
+    language: f1(x, arg1 = data)
+      symbol: f1
+      symbol: x
+      symbol: arg1 = data
+    symbol: y
+
+Where str.language is
+
+str.language <- function(expr, name = "", indent = 0)
+{
+    trim... <- function(string, width.cutoff) {
+        if (nchar(string) > width.cutoff) {
+            string <- sprintf("%.*s ...", width.cutoff-4, string)
+        }
+        string
+    }
+    cat(sep="", rep("  ", indent), typeof(expr), ": ",
+        if(length(name)==1 && nzchar(name)) { paste0(name, " = ") },
+        trim...(deparse1(expr, width.cutoff=40), width.cutoff=40),
+        "\n")
+    if (is.recursive(expr)) {
+        if (!is.list(expr)) {
+            expr <- as.list(expr)
+        }
+        nms <- names(expr)
+        for (i in seq_along(expr)) {
+            str.language(expr[[i]], name=nms[[i]], indent = indent + 1)
+        }
+    }
+    invisible(expr)
+
+                                                 }
+
+On Tue, Jan 12, 2021 at 1:16 PM Duncan Murdoch <murdoch.duncan at gmail.com>
+wrote:
+
+> On 12/01/2021 3:52 p.m., Bill Dunlap wrote:
+> > '=>' can be defined as a function.  E.g., it could be the logical
+> "implies"
+> > function:
+> >      > `=>` <- function(x, y) !x | y
+> >      > TRUE => FALSE
+> >      [1] FALSE
+> >      > FALSE => TRUE
+> >      [1] TRUE
+> > It might be nice then to have deparse() display it as an infix operator
+> > instead of the current prefix:
+> >      > deparse(quote(p => q))
+> >      [1] "`=>`(p, q)"
+> > There was a user who recently wrote asking for an infix operator like ->
+> or
+> > => that would deparse nicely for use in some sort of model specification.
+>
+> The precedence of it as an operator is determined by what makes sense in
+> the pipe construction.  Currently precedence appears to be
+>
+>
+> :: :::  access variables in a namespace
+> $ @     component / slot extraction
+> [ [[    indexing
+> ^       exponentiation (right to left)
+> - +     unary minus and plus
+> :       sequence operator
+> %any%   special operators (including %% and %/%)
+> * /     multiply, divide
+> + -     (binary) add, subtract
+> < > <= >= == != ordering and comparison
+> !       negation
+> & &&    and
+> | ||    or
+> =>      PIPE BIND
+> |>      PIPE
+> ~       as in formulae
+> -> ->>  rightwards assignment
+> <- <<-  assignment (right to left)
+> =       assignment (right to left)
+> ?       help (unary and binary)
+>
+> (Most of this is taken from ?Syntax, but I added the new operators in
+> based on the gram.y file).  So
+>
+> A & B => C & D
+>
+> would appear to be parsed as
+>
+> (A & B) => (C & D)
+>
+> I think this also makes sense; do you?
+>
+> Duncan Murdoch
+>
+>
+> >
+> > When used with |>, the parser will turn the |> and => into an ordinary
+> > looking function call so deparsing is irrelevant.
+> >      > deparse(quote(x |> tmp => f(7,arg2=tmp)))
+> >      [1] "f(7, arg2 = x)"
+> >
+> > -Bill
+> >
+> > On Tue, Jan 12, 2021 at 12:01 PM Dirk Eddelbuettel <edd at debian.org>
+> wrote:
+> >
+> >>
+> >> On 12 January 2021 at 20:38, I?aki Ucar wrote:
+> >> | On Tue, 12 Jan 2021 at 20:23, <luke-tierney at uiowa.edu> wrote:
+> >> | >
+> >> | > After some discussions we've settled on a syntax of the form
+> >> | >
+> >> | >      mtcars |> subset(cyl == 4) |> d => lm(mpg ~ disp, data = d)
+> >> | >
+> >> | > to handle cases where the pipe lhs needs to be passed to an argument
+> >> | > other than the first of the function called on the rhs. This seems a
+> >> | > to be a reasonable balance between making these non-standard cases
+> >> | > easy to see but still easy to write. This is now committed to
+> R-devel.
+> >> |
+> >> | Interesting. Is the use of "d =>" restricted to pipelines? In other
+> >> | words, I think that it shouldn't be equivalent to "function(d)", i.e.,
+> >> | that this:
+> >> |
+> >> | x <- d => lm(mpg ~ disp, data = d)
+> >> |
+> >> | shouldn't work.
+> >>
+> >> Looks like your wish was already granted:
+> >>
+> >>    > mtcars |> subset(cyl == 4) |> d => lm(mpg ~ disp, data = d)
+> >>
+> >>    Call:
+> >>    lm(formula = mpg ~ disp, data = subset(mtcars, cyl == 4))
+> >>
+> >>    Coefficients:
+> >>    (Intercept)         disp
+> >>         40.872       -0.135
+> >>
+> >>    > d => lm(mpg ~ disp, data = d)
+> >>    Error in `=>`(d, lm(mpg ~ disp, data = d)) : could not find function
+> "=>"
+> >>    > x <- d => lm(mpg ~ disp, data = d)
+> >>    Error in `=>`(d, lm(mpg ~ disp, data = d)) : could not find function
+> "=>"
+> >>    >
+> >>
+> >> Dirk
+> >>
+> >> --
+> >> https://dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+> >>
+> >> ______________________________________________
+> >> R-devel at r-project.org mailing list
+> >> https://stat.ethz.ch/mailman/listinfo/r-devel
+> >>
+> >
+> >       [[alternative HTML version deleted]]
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+>
+>
+
+	[[alternative HTML version deleted]]
+
+
+From th|erry@onke||nx @end|ng |rom |nbo@be  Thu Jan 14 15:31:34 2021
+From: th|erry@onke||nx @end|ng |rom |nbo@be (Thierry Onkelinx)
+Date: Thu, 14 Jan 2021 15:31:34 +0100
+Subject: [Rd] change in sorting?
+Message-ID: <CAJuCY5xhPBkA7Zx50V_36DDK_sP2NxX8dnt1a+Q1OopmoNhE-A@mail.gmail.com>
+
+Dear all,
+
+One of the unit tests for my package breaks only on r-devel under Windows (
+https://cran.r-project.org/web/checks/check_results_git2rdata.html).
+The unit test sorts a set of UTF-8 characters and writes them to disk. I've
+noticed that the Euro symbol (?) gets a different place in r-devel under
+Windows 10 compared to over combinations of R version and OS.
+
+I know that sorting depends on the locale. Therefore I set the locale to
+"C" prior to sorting. See the function below. After sorting, I reset the
+locale to the existing one.
+
+Is there something that I'm missing?
+
+Best regards,
+
+Thierry
+
+set_c_locale <- function() {
+  old_ctype <- Sys.getlocale(category = "LC_CTYPE")
+  old_collate <- Sys.getlocale(category = "LC_COLLATE")
+  old_time <- Sys.getlocale(category = "LC_TIME")
+  old_monetary <- Sys.getlocale(category = "LC_MONETARY")
+  Sys.setlocale(category = "LC_CTYPE", locale = "C")
+  Sys.setlocale(category = "LC_COLLATE", locale = "C")
+  Sys.setlocale(category = "LC_TIME", locale = "C")
+  Sys.setlocale(category = "LC_MONETARY", locale = "C")
+  return(
+    c(
+      ctype = old_ctype, collate = old_collate, time = old_time,
+      monetary = old_monetary
+    )
+  )
+}
+
+ir. Thierry Onkelinx
+Statisticus / Statistician
+
+Vlaamse Overheid / Government of Flanders
+INSTITUUT VOOR NATUUR- EN BOSONDERZOEK / RESEARCH INSTITUTE FOR NATURE AND
+FOREST
+Team Biometrie & Kwaliteitszorg / Team Biometrics & Quality Assurance
+thierry.onkelinx at inbo.be
+Havenlaan 88 bus 73, 1000 Brussel
+www.inbo.be
+
+///////////////////////////////////////////////////////////////////////////////////////////
+To call in the statistician after the experiment is done may be no more
+than asking him to perform a post-mortem examination: he may be able to say
+what the experiment died of. ~ Sir Ronald Aylmer Fisher
+The plural of anecdote is not data. ~ Roger Brinner
+The combination of some data and an aching desire for an answer does not
+ensure that a reasonable answer can be extracted from a given body of data.
+~ John Tukey
+///////////////////////////////////////////////////////////////////////////////////////////
+
+<https://www.inbo.be>
+
+	[[alternative HTML version deleted]]
+
+
+From mp_ode|| @end|ng |rom y@hoo@com  Fri Jan 15 06:53:21 2021
+From: mp_ode|| @end|ng |rom y@hoo@com (Michael O'Dell)
+Date: Fri, 15 Jan 2021 05:53:21 +0000 (UTC)
+Subject: [Rd] Does parallel::mclapply work under emulation (Rosetta 2) on
+ Apple Silicon?
+References: <297397267.1308174.1610690001226.ref@mail.yahoo.com>
+Message-ID: <297397267.1308174.1610690001226@mail.yahoo.com>
+
+Setting aside the documented problems of running R natively on Apple's M1 machines (https://developer.r-project.org/Blog/public/2020/11/02/will-r-work-on-apple-silicon/index.html) and similarly the current lack of native versions of many eco-system components (e.g. the discussion here:https://github.com/neurolabusc/AppleSiliconForNeuroimaging?), will code using?parallel::mclapply()?run as expected (i.e. on Intel hardware) under emulation (Rosetta 2)? Has anyone tested this??
+Thank you.
+
+	[[alternative HTML version deleted]]
+
+
+From r|p|ey @end|ng |rom @t@t@@ox@@c@uk  Fri Jan 15 12:17:25 2021
+From: r|p|ey @end|ng |rom @t@t@@ox@@c@uk (Prof Brian Ripley)
+Date: Fri, 15 Jan 2021 11:17:25 +0000
+Subject: [Rd] 
+ Does parallel::mclapply work under emulation (Rosetta 2) on
+ Apple Silicon?
+In-Reply-To: <297397267.1308174.1610690001226@mail.yahoo.com>
+References: <297397267.1308174.1610690001226.ref@mail.yahoo.com>
+ <297397267.1308174.1610690001226@mail.yahoo.com>
+Message-ID: <cadc73d0-f8ce-51b7-4889-6eb1b332d8aa@stats.ox.ac.uk>
+
+On 15/01/2021 05:53, Michael O'Dell via R-devel wrote:
+> Setting aside the documented problems of running R natively on Apple's M1 machines (https://developer.r-project.org/Blog/public/2020/11/02/will-r-work-on-apple-silicon
+
+That's rather dated: see the more recent reports on this list.
+
+/index.html) and similarly the current lack of native versions of many 
+eco-system components (e.g. the discussion 
+here:https://github.com/neurolabusc/AppleSiliconForNeuroimaging?), will 
+code using?parallel::mclapply()?run as expected (i.e. on Intel hardware) 
+under emulation (Rosetta 2)? Has anyone tested this?
+
+Yes: I have no idea why you would think otherwise.  All mclapply uses is 
+forking, and the OS on an M1 Mac is the same as that on a (Big Sur) 
+Intel Mac (in many cases literally the same, with the same bi-arch 
+executables).
+
+-- 
+Brian D. Ripley,                  ripley at stats.ox.ac.uk
+Emeritus Professor of Applied Statistics, University of Oxford
+
+
+From ggrothend|eck @end|ng |rom gm@||@com  Fri Jan 15 13:27:37 2021
+From: ggrothend|eck @end|ng |rom gm@||@com (Gabor Grothendieck)
+Date: Fri, 15 Jan 2021 07:27:37 -0500
+Subject: [Rd] brief update on the pipe operator in R-devel
+In-Reply-To: <alpine.DEB.2.21.2012221624270.3391@luke-Latitude-7480>
+References: <alpine.DEB.2.21.2012221624270.3391@luke-Latitude-7480>
+Message-ID: <CAP01uRnvoBxEw+q76ZMGZhMYujzHon5iGFgxZ_bJF+a7kMe6EA@mail.gmail.com>
+
+These are documented but still seem like serious deficiencies:
+
+> f <- function(x, y) x + 10*y
+> 3 |> x => f(x, x)
+Error in f(x, x) : pipe placeholder may only appear once
+
+> 3 |> x => f(1+x, 1)
+Error in f(1 + x, 1) :
+  pipe placeholder must only appear as a top-level argument in the RHS call
+
+Also note:
+
+ ?"=>"
+No documentation for ?=>? in specified packages and libraries:
+you could try ???=>?
+
+On Tue, Dec 22, 2020 at 5:28 PM <luke-tierney at uiowa.edu> wrote:
+>
+> It turns out that allowing a bare function expression on the
+> right-hand side (RHS) of a pipe creates opportunities for confusion
+> and mistakes that are too risky. So we will be dropping support for
+> this from the pipe operator.
+>
+> The case of a RHS call that wants to receive the LHS result in an
+> argument other than the first can be handled with just implicit first
+> argument passing along the lines of
+>
+>      mtcars |> subset(cyl == 4) |> (\(d) lm(mpg ~ disp, data = d))()
+>
+> It was hoped that allowing a bare function expression would make this
+> more convenient, but it has issues as outlined below. We are exploring
+> some alternatives, and will hopefully settle on one soon after the
+> holidays.
+>
+> The basic problem, pointed out in a comment on Twitter, is that in
+> expressions of the form
+>
+>      1 |> \(x) x + 1 -> y
+>      1 |> \(x) x + 1 |> \(y) x + y
+>
+> everything after the \(x) is parsed as part of the body of the
+> function.  So these are parsed along the lines of
+>
+>      1 |> \(x) { x + 1 -> y }
+>      1 |> \(x) { x + 1 |> \(y) x + y }
+>
+> In the first case the result is assigned to a (useless) local
+> variable.  Someone writing this is more likely to have intended to
+> assign the result to a global variable, as this would:
+>
+>      (1 |> \(x) x + 1) -> y
+>
+> In the second case the 'x' in 'x + y' refers to the local variable 'x'
+> in the first RHS function. Someone writing this is more likely to have
+> meant
+>
+>      (1 |> \(x) x + 1) |> \(y) x + y
+>
+> with 'x' in 'x + y' now referring to a global variable:
+>
+>      > x <- 2
+>      > 1 |> \(x) x + 1 |> \(y) x + y
+>      [1] 3
+>      > (1 |> \(x) x + 1) |> \(y) x + y
+>      [1] 4
+>
+> These issues arise with any approach in R that allows a bare function
+> expression on the RHS of a pipe operation. It also arises in other
+> languages with pipe operators. For example, here is the last example
+> in Julia:
+>
+>      julia> x = 2
+>      2
+>      julia> 1 |> x -> x + 1 |> y -> x + y
+>      3
+>      julia> ( 1 |> x -> x + 1 ) |> y -> x + y
+>      4
+>
+> Even though proper use of parentheses can work around these issues,
+> the likelihood of making mistakes that are hard to track down is too
+> high. So we will disallow the use of bare function expressions on the
+> right hand side of a pipe.
+>
+> Best,
+>
+> luke
+>
+> --
+> Luke Tierney
+> Ralph E. Wareham Professor of Mathematical Sciences
+> University of Iowa                  Phone:             319-335-3386
+> Department of Statistics and        Fax:               319-335-3017
+>     Actuarial Science
+> 241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+> Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+
+-- 
+Statistics & Software Consulting
+GKX Group, GKX Associates Inc.
+tel: 1-877-GKX-GROUP
+email: ggrothendieck at gmail.com
+
+
+From @v|gro@@ @end|ng |rom ver|zon@net  Fri Jan 15 23:15:13 2021
+From: @v|gro@@ @end|ng |rom ver|zon@net (Avi Gross)
+Date: Fri, 15 Jan 2021 17:15:13 -0500
+Subject: [Rd] brief update on the pipe operator in R-devel
+In-Reply-To: <CAP01uRnvoBxEw+q76ZMGZhMYujzHon5iGFgxZ_bJF+a7kMe6EA@mail.gmail.com>
+References: <alpine.DEB.2.21.2012221624270.3391@luke-Latitude-7480>
+ <CAP01uRnvoBxEw+q76ZMGZhMYujzHon5iGFgxZ_bJF+a7kMe6EA@mail.gmail.com>
+Message-ID: <084701d6eb8b$e58b4720$b0a1d560$@verizon.net>
+
+Gabor,
+
+Although it might be nice if all imagined cases worked, there are many ways to work around and get the results you want. 
+
+You may want to consider that it is easier to recognize the symbol you use (x in the examples) if it is alone and used only exactly once and it the list of function arguments.  If you want the x used multiple times, you can make a function that accepts the x once and then invokes another function and reuses the x as often as needed. Similarly for 1+x. 
+
+I do not know if the above choice was made to make it easier and faster to apply the above, or to avoid possible bad edge cases. Have you tested other ideas like:
+
+	3 |> x => f(x=5)
+Or
+	3 |> x => f(x, y=x)
+
+I mean ones where a default is supplied, not that it makes much sense here?
+
+I am thinking of the concept of substitution as is often done for text or symbols. Often the substitution is done for the first instance found unless you specify you want a global change. In your examples, if only the first use of x would be replaced, the second naked x being left alone would be an error. If all instances were changed, what anomalies might happen? Giving a vector of length 1 containing the number 3 seems harmless enough to duplicate. But the pipeline can send all kinds of interesting data structures through including data.frames and arbitrary objects. 
+
+
+-----Original Message-----
+From: R-devel <r-devel-bounces at r-project.org> On Behalf Of Gabor Grothendieck
+Sent: Friday, January 15, 2021 7:28 AM
+To: Tierney, Luke <luke-tierney at uiowa.edu>
+Cc: R-devel at r-project.org
+Subject: Re: [Rd] brief update on the pipe operator in R-devel
+
+These are documented but still seem like serious deficiencies:
+
+> f <- function(x, y) x + 10*y
+> 3 |> x => f(x, x)
+Error in f(x, x) : pipe placeholder may only appear once
+
+> 3 |> x => f(1+x, 1)
+Error in f(1 + x, 1) :
+  pipe placeholder must only appear as a top-level argument in the RHS call
+
+Also note:
+
+ ?"=>"
+No documentation for ?=>? in specified packages and libraries:
+you could try ???=>?
+
+On Tue, Dec 22, 2020 at 5:28 PM <luke-tierney at uiowa.edu> wrote:
+>
+> It turns out that allowing a bare function expression on the 
+> right-hand side (RHS) of a pipe creates opportunities for confusion 
+> and mistakes that are too risky. So we will be dropping support for 
+> this from the pipe operator.
+>
+> The case of a RHS call that wants to receive the LHS result in an 
+> argument other than the first can be handled with just implicit first 
+> argument passing along the lines of
+>
+>      mtcars |> subset(cyl == 4) |> (\(d) lm(mpg ~ disp, data = d))()
+>
+> It was hoped that allowing a bare function expression would make this 
+> more convenient, but it has issues as outlined below. We are exploring 
+> some alternatives, and will hopefully settle on one soon after the 
+> holidays.
+>
+> The basic problem, pointed out in a comment on Twitter, is that in 
+> expressions of the form
+>
+>      1 |> \(x) x + 1 -> y
+>      1 |> \(x) x + 1 |> \(y) x + y
+>
+> everything after the \(x) is parsed as part of the body of the 
+> function.  So these are parsed along the lines of
+>
+>      1 |> \(x) { x + 1 -> y }
+>      1 |> \(x) { x + 1 |> \(y) x + y }
+>
+> In the first case the result is assigned to a (useless) local 
+> variable.  Someone writing this is more likely to have intended to 
+> assign the result to a global variable, as this would:
+>
+>      (1 |> \(x) x + 1) -> y
+>
+> In the second case the 'x' in 'x + y' refers to the local variable 'x'
+> in the first RHS function. Someone writing this is more likely to have 
+> meant
+>
+>      (1 |> \(x) x + 1) |> \(y) x + y
+>
+> with 'x' in 'x + y' now referring to a global variable:
+>
+>      > x <- 2
+>      > 1 |> \(x) x + 1 |> \(y) x + y
+>      [1] 3
+>      > (1 |> \(x) x + 1) |> \(y) x + y
+>      [1] 4
+>
+> These issues arise with any approach in R that allows a bare function 
+> expression on the RHS of a pipe operation. It also arises in other 
+> languages with pipe operators. For example, here is the last example 
+> in Julia:
+>
+>      julia> x = 2
+>      2
+>      julia> 1 |> x -> x + 1 |> y -> x + y
+>      3
+>      julia> ( 1 |> x -> x + 1 ) |> y -> x + y
+>      4
+>
+> Even though proper use of parentheses can work around these issues, 
+> the likelihood of making mistakes that are hard to track down is too 
+> high. So we will disallow the use of bare function expressions on the 
+> right hand side of a pipe.
+>
+> Best,
+>
+> luke
+>
+> --
+> Luke Tierney
+> Ralph E. Wareham Professor of Mathematical Sciences
+> University of Iowa                  Phone:             319-335-3386
+> Department of Statistics and        Fax:               319-335-3017
+>     Actuarial Science
+> 241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+> Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+
+--
+Statistics & Software Consulting
+GKX Group, GKX Associates Inc.
+tel: 1-877-GKX-GROUP
+email: ggrothendieck at gmail.com
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From w||||@mwdun|@p @end|ng |rom gm@||@com  Sat Jan 16 01:35:12 2021
+From: w||||@mwdun|@p @end|ng |rom gm@||@com (Bill Dunlap)
+Date: Fri, 15 Jan 2021 16:35:12 -0800
+Subject: [Rd] brief update on the pipe operator in R-devel
+In-Reply-To: <084701d6eb8b$e58b4720$b0a1d560$@verizon.net>
+References: <alpine.DEB.2.21.2012221624270.3391@luke-Latitude-7480>
+ <CAP01uRnvoBxEw+q76ZMGZhMYujzHon5iGFgxZ_bJF+a7kMe6EA@mail.gmail.com>
+ <084701d6eb8b$e58b4720$b0a1d560$@verizon.net>
+Message-ID: <CAHqSRuSgx=_0M=2HcmK-CFZFTX+X=6Km1XDwJLzy4uEoTJAfxw@mail.gmail.com>
+
+If
+    3 |> x => f(x, y=x)
+were allowed then I think that
+     runif(1) |> x => f(x, y=x)
+be parsed as
+     f(runif(1), y=runif(1))
+so runif(1) would be evaluated twice, leading to incorrect results from f().
+
+-Bill
+
+On Fri, Jan 15, 2021 at 2:16 PM Avi Gross via R-devel <r-devel at r-project.org>
+wrote:
+
+> Gabor,
+>
+> Although it might be nice if all imagined cases worked, there are many
+> ways to work around and get the results you want.
+>
+> You may want to consider that it is easier to recognize the symbol you use
+> (x in the examples) if it is alone and used only exactly once and it the
+> list of function arguments.  If you want the x used multiple times, you can
+> make a function that accepts the x once and then invokes another function
+> and reuses the x as often as needed. Similarly for 1+x.
+>
+> I do not know if the above choice was made to make it easier and faster to
+> apply the above, or to avoid possible bad edge cases. Have you tested other
+> ideas like:
+>
+>         3 |> x => f(x=5)
+> Or
+>         3 |> x => f(x, y=x)
+>
+> I mean ones where a default is supplied, not that it makes much sense here?
+>
+> I am thinking of the concept of substitution as is often done for text or
+> symbols. Often the substitution is done for the first instance found unless
+> you specify you want a global change. In your examples, if only the first
+> use of x would be replaced, the second naked x being left alone would be an
+> error. If all instances were changed, what anomalies might happen? Giving a
+> vector of length 1 containing the number 3 seems harmless enough to
+> duplicate. But the pipeline can send all kinds of interesting data
+> structures through including data.frames and arbitrary objects.
+>
+>
+> -----Original Message-----
+> From: R-devel <r-devel-bounces at r-project.org> On Behalf Of Gabor
+> Grothendieck
+> Sent: Friday, January 15, 2021 7:28 AM
+> To: Tierney, Luke <luke-tierney at uiowa.edu>
+> Cc: R-devel at r-project.org
+> Subject: Re: [Rd] brief update on the pipe operator in R-devel
+>
+> These are documented but still seem like serious deficiencies:
+>
+> > f <- function(x, y) x + 10*y
+> > 3 |> x => f(x, x)
+> Error in f(x, x) : pipe placeholder may only appear once
+>
+> > 3 |> x => f(1+x, 1)
+> Error in f(1 + x, 1) :
+>   pipe placeholder must only appear as a top-level argument in the RHS call
+>
+> Also note:
+>
+>  ?"=>"
+> No documentation for ?=>? in specified packages and libraries:
+> you could try ???=>?
+>
+> On Tue, Dec 22, 2020 at 5:28 PM <luke-tierney at uiowa.edu> wrote:
+> >
+> > It turns out that allowing a bare function expression on the
+> > right-hand side (RHS) of a pipe creates opportunities for confusion
+> > and mistakes that are too risky. So we will be dropping support for
+> > this from the pipe operator.
+> >
+> > The case of a RHS call that wants to receive the LHS result in an
+> > argument other than the first can be handled with just implicit first
+> > argument passing along the lines of
+> >
+> >      mtcars |> subset(cyl == 4) |> (\(d) lm(mpg ~ disp, data = d))()
+> >
+> > It was hoped that allowing a bare function expression would make this
+> > more convenient, but it has issues as outlined below. We are exploring
+> > some alternatives, and will hopefully settle on one soon after the
+> > holidays.
+> >
+> > The basic problem, pointed out in a comment on Twitter, is that in
+> > expressions of the form
+> >
+> >      1 |> \(x) x + 1 -> y
+> >      1 |> \(x) x + 1 |> \(y) x + y
+> >
+> > everything after the \(x) is parsed as part of the body of the
+> > function.  So these are parsed along the lines of
+> >
+> >      1 |> \(x) { x + 1 -> y }
+> >      1 |> \(x) { x + 1 |> \(y) x + y }
+> >
+> > In the first case the result is assigned to a (useless) local
+> > variable.  Someone writing this is more likely to have intended to
+> > assign the result to a global variable, as this would:
+> >
+> >      (1 |> \(x) x + 1) -> y
+> >
+> > In the second case the 'x' in 'x + y' refers to the local variable 'x'
+> > in the first RHS function. Someone writing this is more likely to have
+> > meant
+> >
+> >      (1 |> \(x) x + 1) |> \(y) x + y
+> >
+> > with 'x' in 'x + y' now referring to a global variable:
+> >
+> >      > x <- 2
+> >      > 1 |> \(x) x + 1 |> \(y) x + y
+> >      [1] 3
+> >      > (1 |> \(x) x + 1) |> \(y) x + y
+> >      [1] 4
+> >
+> > These issues arise with any approach in R that allows a bare function
+> > expression on the RHS of a pipe operation. It also arises in other
+> > languages with pipe operators. For example, here is the last example
+> > in Julia:
+> >
+> >      julia> x = 2
+> >      2
+> >      julia> 1 |> x -> x + 1 |> y -> x + y
+> >      3
+> >      julia> ( 1 |> x -> x + 1 ) |> y -> x + y
+> >      4
+> >
+> > Even though proper use of parentheses can work around these issues,
+> > the likelihood of making mistakes that are hard to track down is too
+> > high. So we will disallow the use of bare function expressions on the
+> > right hand side of a pipe.
+> >
+> > Best,
+> >
+> > luke
+> >
+> > --
+> > Luke Tierney
+> > Ralph E. Wareham Professor of Mathematical Sciences
+> > University of Iowa                  Phone:             319-335-3386
+> > Department of Statistics and        Fax:               319-335-3017
+> >     Actuarial Science
+> > 241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+> > Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+>
+>
+> --
+> Statistics & Software Consulting
+> GKX Group, GKX Associates Inc.
+> tel: 1-877-GKX-GROUP
+> email: ggrothendieck at gmail.com
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Sat Jan 16 10:04:41 2021
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Sat, 16 Jan 2021 12:04:41 +0300
+Subject: [Rd] r79833 src/library/tools/R/Rd2HTML.R minor typo
+Message-ID: <20210116120441.64c4dd6f@parabola>
+
+On line 105, "&\\hellip;" should probably be "&hellip;":
+
+Index: Rd2HTML.R
+===================================================================
+--- Rd2HTML.R   (revision 79833)
++++ Rd2HTML.R   (working copy)
+@@ -102,7 +102,7 @@
+     ## http://htmlhelp.com/reference/html40/entities/symbols.html
+     if(inEqn) {
+         x <- psub("\\\\(Alpha|Beta|Gamma|Delta|Epsilon|Zeta|Eta|Theta|Iota|Kappa|Lambda|Mu|Nu|Xi|Omicron|Pi|Rho|Sigma|Tau|Upsilon|Phi|Chi|Psi|Omega|alpha|beta|gamma|delta|epsilon|zeta|eta|theta|iota|kappa|lambda|mu|nu|xi|omicron|pi|rho|sigma|tau|upsilon|phi|chi|psi|omega|le|ge|sum|prod)", "&\\1;",
+x)
+-        x <- psub("\\\\(dots|ldots)", "&\\hellip;", x)
++        x <- psub("\\\\(dots|ldots)", "&hellip;", x)
+         x <- fsub("\\infty", "&infin;", x)
+         x <- fsub("\\sqrt", "&radic;", x)
+     }
+
+The backslash is ignored by gsub(), so no actual bug happens as a
+result of this.
+
+Further checking with
+
+w <- makeCodeWalker(
+ call = function(e,w) {
+  if (
+   grepl('^[gpf]?sub$', as.character(e[[1]])) &&
+   grepl('\\', as.character(e[[3]]), fixed=TRUE)
+  ) print(e) else lapply(e, walkCode, w)
+ }, leaf = function(.,..) invisible()
+)
+for (f in list.files(
+ 'R-devel/src/library/tools/R',
+ full = TRUE, pattern = '\\.R$', ignore.case=TRUE
+)) for (e in parse(f)) invisible(walkCode(e, w))
+
+doesn't reveal any similar typos.
+
+-- 
+Best regards,
+Ivan
+
+
+From pro|jcn@@h @end|ng |rom gm@||@com  Sat Jan 16 16:20:27 2021
+From: pro|jcn@@h @end|ng |rom gm@||@com (J C Nash)
+Date: Sat, 16 Jan 2021 10:20:27 -0500
+Subject: [Rd] Google Summer of Code for R projects / mentors needed
+Message-ID: <597da110-03d4-7a8d-f313-299cd44ef8c8@gmail.com>
+
+One of the mechanisms by which R has been extended and improved has been through
+the efforts of students and mentors in the Google Summer of Code initiatives. This
+year Toby Hocking (along with others) has continued to lead this effort.
+
+This year, Google has changed the format somewhat so that the projects are shorter.
+There will likely be more of them.
+
+For success, we have learned that projects need at least 2 mentors -- illness,
+life events, world events and holidays can get in the way of monitoring student
+work and handling the minor but critical short reports to Google to ensure money
+gets to deserving students (and does not get sent otherwise!).
+
+Please consider mentoring and/or proposing a project. See
+https://github.com/rstats-gsoc/gsoc2021/wiki/
+
+As an example, my own proposal concerns improving the behaviour and features
+of the nls() function. https://github.com/rstats-gsoc/gsoc2021/wiki/Improvements-to-nls()
+
+John Nash
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Sat Jan 16 18:30:34 2021
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Sat, 16 Jan 2021 18:30:34 +0100
+Subject: [Rd] r79833 src/library/tools/R/Rd2HTML.R minor typo
+In-Reply-To: <20210116120441.64c4dd6f@parabola>
+References: <20210116120441.64c4dd6f@parabola>
+Message-ID: <24579.8890.258449.785172@stat.math.ethz.ch>
+
+Thank you, Ivan,
+
+I've updated the source now,
+Martin
+
+> On line 105, "&\\hellip;" should probably be "&hellip;":
+> Index: Rd2HTML.R
+> ===================================================================
+> --- Rd2HTML.R   (revision 79833)
+> +++ Rd2HTML.R   (working copy)
+> 
+> 
+> -        x <- psub("\\\\(dots|ldots)", "&\\hellip;", x)
+> +        x <- psub("\\\\(dots|ldots)", "&hellip;", x)
+> 
+> 
+> The backslash is ignored by gsub(), so no actual bug happens as a
+> result of this.
+> 
+> [............]
+
+
+From th|erry@onke||nx @end|ng |rom |nbo@be  Tue Jan 19 10:10:20 2021
+From: th|erry@onke||nx @end|ng |rom |nbo@be (Thierry Onkelinx)
+Date: Tue, 19 Jan 2021 10:10:20 +0100
+Subject: [Rd] sorting bug in R-devel?
+Message-ID: <CAJuCY5zBY0Q_Y=UPBTFcmnXKS4WKVZ6Dyy4-vmg3sWcLESj5aA@mail.gmail.com>
+
+Dear all,
+
+My git2rdata package relies on a stable sorting. I've noticed that
+some characters get a different position under R-devel under Windows
+10. This is why the unit test of my package only fail in this
+combination (https://cran.r-project.org/web/checks/check_results_git2rdata.html)
+
+Below is a minimal example to illustrate the problem.
+
+Best regards,
+
+Thierry
+
+data <- readLines("https://raw.githubusercontent.com/ropensci/git2rdata/master/tests/testthat/test_b_special.R",
+encoding = "UTF-8", n = 15)
+eval(parse(text = paste(tail(data, -3), collapse = "")))
+ds$a <- enc2utf8(ds$a)
+print(ds$a) # input
+Sys.setlocale(locale = "C")
+print(sort(ds$a)) # sorted
+print(order(ds$a)) # order
+print(sessionInfo())
+
+# input
+## Win 10 R 4.0.2
+ [1] "a"       "a b"     "a\tb"     "a\tb\tc"   "\ta"      "a\t"      "a\nb"
+ [8] "a\nb\nc" "\na"     "a\n"     "a\"b"    "a\"b\"c" "\"b"     "a\""
+[15] "\"b\""   "a'b"     "a'b'c"   "'b"      "a'"      "'b'"     "a b c"
+[22] "\"NA\""  "'NA'"    NA        "?"       "&"       "?"       "?"
+[29] "?"       "\200"       "|"       "#"       "@"       "$"
+## Win 10 R devel
+ [1] "a"       "a b"     "a\tb"     "a\tb\tc"   "\ta"      "a\t"      "a\nb"
+ [8] "a\nb\nc" "\na"     "a\n"     "a\"b"    "a\"b\"c" "\"b"     "a\""
+[15] "\"b\""   "a'b"     "a'b'c"   "'b"      "a'"      "'b'"     "a b c"
+[22] "\"NA\""  "'NA'"    NA        "?"       "&"       "?"       "?"
+[29] "?"       "\200"       "|"       "#"       "@"       "$"
+## Ubuntu 18.04 R 4.0.3
+ [1] "a"       "a b"     "a\tb"    "a\tb\tc" "\ta"     "a\t"     "a\nb"
+ [8] "a\nb\nc" "\na"     "a\n"     "a\"b"    "a\"b\"c" "\"b"     "a\""
+[15] "\"b\""   "a'b"     "a'b'c"   "'b"      "a'"      "'b'"     "a b c"
+[22] "\"NA\""  "'NA'"    NA        "?"       "&"       "?"       "?"
+[29] "?"       "?"       "|"       "#"       "@"       "$"
+
+# sorted
+## Win 10 R 4.0.2
+ [1] "\ta"     "\na"     "\"NA\""  "\"b"     "\"b\""   "#"       "$"
+ [8] "&"       "'NA'"    "'b"      "'b'"     "<U+00B5>" "<U+00E0>" "<U+00E7>"
+[15] "<U+00E9>" "<U+20AC>" "@"       "a"       "a\t"     "a\tb"    "a\tb\tc"
+[22] "a\n"     "a\nb"    "a\nb\nc" "a b"     "a b c"   "a\""     "a\"b"
+[29] "a\"b\"c" "a'"      "a'b"     "a'b'c"   "|"
+## Win 10 R devel
+ [1] "\ta"     "\na"     "\"NA\""  "\"b"     "\"b\""   "#"       "$"
+ [8] "&"       "'NA'"    "'b"      "'b'"     "@"       "a"       "a\t"
+[15] "a\tb"    "a\tb\tc" "a\n"     "a\nb"    "a\nb\nc" "a b"     "a b c"
+[22] "a\""     "a\"b"    "a\"b\"c" "a'"      "a'b"     "a'b'c"   "|"
+[29] "\200"       "\265"       "\340"       "\347"       "\351"
+## Ubuntu 18.04 R 4.0.3
+ [1] "\ta"     "\na"     "\"NA\""  "\"b"     "\"b\""   "#"       "$"
+ [8] "&"       "'NA'"    "'b"      "'b'"     "<U+00B5>" "<U+00E0>" "<U+00E7>"
+[15] "<U+00E9>" "<U+20AC>" "@"       "a"       "a\t"     "a\tb"    "a\tb\tc"
+[22] "a\n"     "a\nb"    "a\nb\nc" "a b"     "a b c"   "a\""     "a\"b"
+[29] "a\"b\"c" "a'"      "a'b"     "a'b'c"   "|"
+
+# order
+## Win 10 R 4.0.2
+ [1]  5  9 22 13 15 32 34 26 23 18 20 28 27 29 25 30 33  1  6  3  4 10  7  8  2
+[26] 21 14 11 12 19 16 17 31 24
+## Win 10 R devel
+ [1]  5  9 22 13 15 32 34 26 23 18 20 33  1  6  3  4 10  7  8  2 21 14 11 12 19
+[26] 16 17 31 30 28 27 29 25 24
+## Ubuntu 18.04 R 4.0.3
+ [1]  5  9 22 13 15 32 34 26 23 18 20 28 27 29 25 30 33  1  6  3  4 10  7  8  2
+[26] 21 14 11 12 19 16 17 31 24
+
+R version 4.0.2 (2020-06-22)
+Platform: x86_64-w64-mingw32/x64 (64-bit)
+Running under: Windows 10 x64 (build 18363)
+
+Matrix products: default
+
+locale:
+[1] C
+system code page: 1252
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base
+
+loaded via a namespace (and not attached):
+[1] compiler_4.0.2 fortunes_1.5-4
+
+R Under development (unstable) (2021-01-13 r79826)
+Platform: x86_64-w64-mingw32/x64 (64-bit)
+Running under: Windows 10 x64 (build 18363)
+
+Matrix products: default
+
+locale:
+[1] C
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base
+
+loaded via a namespace (and not attached):
+[1] compiler_4.1.0
+
+R version 4.0.3 (2020-10-10)
+Platform: x86_64-pc-linux-gnu (64-bit)
+Running under: Ubuntu 18.04.5 LTS
+
+Matrix products: default
+BLAS:   /usr/lib/x86_64-linux-gnu/blas/libblas.so.3.7.1
+LAPACK: /usr/lib/x86_64-linux-gnu/lapack/liblapack.so.3.7.1
+
+locale:
+ [1] LC_CTYPE=C                 LC_NUMERIC=C
+ [3] LC_TIME=C                  LC_COLLATE=C
+ [5] LC_MONETARY=C              LC_MESSAGES=nl_BE.UTF-8
+ [7] LC_PAPER=nl_BE.UTF-8       LC_NAME=C
+ [9] LC_ADDRESS=C               LC_TELEPHONE=C
+[11] LC_MEASUREMENT=nl_BE.UTF-8 LC_IDENTIFICATION=C
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base
+
+loaded via a namespace (and not attached):
+[1] compiler_4.0.3 fortunes_1.5-4
+
+
+ir. Thierry Onkelinx
+Statisticus / Statistician
+
+Vlaamse Overheid / Government of Flanders
+INSTITUUT VOOR NATUUR- EN BOSONDERZOEK / RESEARCH INSTITUTE FOR NATURE
+AND FOREST
+Team Biometrie & Kwaliteitszorg / Team Biometrics & Quality Assurance
+thierry.onkelinx at inbo.be
+Havenlaan 88 bus 73, 1000 Brussel
+www.inbo.be
+
+///////////////////////////////////////////////////////////////////////////////////////////
+To call in the statistician after the experiment is done may be no
+more than asking him to perform a post-mortem examination: he may be
+able to say what the experiment died of. ~ Sir Ronald Aylmer Fisher
+The plural of anecdote is not data. ~ Roger Brinner
+The combination of some data and an aching desire for an answer does
+not ensure that a reasonable answer can be extracted from a given body
+of data. ~ John Tukey
+
+
+From pd@|gd @end|ng |rom gm@||@com  Tue Jan 19 13:19:58 2021
+From: pd@|gd @end|ng |rom gm@||@com (Peter Dalgaard)
+Date: Tue, 19 Jan 2021 13:19:58 +0100
+Subject: [Rd] sorting bug in R-devel?
+In-Reply-To: <CAJuCY5zBY0Q_Y=UPBTFcmnXKS4WKVZ6Dyy4-vmg3sWcLESj5aA@mail.gmail.com>
+References: <CAJuCY5zBY0Q_Y=UPBTFcmnXKS4WKVZ6Dyy4-vmg3sWcLESj5aA@mail.gmail.com>
+Message-ID: <8DFE09A4-0FEB-49B8-86E5-2F00E2EEE73A@gmail.com>
+
+Not sure what happened between 4.0.2 and -devel, but you are using C collation, which assumes 7-bit single-byte characters, to sort multi-byte 8-bit encoded characters, which looks a bit risky.
+
+-pd 
+
+> On 19 Jan 2021, at 10:10 , Thierry Onkelinx via R-devel <r-devel at r-project.org> wrote:
+> 
+> Dear all,
+> 
+> My git2rdata package relies on a stable sorting. I've noticed that
+> some characters get a different position under R-devel under Windows
+> 10. This is why the unit test of my package only fail in this
+> combination (https://cran.r-project.org/web/checks/check_results_git2rdata.html)
+> 
+> Below is a minimal example to illustrate the problem.
+> 
+> Best regards,
+> 
+> Thierry
+> 
+> data <- readLines("https://raw.githubusercontent.com/ropensci/git2rdata/master/tests/testthat/test_b_special.R",
+> encoding = "UTF-8", n = 15)
+> eval(parse(text = paste(tail(data, -3), collapse = "")))
+> ds$a <- enc2utf8(ds$a)
+> print(ds$a) # input
+> Sys.setlocale(locale = "C")
+> print(sort(ds$a)) # sorted
+> print(order(ds$a)) # order
+> print(sessionInfo())
+> 
+> # input
+> ## Win 10 R 4.0.2
+> [1] "a"       "a b"     "a\tb"     "a\tb\tc"   "\ta"      "a\t"      "a\nb"
+> [8] "a\nb\nc" "\na"     "a\n"     "a\"b"    "a\"b\"c" "\"b"     "a\""
+> [15] "\"b\""   "a'b"     "a'b'c"   "'b"      "a'"      "'b'"     "a b c"
+> [22] "\"NA\""  "'NA'"    NA        "?"       "&"       "?"       "?"
+> [29] "?"       "\200"       "|"       "#"       "@"       "$"
+> ## Win 10 R devel
+> [1] "a"       "a b"     "a\tb"     "a\tb\tc"   "\ta"      "a\t"      "a\nb"
+> [8] "a\nb\nc" "\na"     "a\n"     "a\"b"    "a\"b\"c" "\"b"     "a\""
+> [15] "\"b\""   "a'b"     "a'b'c"   "'b"      "a'"      "'b'"     "a b c"
+> [22] "\"NA\""  "'NA'"    NA        "?"       "&"       "?"       "?"
+> [29] "?"       "\200"       "|"       "#"       "@"       "$"
+> ## Ubuntu 18.04 R 4.0.3
+> [1] "a"       "a b"     "a\tb"    "a\tb\tc" "\ta"     "a\t"     "a\nb"
+> [8] "a\nb\nc" "\na"     "a\n"     "a\"b"    "a\"b\"c" "\"b"     "a\""
+> [15] "\"b\""   "a'b"     "a'b'c"   "'b"      "a'"      "'b'"     "a b c"
+> [22] "\"NA\""  "'NA'"    NA        "?"       "&"       "?"       "?"
+> [29] "?"       "?"       "|"       "#"       "@"       "$"
+> 
+> # sorted
+> ## Win 10 R 4.0.2
+> [1] "\ta"     "\na"     "\"NA\""  "\"b"     "\"b\""   "#"       "$"
+> [8] "&"       "'NA'"    "'b"      "'b'"     "<U+00B5>" "<U+00E0>" "<U+00E7>"
+> [15] "<U+00E9>" "<U+20AC>" "@"       "a"       "a\t"     "a\tb"    "a\tb\tc"
+> [22] "a\n"     "a\nb"    "a\nb\nc" "a b"     "a b c"   "a\""     "a\"b"
+> [29] "a\"b\"c" "a'"      "a'b"     "a'b'c"   "|"
+> ## Win 10 R devel
+> [1] "\ta"     "\na"     "\"NA\""  "\"b"     "\"b\""   "#"       "$"
+> [8] "&"       "'NA'"    "'b"      "'b'"     "@"       "a"       "a\t"
+> [15] "a\tb"    "a\tb\tc" "a\n"     "a\nb"    "a\nb\nc" "a b"     "a b c"
+> [22] "a\""     "a\"b"    "a\"b\"c" "a'"      "a'b"     "a'b'c"   "|"
+> [29] "\200"       "\265"       "\340"       "\347"       "\351"
+> ## Ubuntu 18.04 R 4.0.3
+> [1] "\ta"     "\na"     "\"NA\""  "\"b"     "\"b\""   "#"       "$"
+> [8] "&"       "'NA'"    "'b"      "'b'"     "<U+00B5>" "<U+00E0>" "<U+00E7>"
+> [15] "<U+00E9>" "<U+20AC>" "@"       "a"       "a\t"     "a\tb"    "a\tb\tc"
+> [22] "a\n"     "a\nb"    "a\nb\nc" "a b"     "a b c"   "a\""     "a\"b"
+> [29] "a\"b\"c" "a'"      "a'b"     "a'b'c"   "|"
+> 
+> # order
+> ## Win 10 R 4.0.2
+> [1]  5  9 22 13 15 32 34 26 23 18 20 28 27 29 25 30 33  1  6  3  4 10  7  8  2
+> [26] 21 14 11 12 19 16 17 31 24
+> ## Win 10 R devel
+> [1]  5  9 22 13 15 32 34 26 23 18 20 33  1  6  3  4 10  7  8  2 21 14 11 12 19
+> [26] 16 17 31 30 28 27 29 25 24
+> ## Ubuntu 18.04 R 4.0.3
+> [1]  5  9 22 13 15 32 34 26 23 18 20 28 27 29 25 30 33  1  6  3  4 10  7  8  2
+> [26] 21 14 11 12 19 16 17 31 24
+> 
+> R version 4.0.2 (2020-06-22)
+> Platform: x86_64-w64-mingw32/x64 (64-bit)
+> Running under: Windows 10 x64 (build 18363)
+> 
+> Matrix products: default
+> 
+> locale:
+> [1] C
+> system code page: 1252
+> 
+> attached base packages:
+> [1] stats     graphics  grDevices utils     datasets  methods   base
+> 
+> loaded via a namespace (and not attached):
+> [1] compiler_4.0.2 fortunes_1.5-4
+> 
+> R Under development (unstable) (2021-01-13 r79826)
+> Platform: x86_64-w64-mingw32/x64 (64-bit)
+> Running under: Windows 10 x64 (build 18363)
+> 
+> Matrix products: default
+> 
+> locale:
+> [1] C
+> 
+> attached base packages:
+> [1] stats     graphics  grDevices utils     datasets  methods   base
+> 
+> loaded via a namespace (and not attached):
+> [1] compiler_4.1.0
+> 
+> R version 4.0.3 (2020-10-10)
+> Platform: x86_64-pc-linux-gnu (64-bit)
+> Running under: Ubuntu 18.04.5 LTS
+> 
+> Matrix products: default
+> BLAS:   /usr/lib/x86_64-linux-gnu/blas/libblas.so.3.7.1
+> LAPACK: /usr/lib/x86_64-linux-gnu/lapack/liblapack.so.3.7.1
+> 
+> locale:
+> [1] LC_CTYPE=C                 LC_NUMERIC=C
+> [3] LC_TIME=C                  LC_COLLATE=C
+> [5] LC_MONETARY=C              LC_MESSAGES=nl_BE.UTF-8
+> [7] LC_PAPER=nl_BE.UTF-8       LC_NAME=C
+> [9] LC_ADDRESS=C               LC_TELEPHONE=C
+> [11] LC_MEASUREMENT=nl_BE.UTF-8 LC_IDENTIFICATION=C
+> 
+> attached base packages:
+> [1] stats     graphics  grDevices utils     datasets  methods   base
+> 
+> loaded via a namespace (and not attached):
+> [1] compiler_4.0.3 fortunes_1.5-4
+> 
+> 
+> ir. Thierry Onkelinx
+> Statisticus / Statistician
+> 
+> Vlaamse Overheid / Government of Flanders
+> INSTITUUT VOOR NATUUR- EN BOSONDERZOEK / RESEARCH INSTITUTE FOR NATURE
+> AND FOREST
+> Team Biometrie & Kwaliteitszorg / Team Biometrics & Quality Assurance
+> thierry.onkelinx at inbo.be
+> Havenlaan 88 bus 73, 1000 Brussel
+> www.inbo.be
+> 
+> ///////////////////////////////////////////////////////////////////////////////////////////
+> To call in the statistician after the experiment is done may be no
+> more than asking him to perform a post-mortem examination: he may be
+> able to say what the experiment died of. ~ Sir Ronald Aylmer Fisher
+> The plural of anecdote is not data. ~ Roger Brinner
+> The combination of some data and an aching desire for an answer does
+> not ensure that a reasonable answer can be extracted from a given body
+> of data. ~ John Tukey
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From th|erry@onke||nx @end|ng |rom |nbo@be  Tue Jan 19 13:22:32 2021
+From: th|erry@onke||nx @end|ng |rom |nbo@be (Thierry Onkelinx)
+Date: Tue, 19 Jan 2021 13:22:32 +0100
+Subject: [Rd] sorting bug in R-devel?
+In-Reply-To: <8DFE09A4-0FEB-49B8-86E5-2F00E2EEE73A@gmail.com>
+References: <CAJuCY5zBY0Q_Y=UPBTFcmnXKS4WKVZ6Dyy4-vmg3sWcLESj5aA@mail.gmail.com>
+ <8DFE09A4-0FEB-49B8-86E5-2F00E2EEE73A@gmail.com>
+Message-ID: <CAJuCY5xCmLn4kYW+2S3ROCqcHc4co9i2aP5npK-voE=j86Va_A@mail.gmail.com>
+
+Dear Peter,
+
+Thanks for the feedback on the locale. Is there a better alternative for
+the C locale? One that yields a consistent and stable sorting
+independent of the R version and OS.
+
+Best regards,
+
+Thierry
+
+ir. Thierry Onkelinx
+Statisticus / Statistician
+
+Vlaamse Overheid / Government of Flanders
+INSTITUUT VOOR NATUUR- EN BOSONDERZOEK / RESEARCH INSTITUTE FOR NATURE AND
+FOREST
+Team Biometrie & Kwaliteitszorg / Team Biometrics & Quality Assurance
+thierry.onkelinx at inbo.be
+Havenlaan 88 bus 73, 1000 Brussel
+www.inbo.be
+
+///////////////////////////////////////////////////////////////////////////////////////////
+To call in the statistician after the experiment is done may be no more
+than asking him to perform a post-mortem examination: he may be able to say
+what the experiment died of. ~ Sir Ronald Aylmer Fisher
+The plural of anecdote is not data. ~ Roger Brinner
+The combination of some data and an aching desire for an answer does not
+ensure that a reasonable answer can be extracted from a given body of data.
+~ John Tukey
+///////////////////////////////////////////////////////////////////////////////////////////
+
+<https://www.inbo.be>
+
+
+Op di 19 jan. 2021 om 13:20 schreef Peter Dalgaard <pdalgd at gmail.com>:
+
+> Not sure what happened between 4.0.2 and -devel, but you are using C
+> collation, which assumes 7-bit single-byte characters, to sort multi-byte
+> 8-bit encoded characters, which looks a bit risky.
+>
+> -pd
+>
+> > On 19 Jan 2021, at 10:10 , Thierry Onkelinx via R-devel <
+> r-devel at r-project.org> wrote:
+> >
+> > Dear all,
+> >
+> > My git2rdata package relies on a stable sorting. I've noticed that
+> > some characters get a different position under R-devel under Windows
+> > 10. This is why the unit test of my package only fail in this
+> > combination (
+> https://cran.r-project.org/web/checks/check_results_git2rdata.html)
+> >
+> > Below is a minimal example to illustrate the problem.
+> >
+> > Best regards,
+> >
+> > Thierry
+> >
+> > data <- readLines("
+> https://raw.githubusercontent.com/ropensci/git2rdata/master/tests/testthat/test_b_special.R
+> ",
+> > encoding = "UTF-8", n = 15)
+> > eval(parse(text = paste(tail(data, -3), collapse = "")))
+> > ds$a <- enc2utf8(ds$a)
+> > print(ds$a) # input
+> > Sys.setlocale(locale = "C")
+> > print(sort(ds$a)) # sorted
+> > print(order(ds$a)) # order
+> > print(sessionInfo())
+> >
+> > # input
+> > ## Win 10 R 4.0.2
+> > [1] "a"       "a b"     "a\tb"     "a\tb\tc"   "\ta"      "a\t"
+> "a\nb"
+> > [8] "a\nb\nc" "\na"     "a\n"     "a\"b"    "a\"b\"c" "\"b"     "a\""
+> > [15] "\"b\""   "a'b"     "a'b'c"   "'b"      "a'"      "'b'"     "a b c"
+> > [22] "\"NA\""  "'NA'"    NA        "?"       "&"       "?"       "?"
+> > [29] "?"       "\200"       "|"       "#"       "@"       "$"
+> > ## Win 10 R devel
+> > [1] "a"       "a b"     "a\tb"     "a\tb\tc"   "\ta"      "a\t"
+> "a\nb"
+> > [8] "a\nb\nc" "\na"     "a\n"     "a\"b"    "a\"b\"c" "\"b"     "a\""
+> > [15] "\"b\""   "a'b"     "a'b'c"   "'b"      "a'"      "'b'"     "a b c"
+> > [22] "\"NA\""  "'NA'"    NA        "?"       "&"       "?"       "?"
+> > [29] "?"       "\200"       "|"       "#"       "@"       "$"
+> > ## Ubuntu 18.04 R 4.0.3
+> > [1] "a"       "a b"     "a\tb"    "a\tb\tc" "\ta"     "a\t"     "a\nb"
+> > [8] "a\nb\nc" "\na"     "a\n"     "a\"b"    "a\"b\"c" "\"b"     "a\""
+> > [15] "\"b\""   "a'b"     "a'b'c"   "'b"      "a'"      "'b'"     "a b c"
+> > [22] "\"NA\""  "'NA'"    NA        "?"       "&"       "?"       "?"
+> > [29] "?"       "?"       "|"       "#"       "@"       "$"
+> >
+> > # sorted
+> > ## Win 10 R 4.0.2
+> > [1] "\ta"     "\na"     "\"NA\""  "\"b"     "\"b\""   "#"       "$"
+> > [8] "&"       "'NA'"    "'b"      "'b'"     "<U+00B5>" "<U+00E0>"
+> "<U+00E7>"
+> > [15] "<U+00E9>" "<U+20AC>" "@"       "a"       "a\t"     "a\tb"
+> "a\tb\tc"
+> > [22] "a\n"     "a\nb"    "a\nb\nc" "a b"     "a b c"   "a\""     "a\"b"
+> > [29] "a\"b\"c" "a'"      "a'b"     "a'b'c"   "|"
+> > ## Win 10 R devel
+> > [1] "\ta"     "\na"     "\"NA\""  "\"b"     "\"b\""   "#"       "$"
+> > [8] "&"       "'NA'"    "'b"      "'b'"     "@"       "a"       "a\t"
+> > [15] "a\tb"    "a\tb\tc" "a\n"     "a\nb"    "a\nb\nc" "a b"     "a b c"
+> > [22] "a\""     "a\"b"    "a\"b\"c" "a'"      "a'b"     "a'b'c"   "|"
+> > [29] "\200"       "\265"       "\340"       "\347"       "\351"
+> > ## Ubuntu 18.04 R 4.0.3
+> > [1] "\ta"     "\na"     "\"NA\""  "\"b"     "\"b\""   "#"       "$"
+> > [8] "&"       "'NA'"    "'b"      "'b'"     "<U+00B5>" "<U+00E0>"
+> "<U+00E7>"
+> > [15] "<U+00E9>" "<U+20AC>" "@"       "a"       "a\t"     "a\tb"
+> "a\tb\tc"
+> > [22] "a\n"     "a\nb"    "a\nb\nc" "a b"     "a b c"   "a\""     "a\"b"
+> > [29] "a\"b\"c" "a'"      "a'b"     "a'b'c"   "|"
+> >
+> > # order
+> > ## Win 10 R 4.0.2
+> > [1]  5  9 22 13 15 32 34 26 23 18 20 28 27 29 25 30 33  1  6  3  4 10
+> 7  8  2
+> > [26] 21 14 11 12 19 16 17 31 24
+> > ## Win 10 R devel
+> > [1]  5  9 22 13 15 32 34 26 23 18 20 33  1  6  3  4 10  7  8  2 21 14 11
+> 12 19
+> > [26] 16 17 31 30 28 27 29 25 24
+> > ## Ubuntu 18.04 R 4.0.3
+> > [1]  5  9 22 13 15 32 34 26 23 18 20 28 27 29 25 30 33  1  6  3  4 10
+> 7  8  2
+> > [26] 21 14 11 12 19 16 17 31 24
+> >
+> > R version 4.0.2 (2020-06-22)
+> > Platform: x86_64-w64-mingw32/x64 (64-bit)
+> > Running under: Windows 10 x64 (build 18363)
+> >
+> > Matrix products: default
+> >
+> > locale:
+> > [1] C
+> > system code page: 1252
+> >
+> > attached base packages:
+> > [1] stats     graphics  grDevices utils     datasets  methods   base
+> >
+> > loaded via a namespace (and not attached):
+> > [1] compiler_4.0.2 fortunes_1.5-4
+> >
+> > R Under development (unstable) (2021-01-13 r79826)
+> > Platform: x86_64-w64-mingw32/x64 (64-bit)
+> > Running under: Windows 10 x64 (build 18363)
+> >
+> > Matrix products: default
+> >
+> > locale:
+> > [1] C
+> >
+> > attached base packages:
+> > [1] stats     graphics  grDevices utils     datasets  methods   base
+> >
+> > loaded via a namespace (and not attached):
+> > [1] compiler_4.1.0
+> >
+> > R version 4.0.3 (2020-10-10)
+> > Platform: x86_64-pc-linux-gnu (64-bit)
+> > Running under: Ubuntu 18.04.5 LTS
+> >
+> > Matrix products: default
+> > BLAS:   /usr/lib/x86_64-linux-gnu/blas/libblas.so.3.7.1
+> > LAPACK: /usr/lib/x86_64-linux-gnu/lapack/liblapack.so.3.7.1
+> >
+> > locale:
+> > [1] LC_CTYPE=C                 LC_NUMERIC=C
+> > [3] LC_TIME=C                  LC_COLLATE=C
+> > [5] LC_MONETARY=C              LC_MESSAGES=nl_BE.UTF-8
+> > [7] LC_PAPER=nl_BE.UTF-8       LC_NAME=C
+> > [9] LC_ADDRESS=C               LC_TELEPHONE=C
+> > [11] LC_MEASUREMENT=nl_BE.UTF-8 LC_IDENTIFICATION=C
+> >
+> > attached base packages:
+> > [1] stats     graphics  grDevices utils     datasets  methods   base
+> >
+> > loaded via a namespace (and not attached):
+> > [1] compiler_4.0.3 fortunes_1.5-4
+> >
+> >
+> > ir. Thierry Onkelinx
+> > Statisticus / Statistician
+> >
+> > Vlaamse Overheid / Government of Flanders
+> > INSTITUUT VOOR NATUUR- EN BOSONDERZOEK / RESEARCH INSTITUTE FOR NATURE
+> > AND FOREST
+> > Team Biometrie & Kwaliteitszorg / Team Biometrics & Quality Assurance
+> > thierry.onkelinx at inbo.be
+> > Havenlaan 88 bus 73, 1000 Brussel
+> > www.inbo.be
+> >
+> >
+> ///////////////////////////////////////////////////////////////////////////////////////////
+> > To call in the statistician after the experiment is done may be no
+> > more than asking him to perform a post-mortem examination: he may be
+> > able to say what the experiment died of. ~ Sir Ronald Aylmer Fisher
+> > The plural of anecdote is not data. ~ Roger Brinner
+> > The combination of some data and an aching desire for an answer does
+> > not ensure that a reasonable answer can be extracted from a given body
+> > of data. ~ John Tukey
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> --
+> Peter Dalgaard, Professor,
+> Center for Statistics, Copenhagen Business School
+> Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+> Phone: (+45)38153501
+> Office: A 4.23
+> Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+>
+>
+>
+>
+>
+>
+>
+>
+>
+>
+
+	[[alternative HTML version deleted]]
+
+
+From bob @end|ng |rom rud@|@  Tue Jan 19 14:11:35 2021
+From: bob @end|ng |rom rud@|@ (Bob Rudis)
+Date: Tue, 19 Jan 2021 08:11:35 -0500
+Subject: [Rd] sorting bug in R-devel?
+In-Reply-To: <CAJuCY5xCmLn4kYW+2S3ROCqcHc4co9i2aP5npK-voE=j86Va_A@mail.gmail.com>
+References: <CAJuCY5zBY0Q_Y=UPBTFcmnXKS4WKVZ6Dyy4-vmg3sWcLESj5aA@mail.gmail.com>
+ <8DFE09A4-0FEB-49B8-86E5-2F00E2EEE73A@gmail.com>
+ <CAJuCY5xCmLn4kYW+2S3ROCqcHc4co9i2aP5npK-voE=j86Va_A@mail.gmail.com>
+Message-ID: <CAA-FpKUGwuC_NDGeUzfT1PLkZRJV+9yNfAQq+pE_=0eQPDrZ+A@mail.gmail.com>
+
+base::icuSetCollate might be what you need. There are some decent
+examples in the manual page on it.
+
+On Tue, Jan 19, 2021 at 7:30 AM Thierry Onkelinx via R-devel
+<r-devel at r-project.org> wrote:
+>
+> Dear Peter,
+>
+> Thanks for the feedback on the locale. Is there a better alternative for
+> the C locale? One that yields a consistent and stable sorting
+> independent of the R version and OS.
+>
+> Best regards,
+>
+> Thierry
+>
+> ir. Thierry Onkelinx
+> Statisticus / Statistician
+>
+> Vlaamse Overheid / Government of Flanders
+> INSTITUUT VOOR NATUUR- EN BOSONDERZOEK / RESEARCH INSTITUTE FOR NATURE AND
+> FOREST
+> Team Biometrie & Kwaliteitszorg / Team Biometrics & Quality Assurance
+> thierry.onkelinx at inbo.be
+> Havenlaan 88 bus 73, 1000 Brussel
+> www.inbo.be
+>
+> ///////////////////////////////////////////////////////////////////////////////////////////
+> To call in the statistician after the experiment is done may be no more
+> than asking him to perform a post-mortem examination: he may be able to say
+> what the experiment died of. ~ Sir Ronald Aylmer Fisher
+> The plural of anecdote is not data. ~ Roger Brinner
+> The combination of some data and an aching desire for an answer does not
+> ensure that a reasonable answer can be extracted from a given body of data.
+> ~ John Tukey
+> ///////////////////////////////////////////////////////////////////////////////////////////
+>
+> <https://www.inbo.be>
+>
+>
+> Op di 19 jan. 2021 om 13:20 schreef Peter Dalgaard <pdalgd at gmail.com>:
+>
+> > Not sure what happened between 4.0.2 and -devel, but you are using C
+> > collation, which assumes 7-bit single-byte characters, to sort multi-byte
+> > 8-bit encoded characters, which looks a bit risky.
+> >
+> > -pd
+> >
+> > > On 19 Jan 2021, at 10:10 , Thierry Onkelinx via R-devel <
+> > r-devel at r-project.org> wrote:
+> > >
+> > > Dear all,
+> > >
+> > > My git2rdata package relies on a stable sorting. I've noticed that
+> > > some characters get a different position under R-devel under Windows
+> > > 10. This is why the unit test of my package only fail in this
+> > > combination (
+> > https://cran.r-project.org/web/checks/check_results_git2rdata.html)
+> > >
+> > > Below is a minimal example to illustrate the problem.
+> > >
+> > > Best regards,
+> > >
+> > > Thierry
+> > >
+> > > data <- readLines("
+> > https://raw.githubusercontent.com/ropensci/git2rdata/master/tests/testthat/test_b_special.R
+> > ",
+> > > encoding = "UTF-8", n = 15)
+> > > eval(parse(text = paste(tail(data, -3), collapse = "")))
+> > > ds$a <- enc2utf8(ds$a)
+> > > print(ds$a) # input
+> > > Sys.setlocale(locale = "C")
+> > > print(sort(ds$a)) # sorted
+> > > print(order(ds$a)) # order
+> > > print(sessionInfo())
+> > >
+> > > # input
+> > > ## Win 10 R 4.0.2
+> > > [1] "a"       "a b"     "a\tb"     "a\tb\tc"   "\ta"      "a\t"
+> > "a\nb"
+> > > [8] "a\nb\nc" "\na"     "a\n"     "a\"b"    "a\"b\"c" "\"b"     "a\""
+> > > [15] "\"b\""   "a'b"     "a'b'c"   "'b"      "a'"      "'b'"     "a b c"
+> > > [22] "\"NA\""  "'NA'"    NA        "?"       "&"       "?"       "?"
+> > > [29] "?"       "\200"       "|"       "#"       "@"       "$"
+> > > ## Win 10 R devel
+> > > [1] "a"       "a b"     "a\tb"     "a\tb\tc"   "\ta"      "a\t"
+> > "a\nb"
+> > > [8] "a\nb\nc" "\na"     "a\n"     "a\"b"    "a\"b\"c" "\"b"     "a\""
+> > > [15] "\"b\""   "a'b"     "a'b'c"   "'b"      "a'"      "'b'"     "a b c"
+> > > [22] "\"NA\""  "'NA'"    NA        "?"       "&"       "?"       "?"
+> > > [29] "?"       "\200"       "|"       "#"       "@"       "$"
+> > > ## Ubuntu 18.04 R 4.0.3
+> > > [1] "a"       "a b"     "a\tb"    "a\tb\tc" "\ta"     "a\t"     "a\nb"
+> > > [8] "a\nb\nc" "\na"     "a\n"     "a\"b"    "a\"b\"c" "\"b"     "a\""
+> > > [15] "\"b\""   "a'b"     "a'b'c"   "'b"      "a'"      "'b'"     "a b c"
+> > > [22] "\"NA\""  "'NA'"    NA        "?"       "&"       "?"       "?"
+> > > [29] "?"       "?"       "|"       "#"       "@"       "$"
+> > >
+> > > # sorted
+> > > ## Win 10 R 4.0.2
+> > > [1] "\ta"     "\na"     "\"NA\""  "\"b"     "\"b\""   "#"       "$"
+> > > [8] "&"       "'NA'"    "'b"      "'b'"     "<U+00B5>" "<U+00E0>"
+> > "<U+00E7>"
+> > > [15] "<U+00E9>" "<U+20AC>" "@"       "a"       "a\t"     "a\tb"
+> > "a\tb\tc"
+> > > [22] "a\n"     "a\nb"    "a\nb\nc" "a b"     "a b c"   "a\""     "a\"b"
+> > > [29] "a\"b\"c" "a'"      "a'b"     "a'b'c"   "|"
+> > > ## Win 10 R devel
+> > > [1] "\ta"     "\na"     "\"NA\""  "\"b"     "\"b\""   "#"       "$"
+> > > [8] "&"       "'NA'"    "'b"      "'b'"     "@"       "a"       "a\t"
+> > > [15] "a\tb"    "a\tb\tc" "a\n"     "a\nb"    "a\nb\nc" "a b"     "a b c"
+> > > [22] "a\""     "a\"b"    "a\"b\"c" "a'"      "a'b"     "a'b'c"   "|"
+> > > [29] "\200"       "\265"       "\340"       "\347"       "\351"
+> > > ## Ubuntu 18.04 R 4.0.3
+> > > [1] "\ta"     "\na"     "\"NA\""  "\"b"     "\"b\""   "#"       "$"
+> > > [8] "&"       "'NA'"    "'b"      "'b'"     "<U+00B5>" "<U+00E0>"
+> > "<U+00E7>"
+> > > [15] "<U+00E9>" "<U+20AC>" "@"       "a"       "a\t"     "a\tb"
+> > "a\tb\tc"
+> > > [22] "a\n"     "a\nb"    "a\nb\nc" "a b"     "a b c"   "a\""     "a\"b"
+> > > [29] "a\"b\"c" "a'"      "a'b"     "a'b'c"   "|"
+> > >
+> > > # order
+> > > ## Win 10 R 4.0.2
+> > > [1]  5  9 22 13 15 32 34 26 23 18 20 28 27 29 25 30 33  1  6  3  4 10
+> > 7  8  2
+> > > [26] 21 14 11 12 19 16 17 31 24
+> > > ## Win 10 R devel
+> > > [1]  5  9 22 13 15 32 34 26 23 18 20 33  1  6  3  4 10  7  8  2 21 14 11
+> > 12 19
+> > > [26] 16 17 31 30 28 27 29 25 24
+> > > ## Ubuntu 18.04 R 4.0.3
+> > > [1]  5  9 22 13 15 32 34 26 23 18 20 28 27 29 25 30 33  1  6  3  4 10
+> > 7  8  2
+> > > [26] 21 14 11 12 19 16 17 31 24
+> > >
+> > > R version 4.0.2 (2020-06-22)
+> > > Platform: x86_64-w64-mingw32/x64 (64-bit)
+> > > Running under: Windows 10 x64 (build 18363)
+> > >
+> > > Matrix products: default
+> > >
+> > > locale:
+> > > [1] C
+> > > system code page: 1252
+> > >
+> > > attached base packages:
+> > > [1] stats     graphics  grDevices utils     datasets  methods   base
+> > >
+> > > loaded via a namespace (and not attached):
+> > > [1] compiler_4.0.2 fortunes_1.5-4
+> > >
+> > > R Under development (unstable) (2021-01-13 r79826)
+> > > Platform: x86_64-w64-mingw32/x64 (64-bit)
+> > > Running under: Windows 10 x64 (build 18363)
+> > >
+> > > Matrix products: default
+> > >
+> > > locale:
+> > > [1] C
+> > >
+> > > attached base packages:
+> > > [1] stats     graphics  grDevices utils     datasets  methods   base
+> > >
+> > > loaded via a namespace (and not attached):
+> > > [1] compiler_4.1.0
+> > >
+> > > R version 4.0.3 (2020-10-10)
+> > > Platform: x86_64-pc-linux-gnu (64-bit)
+> > > Running under: Ubuntu 18.04.5 LTS
+> > >
+> > > Matrix products: default
+> > > BLAS:   /usr/lib/x86_64-linux-gnu/blas/libblas.so.3.7.1
+> > > LAPACK: /usr/lib/x86_64-linux-gnu/lapack/liblapack.so.3.7.1
+> > >
+> > > locale:
+> > > [1] LC_CTYPE=C                 LC_NUMERIC=C
+> > > [3] LC_TIME=C                  LC_COLLATE=C
+> > > [5] LC_MONETARY=C              LC_MESSAGES=nl_BE.UTF-8
+> > > [7] LC_PAPER=nl_BE.UTF-8       LC_NAME=C
+> > > [9] LC_ADDRESS=C               LC_TELEPHONE=C
+> > > [11] LC_MEASUREMENT=nl_BE.UTF-8 LC_IDENTIFICATION=C
+> > >
+> > > attached base packages:
+> > > [1] stats     graphics  grDevices utils     datasets  methods   base
+> > >
+> > > loaded via a namespace (and not attached):
+> > > [1] compiler_4.0.3 fortunes_1.5-4
+> > >
+> > >
+> > > ir. Thierry Onkelinx
+> > > Statisticus / Statistician
+> > >
+> > > Vlaamse Overheid / Government of Flanders
+> > > INSTITUUT VOOR NATUUR- EN BOSONDERZOEK / RESEARCH INSTITUTE FOR NATURE
+> > > AND FOREST
+> > > Team Biometrie & Kwaliteitszorg / Team Biometrics & Quality Assurance
+> > > thierry.onkelinx at inbo.be
+> > > Havenlaan 88 bus 73, 1000 Brussel
+> > > www.inbo.be
+> > >
+> > >
+> > ///////////////////////////////////////////////////////////////////////////////////////////
+> > > To call in the statistician after the experiment is done may be no
+> > > more than asking him to perform a post-mortem examination: he may be
+> > > able to say what the experiment died of. ~ Sir Ronald Aylmer Fisher
+> > > The plural of anecdote is not data. ~ Roger Brinner
+> > > The combination of some data and an aching desire for an answer does
+> > > not ensure that a reasonable answer can be extracted from a given body
+> > > of data. ~ John Tukey
+> > >
+> > > ______________________________________________
+> > > R-devel at r-project.org mailing list
+> > > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+> > --
+> > Peter Dalgaard, Professor,
+> > Center for Statistics, Copenhagen Business School
+> > Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+> > Phone: (+45)38153501
+> > Office: A 4.23
+> > Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+> >
+> >
+> >
+> >
+> >
+> >
+> >
+> >
+> >
+> >
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From pd@me@ @end|ng |rom cb@@dk  Thu Jan 21 11:59:07 2021
+From: pd@me@ @end|ng |rom cb@@dk (Peter Dalgaard)
+Date: Thu, 21 Jan 2021 10:59:07 +0000
+Subject: [Rd] R 4.0.4 scheduled for February 15
+Message-ID: <DE870AF7-6083-4D2F-8046-6C73E3D1D936@cbs.dk>
+
+Full schedule is available on https://developer.r-project.org (or https://svn.r-project.org/R-dev-web/trunk/index.html for the impatient).
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From |uc@r @end|ng |rom |edor@project@org  Thu Jan 21 13:51:03 2021
+From: |uc@r @end|ng |rom |edor@project@org (=?UTF-8?Q?I=C3=B1aki_Ucar?=)
+Date: Thu, 21 Jan 2021 13:51:03 +0100
+Subject: [Rd] R 4.0.4 scheduled for February 15
+In-Reply-To: <DE870AF7-6083-4D2F-8046-6C73E3D1D936@cbs.dk>
+References: <DE870AF7-6083-4D2F-8046-6C73E3D1D936@cbs.dk>
+Message-ID: <CALEXWq3NBMnkKOQyz4VNfRyQxVGWLYijq7S53Oeiy=gkUWjHug@mail.gmail.com>
+
+Minor question: wouldn't the new pipe syntax be worth a minor version
+bump? A package planning to drop magrittr would end up depending on R
+4.0.4, which sounds suboptimal. And (I don't find any reference to
+this in the manual or in CRAN policies, but) if I remember correctly,
+depending on a patch version was discouraged.
+
+I?aki
+
+
+On Thu, 21 Jan 2021 at 11:59, Peter Dalgaard via R-devel
+<r-devel at r-project.org> wrote:
+>
+> Full schedule is available on https://developer.r-project.org (or https://svn.r-project.org/R-dev-web/trunk/index.html for the impatient).
+>
+> --
+> Peter Dalgaard, Professor,
+> Center for Statistics, Copenhagen Business School
+> Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+> Phone: (+45)38153501
+> Office: A 4.23
+> Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+
+-- 
+I?aki ?car
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Thu Jan 21 14:09:21 2021
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Thu, 21 Jan 2021 08:09:21 -0500
+Subject: [Rd] R 4.0.4 scheduled for February 15
+In-Reply-To: <CALEXWq3NBMnkKOQyz4VNfRyQxVGWLYijq7S53Oeiy=gkUWjHug@mail.gmail.com>
+References: <DE870AF7-6083-4D2F-8046-6C73E3D1D936@cbs.dk>
+ <CALEXWq3NBMnkKOQyz4VNfRyQxVGWLYijq7S53Oeiy=gkUWjHug@mail.gmail.com>
+Message-ID: <753e3afe-a1f7-13f3-aafa-d4e4489444a4@gmail.com>
+
+On 21/01/2021 7:51 a.m., I?aki Ucar wrote:
+> Minor question: wouldn't the new pipe syntax be worth a minor version
+> bump?
+
+I don't think I've seen anything to signal that it will end up in 4.0.4. 
+  It's intended for 4.1.0, as far as all the signs show.
+
+Duncan Murdoch
+
+  A package planning to drop magrittr would end up depending on R
+> 4.0.4, which sounds suboptimal. And (I don't find any reference to
+> this in the manual or in CRAN policies, but) if I remember correctly,
+> depending on a patch version was discouraged.
+> 
+> I?aki
+> 
+> 
+> On Thu, 21 Jan 2021 at 11:59, Peter Dalgaard via R-devel
+> <r-devel at r-project.org> wrote:
+>>
+>> Full schedule is available on https://developer.r-project.org (or https://svn.r-project.org/R-dev-web/trunk/index.html for the impatient).
+>>
+>> --
+>> Peter Dalgaard, Professor,
+>> Center for Statistics, Copenhagen Business School
+>> Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+>> Phone: (+45)38153501
+>> Office: A 4.23
+>> Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> 
+>
+
+
+From @eb@meyer @end|ng |rom |@u@de  Thu Jan 21 14:13:10 2021
+From: @eb@meyer @end|ng |rom |@u@de (Sebastian Meyer)
+Date: Thu, 21 Jan 2021 14:13:10 +0100
+Subject: [Rd] R 4.0.4 scheduled for February 15
+In-Reply-To: <CALEXWq3NBMnkKOQyz4VNfRyQxVGWLYijq7S53Oeiy=gkUWjHug@mail.gmail.com>
+References: <DE870AF7-6083-4D2F-8046-6C73E3D1D936@cbs.dk>
+ <CALEXWq3NBMnkKOQyz4VNfRyQxVGWLYijq7S53Oeiy=gkUWjHug@mail.gmail.com>
+Message-ID: <70bb64f4-afa0-898e-b251-ff6f275077a3@fau.de>
+
+Am 21.01.21 um 13:51 schrieb I?aki Ucar:
+> Minor question: wouldn't the new pipe syntax be worth a minor version
+> bump? 
+
+Yes. The NEWS mention the pipe syntax for R-devel not for R-patched.
+
+See the section "CHANGES IN R 4.0.3 patched" in
+
+https://stat.ethz.ch/R-manual/R-devel/doc/html/NEWS.html
+
+for what is currently included for R 4.0.4.
+
+Cheers,
+
+	Sebastian
+
+
+> A package planning to drop magrittr would end up depending on R
+> 4.0.4, which sounds suboptimal. And (I don't find any reference to
+> this in the manual or in CRAN policies, but) if I remember correctly,
+> depending on a patch version was discouraged.
+> 
+> I?aki
+> 
+> 
+> On Thu, 21 Jan 2021 at 11:59, Peter Dalgaard via R-devel
+> <r-devel at r-project.org> wrote:
+>>
+>> Full schedule is available on https://developer.r-project.org (or https://svn.r-project.org/R-dev-web/trunk/index.html for the impatient).
+>>
+>> --
+>> Peter Dalgaard, Professor,
+>> Center for Statistics, Copenhagen Business School
+>> Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+>> Phone: (+45)38153501
+>> Office: A 4.23
+>> Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> 
+>
+
+
+From |uc@r @end|ng |rom |edor@project@org  Thu Jan 21 14:42:53 2021
+From: |uc@r @end|ng |rom |edor@project@org (=?UTF-8?Q?I=C3=B1aki_Ucar?=)
+Date: Thu, 21 Jan 2021 14:42:53 +0100
+Subject: [Rd] R 4.0.4 scheduled for February 15
+In-Reply-To: <70bb64f4-afa0-898e-b251-ff6f275077a3@fau.de>
+References: <DE870AF7-6083-4D2F-8046-6C73E3D1D936@cbs.dk>
+ <CALEXWq3NBMnkKOQyz4VNfRyQxVGWLYijq7S53Oeiy=gkUWjHug@mail.gmail.com>
+ <70bb64f4-afa0-898e-b251-ff6f275077a3@fau.de>
+Message-ID: <CALEXWq0VAuxNi6pjzFtF6xXTNdG+hUD5vDsmp74RzzOTi=k_gQ@mail.gmail.com>
+
+On Thu, 21 Jan 2021 at 14:19, Sebastian Meyer <seb.meyer at fau.de> wrote:
+>
+> Am 21.01.21 um 13:51 schrieb I?aki Ucar:
+> > Minor question: wouldn't the new pipe syntax be worth a minor version
+> > bump?
+>
+> Yes. The NEWS mention the pipe syntax for R-devel not for R-patched.
+>
+> See the section "CHANGES IN R 4.0.3 patched" in
+>
+> https://stat.ethz.ch/R-manual/R-devel/doc/html/NEWS.html
+>
+> for what is currently included for R 4.0.4.
+
+Understood, thanks!
+
+-- 
+I?aki ?car
+
+
+From jen@@heum@nn @end|ng |rom uzh@ch  Fri Jan 22 21:35:22 2021
+From: jen@@heum@nn @end|ng |rom uzh@ch (Jens Heumann)
+Date: Fri, 22 Jan 2021 21:35:22 +0100
+Subject: [Rd] Inconsistency of c.Date: non-commutativity and non-integer
+ Value
+Message-ID: <93d0821e-0fd6-968d-4992-3cf56dd5c8ef@uzh.ch>
+
+Dear r-devel,
+
+Today I came across what I would call inconsistencies in the `c.Date` 
+method compared to what happens when concatenating other classes: 1. 
+Non-commutativity: The type in the arrangements of the elements does 
+matter (first element is critical), 2. the resulting value is numeric 
+instead of expected integer (as in the case with factors).
+
+ > ## 
+Examples####################################################################
+ > ## 1. Non-commutativity:
+ > c(.1, Sys.Date())
+[1]???? 0.1 18649.0
+ > c(as.integer(.1), Sys.Date())
+[1]???? 0 18649
+ > ## whereas:
+ > c(Sys.Date(), .1)
+Error in as.Date.numeric(e) : 'origin' must be supplied
+ > c(Sys.Date(), as.integer(.1))
+Error in as.Date.numeric(e) : 'origin' must be supplied
+ >
+ > ## 2. Numeric instead of numeric value
+ > str(c(as.integer(.1), Sys.Date()))
+ ?num [1:2] 0 18649? ## not integer
+ > 
+################################################################################ 
+
+
+I'm not sure if `c.Date` should redefined, since there would probably be 
+many more classes to consider. However, the error message "'origin' must 
+be supplied" cannot be served by the user and appears to me like an 
+imperfection in the design.
+
+It would be desirable if `c.Date` harmonizes with the hierarchy stated 
+in `?c`: "NULL < raw < logical < integer < double < complex < character 
+< list < expression. [...] factors are treated only via their internal 
+integer codes" and behaves best like a factor (and also throws integer 
+values as in 2. above).
+
+Or maybe disabling non-dates at all `if (!all(sapply(list(Sys.Date(), 
+.1), "class") == "Date")) stop...`, but this is a little beyond my 
+knowledge.
+
+Anyway, I hope my remark is of relevance and contributes to the 
+continuous development of our great programming language R!
+
+Best,
+
+Jens
+
+
+From edd @end|ng |rom deb|@n@org  Fri Jan 22 22:17:42 2021
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Fri, 22 Jan 2021 15:17:42 -0600
+Subject: [Rd] Inconsistency of c.Date: non-commutativity and non-integer
+ Value
+In-Reply-To: <93d0821e-0fd6-968d-4992-3cf56dd5c8ef@uzh.ch>
+References: <93d0821e-0fd6-968d-4992-3cf56dd5c8ef@uzh.ch>
+Message-ID: <24587.16631.44.523034@rob.eddelbuettel.com>
+
+
+On 22 January 2021 at 21:35, Jens Heumann wrote:
+| Dear r-devel,
+| 
+| Today I came across what I would call inconsistencies in the `c.Date` 
+| method compared to what happens when concatenating other classes: 1. 
+| Non-commutativity: The type in the arrangements of the elements does 
+| matter (first element is critical), 2. the resulting value is numeric 
+| instead of expected integer (as in the case with factors).
+| 
+|  > ## 
+| Examples####################################################################
+|  > ## 1. Non-commutativity:
+|  > c(.1, Sys.Date())
+| [1]???? 0.1 18649.0
+|  > c(as.integer(.1), Sys.Date())
+| [1]???? 0 18649
+|  > ## whereas:
+|  > c(Sys.Date(), .1)
+| Error in as.Date.numeric(e) : 'origin' must be supplied
+|  > c(Sys.Date(), as.integer(.1))
+| Error in as.Date.numeric(e) : 'origin' must be supplied
+|  >
+|  > ## 2. Numeric instead of numeric value
+|  > str(c(as.integer(.1), Sys.Date()))
+|  ?num [1:2] 0 18649? ## not integer
+|  > 
+| ################################################################################ 
+| 
+| 
+| I'm not sure if `c.Date` should redefined, since there would probably be 
+| many more classes to consider. However, the error message "'origin' must 
+| be supplied" cannot be served by the user and appears to me like an 
+| imperfection in the design.
+| 
+| It would be desirable if `c.Date` harmonizes with the hierarchy stated 
+| in `?c`: "NULL < raw < logical < integer < double < complex < character 
+| < list < expression. [...] factors are treated only via their internal 
+| integer codes" and behaves best like a factor (and also throws integer 
+| values as in 2. above).
+| 
+| Or maybe disabling non-dates at all `if (!all(sapply(list(Sys.Date(), 
+| .1), "class") == "Date")) stop...`, but this is a little beyond my 
+| knowledge.
+| 
+| Anyway, I hope my remark is of relevance and contributes to the 
+| continuous development of our great programming language R!
+
+Nice analysis, well done.  Sadly it is also a "known feature" of the c()
+operator and documented as such -- S3 class attributes drop. C'est la vie.
+>From ?c
+
+     ?c? is sometimes used for its side effect of removing attributes
+     except names, for example to turn an array into a vector.
+     ?as.vector? is a more intuitive way to do this, but also drops
+     names.  Note that methods other than the default are not required
+     to do this (and they will almost certainly preserve a class
+     attribute).
+
+I have into that trap approximately 4.56e8 times in this idiom
+
+    > for (d in Sys.Date() + 0:2) print(d)
+    [1] 18649
+    [1] 18650
+    [1] 18651
+    > 
+
+Eventually one learns to switch to an iterator, and to pick the dates from a
+vector preserving their class.
+
+Dirk
+
+-- 
+https://dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From g@bembecker @end|ng |rom gm@||@com  Fri Jan 22 22:57:26 2021
+From: g@bembecker @end|ng |rom gm@||@com (Gabriel Becker)
+Date: Fri, 22 Jan 2021 13:57:26 -0800
+Subject: [Rd] Inconsistency of c.Date: non-commutativity and non-integer
+ Value
+In-Reply-To: <24587.16631.44.523034@rob.eddelbuettel.com>
+References: <93d0821e-0fd6-968d-4992-3cf56dd5c8ef@uzh.ch>
+ <24587.16631.44.523034@rob.eddelbuettel.com>
+Message-ID: <CAD4oTHEKrLpTKmjp7pLS0MkoN8mVrNj9SKbhYRZi_g6Sjufy6Q@mail.gmail.com>
+
+Hi Jens,
+
+On Fri, Jan 22, 2021 at 1:18 PM Dirk Eddelbuettel <edd at debian.org> wrote:
+
+>
+> On 22 January 2021 at 21:35, Jens Heumann wrote:
+> | Dear r-devel,
+> |
+> | Today I came across what I would call inconsistencies in the `c.Date`
+> | method compared to what happens when concatenating other classes: 1.
+> | Non-commutativity: The type in the arrangements of the elements does
+> | matter (first element is critical), 2. the resulting value is numeric
+> | instead of expected integer (as in the case with factors).
+> |
+> |  > ##
+> |
+> Examples####################################################################
+> |  > ## 1. Non-commutativity:
+> |  > c(.1, Sys.Date())
+> | [1]     0.1 18649.0
+> |  > c(as.integer(.1), Sys.Date())
+> | [1]     0 18649
+> |  > ## whereas:
+> |  > c(Sys.Date(), .1)
+> | Error in as.Date.numeric(e) : 'origin' must be supplied
+> |  > c(Sys.Date(), as.integer(.1))
+> | Error in as.Date.numeric(e) : 'origin' must be supplied
+> |  >
+> |  > ## 2. Numeric instead of numeric value
+> |  > str(c(as.integer(.1), Sys.Date()))
+> |   num [1:2] 0 18649  ## not integer
+> |  >
+> |
+> ################################################################################
+>
+> |
+> |
+> | I'm not sure if `c.Date` should redefined, since there would probably be
+> | many more classes to consider. However, the error message "'origin' must
+> | be supplied" cannot be served by the user and appears to me like an
+> | imperfection in the design.
+> |
+> | It would be desirable if `c.Date` harmonizes with the hierarchy stated
+> | in `?c`: "NULL < raw < logical < integer < double < complex < character
+> | < list < expression. [...] factors are treated only via their internal
+> | integer codes" and behaves best like a factor (and also throws integer
+> | values as in 2. above).
+>
+
+So I think the issue here is twofold. The first (fairly subtle) issue here
+is that "Date" is not a type, it's an "(S3) class" (which, in turn, is just
+a labeling attribute, as illustrated by the fact that it's removed by
+c.default).
+
+> typeof(Sys.Date())
+
+[1] "double"
+
+
+So Date cannot appear anywhere in that hierarchy, because it is a hierarchy
+of types.
+
+The reason c(as.integer(1), Sys.Date()) gives a numeric, is in fact because
+of that type hierarchy, as one of the elements is a "double" (the Date),
+which precludes returning an integer.
+
+The second issue is is that S3 dispatch occurs only on the first element,
+so you're hitting completely different methods with  c(as.integer(1),
+Sys.Date()) and c(Sys.Date(), as.integer(1)) So that is where your
+non-commutativity is coming from.  Personally, I think the case for
+c(<Date>, stuff) to give you a Date object back is stronger than that of
+commutativity, given the caveat that it would only be commutative if
+c(<Date>, <character w/ date string>) gave you a character back and
+c(<Date>, <numeric>) gave you a numeric back, but I can see there's space
+to disagree about that and argue for commutative absolutism.
+
+Note though that there is unlikely to be a way to get c(<character date
+string>, <Date>) to give you a Date back, because, again, S3 dispatch only
+sees the first argument, so you would *at best* be in c.character (but in
+as it stands now, in c.default, which explicitly strips classes).
+
+I do agree though that imho, the error from the latter could at least be
+improved. Unfortunately, Date objects do not carry around their origin, so
+we cannot do something such as "use the same origin as the Date object
+which caused dispatch into this method for any non-Date objects", which was
+going to be my suggestion here until I checked its feasibility.
+
+Best,
+~G
+
+|
+> | Or maybe disabling non-dates at all `if (!all(sapply(list(Sys.Date(),
+> | .1), "class") == "Date")) stop...`, but this is a little beyond my
+> | knowledge.
+> |
+> | Anyway, I hope my remark is of relevance and contributes to the
+> | continuous development of our great programming language R!
+>
+> Nice analysis, well done.  Sadly it is also a "known feature" of the c()
+> operator and documented as such -- S3 class attributes drop. C'est la vie.
+> From ?c
+>
+>      ?c? is sometimes used for its side effect of removing attributes
+>      except names, for example to turn an array into a vector.
+>      ?as.vector? is a more intuitive way to do this, but also drops
+>      names.  Note that methods other than the default are not required
+>      to do this (and they will almost certainly preserve a class
+>      attribute).
+>
+> I have into that trap approximately 4.56e8 times in this idiom
+>
+>     > for (d in Sys.Date() + 0:2) print(d)
+>     [1] 18649
+>     [1] 18650
+>     [1] 18651
+>     >
+>
+> Eventually one learns to switch to an iterator, and to pick the dates from
+> a
+> vector preserving their class.
+>
+> Dirk
+>
+> --
+> https://dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Sun Jan 24 17:52:08 2021
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Sun, 24 Jan 2021 17:52:08 +0100
+Subject: [Rd] Silent failure with NA results in fligner.test()
+In-Reply-To: <CACT_sGYaQyCC5PNEYF5UYApKgjWqAa3K6HqsEAawankh2YJ5fQ@mail.gmail.com>
+References: <CACT_sGYaQyCC5PNEYF5UYApKgjWqAa3K6HqsEAawankh2YJ5fQ@mail.gmail.com>
+Message-ID: <24589.42424.517129.469111@hornik.net>
+
+>>>>> Karolis K writes:
+
+> To me it seems like returning chi-sq = 0 and p-value = 1 would make sense.
+> It would also be consistent with other scenarios of equal variance in all
+> groups. One example:
+
+> fligner.test(1:8, gl(2,4))
+> #        Fligner-Killeen test of homogeneity of variances
+> #
+> # data:  1:8 and gl(2, 4)
+> # Fligner-Killeen:med chi-squared = 0, df = 1, p-value = 1
+
+> But I am aware that other tests implemented in stats:: sometimes throw
+> errors in similar situations.
+
+> Maybe someone more familiar with the behaviour and philosophy behind
+> stats:: preferences can add more weight here?
+
+Thanks for spotting this.  After some internal discussions, we've come
+to the conclusion that there is no "obvious" way to handle situations
+where the Fligner-Killeen:med chi-squared test statistic is undefined
+(i.e., when the denominator is zero).  [Owing to the discreteness of the
+ranks, trying to take limits will not work.]  For now, these
+sitatuations consistently give NaN/NA instead of errors (and the numeric
+computations were improved so that it should no longer possible to get a
+zero denominator and a non-zero numerator).
+
+Best
+-k
+
+> Warm regards,
+> Karolis K.
+
+> 	[[alternative HTML version deleted]]
+
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From k@ro||@@koncev|c|u@ @end|ng |rom gm@||@com  Sun Jan 24 17:57:05 2021
+From: k@ro||@@koncev|c|u@ @end|ng |rom gm@||@com (Karolis K)
+Date: Sun, 24 Jan 2021 18:57:05 +0200
+Subject: [Rd] Silent failure with NA results in fligner.test()
+In-Reply-To: <24589.42424.517129.469111@hornik.net>
+References: <CACT_sGYaQyCC5PNEYF5UYApKgjWqAa3K6HqsEAawankh2YJ5fQ@mail.gmail.com>
+ <24589.42424.517129.469111@hornik.net>
+Message-ID: <9F9048EA-9595-42C6-9D1D-C89EC2A4B5E4@gmail.com>
+
+Thank you a lot for the update.
+
+I understand leaving NaN/NA in these cases, that can make sense.
+But feels to me that this situation could maybe produce a warning, to inform the user of what had happened?
+
+Kind regards,
+Karolis K.
+
+> On Jan 24, 2021, at 6:52 PM, Kurt Hornik <Kurt.Hornik at wu.ac.at> wrote:
+> 
+>>>>>> Karolis K writes:
+> 
+>> To me it seems like returning chi-sq = 0 and p-value = 1 would make sense.
+>> It would also be consistent with other scenarios of equal variance in all
+>> groups. One example:
+> 
+>> fligner.test(1:8, gl(2,4))
+>> #        Fligner-Killeen test of homogeneity of variances
+>> #
+>> # data:  1:8 and gl(2, 4)
+>> # Fligner-Killeen:med chi-squared = 0, df = 1, p-value = 1
+> 
+>> But I am aware that other tests implemented in stats:: sometimes throw
+>> errors in similar situations.
+> 
+>> Maybe someone more familiar with the behaviour and philosophy behind
+>> stats:: preferences can add more weight here?
+> 
+> Thanks for spotting this.  After some internal discussions, we've come
+> to the conclusion that there is no "obvious" way to handle situations
+> where the Fligner-Killeen:med chi-squared test statistic is undefined
+> (i.e., when the denominator is zero).  [Owing to the discreteness of the
+> ranks, trying to take limits will not work.]  For now, these
+> sitatuations consistently give NaN/NA instead of errors (and the numeric
+> computations were improved so that it should no longer possible to get a
+> zero denominator and a non-zero numerator).
+> 
+> Best
+> -k
+> 
+>> Warm regards,
+>> Karolis K.
+> 
+>> 	[[alternative HTML version deleted]]
+> 
+>> ______________________________________________
+>> R-devel at r-project.org <mailto:R-devel at r-project.org> mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel <https://stat.ethz.ch/mailman/listinfo/r-devel>
+
+	[[alternative HTML version deleted]]
+
+
+From ezr@ @end|ng |rom |@ndtucker@com  Thu Jan 28 03:55:59 2021
+From: ezr@ @end|ng |rom |@ndtucker@com (Ezra Tucker)
+Date: Thu, 28 Jan 2021 02:55:59 +0000
+Subject: [Rd] Unexpected behavior with inheritance and using S3 classes as
+ slots in S4 class
+Message-ID: <3NgorfmRHc0G3gBpmZfuMRSEcpfH6TwnVtcRctTA6Ze0ZYYOtgIzsYG0MekzBiWvSId53Cz1j2abdgJebaXo47kq7pK58pHQ-DrRIvJfhKc=@landtucker.com>
+
+Hi all,
+
+I have a situation where I'm trying to use S3 classes as slots in an S4 class and am running into some problems with inheritance.
+
+My example:
+## with S3 classes
+a <- function(x) structure(x, class = "a")
+b <- function(x) structure(x, class = c("b", "a"))
+setOldClass(c("a", "b"))
+
+a_1 <- a("hello")
+b_1 <- b("world")
+n <- setClass("n", slots = c(s1 = "a"))
+n(s1 = a_1) # works as expected
+is(b_1, "a") # yields TRUE
+n(s1 = b_1) # doesn't work-- unexpected
+
+Error message is:
+Error in validObject(.Object) :
+invalid class ?n? object: invalid object for slot "s1" in class "n": got class "b", should be or extend class "a"
+
+Digging in, validObject looks like it's calling getClassDef, which gives me
+> getClassDef("b")
+Virtual Class "b" [in ".GlobalEnv"]
+
+Slots:
+
+Name: .S3Class
+Class: character
+
+Extends: "oldClass"
+
+-- it extends "oldClass" but it doesn't extend class "a" despite the fact the S3 version does.
+
+Now, In this simple example, I could have defined a and b as s4 classes, but in the real world, I didn't define them and have to use setOldClass.
+I'm currently getting around this issue by doing setClassUnion("ab", c("a", "b")) and then specify to use "ab" as the type for the slot, but since I already know b inherits from a, this ought not to be necessary (and there are other reasons this is undesirable).
+
+1. Is there anything I missed, in setting up this simple example, that would cause n(s1 = b_1) to work properly? Or is there anything I should do other than setClassUnion?
+2. Is this a shortcoming of validObject or getClassDef?
+
+Thank you all!
+-Ezra
+	[[alternative HTML version deleted]]
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Thu Jan 28 09:41:12 2021
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Thu, 28 Jan 2021 21:41:12 +1300
+Subject: [Rd] 
+ Unexpected behavior with inheritance and using S3 classes as
+ slots in S4 class
+In-Reply-To: <3NgorfmRHc0G3gBpmZfuMRSEcpfH6TwnVtcRctTA6Ze0ZYYOtgIzsYG0MekzBiWvSId53Cz1j2abdgJebaXo47kq7pK58pHQ-DrRIvJfhKc=@landtucker.com>
+References: <3NgorfmRHc0G3gBpmZfuMRSEcpfH6TwnVtcRctTA6Ze0ZYYOtgIzsYG0MekzBiWvSId53Cz1j2abdgJebaXo47kq7pK58pHQ-DrRIvJfhKc=@landtucker.com>
+Message-ID: <B931F4BF-A66B-46F4-8D6E-B3D64FB507F4@R-project.org>
+
+Ezra,
+
+I think it's just the fact the you specified the wrong class inheritance in setOldClass() - it has to match you S3 definition, so it should be:
+
+setOldClass(c("b","a"))
+
+In which case it works:
+
+> n(s1 = b_1)
+An object of class "n"
+Slot "s1":
+[1] "world"
+attr(,"class")
+[1] "b" "a"
+
+Cheers,
+Simon
+
+
+
+> On Jan 28, 2021, at 15:55, Ezra Tucker <ezra at landtucker.com> wrote:
+> 
+> Hi all,
+> 
+> I have a situation where I'm trying to use S3 classes as slots in an S4 class and am running into some problems with inheritance.
+> 
+> My example:
+> ## with S3 classes
+> a <- function(x) structure(x, class = "a")
+> b <- function(x) structure(x, class = c("b", "a"))
+> setOldClass(c("a", "b"))
+> 
+> a_1 <- a("hello")
+> b_1 <- b("world")
+> n <- setClass("n", slots = c(s1 = "a"))
+> n(s1 = a_1) # works as expected
+> is(b_1, "a") # yields TRUE
+> n(s1 = b_1) # doesn't work-- unexpected
+> 
+> Error message is:
+> Error in validObject(.Object) :
+> invalid class ?n? object: invalid object for slot "s1" in class "n": got class "b", should be or extend class "a"
+> 
+> Digging in, validObject looks like it's calling getClassDef, which gives me
+>> getClassDef("b")
+> Virtual Class "b" [in ".GlobalEnv"]
+> 
+> Slots:
+> 
+> Name: .S3Class
+> Class: character
+> 
+> Extends: "oldClass"
+> 
+> -- it extends "oldClass" but it doesn't extend class "a" despite the fact the S3 version does.
+> 
+> Now, In this simple example, I could have defined a and b as s4 classes, but in the real world, I didn't define them and have to use setOldClass.
+> I'm currently getting around this issue by doing setClassUnion("ab", c("a", "b")) and then specify to use "ab" as the type for the slot, but since I already know b inherits from a, this ought not to be necessary (and there are other reasons this is undesirable).
+> 
+> 1. Is there anything I missed, in setting up this simple example, that would cause n(s1 = b_1) to work properly? Or is there anything I should do other than setClassUnion?
+> 2. Is this a shortcoming of validObject or getClassDef?
+> 
+> Thank you all!
+> -Ezra
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From d@v|@ @end|ng |rom r@tud|o@com  Thu Jan 28 15:14:54 2021
+From: d@v|@ @end|ng |rom r@tud|o@com (Davis Vaughan)
+Date: Thu, 28 Jan 2021 09:14:54 -0500
+Subject: [Rd] Allowing S3 methods of rounding functions to take `...`
+Message-ID: <CABzLhzxvruahURQ3fCS2dOZOTYXhwaVyKP05qogmw4ougtZ5gA@mail.gmail.com>
+
+Hi all,
+
+I would like to propose adding `...` to the signatures of the following
+rounding functions:
+
+- floor(x)
+- ceiling(x)
+- round(x, digits = 0)
+- And possibly signif(x, digits = 6)
+
+The purpose would be to allow S3 methods to add additional arguments as
+required.
+
+A few arguments in favor of this change:
+
+`trunc(x, ...)` already takes dots, which sets a precedent for the others
+to do so as well. It is documented in the same help file as the other
+rounding functions.
+
+Internally at the C level, a check is done to ensure that there is exactly
+1 arg for floor() and ceiling(), and either 1 or 2 args for round(). The
+actual names of those arguments are not checked, however, and I believe
+this is what allows `round.Date(x, ...)` and `round.POSIXt(x, unit)` to
+exist, solely because they have 2 arguments. It seems like this is a bit of
+a hack, since you couldn't create something similar for floor, like
+`floor.POSIXt(x, unit)` (not saying this should exist, it is just for
+argument's sake), because the 1 argument check would error on this. I think
+adding `...` to the signature of the generics would better support what is
+being done here.
+
+Additionally, I have a custom date-like S3 class of my own that I would
+like to write floor(), ceiling(), and round() methods for, and they would
+require passing additional arguments.
+
+If R core would like to make this change, they could probably tweak
+`do_trunc()` to be a bit more general, and use it for floor() and
+ceiling(), since it already allows `...`.
+
+A few references:
+
+Check for 1 arg in do_math1(), used by floor() and ceiling()
+https://github.com/wch/r-source/blob/fe82da3baf849fcd3cc7dbc31c6abc72b57aa083/src/main/arithmetic.c#L1270
+
+Check for 2 args in do_Math2(), used by round()
+https://github.com/wch/r-source/blob/fe82da3baf849fcd3cc7dbc31c6abc72b57aa083/src/main/arithmetic.c#L1655
+
+do_trunc() definition that allows `...`
+https://github.com/wch/r-source/blob/fe82da3baf849fcd3cc7dbc31c6abc72b57aa083/src/main/arithmetic.c#L1329-L1340
+
+- Davis
+
+	[[alternative HTML version deleted]]
+
+
+From ezr@ @end|ng |rom |@ndtucker@com  Thu Jan 28 15:36:12 2021
+From: ezr@ @end|ng |rom |@ndtucker@com (Ezra Tucker)
+Date: Thu, 28 Jan 2021 14:36:12 +0000
+Subject: [Rd] 
+ Unexpected behavior with inheritance and using S3 classes as
+ slots in S4 class
+In-Reply-To: <B931F4BF-A66B-46F4-8D6E-B3D64FB507F4@R-project.org>
+References: <3NgorfmRHc0G3gBpmZfuMRSEcpfH6TwnVtcRctTA6Ze0ZYYOtgIzsYG0MekzBiWvSId53Cz1j2abdgJebaXo47kq7pK58pHQ-DrRIvJfhKc=@landtucker.com>
+ <B931F4BF-A66B-46F4-8D6E-B3D64FB507F4@R-project.org>
+Message-ID: <EijIzgM-WP5G_Dv3O6ghk_DuklZBK13Ue2C7g98byzhrVrmAAD4_WQ784RPGsnx3wWg6jC-EsesXZ94YUvSUj9VYumZlf3Yp3U5g18vvPW0=@landtucker.com>
+
+Wow - can't believe it was that simple (and obvious now that I see the answer). Thanks Simon!
+
+-Ezra
+
+--
+ezra at landtucker.com
+m:?818-203-0269
+LinkedIn:?linkedin.com/in/ezztucker
+Github:?github.com/minimenchmuncher
+
+??????? Original Message ???????
+
+On Thursday, January 28th, 2021 at 8:41 AM, Simon Urbanek <simon.urbanek at R-project.org> wrote:
+
+> Ezra,
+>
+> I think it's just the fact the you specified the wrong class inheritance in setOldClass() - it has to match you S3 definition, so it should be:
+>
+> setOldClass(c("b","a"))
+>
+> In which case it works:
+>
+> > n(s1 = b_1)
+>
+> An object of class "n"
+>
+> Slot "s1":
+>
+> [1] "world"
+>
+> attr(,"class")
+>
+> [1] "b" "a"
+>
+> Cheers,
+>
+> Simon
+>
+> > On Jan 28, 2021, at 15:55, Ezra Tucker ezra at landtucker.com wrote:
+> >
+> > Hi all,
+> >
+> > I have a situation where I'm trying to use S3 classes as slots in an S4 class and am running into some problems with inheritance.
+> >
+> > My example:
+> >
+> > with S3 classes
+> > ---------------
+> >
+> > a <- function(x) structure(x, class = "a")
+> >
+> > b <- function(x) structure(x, class = c("b", "a"))
+> >
+> > setOldClass(c("a", "b"))
+> >
+> > a_1 <- a("hello")
+> >
+> > b_1 <- b("world")
+> >
+> > n <- setClass("n", slots = c(s1 = "a"))
+> >
+> > n(s1 = a_1) # works as expected
+> >
+> > is(b_1, "a") # yields TRUE
+> >
+> > n(s1 = b_1) # doesn't work-- unexpected
+> >
+> > Error message is:
+> >
+> > Error in validObject(.Object) :
+> >
+> > invalid class ?n? object: invalid object for slot "s1" in class "n": got class "b", should be or extend class "a"
+> >
+> > Digging in, validObject looks like it's calling getClassDef, which gives me
+> >
+> > > getClassDef("b")
+> > >
+> > > Virtual Class "b" [in ".GlobalEnv"]
+> >
+> > Slots:
+> >
+> > Name: .S3Class
+> >
+> > Class: character
+> >
+> > Extends: "oldClass"
+> >
+> > -- it extends "oldClass" but it doesn't extend class "a" despite the fact the S3 version does.
+> >
+> > Now, In this simple example, I could have defined a and b as s4 classes, but in the real world, I didn't define them and have to use setOldClass.
+> >
+> > I'm currently getting around this issue by doing setClassUnion("ab", c("a", "b")) and then specify to use "ab" as the type for the slot, but since I already know b inherits from a, this ought not to be necessary (and there are other reasons this is undesirable).
+> >
+> > 1.  Is there anything I missed, in setting up this simple example, that would cause n(s1 = b_1) to work properly? Or is there anything I should do other than setClassUnion?
+> > 2.  Is this a shortcoming of validObject or getClassDef?
+> >
+> > Thank you all!
+> >
+> > -Ezra
+> >
+> > [[alternative HTML version deleted]]
+> >
+> > R-devel at r-project.org mailing list
+> >
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From d@v|@ @end|ng |rom r@tud|o@com  Thu Jan 28 16:47:56 2021
+From: d@v|@ @end|ng |rom r@tud|o@com (Davis Vaughan)
+Date: Thu, 28 Jan 2021 10:47:56 -0500
+Subject: [Rd] Allowing S3 methods of rounding functions to take `...`
+In-Reply-To: <CABzLhzxvruahURQ3fCS2dOZOTYXhwaVyKP05qogmw4ougtZ5gA@mail.gmail.com>
+References: <CABzLhzxvruahURQ3fCS2dOZOTYXhwaVyKP05qogmw4ougtZ5gA@mail.gmail.com>
+Message-ID: <CABzLhzxj758FgFEmw5wm-OOL0HX-Xht3TkYznkow5z93DhdXcQ@mail.gmail.com>
+
+I should also say that I would be willing to attempt a patch for this, if
+others agree that this would be useful.
+
+- Davis
+
+On Thu, Jan 28, 2021 at 9:14 AM Davis Vaughan <davis at rstudio.com> wrote:
+
+> Hi all,
+>
+> I would like to propose adding `...` to the signatures of the following
+> rounding functions:
+>
+> - floor(x)
+> - ceiling(x)
+> - round(x, digits = 0)
+> - And possibly signif(x, digits = 6)
+>
+> The purpose would be to allow S3 methods to add additional arguments as
+> required.
+>
+> A few arguments in favor of this change:
+>
+> `trunc(x, ...)` already takes dots, which sets a precedent for the others
+> to do so as well. It is documented in the same help file as the other
+> rounding functions.
+>
+> Internally at the C level, a check is done to ensure that there is exactly
+> 1 arg for floor() and ceiling(), and either 1 or 2 args for round(). The
+> actual names of those arguments are not checked, however, and I believe
+> this is what allows `round.Date(x, ...)` and `round.POSIXt(x, unit)` to
+> exist, solely because they have 2 arguments. It seems like this is a bit of
+> a hack, since you couldn't create something similar for floor, like
+> `floor.POSIXt(x, unit)` (not saying this should exist, it is just for
+> argument's sake), because the 1 argument check would error on this. I think
+> adding `...` to the signature of the generics would better support what is
+> being done here.
+>
+> Additionally, I have a custom date-like S3 class of my own that I would
+> like to write floor(), ceiling(), and round() methods for, and they would
+> require passing additional arguments.
+>
+> If R core would like to make this change, they could probably tweak
+> `do_trunc()` to be a bit more general, and use it for floor() and
+> ceiling(), since it already allows `...`.
+>
+> A few references:
+>
+> Check for 1 arg in do_math1(), used by floor() and ceiling()
+>
+> https://github.com/wch/r-source/blob/fe82da3baf849fcd3cc7dbc31c6abc72b57aa083/src/main/arithmetic.c#L1270
+>
+> Check for 2 args in do_Math2(), used by round()
+>
+> https://github.com/wch/r-source/blob/fe82da3baf849fcd3cc7dbc31c6abc72b57aa083/src/main/arithmetic.c#L1655
+>
+> do_trunc() definition that allows `...`
+>
+> https://github.com/wch/r-source/blob/fe82da3baf849fcd3cc7dbc31c6abc72b57aa083/src/main/arithmetic.c#L1329-L1340
+>
+> - Davis
+>
+
+	[[alternative HTML version deleted]]
+
+
+From @purd|e@@ @end|ng |rom gm@||@com  Fri Jan 29 02:26:40 2021
+From: @purd|e@@ @end|ng |rom gm@||@com (Abby Spurdle)
+Date: Fri, 29 Jan 2021 14:26:40 +1300
+Subject: [Rd] Allowing S3 methods of rounding functions to take `...`
+In-Reply-To: <CABzLhzxj758FgFEmw5wm-OOL0HX-Xht3TkYznkow5z93DhdXcQ@mail.gmail.com>
+References: <CABzLhzxvruahURQ3fCS2dOZOTYXhwaVyKP05qogmw4ougtZ5gA@mail.gmail.com>
+ <CABzLhzxj758FgFEmw5wm-OOL0HX-Xht3TkYznkow5z93DhdXcQ@mail.gmail.com>
+Message-ID: <CAB8pepxCxCRJjO5kzLUFhb54QN04aA7Z5m64c0k+i4-CVGdJfw@mail.gmail.com>
+
+That's a great suggestion Davis.
+
+While, we're on the topic...
+Could we have a "dots" argument in base::t, the transpose function?
+
+
+On Fri, Jan 29, 2021 at 4:48 AM Davis Vaughan <davis at rstudio.com> wrote:
+>
+> I should also say that I would be willing to attempt a patch for this, if
+> others agree that this would be useful.
+>
+> - Davis
+>
+> On Thu, Jan 28, 2021 at 9:14 AM Davis Vaughan <davis at rstudio.com> wrote:
+>
+> > Hi all,
+> >
+> > I would like to propose adding `...` to the signatures of the following
+> > rounding functions:
+> >
+> > - floor(x)
+> > - ceiling(x)
+> > - round(x, digits = 0)
+> > - And possibly signif(x, digits = 6)
+> >
+> > The purpose would be to allow S3 methods to add additional arguments as
+> > required.
+> >
+> > A few arguments in favor of this change:
+> >
+> > `trunc(x, ...)` already takes dots, which sets a precedent for the others
+> > to do so as well. It is documented in the same help file as the other
+> > rounding functions.
+> >
+> > Internally at the C level, a check is done to ensure that there is exactly
+> > 1 arg for floor() and ceiling(), and either 1 or 2 args for round(). The
+> > actual names of those arguments are not checked, however, and I believe
+> > this is what allows `round.Date(x, ...)` and `round.POSIXt(x, unit)` to
+> > exist, solely because they have 2 arguments. It seems like this is a bit of
+> > a hack, since you couldn't create something similar for floor, like
+> > `floor.POSIXt(x, unit)` (not saying this should exist, it is just for
+> > argument's sake), because the 1 argument check would error on this. I think
+> > adding `...` to the signature of the generics would better support what is
+> > being done here.
+> >
+> > Additionally, I have a custom date-like S3 class of my own that I would
+> > like to write floor(), ceiling(), and round() methods for, and they would
+> > require passing additional arguments.
+> >
+> > If R core would like to make this change, they could probably tweak
+> > `do_trunc()` to be a bit more general, and use it for floor() and
+> > ceiling(), since it already allows `...`.
+> >
+> > A few references:
+> >
+> > Check for 1 arg in do_math1(), used by floor() and ceiling()
+> >
+> > https://github.com/wch/r-source/blob/fe82da3baf849fcd3cc7dbc31c6abc72b57aa083/src/main/arithmetic.c#L1270
+> >
+> > Check for 2 args in do_Math2(), used by round()
+> >
+> > https://github.com/wch/r-source/blob/fe82da3baf849fcd3cc7dbc31c6abc72b57aa083/src/main/arithmetic.c#L1655
+> >
+> > do_trunc() definition that allows `...`
+> >
+> > https://github.com/wch/r-source/blob/fe82da3baf849fcd3cc7dbc31c6abc72b57aa083/src/main/arithmetic.c#L1329-L1340
+> >
+> > - Davis
+> >
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From g@bembecker @end|ng |rom gm@||@com  Fri Jan 29 03:37:43 2021
+From: g@bembecker @end|ng |rom gm@||@com (Gabriel Becker)
+Date: Thu, 28 Jan 2021 18:37:43 -0800
+Subject: [Rd] Allowing S3 methods of rounding functions to take `...`
+In-Reply-To: <CAB8pepxCxCRJjO5kzLUFhb54QN04aA7Z5m64c0k+i4-CVGdJfw@mail.gmail.com>
+References: <CABzLhzxvruahURQ3fCS2dOZOTYXhwaVyKP05qogmw4ougtZ5gA@mail.gmail.com>
+ <CABzLhzxj758FgFEmw5wm-OOL0HX-Xht3TkYznkow5z93DhdXcQ@mail.gmail.com>
+ <CAB8pepxCxCRJjO5kzLUFhb54QN04aA7Z5m64c0k+i4-CVGdJfw@mail.gmail.com>
+Message-ID: <CAD4oTHE5OOHn7Gv3g=dRAdxVhJDWXxWCU-PfiK6TgCHGXavPZw@mail.gmail.com>
+
+Out of my naive curiosity, what arguments are you hoping a method for t()
+will take?
+
+I mean honestly an argument could be made that all S3 generics should take
+.... I don't think its an overwhelmingly compelling one, but I d see some
+merit to it given what an s3 generic is at its core.
+
+~G
+
+On Thu, Jan 28, 2021 at 5:27 PM Abby Spurdle <spurdle.a at gmail.com> wrote:
+
+> That's a great suggestion Davis.
+>
+> While, we're on the topic...
+> Could we have a "dots" argument in base::t, the transpose function?
+>
+>
+> On Fri, Jan 29, 2021 at 4:48 AM Davis Vaughan <davis at rstudio.com> wrote:
+> >
+> > I should also say that I would be willing to attempt a patch for this, if
+> > others agree that this would be useful.
+> >
+> > - Davis
+> >
+> > On Thu, Jan 28, 2021 at 9:14 AM Davis Vaughan <davis at rstudio.com> wrote:
+> >
+> > > Hi all,
+> > >
+> > > I would like to propose adding `...` to the signatures of the following
+> > > rounding functions:
+> > >
+> > > - floor(x)
+> > > - ceiling(x)
+> > > - round(x, digits = 0)
+> > > - And possibly signif(x, digits = 6)
+> > >
+> > > The purpose would be to allow S3 methods to add additional arguments as
+> > > required.
+> > >
+> > > A few arguments in favor of this change:
+> > >
+> > > `trunc(x, ...)` already takes dots, which sets a precedent for the
+> others
+> > > to do so as well. It is documented in the same help file as the other
+> > > rounding functions.
+> > >
+> > > Internally at the C level, a check is done to ensure that there is
+> exactly
+> > > 1 arg for floor() and ceiling(), and either 1 or 2 args for round().
+> The
+> > > actual names of those arguments are not checked, however, and I believe
+> > > this is what allows `round.Date(x, ...)` and `round.POSIXt(x, unit)` to
+> > > exist, solely because they have 2 arguments. It seems like this is a
+> bit of
+> > > a hack, since you couldn't create something similar for floor, like
+> > > `floor.POSIXt(x, unit)` (not saying this should exist, it is just for
+> > > argument's sake), because the 1 argument check would error on this. I
+> think
+> > > adding `...` to the signature of the generics would better support
+> what is
+> > > being done here.
+> > >
+> > > Additionally, I have a custom date-like S3 class of my own that I would
+> > > like to write floor(), ceiling(), and round() methods for, and they
+> would
+> > > require passing additional arguments.
+> > >
+> > > If R core would like to make this change, they could probably tweak
+> > > `do_trunc()` to be a bit more general, and use it for floor() and
+> > > ceiling(), since it already allows `...`.
+> > >
+> > > A few references:
+> > >
+> > > Check for 1 arg in do_math1(), used by floor() and ceiling()
+> > >
+> > >
+> https://github.com/wch/r-source/blob/fe82da3baf849fcd3cc7dbc31c6abc72b57aa083/src/main/arithmetic.c#L1270
+> > >
+> > > Check for 2 args in do_Math2(), used by round()
+> > >
+> > >
+> https://github.com/wch/r-source/blob/fe82da3baf849fcd3cc7dbc31c6abc72b57aa083/src/main/arithmetic.c#L1655
+> > >
+> > > do_trunc() definition that allows `...`
+> > >
+> > >
+> https://github.com/wch/r-source/blob/fe82da3baf849fcd3cc7dbc31c6abc72b57aa083/src/main/arithmetic.c#L1329-L1340
+> > >
+> > > - Davis
+> > >
+> >
+> >         [[alternative HTML version deleted]]
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From @purd|e@@ @end|ng |rom gm@||@com  Fri Jan 29 07:56:28 2021
+From: @purd|e@@ @end|ng |rom gm@||@com (Abby Spurdle)
+Date: Fri, 29 Jan 2021 19:56:28 +1300
+Subject: [Rd] Allowing S3 methods of rounding functions to take `...`
+In-Reply-To: <CAD4oTHE5OOHn7Gv3g=dRAdxVhJDWXxWCU-PfiK6TgCHGXavPZw@mail.gmail.com>
+References: <CABzLhzxvruahURQ3fCS2dOZOTYXhwaVyKP05qogmw4ougtZ5gA@mail.gmail.com>
+ <CABzLhzxj758FgFEmw5wm-OOL0HX-Xht3TkYznkow5z93DhdXcQ@mail.gmail.com>
+ <CAB8pepxCxCRJjO5kzLUFhb54QN04aA7Z5m64c0k+i4-CVGdJfw@mail.gmail.com>
+ <CAD4oTHE5OOHn7Gv3g=dRAdxVhJDWXxWCU-PfiK6TgCHGXavPZw@mail.gmail.com>
+Message-ID: <CAB8pepx6LWU9g2EakRgxZdxOAuvVc3oHLDcPsEpO41uAuJB5Ug@mail.gmail.com>
+
+I've been writing functions for block matrices and more generally,
+arrays of matrices.
+
+Presumably, the default transpose operation would transpose everything.
+But there are situations where one might want to transpose the
+top-level matrix (of submatrices) but not the submatrices, themselves.
+Or vice versa.
+
+On a side note, the help file for base::aperm is entitled "Array Transposition".
+So, this topic is not quite as simple as it may sound.
+
+Interestingly, the aperm generic function *does* have dots.
+
+
+On Fri, Jan 29, 2021 at 3:37 PM Gabriel Becker <gabembecker at gmail.com> wrote:
+>
+> Out of my naive curiosity, what arguments are you hoping a method for t() will take?
+>
+> I mean honestly an argument could be made that all S3 generics should take .... I don't think its an overwhelmingly compelling one, but I d see some merit to it given what an s3 generic is at its core.
+>
+> ~G
+>
+> On Thu, Jan 28, 2021 at 5:27 PM Abby Spurdle <spurdle.a at gmail.com> wrote:
+>>
+>> That's a great suggestion Davis.
+>>
+>> While, we're on the topic...
+>> Could we have a "dots" argument in base::t, the transpose function?
+>>
+>>
+>> On Fri, Jan 29, 2021 at 4:48 AM Davis Vaughan <davis at rstudio.com> wrote:
+>> >
+>> > I should also say that I would be willing to attempt a patch for this, if
+>> > others agree that this would be useful.
+>> >
+>> > - Davis
+>> >
+>> > On Thu, Jan 28, 2021 at 9:14 AM Davis Vaughan <davis at rstudio.com> wrote:
+>> >
+>> > > Hi all,
+>> > >
+>> > > I would like to propose adding `...` to the signatures of the following
+>> > > rounding functions:
+>> > >
+>> > > - floor(x)
+>> > > - ceiling(x)
+>> > > - round(x, digits = 0)
+>> > > - And possibly signif(x, digits = 6)
+>> > >
+>> > > The purpose would be to allow S3 methods to add additional arguments as
+>> > > required.
+>> > >
+>> > > A few arguments in favor of this change:
+>> > >
+>> > > `trunc(x, ...)` already takes dots, which sets a precedent for the others
+>> > > to do so as well. It is documented in the same help file as the other
+>> > > rounding functions.
+>> > >
+>> > > Internally at the C level, a check is done to ensure that there is exactly
+>> > > 1 arg for floor() and ceiling(), and either 1 or 2 args for round(). The
+>> > > actual names of those arguments are not checked, however, and I believe
+>> > > this is what allows `round.Date(x, ...)` and `round.POSIXt(x, unit)` to
+>> > > exist, solely because they have 2 arguments. It seems like this is a bit of
+>> > > a hack, since you couldn't create something similar for floor, like
+>> > > `floor.POSIXt(x, unit)` (not saying this should exist, it is just for
+>> > > argument's sake), because the 1 argument check would error on this. I think
+>> > > adding `...` to the signature of the generics would better support what is
+>> > > being done here.
+>> > >
+>> > > Additionally, I have a custom date-like S3 class of my own that I would
+>> > > like to write floor(), ceiling(), and round() methods for, and they would
+>> > > require passing additional arguments.
+>> > >
+>> > > If R core would like to make this change, they could probably tweak
+>> > > `do_trunc()` to be a bit more general, and use it for floor() and
+>> > > ceiling(), since it already allows `...`.
+>> > >
+>> > > A few references:
+>> > >
+>> > > Check for 1 arg in do_math1(), used by floor() and ceiling()
+>> > >
+>> > > https://github.com/wch/r-source/blob/fe82da3baf849fcd3cc7dbc31c6abc72b57aa083/src/main/arithmetic.c#L1270
+>> > >
+>> > > Check for 2 args in do_Math2(), used by round()
+>> > >
+>> > > https://github.com/wch/r-source/blob/fe82da3baf849fcd3cc7dbc31c6abc72b57aa083/src/main/arithmetic.c#L1655
+>> > >
+>> > > do_trunc() definition that allows `...`
+>> > >
+>> > > https://github.com/wch/r-source/blob/fe82da3baf849fcd3cc7dbc31c6abc72b57aa083/src/main/arithmetic.c#L1329-L1340
+>> > >
+>> > > - Davis
+>> > >
+>> >
+>> >         [[alternative HTML version deleted]]
+>> >
+>> > ______________________________________________
+>> > R-devel at r-project.org mailing list
+>> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From dw|n@em|u@ @end|ng |rom comc@@t@net  Fri Jan 29 19:51:26 2021
+From: dw|n@em|u@ @end|ng |rom comc@@t@net (David Winsemius)
+Date: Fri, 29 Jan 2021 10:51:26 -0800
+Subject: [Rd] Allowing S3 methods of rounding functions to take `...`
+In-Reply-To: <CAB8pepx6LWU9g2EakRgxZdxOAuvVc3oHLDcPsEpO41uAuJB5Ug@mail.gmail.com>
+References: <CABzLhzxvruahURQ3fCS2dOZOTYXhwaVyKP05qogmw4ougtZ5gA@mail.gmail.com>
+ <CABzLhzxj758FgFEmw5wm-OOL0HX-Xht3TkYznkow5z93DhdXcQ@mail.gmail.com>
+ <CAB8pepxCxCRJjO5kzLUFhb54QN04aA7Z5m64c0k+i4-CVGdJfw@mail.gmail.com>
+ <CAD4oTHE5OOHn7Gv3g=dRAdxVhJDWXxWCU-PfiK6TgCHGXavPZw@mail.gmail.com>
+ <CAB8pepx6LWU9g2EakRgxZdxOAuvVc3oHLDcPsEpO41uAuJB5Ug@mail.gmail.com>
+Message-ID: <c141a85e-4497-e77b-5f95-041b63762dba@comcast.net>
+
+
+On 1/28/21 10:56 PM, Abby Spurdle wrote:
+> I've been writing functions for block matrices and more generally,
+> arrays of matrices.
+>
+> Presumably, the default transpose operation would transpose everything.
+> But there are situations where one might want to transpose the
+> top-level matrix (of submatrices) but not the submatrices, themselves.
+> Or vice versa.
+
+
+You could construct a matrix of lists and have the lists hold the 
+sub-matrices.
+
+
+-- 
+
+David.
+
+>
+> On a side note, the help file for base::aperm is entitled "Array Transposition".
+> So, this topic is not quite as simple as it may sound.
+>
+> Interestingly, the aperm generic function *does* have dots.
+>
+>
+> On Fri, Jan 29, 2021 at 3:37 PM Gabriel Becker <gabembecker at gmail.com> wrote:
+>> Out of my naive curiosity, what arguments are you hoping a method for t() will take?
+>>
+>> I mean honestly an argument could be made that all S3 generics should take .... I don't think its an overwhelmingly compelling one, but I d see some merit to it given what an s3 generic is at its core.
+>>
+>> ~G
+>>
+>> On Thu, Jan 28, 2021 at 5:27 PM Abby Spurdle <spurdle.a at gmail.com> wrote:
+>>> That's a great suggestion Davis.
+>>>
+>>> While, we're on the topic...
+>>> Could we have a "dots" argument in base::t, the transpose function?
+>>>
+>>>
+>>> On Fri, Jan 29, 2021 at 4:48 AM Davis Vaughan <davis at rstudio.com> wrote:
+>>>> I should also say that I would be willing to attempt a patch for this, if
+>>>> others agree that this would be useful.
+>>>>
+>>>> - Davis
+>>>>
+>>>> On Thu, Jan 28, 2021 at 9:14 AM Davis Vaughan <davis at rstudio.com> wrote:
+>>>>
+>>>>> Hi all,
+>>>>>
+>>>>> I would like to propose adding `...` to the signatures of the following
+>>>>> rounding functions:
+>>>>>
+>>>>> - floor(x)
+>>>>> - ceiling(x)
+>>>>> - round(x, digits = 0)
+>>>>> - And possibly signif(x, digits = 6)
+>>>>>
+>>>>> The purpose would be to allow S3 methods to add additional arguments as
+>>>>> required.
+>>>>>
+>>>>> A few arguments in favor of this change:
+>>>>>
+>>>>> `trunc(x, ...)` already takes dots, which sets a precedent for the others
+>>>>> to do so as well. It is documented in the same help file as the other
+>>>>> rounding functions.
+>>>>>
+>>>>> Internally at the C level, a check is done to ensure that there is exactly
+>>>>> 1 arg for floor() and ceiling(), and either 1 or 2 args for round(). The
+>>>>> actual names of those arguments are not checked, however, and I believe
+>>>>> this is what allows `round.Date(x, ...)` and `round.POSIXt(x, unit)` to
+>>>>> exist, solely because they have 2 arguments. It seems like this is a bit of
+>>>>> a hack, since you couldn't create something similar for floor, like
+>>>>> `floor.POSIXt(x, unit)` (not saying this should exist, it is just for
+>>>>> argument's sake), because the 1 argument check would error on this. I think
+>>>>> adding `...` to the signature of the generics would better support what is
+>>>>> being done here.
+>>>>>
+>>>>> Additionally, I have a custom date-like S3 class of my own that I would
+>>>>> like to write floor(), ceiling(), and round() methods for, and they would
+>>>>> require passing additional arguments.
+>>>>>
+>>>>> If R core would like to make this change, they could probably tweak
+>>>>> `do_trunc()` to be a bit more general, and use it for floor() and
+>>>>> ceiling(), since it already allows `...`.
+>>>>>
+>>>>> A few references:
+>>>>>
+>>>>> Check for 1 arg in do_math1(), used by floor() and ceiling()
+>>>>>
+>>>>> https://github.com/wch/r-source/blob/fe82da3baf849fcd3cc7dbc31c6abc72b57aa083/src/main/arithmetic.c#L1270
+>>>>>
+>>>>> Check for 2 args in do_Math2(), used by round()
+>>>>>
+>>>>> https://github.com/wch/r-source/blob/fe82da3baf849fcd3cc7dbc31c6abc72b57aa083/src/main/arithmetic.c#L1655
+>>>>>
+>>>>> do_trunc() definition that allows `...`
+>>>>>
+>>>>> https://github.com/wch/r-source/blob/fe82da3baf849fcd3cc7dbc31c6abc72b57aa083/src/main/arithmetic.c#L1329-L1340
+>>>>>
+>>>>> - Davis
+>>>>>
+>>>>          [[alternative HTML version deleted]]
+>>>>
+>>>> ______________________________________________
+>>>> R-devel at r-project.org mailing list
+>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+

@@ -1,0 +1,5121 @@
+From @purd|e@@ @end|ng |rom gm@||@com  Mon Feb  1 07:31:27 2021
+From: @purd|e@@ @end|ng |rom gm@||@com (=?UTF-8?B?QWJieSBTcHVyZGxlICgvyZnLiGJpLyk=?=)
+Date: Mon, 1 Feb 2021 19:31:27 +1300
+Subject: [Rd] Allowing S3 methods of rounding functions to take `...`
+In-Reply-To: <c141a85e-4497-e77b-5f95-041b63762dba@comcast.net>
+References: <CABzLhzxvruahURQ3fCS2dOZOTYXhwaVyKP05qogmw4ougtZ5gA@mail.gmail.com>
+ <CABzLhzxj758FgFEmw5wm-OOL0HX-Xht3TkYznkow5z93DhdXcQ@mail.gmail.com>
+ <CAB8pepxCxCRJjO5kzLUFhb54QN04aA7Z5m64c0k+i4-CVGdJfw@mail.gmail.com>
+ <CAD4oTHE5OOHn7Gv3g=dRAdxVhJDWXxWCU-PfiK6TgCHGXavPZw@mail.gmail.com>
+ <CAB8pepx6LWU9g2EakRgxZdxOAuvVc3oHLDcPsEpO41uAuJB5Ug@mail.gmail.com>
+ <c141a85e-4497-e77b-5f95-041b63762dba@comcast.net>
+Message-ID: <CAB8pepzkwFj_iMa5B3pinWti=V8Akf=An937TJDfbktqUtEpLw@mail.gmail.com>
+
+I've used S4 objects but with mostly S3 methods.
+Currently, with two different versions.
+(One extending a general purpose ObjectArray object, and the other
+with partitioning information).
+
+Sample below.
+
+However, I'd really like to get back the suggestion(s) of adding
+"dots" to the S3 methods.
+I know I've said similar things before, but I think minimizing
+constraints on object oriented programming is a good thing...
+That principle applies to both S3 and S4...
+
+#mono-fonts req. to read this
+> x <- matrix (1:256, 8, 8)
+> pm <- as.PartMatrix (x, c (2, 6), c (2, 6) )
+
+> as.NestMatrix (pm)
+     [,1]    [,2]    [,3]
+[1,] <m 2x2> <m 2x4> <m 2x2>
+[2,] <m 4x2> <m 4x4> <m 4x2>
+[3,] <m 2x2> <m 2x4> <m 2x2>
+
+> headt (pm, 4, c (1, 4) )
+     [,1] [,2]    [,3]   [,6]    [,7] [,8]
+[1,]  1    9   |  17   . 41   |  49   57
+[2,]  2   10   |  18   . 42   |  50   58
+     --   --   +  --   . --   +  --   --
+[3,]  3   11   |  19   . 43   |  51   59
+     ..   ..   .. ..   . ..   .. ..   ..
+[8,]  8   16   |  24   . 48   |  56   64
+
+
+On Sat, Jan 30, 2021 at 7:51 AM David Winsemius <dwinsemius at comcast.net> wrote:
+>
+>
+> On 1/28/21 10:56 PM, Abby Spurdle wrote:
+> > I've been writing functions for block matrices and more generally,
+> > arrays of matrices.
+> >
+> > Presumably, the default transpose operation would transpose everything.
+> > But there are situations where one might want to transpose the
+> > top-level matrix (of submatrices) but not the submatrices, themselves.
+> > Or vice versa.
+>
+>
+> You could construct a matrix of lists and have the lists hold the
+> sub-matrices.
+>
+>
+> --
+>
+> David.
+>
+> >
+> > On a side note, the help file for base::aperm is entitled "Array Transposition".
+> > So, this topic is not quite as simple as it may sound.
+> >
+> > Interestingly, the aperm generic function *does* have dots.
+> >
+> >
+> > On Fri, Jan 29, 2021 at 3:37 PM Gabriel Becker <gabembecker at gmail.com> wrote:
+> >> Out of my naive curiosity, what arguments are you hoping a method for t() will take?
+> >>
+> >> I mean honestly an argument could be made that all S3 generics should take .... I don't think its an overwhelmingly compelling one, but I d see some merit to it given what an s3 generic is at its core.
+> >>
+> >> ~G
+> >>
+> >> On Thu, Jan 28, 2021 at 5:27 PM Abby Spurdle <spurdle.a at gmail.com> wrote:
+> >>> That's a great suggestion Davis.
+> >>>
+> >>> While, we're on the topic...
+> >>> Could we have a "dots" argument in base::t, the transpose function?
+> >>>
+> >>>
+> >>> On Fri, Jan 29, 2021 at 4:48 AM Davis Vaughan <davis at rstudio.com> wrote:
+> >>>> I should also say that I would be willing to attempt a patch for this, if
+> >>>> others agree that this would be useful.
+> >>>>
+> >>>> - Davis
+> >>>>
+> >>>> On Thu, Jan 28, 2021 at 9:14 AM Davis Vaughan <davis at rstudio.com> wrote:
+> >>>>
+> >>>>> Hi all,
+> >>>>>
+> >>>>> I would like to propose adding `...` to the signatures of the following
+> >>>>> rounding functions:
+> >>>>>
+> >>>>> - floor(x)
+> >>>>> - ceiling(x)
+> >>>>> - round(x, digits = 0)
+> >>>>> - And possibly signif(x, digits = 6)
+> >>>>>
+> >>>>> The purpose would be to allow S3 methods to add additional arguments as
+> >>>>> required.
+> >>>>>
+> >>>>> A few arguments in favor of this change:
+> >>>>>
+> >>>>> `trunc(x, ...)` already takes dots, which sets a precedent for the others
+> >>>>> to do so as well. It is documented in the same help file as the other
+> >>>>> rounding functions.
+> >>>>>
+> >>>>> Internally at the C level, a check is done to ensure that there is exactly
+> >>>>> 1 arg for floor() and ceiling(), and either 1 or 2 args for round(). The
+> >>>>> actual names of those arguments are not checked, however, and I believe
+> >>>>> this is what allows `round.Date(x, ...)` and `round.POSIXt(x, unit)` to
+> >>>>> exist, solely because they have 2 arguments. It seems like this is a bit of
+> >>>>> a hack, since you couldn't create something similar for floor, like
+> >>>>> `floor.POSIXt(x, unit)` (not saying this should exist, it is just for
+> >>>>> argument's sake), because the 1 argument check would error on this. I think
+> >>>>> adding `...` to the signature of the generics would better support what is
+> >>>>> being done here.
+> >>>>>
+> >>>>> Additionally, I have a custom date-like S3 class of my own that I would
+> >>>>> like to write floor(), ceiling(), and round() methods for, and they would
+> >>>>> require passing additional arguments.
+> >>>>>
+> >>>>> If R core would like to make this change, they could probably tweak
+> >>>>> `do_trunc()` to be a bit more general, and use it for floor() and
+> >>>>> ceiling(), since it already allows `...`.
+> >>>>>
+> >>>>> A few references:
+> >>>>>
+> >>>>> Check for 1 arg in do_math1(), used by floor() and ceiling()
+> >>>>>
+> >>>>> https://github.com/wch/r-source/blob/fe82da3baf849fcd3cc7dbc31c6abc72b57aa083/src/main/arithmetic.c#L1270
+> >>>>>
+> >>>>> Check for 2 args in do_Math2(), used by round()
+> >>>>>
+> >>>>> https://github.com/wch/r-source/blob/fe82da3baf849fcd3cc7dbc31c6abc72b57aa083/src/main/arithmetic.c#L1655
+> >>>>>
+> >>>>> do_trunc() definition that allows `...`
+> >>>>>
+> >>>>> https://github.com/wch/r-source/blob/fe82da3baf849fcd3cc7dbc31c6abc72b57aa083/src/main/arithmetic.c#L1329-L1340
+> >>>>>
+> >>>>> - Davis
+> >>>>>
+> >>>>          [[alternative HTML version deleted]]
+> >>>>
+> >>>> ______________________________________________
+> >>>> R-devel at r-project.org mailing list
+> >>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> >>> ______________________________________________
+> >>> R-devel at r-project.org mailing list
+> >>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @purd|e@@ @end|ng |rom gm@||@com  Mon Feb  1 07:39:28 2021
+From: @purd|e@@ @end|ng |rom gm@||@com (=?UTF-8?B?QWJieSBTcHVyZGxlICgvyZnLiGJpLyk=?=)
+Date: Mon, 1 Feb 2021 19:39:28 +1300
+Subject: [Rd] Allowing S3 methods of rounding functions to take `...`
+In-Reply-To: <CAB8pepzkwFj_iMa5B3pinWti=V8Akf=An937TJDfbktqUtEpLw@mail.gmail.com>
+References: <CABzLhzxvruahURQ3fCS2dOZOTYXhwaVyKP05qogmw4ougtZ5gA@mail.gmail.com>
+ <CABzLhzxj758FgFEmw5wm-OOL0HX-Xht3TkYznkow5z93DhdXcQ@mail.gmail.com>
+ <CAB8pepxCxCRJjO5kzLUFhb54QN04aA7Z5m64c0k+i4-CVGdJfw@mail.gmail.com>
+ <CAD4oTHE5OOHn7Gv3g=dRAdxVhJDWXxWCU-PfiK6TgCHGXavPZw@mail.gmail.com>
+ <CAB8pepx6LWU9g2EakRgxZdxOAuvVc3oHLDcPsEpO41uAuJB5Ug@mail.gmail.com>
+ <c141a85e-4497-e77b-5f95-041b63762dba@comcast.net>
+ <CAB8pepzkwFj_iMa5B3pinWti=V8Akf=An937TJDfbktqUtEpLw@mail.gmail.com>
+Message-ID: <CAB8pepyBt2BbZdrtsUdHsgW0bg0PLimJrtfBhtiqrHb9CF7YAA@mail.gmail.com>
+
+#correction to first line
+x <- matrix (1:64, 8, 8)
+
+
+From @purd|e@@ @end|ng |rom gm@||@com  Mon Feb  1 07:50:32 2021
+From: @purd|e@@ @end|ng |rom gm@||@com (=?UTF-8?B?QWJieSBTcHVyZGxlICgvyZnLiGJpLyk=?=)
+Date: Mon, 1 Feb 2021 19:50:32 +1300
+Subject: [Rd] surprised matrix (1:256, 8, 8) doesn't cause error/warning
+Message-ID: <CAB8pepzJtA0k+xwucuPgsX1U5YJSymy2eX5+XMvi=po5UGmJHw@mail.gmail.com>
+
+I'm a little surprised that the following doesn't trigger an error or a warning.
+
+matrix (1:256, 8, 8)
+
+The help file says that the main argument is recycled, if it's too short.
+But doesn't say what happens if it's too long.
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Mon Feb  1 10:08:14 2021
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Mon, 1 Feb 2021 10:08:14 +0100
+Subject: [Rd] surprised matrix (1:256, 8, 8) doesn't cause error/warning
+In-Reply-To: <CAB8pepzJtA0k+xwucuPgsX1U5YJSymy2eX5+XMvi=po5UGmJHw@mail.gmail.com>
+References: <CAB8pepzJtA0k+xwucuPgsX1U5YJSymy2eX5+XMvi=po5UGmJHw@mail.gmail.com>
+Message-ID: <24599.50430.981659.510862@stat.math.ethz.ch>
+
+>>>>> Abby Spurdle (/??bi/) 
+>>>>>     on Mon, 1 Feb 2021 19:50:32 +1300 writes:
+
+    > I'm a little surprised that the following doesn't trigger an error or a warning.
+    > matrix (1:256, 8, 8)
+
+    > The help file says that the main argument is recycled, if it's too short.
+    > But doesn't say what happens if it's too long.
+
+It's somewhat subtler than one may assume :
+
+> matrix(1:9, 2,3)
+     [,1] [,2] [,3]
+[1,]    1    3    5
+[2,]    2    4    6
+Warning message:
+In matrix(1:9, 2, 3) :
+  data length [9] is not a sub-multiple or multiple of the number of rows [2]
+
+> matrix(1:8, 2,3)
+     [,1] [,2] [,3]
+[1,]    1    3    5
+[2,]    2    4    6
+Warning message:
+In matrix(1:8, 2, 3) :
+  data length [8] is not a sub-multiple or multiple of the number of columns [3]
+
+> matrix(1:12, 2,3)
+     [,1] [,2] [,3]
+[1,]    1    3    5
+[2,]    2    4    6
+>
+
+So it looks to me the current behavior is quite on purpose.
+Are you sure it's not documented at all when reading the docs
+carefully?  (I did *not*, just now).
+
+
+From @purd|e@@ @end|ng |rom gm@||@com  Tue Feb  2 00:27:05 2021
+From: @purd|e@@ @end|ng |rom gm@||@com (=?UTF-8?B?QWJieSBTcHVyZGxlICgvyZnLiGJpLyk=?=)
+Date: Tue, 2 Feb 2021 12:27:05 +1300
+Subject: [Rd] surprised matrix (1:256, 8, 8) doesn't cause error/warning
+In-Reply-To: <24599.50430.981659.510862@stat.math.ethz.ch>
+References: <CAB8pepzJtA0k+xwucuPgsX1U5YJSymy2eX5+XMvi=po5UGmJHw@mail.gmail.com>
+ <24599.50430.981659.510862@stat.math.ethz.ch>
+Message-ID: <CAB8pepzDXNHwgujFq9=gmehgTOFCExhd4QsuNvSN9SM=jefMpg@mail.gmail.com>
+
+So, does that mean that a clean result is contingent on the length of
+the data being a multiple of both the number of rows and columns?
+
+However, this rule is not straightforward.
+
+> #EXAMPLE 1
+> #what I would expect
+> matrix (1:12, 0, 0)
+<0 x 0 matrix>
+Warning message:
+In matrix(1:12, 0, 0) : data length exceeds size of matrix
+
+> #EXAMPLE 2
+> #don't like this
+> matrix (numeric (), 2, 3)
+     [,1] [,2] [,3]
+[1,]   NA   NA   NA
+[2,]   NA   NA   NA
+
+The first example is what I would expect, but is inconsistent with the
+previous examples.
+(Because zero is a valid multiple of twelve).
+
+I dislike the second example with recycling of a zero-length vector.
+This *is* covered in the help file, but also seems inconsistent with
+the previous examples.
+(Because two and three are not valid multiples of zero).
+
+Also, I can't think of any reason why someone would want to construct
+a matrix with extra data, and then discard part of it.
+And even if there was, then why not allow an arbitrarily longer length?
+
+
+On Mon, Feb 1, 2021 at 10:08 PM Martin Maechler
+<maechler at stat.math.ethz.ch> wrote:
+>
+> >>>>> Abby Spurdle (/??bi/)
+> >>>>>     on Mon, 1 Feb 2021 19:50:32 +1300 writes:
+>
+>     > I'm a little surprised that the following doesn't trigger an error or a warning.
+>     > matrix (1:256, 8, 8)
+>
+>     > The help file says that the main argument is recycled, if it's too short.
+>     > But doesn't say what happens if it's too long.
+>
+> It's somewhat subtler than one may assume :
+>
+> > matrix(1:9, 2,3)
+>      [,1] [,2] [,3]
+> [1,]    1    3    5
+> [2,]    2    4    6
+> Warning message:
+> In matrix(1:9, 2, 3) :
+>   data length [9] is not a sub-multiple or multiple of the number of rows [2]
+>
+> > matrix(1:8, 2,3)
+>      [,1] [,2] [,3]
+> [1,]    1    3    5
+> [2,]    2    4    6
+> Warning message:
+> In matrix(1:8, 2, 3) :
+>   data length [8] is not a sub-multiple or multiple of the number of columns [3]
+>
+> > matrix(1:12, 2,3)
+>      [,1] [,2] [,3]
+> [1,]    1    3    5
+> [2,]    2    4    6
+> >
+>
+> So it looks to me the current behavior is quite on purpose.
+> Are you sure it's not documented at all when reading the docs
+> carefully?  (I did *not*, just now).
+
+
+From one@kych@| @end|ng |rom gm@||@com  Fri Feb  5 22:01:17 2021
+From: one@kych@| @end|ng |rom gm@||@com (Christopher Carbone)
+Date: Fri, 5 Feb 2021 13:01:17 -0800
+Subject: [Rd] Bug found in cut.Date, solution found
+Message-ID: <CAGrWiDrvdpk9AssSaoaZkF+QuFFumxwm_s_TrKZDtr2S3cepQQ@mail.gmail.com>
+
+Greetings,
+
+I found a bug in the cut.Date function of base R. My session info is
+at the bottom.
+
+The bug is in the "months" section of the code. Consider the following:
+
+# Create vector with 365 days of year and cut into 12 months
+dates <- seq(as.Date("2021-1-1"),as.Date("2021-12-31"),by="day")
+months <- cut(dates,"months",labels=1:12)
+table(months)
+# months
+# 1  2  3  4  5  6  7  8  9 10 11 12
+# 31 28 31 30 31 30 31 31 30 31 30 31
+# cut.Date works perfectly
+
+# Extend dates vector by adding following January and cut into 13 months
+dates <- seq(as.Date("2021-1-1"),as.Date("2022-1-31"),by="day")
+months <- cut(dates,"months",labels=1:13)
+# Error in cut.default(unclass(x), unclass(breaks), labels = labels,
+right = right,  :
+#                        lengths of 'breaks' and 'labels' differ
+months <- cut(dates,"months",labels=1:14)
+table(months)
+# months
+# 1  2  3  4  5  6  7  8  9 10 11 12 13 14
+# 31 28 31 30 31 30 31 31 30 31 30 31 31  0
+# Bug: cut.Date adds a superfluous bin
+# This is because February has less than 31 days
+# Thus, the code adjusts the end into March instead of February
+
+Inspecting the source code, I see the problem resides in lines 31
+through 41, the section dealing with breaks="months":
+
+    if (valid == 3L) {
+      start$mday <- 1L
+      start$isdst <- -1L
+      end <- as.POSIXlt(max(x, na.rm = TRUE))
+      step <- if (length(by2) == 2L)
+        as.integer(by2[1L])
+      else 1L
+38  end <- as.POSIXlt(end + (31 * step * 86400))
+      end$mday <- 1L
+      end$isdst <- -1L
+      breaks <- as.Date(seq(start, end, breaks))
+
+When the end is adjusted in line 38, there are instances where an
+unnecessary extra bin is created.
+This is accounted for in the breaks="quarters" case by testing at the
+end and removing the final break if necessary.
+The same method employed here fixes the bug:
+
+    if (valid == 3L) {
+      start$mday <- 1L
+      start$isdst <- -1L
+     maxx <- max(x, na.rm = TRUE)   # Added line
+     end <- as.POSIXlt(maxx)             # Modified line
+      step <- if (length(by2) == 2L)
+        as.integer(by2[1L])
+      else 1L
+      end <- as.POSIXlt(end + (31 * step * 86400))
+      end$mday <- 1L
+      end$isdst <- -1L
+      breaks <- as.Date(seq(start, end, breaks))
+     lb <- length(breaks)                   # Added line
+     if (maxx < breaks[lb - 1])           # Added line
+       breaks <- breaks[-lb]               # Added line
+
+I modified cut.Date with the above code changes and stored it in a
+function called cut_Date():
+
+dates <- seq(as.Date("2021-1-1"),as.Date("2022-1-31"),by="day")
+months <- cut_Date(dates,"months",labels=1:13)
+table(months)
+# months
+# 1  2  3  4  5  6  7  8  9 10 11 12 13
+# 31 28 31 30 31 30 31 31 30 31 30 31 31
+
+Thanks for your time and consideration!
+
+> sessionInfo()
+R version 4.0.3 (2020-10-10)
+Platform: x86_64-w64-mingw32/x64 (64-bit)
+Running under: Windows 10 x64 (build 19041)
+
+Matrix products: default
+
+locale:
+[1] LC_COLLATE=English_United States.1252  LC_CTYPE=English_United States.1252
+[3] LC_MONETARY=English_United States.1252 LC_NUMERIC=C
+[5] LC_TIME=English_United States.1252
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base
+
+loaded via a namespace (and not attached):
+[1] compiler_4.0.3 tools_4.0.3    tinytex_0.28   xfun_0.19
+
+Many Blessings,
+Christopher Carbone
+
+"Follow your bliss and doors will open where you didn't know they were
+going to be..."
+-Joseph Campbell
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Fri Feb  5 23:47:53 2021
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Fri, 5 Feb 2021 17:47:53 -0500
+Subject: [Rd] Bug found in cut.Date, solution found
+In-Reply-To: <CAGrWiDrvdpk9AssSaoaZkF+QuFFumxwm_s_TrKZDtr2S3cepQQ@mail.gmail.com>
+References: <CAGrWiDrvdpk9AssSaoaZkF+QuFFumxwm_s_TrKZDtr2S3cepQQ@mail.gmail.com>
+Message-ID: <f788e98e-b54d-15f1-5307-ab58f45d3929@gmail.com>
+
+If you don't hear something from someone in R Core, you should submit 
+this as a bug report on bugs.r-project.org.  (You might not have an 
+account there; if you don't, someone from R Core will have to give you 
+one.  Feel free to remind them if nothing happens in a few days!)
+
+Duncan Murdoch
+
+On 05/02/2021 4:01 p.m., Christopher Carbone wrote:
+> Greetings,
+> 
+> I found a bug in the cut.Date function of base R. My session info is
+> at the bottom.
+> 
+> The bug is in the "months" section of the code. Consider the following:
+> 
+> # Create vector with 365 days of year and cut into 12 months
+> dates <- seq(as.Date("2021-1-1"),as.Date("2021-12-31"),by="day")
+> months <- cut(dates,"months",labels=1:12)
+> table(months)
+> # months
+> # 1  2  3  4  5  6  7  8  9 10 11 12
+> # 31 28 31 30 31 30 31 31 30 31 30 31
+> # cut.Date works perfectly
+> 
+> # Extend dates vector by adding following January and cut into 13 months
+> dates <- seq(as.Date("2021-1-1"),as.Date("2022-1-31"),by="day")
+> months <- cut(dates,"months",labels=1:13)
+> # Error in cut.default(unclass(x), unclass(breaks), labels = labels,
+> right = right,  :
+> #                        lengths of 'breaks' and 'labels' differ
+> months <- cut(dates,"months",labels=1:14)
+> table(months)
+> # months
+> # 1  2  3  4  5  6  7  8  9 10 11 12 13 14
+> # 31 28 31 30 31 30 31 31 30 31 30 31 31  0
+> # Bug: cut.Date adds a superfluous bin
+> # This is because February has less than 31 days
+> # Thus, the code adjusts the end into March instead of February
+> 
+> Inspecting the source code, I see the problem resides in lines 31
+> through 41, the section dealing with breaks="months":
+> 
+>      if (valid == 3L) {
+>        start$mday <- 1L
+>        start$isdst <- -1L
+>        end <- as.POSIXlt(max(x, na.rm = TRUE))
+>        step <- if (length(by2) == 2L)
+>          as.integer(by2[1L])
+>        else 1L
+> 38  end <- as.POSIXlt(end + (31 * step * 86400))
+>        end$mday <- 1L
+>        end$isdst <- -1L
+>        breaks <- as.Date(seq(start, end, breaks))
+> 
+> When the end is adjusted in line 38, there are instances where an
+> unnecessary extra bin is created.
+> This is accounted for in the breaks="quarters" case by testing at the
+> end and removing the final break if necessary.
+> The same method employed here fixes the bug:
+> 
+>      if (valid == 3L) {
+>        start$mday <- 1L
+>        start$isdst <- -1L
+>       maxx <- max(x, na.rm = TRUE)   # Added line
+>       end <- as.POSIXlt(maxx)             # Modified line
+>        step <- if (length(by2) == 2L)
+>          as.integer(by2[1L])
+>        else 1L
+>        end <- as.POSIXlt(end + (31 * step * 86400))
+>        end$mday <- 1L
+>        end$isdst <- -1L
+>        breaks <- as.Date(seq(start, end, breaks))
+>       lb <- length(breaks)                   # Added line
+>       if (maxx < breaks[lb - 1])           # Added line
+>         breaks <- breaks[-lb]               # Added line
+> 
+> I modified cut.Date with the above code changes and stored it in a
+> function called cut_Date():
+> 
+> dates <- seq(as.Date("2021-1-1"),as.Date("2022-1-31"),by="day")
+> months <- cut_Date(dates,"months",labels=1:13)
+> table(months)
+> # months
+> # 1  2  3  4  5  6  7  8  9 10 11 12 13
+> # 31 28 31 30 31 30 31 31 30 31 30 31 31
+> 
+> Thanks for your time and consideration!
+> 
+>> sessionInfo()
+> R version 4.0.3 (2020-10-10)
+> Platform: x86_64-w64-mingw32/x64 (64-bit)
+> Running under: Windows 10 x64 (build 19041)
+> 
+> Matrix products: default
+> 
+> locale:
+> [1] LC_COLLATE=English_United States.1252  LC_CTYPE=English_United States.1252
+> [3] LC_MONETARY=English_United States.1252 LC_NUMERIC=C
+> [5] LC_TIME=English_United States.1252
+> 
+> attached base packages:
+> [1] stats     graphics  grDevices utils     datasets  methods   base
+> 
+> loaded via a namespace (and not attached):
+> [1] compiler_4.0.3 tools_4.0.3    tinytex_0.28   xfun_0.19
+> 
+> Many Blessings,
+> Christopher Carbone
+> 
+> "Follow your bliss and doors will open where you didn't know they were
+> going to be..."
+> -Joseph Campbell
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From m@tth|@@-gond@n @end|ng |rom gmx@de  Sat Feb  6 14:11:53 2021
+From: m@tth|@@-gond@n @end|ng |rom gmx@de (Matthias Gondan)
+Date: Sat, 6 Feb 2021 14:11:53 +0100
+Subject: [Rd] sprintf, check number of parameters
+Message-ID: <1M5QJJ-1l7Xtn0F3F-001USW@mail.gmx.net>
+
+Dear developers,
+
+This is a follow-up from an earlier mail about warnings of unused arguments in sprintf:
+
+1. This should obviously raise an error (and it does):
+sprintf('%i %i', 1)
+Fehler in sprintf("%i %i", 1) : zu wenig Argumente [= too few arguments]
+
+2. This should, in my opinion, raise a warning about an unused argument (and I think it does in now R-devel):
+sprintf('%i', 1, 2)
+
+3. From the conversation below, it seems that this also raises a warning (in R-devel):
+sprintf('%1$i', 1, 2)
+
+I think that one should be suppressed. When I reported this a few months ago, I didn?t really have a use case for (3), but now I think I have found something. Suppose I have a function that calculates some descriptive statistics, mean, sd, available cases, missings, something like the one below:
+
+msnx = function(x, mask='%1$.1f (SD=%2$.1f, n=%3$i, NA=%4$i)')
+{
+  m = mean(x, na.rm=TRUE)
+  s = sd(x, na.rm=TRUE)
+  n = sum(!is.na(x))
+  na = sum(is.na(x))
+  
+  sprintf(mask, m, s, n, na)
+}
+
+The mask is meant to help formatting it a bit.
+
+msnx(T0)
+[1] "30.7 (SD=4.7, n=104, NA=0)"
+
+Now I want a ?less detailed? summary, so I invoke the function with something like
+
+msnx(T0, mask='%1$.1f (SD=%2$.1f)')
+[1] "30.7 (SD=4.7)"
+
+In my opinion, in the last example, sprintf should not raise the warning in (2) if all arguments in the mask are ?dollared?. I am still a bit unsure since the example uses a function that calculate things that aren?t being used (n and na), and this could be considered bad programming style. But there might be other use cases, and it is, nevertheless, a deliberate choice to skip arguments 3$ and 4$.
+
+Best wishes,
+
+Matthias
+
+
+
+Dear Matthias,
+
+thanks for the suggestion, R-devel now warns on unused arguments by 
+format (both numbered and un-numbered). It seems that the new warning is 
+useful, often it finds cases when arguments were accidentally passed to 
+sprintf but had been meant for a different function.
+
+R allows combining both numbered and un-numbered references in a single 
+format, even though it may be better to avoid and POSIX does not allow 
+that.
+
+Best
+Tomas
+
+On 9/20/20 1:03 PM, Matthias Gondan wrote:
+> Dear R developers,
+>
+> I am wondering if this should raise an error or a warning.
+>
+>> sprintf('%.f, %.f', 1, 2, 3)
+> [1] "1, 2"
+>
+> I am aware that R has ?numbered? sprintf arguments (sprintf('%1$.f', ?), and in that case, omissing of specific arguments may be intended. But in the usual syntax, omission of an argument is probably a mistake.
+>
+> Thank you for your consideration.
+>
+> Best wishes,
+>
+> Matthias
+
+	[[alternative HTML version deleted]]
+
+
+From wo||g@ng@huber @end|ng |rom emb|@org  Sat Feb  6 20:13:07 2021
+From: wo||g@ng@huber @end|ng |rom emb|@org (Wolfgang Huber)
+Date: Sat, 6 Feb 2021 20:13:07 +0100
+Subject: [Rd] surprised matrix (1:256, 8, 8) doesn't cause error/warning
+In-Reply-To: <CAB8pepzDXNHwgujFq9=gmehgTOFCExhd4QsuNvSN9SM=jefMpg@mail.gmail.com>
+References: <CAB8pepzJtA0k+xwucuPgsX1U5YJSymy2eX5+XMvi=po5UGmJHw@mail.gmail.com>
+ <24599.50430.981659.510862@stat.math.ethz.ch>
+ <CAB8pepzDXNHwgujFq9=gmehgTOFCExhd4QsuNvSN9SM=jefMpg@mail.gmail.com>
+Message-ID: <AD151E87-C3A8-4098-9BFB-E78C65D7A8A7@embl.org>
+
+FWIW, I paste below a possible change to the warnings generating part of the do_matrix function in R/src/main/array.c that adds the kind of warning that Abby is asking for, and that IMHO would more often help users find bugs in their code than interfere with intended behaviour.
+
+> matrix (1:6, nrow = 2, ncol = 3)
+
+> matrix (1:12, nrow = 2, ncol = 3)
+    [,1] [,2] [,3]
+[1,]    1    3    5
+[2,]    2    4    6
+Warning message:
+In matrix(1:12, nrow = 2, ncol = 3) :
+ data length incompatible with size of matrix
+
+> matrix (1:7, nrow = 2, ncol = 3)
+Warning messages:
+1: In matrix(1:7, nrow = 2, ncol = 3) :
+ data length [7] is not a sub-multiple or multiple of the number of rows [2]
+2: In matrix(1:7, nrow = 2, ncol = 3) :
+ data length incompatible with size of matrix
+
+> matrix (1:8, nrow = 2, ncol = 3)
+Warning messages:
+1: In matrix(1:8, nrow = 2, ncol = 3) :
+ data length [8] is not a sub-multiple or multiple of the number of columns [3]
+2: In matrix(1:8, nrow = 2, ncol = 3) :
+ data length incompatible with size of matrix
+
+> matrix (1:6, nrow = 0, ncol = 0)
+<0 x 0 matrix>
+> matrix (numeric(0), nrow = 2, ncol = 3)
+    [,1] [,2] [,3]
+[1,]   NA   NA   NA
+[2,]   NA   NA   NA
+
+> matrix(1:2, ncol = 8)
+    [,1] [,2] [,3] [,4] [,5] [,6] [,7] [,8]
+[1,]    1    2    1    2    1    2    1    2
+
+It would be nice to combine the new warning with that about ?...not a sub-multiple or multiple?? into a single warning, if appropriate (as in two of the examples above), but that would require bigger surgery way above my payscale.
+
+Kind regards
+	Wolfgang Huber
+
+
+Index: array.c
+===================================================================
+--- array.c	(revision 79951)
++++ array.c	(working copy)
+@@ -133,18 +133,19 @@
+	    nc = (int) ceil((double) lendat / (double) nr);
+    }
+
+-    if(lendat > 0) {
++    if (lendat > 1) {
+	R_xlen_t nrc = (R_xlen_t) nr * nc;
+-	if (lendat > 1 && nrc % lendat != 0) {
++	if ((nrc % lendat) != 0) {
+	    if (((lendat > nr) && (lendat / nr) * nr != lendat) ||
+		((lendat < nr) && (nr / lendat) * lendat != nr))
+		warning(_("data length [%d] is not a sub-multiple or multiple of the number of rows [%d]"), lendat, nr);
+	    else if (((lendat > nc) && (lendat / nc) * nc != lendat) ||
+		     ((lendat < nc) && (nc / lendat) * lendat != nc))
+-		warning(_("data length [%d] is not a sub-multiple or multiple of the number of columns [%d]"), lendat, nc);
+-	}
+-	else if ((lendat > 1) && (nrc == 0)){
++		    warning(_("data length [%d] is not a sub-multiple or multiple of the number of columns [%d]"), lendat, nc);
++	if (nrc == 0)
+	    warning(_("data length exceeds size of matrix"));
++        if (nrc != lendat)
++            warning(_("data length incompatible with size of matrix"));
+	}
+    }
+
+
+------
+// And here, for easy checking that part of the code in the new form:
+ if (lendat > 1) {
+	R_xlen_t nrc = (R_xlen_t) nr * nc;
+	if ((nrc % lendat) != 0) {
+	    if (((lendat > nr) && (lendat / nr) * nr != lendat) ||
+		((lendat < nr) && (nr / lendat) * lendat != nr))
+		warning(_("data length [%d] is not a sub-multiple or multiple of the number of rows [%d]"), lendat, nr);
+	    else if (((lendat > nc) && (lendat / nc) * nc != lendat) ||
+		     ((lendat < nc) && (nc / lendat) * lendat != nc))
+		    warning(_("data length [%d] is not a sub-multiple or multiple of the number of columns [%d]"), lendat, nc);
+	if (nrc == 0)
+	    warning(_("data length exceeds size of matrix"));
+       if (nrc != lendat)  
+           warning(_("data length incompatible with size of matrix"));
+	}
+   }
+
+> Il giorno 2feb2021, alle ore 00:27, Abby Spurdle (/??bi/) <spurdle.a at gmail.com> ha scritto:
+> 
+> So, does that mean that a clean result is contingent on the length of
+> the data being a multiple of both the number of rows and columns?
+> 
+> However, this rule is not straightforward.
+> 
+>> #EXAMPLE 1
+>> #what I would expect
+>> matrix (1:12, 0, 0)
+> <0 x 0 matrix>
+> Warning message:
+> In matrix(1:12, 0, 0) : data length exceeds size of matrix
+> 
+>> #EXAMPLE 2
+>> #don't like this
+>> matrix (numeric (), 2, 3)
+>    [,1] [,2] [,3]
+> [1,]   NA   NA   NA
+> [2,]   NA   NA   NA
+> 
+> The first example is what I would expect, but is inconsistent with the
+> previous examples.
+> (Because zero is a valid multiple of twelve).
+> 
+> I dislike the second example with recycling of a zero-length vector.
+> This *is* covered in the help file, but also seems inconsistent with
+> the previous examples.
+> (Because two and three are not valid multiples of zero).
+> 
+> Also, I can't think of any reason why someone would want to construct
+> a matrix with extra data, and then discard part of it.
+> And even if there was, then why not allow an arbitrarily longer length?
+> 
+> 
+> On Mon, Feb 1, 2021 at 10:08 PM Martin Maechler
+> <maechler at stat.math.ethz.ch> wrote:
+>> 
+>>>>>>> Abby Spurdle (/??bi/)
+>>>>>>>   on Mon, 1 Feb 2021 19:50:32 +1300 writes:
+>> 
+>>> I'm a little surprised that the following doesn't trigger an error or a warning.
+>>> matrix (1:256, 8, 8)
+>> 
+>>> The help file says that the main argument is recycled, if it's too short.
+>>> But doesn't say what happens if it's too long.
+>> 
+>> It's somewhat subtler than one may assume :
+>> 
+>>> matrix(1:9, 2,3)
+>>    [,1] [,2] [,3]
+>> [1,]    1    3    5
+>> [2,]    2    4    6
+>> Warning message:
+>> In matrix(1:9, 2, 3) :
+>> data length [9] is not a sub-multiple or multiple of the number of rows [2]
+>> 
+>>> matrix(1:8, 2,3)
+>>    [,1] [,2] [,3]
+>> [1,]    1    3    5
+>> [2,]    2    4    6
+>> Warning message:
+>> In matrix(1:8, 2, 3) :
+>> data length [8] is not a sub-multiple or multiple of the number of columns [3]
+>> 
+>>> matrix(1:12, 2,3)
+>>    [,1] [,2] [,3]
+>> [1,]    1    3    5
+>> [2,]    2    4    6
+>>> 
+>> 
+>> So it looks to me the current behavior is quite on purpose.
+>> Are you sure it's not documented at all when reading the docs
+>> carefully?  (I did *not*, just now).
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From hugh@p@r@on@ge @end|ng |rom gm@||@com  Mon Feb  8 14:25:35 2021
+From: hugh@p@r@on@ge @end|ng |rom gm@||@com (Hugh Parsonage)
+Date: Tue, 9 Feb 2021 00:25:35 +1100
+Subject: [Rd] Does type raw really have no ordering?
+Message-ID: <CAJmOi+PZKcmr88eAVT0b+iAKkfwtbhjUzuk3SNeJMZ6TJMHX5g@mail.gmail.com>
+
+In the help for Extremes  ?min
+
+> Note that all versions fail for raw and complex vectors since these have no ordering.
+
+This makes sense for complex vectors, yet `raw` vectors seem to have a
+natural order. Indeed:
+
+which.min(as.raw(c(5L, 2L, 1L, 99L)))
+
+works and would identify the minimum.  Similarly comparison operators
+work on raw vectors (and fail, expectedly, on complex ones).
+
+Is there something peculiar to min() and friends that make raw vectors
+invalid input?
+
+
+Hugh.
+
+
+From r|p|ey @end|ng |rom @t@t@@ox@@c@uk  Mon Feb  8 17:47:42 2021
+From: r|p|ey @end|ng |rom @t@t@@ox@@c@uk (Prof Brian Ripley)
+Date: Mon, 8 Feb 2021 16:47:42 +0000
+Subject: [Rd] Does type raw really have no ordering?
+In-Reply-To: <CAJmOi+PZKcmr88eAVT0b+iAKkfwtbhjUzuk3SNeJMZ6TJMHX5g@mail.gmail.com>
+References: <CAJmOi+PZKcmr88eAVT0b+iAKkfwtbhjUzuk3SNeJMZ6TJMHX5g@mail.gmail.com>
+Message-ID: <e19ab2f5-1790-b38e-e00c-eff8717ad41d@stats.ox.ac.uk>
+
+On 08/02/2021 13:25, Hugh Parsonage wrote:
+> In the help for Extremes  ?min
+> 
+>> Note that all versions fail for raw and complex vectors since these have no ordering.
+> 
+> This makes sense for complex vectors, yet `raw` vectors seem to have a
+> natural order. Indeed:
+> 
+> which.min(as.raw(c(5L, 2L, 1L, 99L)))
+> 
+> works and would identify the minimum.  Similarly comparison operators
+> work on raw vectors (and fail, expectedly, on complex ones).
+> 
+> Is there something peculiar to min() and friends that make raw vectors
+> invalid input?
+
+Please re-read the help for which.min: as it says you computed on an 
+internal coercion to double.  Doubles do have an ordering.
+
+Like factors, raw vectors have numeric codes, but that does not imply 
+that the ordering of the numeric codes is relevant to the original 
+object.  And reading the help for comparisons would have informed you
+
+      Raw vectors should not really be considered to have an order, but
+      the numeric order of the byte representation is used.
+
+One use case for a raw vector is to store bytes in an unspecified 8-bit 
+encoding.  What ordering would be relevant depends on the encoding - 
+this is even true for the ASCII subset - some people sort AaBb some 
+AB...ab and some locales even sort aAbB (although I have never seen that 
+recommended for human usage).
+
+-- 
+Brian D. Ripley,                  ripley at stats.ox.ac.uk
+Emeritus Professor of Applied Statistics, University of Oxford
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Tue Feb  9 11:58:43 2021
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Tue, 9 Feb 2021 11:58:43 +0100
+Subject: [Rd] surprised matrix (1:256, 8, 8) doesn't cause error/warning
+In-Reply-To: <6219F78B-C3C0-4A22-91C3-D9ABAA45856A@embl.org>
+References: <CAB8pepzJtA0k+xwucuPgsX1U5YJSymy2eX5+XMvi=po5UGmJHw@mail.gmail.com>
+ <24599.50430.981659.510862@stat.math.ethz.ch>
+ <CAB8pepzDXNHwgujFq9=gmehgTOFCExhd4QsuNvSN9SM=jefMpg@mail.gmail.com>
+ <6219F78B-C3C0-4A22-91C3-D9ABAA45856A@embl.org>
+Message-ID: <24610.27363.60482.680529@stat.math.ethz.ch>
+
+>>>>> Wolfgang Huber 
+>>>>>     on Sat, 6 Feb 2021 19:49:11 +0100 writes:
+
+    > FWIW, I paste below a possible change to the warnings generating part of the do_matrix function in R/src/main/array.c that adds the kind of warning that Abby is asking for, and that IMHO would more often help users find bugs in their code than interfere with intended behaviour.
+
+Thank you, Wolfgang.
+Honestly,  I had originally not wanted to get into this.
+
+Functions that have been in use for longer than R exists (namely
+in S / S+) without the need for changes  is not something we'd
+typically easily consider for a change.
+{well, in the very old times,  0-extent matrices did not exist,
+ so there were *some* changes during matrix()'s history ..}
+
+But I think Abby and you have a point here.... so I have been
+looking at your patch .. and from code reading had wondered
+about another  behavior which *was* not quite consistent,
+and you eliminated completely with your patch:
+
+op <- options(warn=1)
+for(n in 0:2) { cat(n,":\n") ; print(matrix(seq_len(n), 0, 0)) }
+options(op)
+
+shows (in released R)
+
+0 :
+<0 x 0 matrix>
+1 :
+<0 x 0 matrix>
+2 :
+Warning in matrix(seq_len(n), 0, 0) :
+  data length exceeds size of matrix
+<0 x 0 matrix>
+> 
+
+and it is really seems not logical that in matrix(x, 0,0),
+ 'x' of  size 1 and  size (>=) 2  are treated differently.
+For consistency,  size 1  "should"  also warn (but read on!)
+
+After your patch, theres' no warning in any case .. which is
+consistent, within the  matrix(x, 0,0) situation  but not consistent
+with your proposal to warn more often when  matrix(x, n,k)  is
+"obviously" using inconsistent dimensions.
+
+When trying to let   matrix(1, 0,0)  also warn,
+I quickly found that this produces many new warnings in our (R
+base packages) examples and tests, notably from construction
+such as
+
+	 matrix(NA, 0, 3)
+or
+	 matrix(NA_character_, 0, 4)
+
+which would all have to be re-written as
+
+      matrix(logical()  , 0, 3)
+or    matrix(character(), 0, 4)
+
+The latter *is* more strictly self-consistent, but do we really
+want to impose such strictness ?
+
+My conclusion:  Not at this moment
+
+OTOH, I'd re-add the warning for  length(x) > 1  which has
+been there in the current code (but not your patch).
+{{No need to send another patch, I've changed too many small
+  things already, for me to be useful}}
+
+This still needs adaption of one of the regression tests of R
+itself, and needs (at least) one of the tests of the Matrix package
+(warning turned into error, from options(warn = 2)).
+
+I'm willing to go that route, but I'm sure this will entail some
+work by other package authors, too (and hence CRAN maintainers etc).
+
+Opinions?
+
+
+    >> matrix (1:6, nrow = 2, ncol = 3)
+
+    >> matrix (1:12, nrow = 2, ncol = 3)
+    > [,1] [,2] [,3]
+    > [1,]    1    3    5
+    > [2,]    2    4    6
+    > Warning message:
+    > In matrix(1:12, nrow = 2, ncol = 3) :
+    > data length incompatible with size of matrix
+
+    >> matrix (1:7, nrow = 2, ncol = 3)
+    > Warning messages:
+    > 1: In matrix(1:7, nrow = 2, ncol = 3) :
+    > data length [7] is not a sub-multiple or multiple of the number of rows [2]
+    > 2: In matrix(1:7, nrow = 2, ncol = 3) :
+    > data length incompatible with size of matrix
+
+    >> matrix (1:8, nrow = 2, ncol = 3)
+    > Warning messages:
+    > 1: In matrix(1:8, nrow = 2, ncol = 3) :
+    > data length [8] is not a sub-multiple or multiple of the number of columns [3]
+    > 2: In matrix(1:8, nrow = 2, ncol = 3) :
+    > data length incompatible with size of matrix
+
+    >> matrix (1:6, nrow = 0, ncol = 0)
+    > <0 x 0 matrix>
+    >> matrix (numeric(0), nrow = 2, ncol = 3)
+    > [,1] [,2] [,3]
+    > [1,]   NA   NA   NA
+    > [2,]   NA   NA   NA
+
+    >> matrix(1:2, ncol = 8)
+    > [,1] [,2] [,3] [,4] [,5] [,6] [,7] [,8]
+    > [1,]    1    2    1    2    1    2    1    2
+
+    > It would be nice to combine the new warning with that about ?...not a sub-multiple or multiple?? into a single warning, if appropriate (as in two of the examples above), but that would require bigger surgery way above my payscale.
+
+I agree that in those cases it should only show one warning, and
+to keep things simple I'd say it should just be the 2nd of those
+above  or more precisely (I have to check if that's correct)
+
+  "data length larger than size of matrix"
+
+Martin
+
+    > Kind regards
+    > Wolfgang Huber
+
+
+    > Index: array.c
+    > ===================================================================
+    > --- array.c	(revision 79951)
+    > +++ array.c	(working copy)
+    > @@ -133,18 +133,19 @@
+    > nc = (int) ceil((double) lendat / (double) nr);
+    > }
+
+    > -    if(lendat > 0) {
+    > +    if (lendat > 1) {
+    > R_xlen_t nrc = (R_xlen_t) nr * nc;
+    > -	if (lendat > 1 && nrc % lendat != 0) {
+    > +	if ((nrc % lendat) != 0) {
+    > if (((lendat > nr) && (lendat / nr) * nr != lendat) ||
+    > ((lendat < nr) && (nr / lendat) * lendat != nr))
+    > warning(_("data length [%d] is not a sub-multiple or multiple of the number of rows [%d]"), lendat, nr);
+    > else if (((lendat > nc) && (lendat / nc) * nc != lendat) ||
+    > ((lendat < nc) && (nc / lendat) * lendat != nc))
+    > -		warning(_("data length [%d] is not a sub-multiple or multiple of the number of columns [%d]"), lendat, nc);
+    > -	}
+    > -	else if ((lendat > 1) && (nrc == 0)){
+    > +		    warning(_("data length [%d] is not a sub-multiple or multiple of the number of columns [%d]"), lendat, nc);
+    > +	if (nrc == 0)
+    > warning(_("data length exceeds size of matrix"));
+    > +        if (nrc != lendat)
+    > +            warning(_("data length incompatible with size of matrix"));
+    > }
+    > }
+
+
+    > ------
+    > // And here, for easy checking that part of the code in the new form:
+    > if (lendat > 1) {
+    > R_xlen_t nrc = (R_xlen_t) nr * nc;
+    > if ((nrc % lendat) != 0) {
+    > if (((lendat > nr) && (lendat / nr) * nr != lendat) ||
+    > ((lendat < nr) && (nr / lendat) * lendat != nr))
+    > warning(_("data length [%d] is not a sub-multiple or multiple of the number of rows [%d]"), lendat, nr);
+    > else if (((lendat > nc) && (lendat / nc) * nc != lendat) ||
+    > ((lendat < nc) && (nc / lendat) * lendat != nc))
+    > warning(_("data length [%d] is not a sub-multiple or multiple of the number of columns [%d]"), lendat, nc);
+    > if (nrc == 0)
+    > warning(_("data length exceeds size of matrix"));
+    > if (nrc != lendat)  
+    > warning(_("data length incompatible with size of matrix"));
+    > }
+    > }
+
+    >> Il giorno 2feb2021, alle ore 00:27, Abby Spurdle (/??bi/) <spurdle.a at gmail.com> ha scritto:
+    >> 
+    >> So, does that mean that a clean result is contingent on the length of
+    >> the data being a multiple of both the number of rows and columns?
+    >> 
+    >> However, this rule is not straightforward.
+    >> 
+    >>> #EXAMPLE 1
+    >>> #what I would expect
+    >>> matrix (1:12, 0, 0)
+    >> <0 x 0 matrix>
+    >> Warning message:
+    >> In matrix(1:12, 0, 0) : data length exceeds size of matrix
+    >> 
+    >>> #EXAMPLE 2
+    >>> #don't like this
+    >>> matrix (numeric (), 2, 3)
+    >> [,1] [,2] [,3]
+    >> [1,]   NA   NA   NA
+    >> [2,]   NA   NA   NA
+    >> 
+    >> The first example is what I would expect, but is inconsistent with the
+    >> previous examples.
+    >> (Because zero is a valid multiple of twelve).
+    >> 
+    >> I dislike the second example with recycling of a zero-length vector.
+    >> This *is* covered in the help file, but also seems inconsistent with
+    >> the previous examples.
+    >> (Because two and three are not valid multiples of zero).
+    >> 
+    >> Also, I can't think of any reason why someone would want to construct
+    >> a matrix with extra data, and then discard part of it.
+    >> And even if there was, then why not allow an arbitrarily longer length?
+    >> 
+    >> 
+    >> On Mon, Feb 1, 2021 at 10:08 PM Martin Maechler
+    >> <maechler at stat.math.ethz.ch> wrote:
+    >>> 
+    >>>>>>>> Abby Spurdle (/??bi/)
+    >>>>>>>> on Mon, 1 Feb 2021 19:50:32 +1300 writes:
+    >>> 
+    >>>> I'm a little surprised that the following doesn't trigger an error or a warning.
+    >>>> matrix (1:256, 8, 8)
+    >>> 
+    >>>> The help file says that the main argument is recycled, if it's too short.
+    >>>> But doesn't say what happens if it's too long.
+    >>> 
+    >>> It's somewhat subtler than one may assume :
+    >>> 
+    >>>> matrix(1:9, 2,3)
+    >>> [,1] [,2] [,3]
+    >>> [1,]    1    3    5
+    >>> [2,]    2    4    6
+    >>> Warning message:
+    >>> In matrix(1:9, 2, 3) :
+    >>> data length [9] is not a sub-multiple or multiple of the number of rows [2]
+    >>> 
+    >>>> matrix(1:8, 2,3)
+    >>> [,1] [,2] [,3]
+    >>> [1,]    1    3    5
+    >>> [2,]    2    4    6
+    >>> Warning message:
+    >>> In matrix(1:8, 2, 3) :
+    >>> data length [8] is not a sub-multiple or multiple of the number of columns [3]
+    >>> 
+    >>>> matrix(1:12, 2,3)
+    >>> [,1] [,2] [,3]
+    >>> [1,]    1    3    5
+    >>> [2,]    2    4    6
+    >>>> 
+    >>> 
+    >>> So it looks to me the current behavior is quite on purpose.
+    >>> Are you sure it's not documented at all when reading the docs
+    >>> carefully?  (I did *not*, just now).
+    >> 
+    >> ______________________________________________
+    >> R-devel at r-project.org mailing list
+    >> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From wo||g@ng@huber @end|ng |rom emb|@org  Tue Feb  9 15:52:06 2021
+From: wo||g@ng@huber @end|ng |rom emb|@org (Wolfgang Huber)
+Date: Tue, 9 Feb 2021 15:52:06 +0100
+Subject: [Rd] surprised matrix (1:256, 8, 8) doesn't cause error/warning
+In-Reply-To: <24610.27363.60482.680529@stat.math.ethz.ch>
+References: <CAB8pepzJtA0k+xwucuPgsX1U5YJSymy2eX5+XMvi=po5UGmJHw@mail.gmail.com>
+ <24599.50430.981659.510862@stat.math.ethz.ch>
+ <CAB8pepzDXNHwgujFq9=gmehgTOFCExhd4QsuNvSN9SM=jefMpg@mail.gmail.com>
+ <6219F78B-C3C0-4A22-91C3-D9ABAA45856A@embl.org>
+ <24610.27363.60482.680529@stat.math.ethz.ch>
+Message-ID: <5B83ED91-69E7-4853-970C-6520AB948C37@embl.org>
+
+Hi Martin
+
+Thank you! I very much understand your reservations and know it was a bit cheeky to poke.
+
+I agree that in those cases where my (naive) patch results in two warnings, keeping only the new one would better.
+No strong opinion about the case where either ncol or nrow is 0. Maybe a compromise would be to live with the inconsistency of only warning if length(data)>1, in order to allow legacy code such as  matrix(NA, 0, 3). Assuming that the main objective is not consistency but more robust users? R code.
+
+Btw if one were to refactor this properly (which I do not propose!), shouldn?t `matrix` just be a wrapper to `array`, whose added value is the inference of missing `nrow` and `ncol` values and dealing with `byrow`?
+
+	Kind regards, and thanks again	
+		Wolfgang
+
+
+> Il giorno 9feb2021, alle ore 11:58, Martin Maechler <maechler at stat.math.ethz.ch> ha scritto:
+> 
+>>>>>> Wolfgang Huber 
+>>>>>>    on Sat, 6 Feb 2021 19:49:11 +0100 writes:
+> 
+>> FWIW, I paste below a possible change to the warnings generating part of the do_matrix function in R/src/main/array.c that adds the kind of warning that Abby is asking for, and that IMHO would more often help users find bugs in their code than interfere with intended behaviour.
+> 
+> Thank you, Wolfgang.
+> Honestly,  I had originally not wanted to get into this.
+> 
+> Functions that have been in use for longer than R exists (namely
+> in S / S+) without the need for changes  is not something we'd
+> typically easily consider for a change.
+> {well, in the very old times,  0-extent matrices did not exist,
+> so there were *some* changes during matrix()'s history ..}
+> 
+> But I think Abby and you have a point here.... so I have been
+> looking at your patch .. and from code reading had wondered
+> about another  behavior which *was* not quite consistent,
+> and you eliminated completely with your patch:
+> 
+> op <- options(warn=1)
+> for(n in 0:2) { cat(n,":\n") ; print(matrix(seq_len(n), 0, 0)) }
+> options(op)
+> 
+> shows (in released R)
+> 
+> 0 :
+> <0 x 0 matrix>
+> 1 :
+> <0 x 0 matrix>
+> 2 :
+> Warning in matrix(seq_len(n), 0, 0) :
+>  data length exceeds size of matrix
+> <0 x 0 matrix>
+>> 
+> 
+> and it is really seems not logical that in matrix(x, 0,0),
+> 'x' of  size 1 and  size (>=) 2  are treated differently.
+> For consistency,  size 1  "should"  also warn (but read on!)
+> 
+> After your patch, theres' no warning in any case .. which is
+> consistent, within the  matrix(x, 0,0) situation  but not consistent
+> with your proposal to warn more often when  matrix(x, n,k)  is
+> "obviously" using inconsistent dimensions.
+> 
+> When trying to let   matrix(1, 0,0)  also warn,
+> I quickly found that this produces many new warnings in our (R
+> base packages) examples and tests, notably from construction
+> such as
+> 
+> 	 matrix(NA, 0, 3)
+> or
+> 	 matrix(NA_character_, 0, 4)
+> 
+> which would all have to be re-written as
+> 
+>      matrix(logical()  , 0, 3)
+> or    matrix(character(), 0, 4)
+> 
+> The latter *is* more strictly self-consistent, but do we really
+> want to impose such strictness ?
+> 
+> My conclusion:  Not at this moment
+> 
+> OTOH, I'd re-add the warning for  length(x) > 1  which has
+> been there in the current code (but not your patch).
+> {{No need to send another patch, I've changed too many small
+>  things already, for me to be useful}}
+> 
+> This still needs adaption of one of the regression tests of R
+> itself, and needs (at least) one of the tests of the Matrix package
+> (warning turned into error, from options(warn = 2)).
+> 
+> I'm willing to go that route, but I'm sure this will entail some
+> work by other package authors, too (and hence CRAN maintainers etc).
+> 
+> Opinions?
+> 
+> 
+>>> matrix (1:6, nrow = 2, ncol = 3)
+> 
+>>> matrix (1:12, nrow = 2, ncol = 3)
+>> [,1] [,2] [,3]
+>> [1,]    1    3    5
+>> [2,]    2    4    6
+>> Warning message:
+>> In matrix(1:12, nrow = 2, ncol = 3) :
+>> data length incompatible with size of matrix
+> 
+>>> matrix (1:7, nrow = 2, ncol = 3)
+>> Warning messages:
+>> 1: In matrix(1:7, nrow = 2, ncol = 3) :
+>> data length [7] is not a sub-multiple or multiple of the number of rows [2]
+>> 2: In matrix(1:7, nrow = 2, ncol = 3) :
+>> data length incompatible with size of matrix
+> 
+>>> matrix (1:8, nrow = 2, ncol = 3)
+>> Warning messages:
+>> 1: In matrix(1:8, nrow = 2, ncol = 3) :
+>> data length [8] is not a sub-multiple or multiple of the number of columns [3]
+>> 2: In matrix(1:8, nrow = 2, ncol = 3) :
+>> data length incompatible with size of matrix
+> 
+>>> matrix (1:6, nrow = 0, ncol = 0)
+>> <0 x 0 matrix>
+>>> matrix (numeric(0), nrow = 2, ncol = 3)
+>> [,1] [,2] [,3]
+>> [1,]   NA   NA   NA
+>> [2,]   NA   NA   NA
+> 
+>>> matrix(1:2, ncol = 8)
+>> [,1] [,2] [,3] [,4] [,5] [,6] [,7] [,8]
+>> [1,]    1    2    1    2    1    2    1    2
+> 
+>> It would be nice to combine the new warning with that about ?...not a sub-multiple or multiple?? into a single warning, if appropriate (as in two of the examples above), but that would require bigger surgery way above my payscale.
+> 
+> I agree that in those cases it should only show one warning, and
+> to keep things simple I'd say it should just be the 2nd of those
+> above  or more precisely (I have to check if that's correct)
+> 
+>  "data length larger than size of matrix"
+> 
+> Martin
+> 
+>> Kind regards
+>> Wolfgang Huber
+> 
+> 
+>> Index: array.c
+>> ===================================================================
+>> --- array.c	(revision 79951)
+>> +++ array.c	(working copy)
+>> @@ -133,18 +133,19 @@
+>> nc = (int) ceil((double) lendat / (double) nr);
+>> }
+> 
+>> -    if(lendat > 0) {
+>> +    if (lendat > 1) {
+>> R_xlen_t nrc = (R_xlen_t) nr * nc;
+>> -	if (lendat > 1 && nrc % lendat != 0) {
+>> +	if ((nrc % lendat) != 0) {
+>> if (((lendat > nr) && (lendat / nr) * nr != lendat) ||
+>> ((lendat < nr) && (nr / lendat) * lendat != nr))
+>> warning(_("data length [%d] is not a sub-multiple or multiple of the number of rows [%d]"), lendat, nr);
+>> else if (((lendat > nc) && (lendat / nc) * nc != lendat) ||
+>> ((lendat < nc) && (nc / lendat) * lendat != nc))
+>> -		warning(_("data length [%d] is not a sub-multiple or multiple of the number of columns [%d]"), lendat, nc);
+>> -	}
+>> -	else if ((lendat > 1) && (nrc == 0)){
+>> +		    warning(_("data length [%d] is not a sub-multiple or multiple of the number of columns [%d]"), lendat, nc);
+>> +	if (nrc == 0)
+>> warning(_("data length exceeds size of matrix"));
+>> +        if (nrc != lendat)
+>> +            warning(_("data length incompatible with size of matrix"));
+>> }
+>> }
+> 
+> 
+>> ------
+>> // And here, for easy checking that part of the code in the new form:
+>> if (lendat > 1) {
+>> R_xlen_t nrc = (R_xlen_t) nr * nc;
+>> if ((nrc % lendat) != 0) {
+>> if (((lendat > nr) && (lendat / nr) * nr != lendat) ||
+>> ((lendat < nr) && (nr / lendat) * lendat != nr))
+>> warning(_("data length [%d] is not a sub-multiple or multiple of the number of rows [%d]"), lendat, nr);
+>> else if (((lendat > nc) && (lendat / nc) * nc != lendat) ||
+>> ((lendat < nc) && (nc / lendat) * lendat != nc))
+>> warning(_("data length [%d] is not a sub-multiple or multiple of the number of columns [%d]"), lendat, nc);
+>> if (nrc == 0)
+>> warning(_("data length exceeds size of matrix"));
+>> if (nrc != lendat)  
+>> warning(_("data length incompatible with size of matrix"));
+>> }
+>> }
+> 
+>>> Il giorno 2feb2021, alle ore 00:27, Abby Spurdle (/??bi/) <spurdle.a at gmail.com> ha scritto:
+>>> 
+>>> So, does that mean that a clean result is contingent on the length of
+>>> the data being a multiple of both the number of rows and columns?
+>>> 
+>>> However, this rule is not straightforward.
+>>> 
+>>>> #EXAMPLE 1
+>>>> #what I would expect
+>>>> matrix (1:12, 0, 0)
+>>> <0 x 0 matrix>
+>>> Warning message:
+>>> In matrix(1:12, 0, 0) : data length exceeds size of matrix
+>>> 
+>>>> #EXAMPLE 2
+>>>> #don't like this
+>>>> matrix (numeric (), 2, 3)
+>>> [,1] [,2] [,3]
+>>> [1,]   NA   NA   NA
+>>> [2,]   NA   NA   NA
+>>> 
+>>> The first example is what I would expect, but is inconsistent with the
+>>> previous examples.
+>>> (Because zero is a valid multiple of twelve).
+>>> 
+>>> I dislike the second example with recycling of a zero-length vector.
+>>> This *is* covered in the help file, but also seems inconsistent with
+>>> the previous examples.
+>>> (Because two and three are not valid multiples of zero).
+>>> 
+>>> Also, I can't think of any reason why someone would want to construct
+>>> a matrix with extra data, and then discard part of it.
+>>> And even if there was, then why not allow an arbitrarily longer length?
+>>> 
+>>> 
+>>> On Mon, Feb 1, 2021 at 10:08 PM Martin Maechler
+>>> <maechler at stat.math.ethz.ch> wrote:
+>>>> 
+>>>>>>>>> Abby Spurdle (/??bi/)
+>>>>>>>>> on Mon, 1 Feb 2021 19:50:32 +1300 writes:
+>>>> 
+>>>>> I'm a little surprised that the following doesn't trigger an error or a warning.
+>>>>> matrix (1:256, 8, 8)
+>>>> 
+>>>>> The help file says that the main argument is recycled, if it's too short.
+>>>>> But doesn't say what happens if it's too long.
+>>>> 
+>>>> It's somewhat subtler than one may assume :
+>>>> 
+>>>>> matrix(1:9, 2,3)
+>>>> [,1] [,2] [,3]
+>>>> [1,]    1    3    5
+>>>> [2,]    2    4    6
+>>>> Warning message:
+>>>> In matrix(1:9, 2, 3) :
+>>>> data length [9] is not a sub-multiple or multiple of the number of rows [2]
+>>>> 
+>>>>> matrix(1:8, 2,3)
+>>>> [,1] [,2] [,3]
+>>>> [1,]    1    3    5
+>>>> [2,]    2    4    6
+>>>> Warning message:
+>>>> In matrix(1:8, 2, 3) :
+>>>> data length [8] is not a sub-multiple or multiple of the number of columns [3]
+>>>> 
+>>>>> matrix(1:12, 2,3)
+>>>> [,1] [,2] [,3]
+>>>> [1,]    1    3    5
+>>>> [2,]    2    4    6
+>>>>> 
+>>>> 
+>>>> So it looks to me the current behavior is quite on purpose.
+>>>> Are you sure it's not documented at all when reading the docs
+>>>> carefully?  (I did *not*, just now).
+>>> 
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @vr@h@m@@d|er @end|ng |rom gm@||@com  Wed Feb 10 04:15:08 2021
+From: @vr@h@m@@d|er @end|ng |rom gm@||@com (Avraham Adler)
+Date: Wed, 10 Feb 2021 03:15:08 +0000
+Subject: [Rd] From .Fortran to .Call?
+In-Reply-To: <CAL6gwn+=pJXMrUyJTx7utNUMXk+BSfyXnTVz2BnxeGyi9GveJw@mail.gmail.com>
+References: <4972E445-44EB-4E2E-B9CB-4A274972BE71@illinois.edu>
+ <20201219205313.01df8259@Tarkus>
+ <22b9d8f5-dba6-e58c-56e5-b0389daa243a@stanford.edu>
+ <CAL6gwnL5de4UU2uTs=z=Q1552QKRd+p1NmesSn5sz6Nvp5K2MA@mail.gmail.com>
+ <B71E1276-B63C-4766-BA81-27649AC3AE14@illinois.edu>
+ <579c7a2c-e6d7-f3da-2b2e-2a1fc1ecdbd9@stanford.edu>
+ <5d7ef351-b778-e094-6cc6-d08d27dc6035@stanford.edu>
+ <3318E414-C42D-4C3D-AC05-4D801B087681@illinois.edu>
+ <CAL6gwn+=pJXMrUyJTx7utNUMXk+BSfyXnTVz2BnxeGyi9GveJw@mail.gmail.com>
+Message-ID: <CAL6gwnJ99yY_h-3Tib5xfG6wOONAastjQpU7N-PO=nC+D5dWsw@mail.gmail.com>
+
+I had some time, so I updated a toy package I have for explaining R
+and Fortran use to use both the .Call and the .Fortran interfaces [1].
+I think the actual Fortran code is as close to identical as I can
+reasonably make it. On my computer, the .Call interface (_f) is around
+4 times as fast as the .Fortran interface (_f2).
+
+Bill, I don't know if you can, or should, "just" change .Fortran to
+.Call. You certainly cannot do the reverse. I think my source code
+made as minimal a change as possible; maybe that would help.
+
+-------
+set.seed(77)
+A <- runif(100, 0, 2000)
+microbenchmark(LLC_f(A, 500, 500), LLC_f2(A, 500, 500), times =
+10000L, control = list(order = 'block'), check = 'equal')
+Unit: nanoseconds
+                expr  min   lq      mean median   uq   max neval cld
+  LLC_f(A, 500, 500)  700  702  799.5906    801  802  6601 10000  a
+ LLC_f2(A, 500, 500) 3000 3101 3328.8712   3201 3401 19802 10000   b
+--------
+
+Thanks,
+
+Avi
+
+[1] https://github.com/aadler/SimpFort
+
+
+On Sat, Dec 26, 2020 at 10:48 PM Avraham Adler <avraham.adler at gmail.com> wrote:
+>
+> I?ve tried recoding some of Delaporte to use the .Fortran interface and I don?t know what I?m doing wrong but it either doesn?t work or crashes my R instance completely.
+>
+> Avi
+>
+> On Sat, Dec 26, 2020 at 11:48 AM Koenker, Roger W <rkoenker at illinois.edu> wrote:
+>>
+>> I?ve recoded a version of one of my quantile regression fitting functions to use .C64 from dotCall64 rather than .Fortran.
+>> For a moderately large problem with n = 500,000 and p = 5, and solving for  1:49/50 quantiles the new version shows
+>> a 3% speedup, although for smaller problems it is actually slower that the .Fortran version.  So, I?m (provisionally)
+>> unimpressed by the claims that .Fortran has a big ?overhead? performance penalty.  Compared to the(more than) an order of
+>> magnitude (base 10) improvement that moving from R to fortran produces,  3% isn?t really worth the (admittedly) minimal
+>> additional coding effort.
+>>
+>> > On Dec 24, 2020, at 12:39 AM, Balasubramanian Narasimhan <naras at stanford.edu> wrote:
+>> >
+>> > Also, just came to know about dotcall64::.C64() (on CRAN) which allows for Fortran to be called using .Call().
+>> >
+>> > -Naras
+>> >
+>> > On 12/23/20 8:34 AM, Balasubramanian Narasimhan wrote:
+>> >> I think it should be pretty easy to fix up SUtools to use the .Call instead of .Fortran following along the lines of
+>> >>
+>> >> https://urldefense.com/v3/__https://github.com/wrathematics/Romp__;!!DZ3fjg!r3_sswU4ZHCe3huoGUy2boX-Vr7aUS-RaExyeh_Rsv8gvGiABcqzvOOKZinG4kC7RtA$
+>> >> I too deal with a lot of f77 and so I will most likely finish it before the new year, if not earlier. (Would welcome testers besides myself.)
+>> >>
+>> >> Incidentally, any idea of what the performance hit is, quantitatively? I confess I never paid attention to it myself as most Fortran code I use seems pretty fast, i.e. glmnet.
+>> >>
+>> >> -Naras
+>> >>
+>> >>
+>> >> On 12/23/20 3:57 AM, Koenker, Roger W wrote:
+>> >>> Thanks to all and best wishes for a better 2021.
+>> >>>
+>> >>> Unfortunately I remain somewhat confused:
+>> >>>
+>> >>>     o  Bill reveals an elegant way to get from my rudimentary registration setup to
+>> >>>     one that would explicitly type the C interface functions,
+>> >>>
+>> >>>     o Ivan seems to suggest that there would be no performance gain from doing this.
+>> >>>
+>> >>>     o  Naras?s pcLasso package does use the explicit C typing, but then uses .Fortran
+>> >>>     not .Call.
+>> >>>
+>> >>>     o  Avi uses .Call and cites the Romp package https://urldefense.com/v3/__https://github.com/wrathematics/Romp__;!!DZ3fjg!r3_sswU4ZHCe3huoGUy2boX-Vr7aUS-RaExyeh_Rsv8gvGiABcqzvOOKZinG4kC7RtA$     where it is asserted that "there is a (nearly) deprecated interface .Fortran() which you
+>> >>>     should not use due to its large performance overhead.?
+>> >>>
+>> >>> As the proverbial naive R (ab)user I?m left wondering:
+>> >>>
+>> >>>     o  if I updated my quantreg_init.c file in accordance with Bill?s suggestion could I
+>> >>>     then simply change my .Fortran calls to .Call?
+>> >>>
+>> >>>     o  and if so, do I need to include ALL the fortran subroutines in my src directory
+>> >>>     or only the ones called from R?
+>> >>>
+>> >>>     o  and in either case could I really expect to see a significant performance gain?
+>> >>>
+>> >>> Finally, perhaps I should stipulate that my fortran is strictly f77, so no modern features
+>> >>> are in play, indeed most of the code is originally written in ratfor, Brian Kernighan?s
+>> >>> dialect from ancient times at Bell Labs.
+>> >>>
+>> >>> Again,  thanks to all for any advice,
+>> >>> Roger
+>> >>>
+>> >>>
+>> >>>> On Dec 23, 2020, at 1:11 AM, Avraham Adler <avraham.adler at gmail.com> wrote:
+>> >>>>
+>> >>>> Hello, Ivan.
+>> >>>>
+>> >>>> I used .Call instead of .Fortran in the Delaporte package [1]. What
+>> >>>> helped me out a lot was Drew Schmidt's Romp examples and descriptions
+>> >>>> [2]. If you are more comfortable with the older Fortran interface,
+>> >>>> Tomasz Kalinowski has a package which uses Fortran 2018 more
+>> >>>> efficiently [3]. I haven't tried this last in practice, however.
+>> >>>>
+>> >>>> Hope that helps,
+>> >>>>
+>> >>>> Avi
+>> >>>>
+>> >>>> [1] https://urldefense.com/v3/__https://CRAN.R-project.org/package=Delaporte__;!!DZ3fjg!s1-ihrZ9DPUtXpxdIpJPA1VedpZFt12Ahmn4CycOmile_uSahFZnJPn_5KPITBN5NK8$
+>> >>>> [2] https://urldefense.com/v3/__https://github.com/wrathematics/Romp__;!!DZ3fjg!s1-ihrZ9DPUtXpxdIpJPA1VedpZFt12Ahmn4CycOmile_uSahFZnJPn_5KPISF5aCYs$
+>> >>>> [3] https://urldefense.com/v3/__https://github.com/t-kalinowski/RFI__;!!DZ3fjg!s1-ihrZ9DPUtXpxdIpJPA1VedpZFt12Ahmn4CycOmile_uSahFZnJPn_5KPIbwXmXqY$
+>> >>>>
+>> >>>> Tomasz Kalinowski
+>> >>>>
+>> >>>>
+>> >>>>
+>> >>>> On Tue, Dec 22, 2020 at 7:24 PM Balasubramanian Narasimhan
+>> >>>> <naras at stanford.edu> wrote:
+>> >>>>> To deal with such Fortran issues in several packages I deal with, I
+>> >>>>> wrote the SUtools package (https://urldefense.com/v3/__https://github.com/bnaras/SUtools__;!!DZ3fjg!s1-ihrZ9DPUtXpxdIpJPA1VedpZFt12Ahmn4CycOmile_uSahFZnJPn_5KPIJ5BbDwA$ ) that you
+>> >>>>> can try.  The current version generates the registration assuming
+>> >>>>> implicit Fortran naming conventions though. (I've been meaning to
+>> >>>>> upgrade it to use the gfortran -fc-prototypes-external flag which should
+>> >>>>> be easy; I might just finish that during these holidays.)
+>> >>>>>
+>> >>>>> There's a vignette as well:
+>> >>>>> https://urldefense.com/v3/__https://bnaras.github.io/SUtools/articles/SUtools.html__;!!DZ3fjg!s1-ihrZ9DPUtXpxdIpJPA1VedpZFt12Ahmn4CycOmile_uSahFZnJPn_5KPITq9-Quc$
+>> >>>>>
+>> >>>>> -Naras
+>> >>>>>
+>> >>>>>
+>> >>>>> On 12/19/20 9:53 AM, Ivan Krylov wrote:
+>> >>>>>> On Sat, 19 Dec 2020 17:04:59 +0000
+>> >>>>>> "Koenker, Roger W" <rkoenker at illinois.edu> wrote:
+>> >>>>>>
+>> >>>>>>> There are comments in various places, including R-extensions ?5.4
+>> >>>>>>> suggesting that .Fortran is (nearly) deprecated and hinting that use
+>> >>>>>>> of .Call is more efficient and now preferred for packages.
+>> >>>>>> My understanding of ?5.4 and 5.5 is that explicit routine registration
+>> >>>>>> is what's important for efficiency, and your package already does that
+>> >>>>>> (i.e. calls R_registerRoutines()). The only two things left to add
+>> >>>>>> would be types (REALSXP/INTSXP/...) and styles (R_ARG_IN,
+>> >>>>>> R_ARG_OUT/...) of the arguments of each subroutine.
+>> >>>>>>
+>> >>>>>> Switching to .Call makes sense if you want to change the interface of
+>> >>>>>> your native subroutines to accept arbitrary heavily structured SEXPs
+>> >>>>>> (and switching to .External could be useful if you wanted to play with
+>> >>>>>> evaluation of the arguments).
+>> >>>>>>
+>> >>>>> ______________________________________________
+>> >>>>> R-devel at r-project.org mailing list
+>> >>>>> https://urldefense.com/v3/__https://stat.ethz.ch/mailman/listinfo/r-devel__;!!DZ3fjg!s1-ihrZ9DPUtXpxdIpJPA1VedpZFt12Ahmn4CycOmile_uSahFZnJPn_5KPIr_nqkqg$
+>> >>
+>> >> ______________________________________________
+>> >> R-devel at r-project.org mailing list
+>> >> https://urldefense.com/v3/__https://stat.ethz.ch/mailman/listinfo/r-devel__;!!DZ3fjg!r3_sswU4ZHCe3huoGUy2boX-Vr7aUS-RaExyeh_Rsv8gvGiABcqzvOOKZinGvMnBkW0$
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> --
+> Sent from Gmail Mobile
+
+
+From tobm@r @end|ng |rom ceh@@c@uk  Thu Feb 11 17:55:14 2021
+From: tobm@r @end|ng |rom ceh@@c@uk (Marthews, Toby R.)
+Date: Thu, 11 Feb 2021 16:55:14 +0000
+Subject: [Rd] Request for a crop option on R's standard plot context menu
+Message-ID: <CWXP123MB3429545A65FE3EF62D70CF318F8C9@CWXP123MB3429.GBRP123.PROD.OUTLOOK.COM>
+
+Dear R Dev,
+
+I hope you don't mind a request for a feature from a long-time R user (happily using R since 2005).
+
+I use R for lots of plotting for my work, e.g. for my current project I have a script that generates 300 plots. I generally copy these all as bitmaps and put them directly into a Word document for my report (see e.g. attached screenshot).
+
+I am always required to maximise the plots to get the best resolution, but that always means I get lots of white space when I copy the plot into Word. Cropping them takes a reasonable amount of time (e.g. an entire day to crop all 300 for this project).
+
+I'm wondering whether it would be possible to have an option added to the plot window context menu for "Cropped bitmap" or "Crop whitespace"? I think this would be VERY useful because all the online tools I've seen for batch-cropping a set of images require the same crop to be applied to all images (e.g. https://www.youtube.com/watch?v=icbpS0OH9a0 ) and that's not the case for my plots (some of my plots are panel plots, some simpler plots).
+
+I know it's a bit cheeky to ask for something that I have no idea how to code up myself: I am just hoping that this feedback might go somewhere useful. R can really do 99% of things kind of perfectly so it seems churlish to point out the 1%, but if this is an easy thing to add in then at least I would use it pretty much every project I work on!
+
+Many thanks and best regards,
+
+Best regards,
+
+Toby
+
+PS. I know I could modify my script so that it creates windows of exactly the right size (dev.new), but doing that would mean I would have to recalculate the sizes if I changed anything on the plots at all (e.g. aspect, x label) so I would lose probably more time pursuing that option. Also, I've found that using lots of dev.new commands makes it difficult for colleagues who use RStudio to use my scripts.
+   I am also aware I could export these images as pdfs, but then I would have to open 300 pdfs, extract the images and crop them all in 3rd party software. Again, perfectly possible but I am searching for a slightly quicker solution (!).
+
+
+Dr Toby Marthews
+
+UKCEH Band 6 Researcher in Global Surface Science (Hydro-Climate Risks)
+
+   Mob: +44 753 2168305, web: www.tobymarthews.com<http://www.tobymarthews.com>
+
+
+
+This email and any attachments are intended solely for the named recipients and are confidential. If you are not the intended recipient please reply to the email to highlight the error and delete this email from your system; you must not use, disclose, copy or distribute this email or any of its attachments. UKCEH has taken every reasonable precaution to minimise risk of this email or any attachments containing viruses or malware but the recipient should carry out its own virus and malware checks before opening the attachments. UKCEH does not accept any liability for any losses or damages which the recipient may sustain due to presence of any viruses. Opinions, conclusions or other information in this message and attachments that are not related directly to UKCEH business are solely those of the author and do not represent the views of UKCEH. We process your personal data in accordance with our Privacy Notice, available on the UKCEH website.
+https://www.ceh.ac.uk/privacy-notice
+
+-------------- next part --------------
+A non-text attachment was scrubbed...
+Name: Plot context menu.png
+Type: image/png
+Size: 100320 bytes
+Desc: Plot context menu.png
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20210211/eee7ee24/attachment.png>
+
+From ru|pb@rr@d@@ @end|ng |rom @@po@pt  Fri Feb 12 12:25:48 2021
+From: ru|pb@rr@d@@ @end|ng |rom @@po@pt (Rui Barradas)
+Date: Fri, 12 Feb 2021 11:25:48 +0000
+Subject: [Rd] Unexpected behavior of '[' in an apply instruction
+Message-ID: <a8eac065-c1ea-a165-2d92-c4802b4d0373@sapo.pt>
+
+Hello,
+
+This came up in this StackOverflow post [1].
+
+If x is an array with n dimensions, how to subset by just one dimension?
+If n is known, it's simple, add the required number of commas in their 
+proper places.
+But what if the user doesn't know the value of n?
+
+The example below has n = 3, and subsets by the 1st dim. The apply loop 
+solves the problem as expected but note that the index i has length(i) > 1.
+
+
+x <- array(1:60, dim = c(10, 2, 3))
+
+d <- 1L
+i <- 1:5
+apply(x, MARGIN = -d, '[', i)
+x[i, , ]
+
+
+If length(i) == 1, argument drop = FALSE doesn't work as I expected it 
+to work, only the other way does:
+
+
+i <- 1L
+apply(x, MARGIN = -d, '[', i, drop = FALSE)
+x[i, , drop = FALSE]
+
+
+What am I missing?
+
+[1] 
+https://stackoverflow.com/questions/66168564/is-there-a-native-r-syntax-to-extract-rows-of-an-array
+
+Thanks in advance,
+
+Rui Barradas
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Fri Feb 12 21:32:02 2021
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Sat, 13 Feb 2021 09:32:02 +1300
+Subject: [Rd] 
+ Request for a crop option on R's standard plot context menu
+In-Reply-To: <CWXP123MB3429545A65FE3EF62D70CF318F8C9@CWXP123MB3429.GBRP123.PROD.OUTLOOK.COM>
+References: <CWXP123MB3429545A65FE3EF62D70CF318F8C9@CWXP123MB3429.GBRP123.PROD.OUTLOOK.COM>
+Message-ID: <53D47F27-ABEF-4369-B42B-7FB0295C6381@R-project.org>
+
+Toby,
+
+R provides more convenient ways for this - using window devices for any output other than screen is not its intended function. I would recommend using the off-screen devices devices such as pdf() or png() to generate output which also gives you far more control. Also please note that the amount of margins you include in the plots is entirely up to you, it should not be necessary to crop anything after the fact if you set mar/oma to the desired values.
+
+That said, it is just a simple one-liner "magick::image_trim('foo.png')" to trim an image if you want to go that route.
+
+Cheers,
+Simon
+
+
+
+> On Feb 12, 2021, at 5:55 AM, Marthews, Toby R. via R-devel <r-devel at r-project.org> wrote:
+> 
+> Dear R Dev,
+> 
+> I hope you don't mind a request for a feature from a long-time R user (happily using R since 2005).
+> 
+> I use R for lots of plotting for my work, e.g. for my current project I have a script that generates 300 plots. I generally copy these all as bitmaps and put them directly into a Word document for my report (see e.g. attached screenshot).
+> 
+> I am always required to maximise the plots to get the best resolution, but that always means I get lots of white space when I copy the plot into Word. Cropping them takes a reasonable amount of time (e.g. an entire day to crop all 300 for this project).
+> 
+> I'm wondering whether it would be possible to have an option added to the plot window context menu for "Cropped bitmap" or "Crop whitespace"? I think this would be VERY useful because all the online tools I've seen for batch-cropping a set of images require the same crop to be applied to all images (e.g. https://www.youtube.com/watch?v=icbpS0OH9a0 ) and that's not the case for my plots (some of my plots are panel plots, some simpler plots).
+> 
+> I know it's a bit cheeky to ask for something that I have no idea how to code up myself: I am just hoping that this feedback might go somewhere useful. R can really do 99% of things kind of perfectly so it seems churlish to point out the 1%, but if this is an easy thing to add in then at least I would use it pretty much every project I work on!
+> 
+> Many thanks and best regards,
+> 
+> Best regards,
+> 
+> Toby
+> 
+> PS. I know I could modify my script so that it creates windows of exactly the right size (dev.new), but doing that would mean I would have to recalculate the sizes if I changed anything on the plots at all (e.g. aspect, x label) so I would lose probably more time pursuing that option. Also, I've found that using lots of dev.new commands makes it difficult for colleagues who use RStudio to use my scripts.
+>   I am also aware I could export these images as pdfs, but then I would have to open 300 pdfs, extract the images and crop them all in 3rd party software. Again, perfectly possible but I am searching for a slightly quicker solution (!).
+> 
+> 
+> Dr Toby Marthews
+> 
+> UKCEH Band 6 Researcher in Global Surface Science (Hydro-Climate Risks)
+> 
+>   Mob: +44 753 2168305, web: www.tobymarthews.com<http://www.tobymarthews.com>
+> 
+> 
+> 
+> This email and any attachments are intended solely for the named recipients and are confidential. If you are not the intended recipient please reply to the email to highlight the error and delete this email from your system; you must not use, disclose, copy or distribute this email or any of its attachments. UKCEH has taken every reasonable precaution to minimise risk of this email or any attachments containing viruses or malware but the recipient should carry out its own virus and malware checks before opening the attachments. UKCEH does not accept any liability for any losses or damages which the recipient may sustain due to presence of any viruses. Opinions, conclusions or other information in this message and attachments that are not related directly to UKCEH business are solely those of the author and do not represent the views of UKCEH. We process your personal data in accordance with our Privacy Notice, available on the UKCEH website.
+> https://www.ceh.ac.uk/privacy-notice
+> <Plot context menu.png>______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+	[[alternative HTML version deleted]]
+
+
+From h@nk|n@rob|n @end|ng |rom gm@||@com  Fri Feb 12 21:45:46 2021
+From: h@nk|n@rob|n @end|ng |rom gm@||@com (robin hankin)
+Date: Sat, 13 Feb 2021 09:45:46 +1300
+Subject: [Rd] Unexpected behavior of '[' in an apply instruction
+In-Reply-To: <a8eac065-c1ea-a165-2d92-c4802b4d0373@sapo.pt>
+References: <a8eac065-c1ea-a165-2d92-c4802b4d0373@sapo.pt>
+Message-ID: <CAHHjBM5PhQfxw3xSZXxuQAuWqTi83eN=EiuCQC7rtC35bS3R9A@mail.gmail.com>
+
+Rui
+
+> x <- array(runif(60), dim = c(10, 2, 3))
+> array(x[slice.index(x,1) %in% 1:5],c(5,dim(x)[-1]))
+
+(I don't see this on stackoverflow; should I post this there too?)  Most of
+the magic package is devoted to handling arrays of arbitrary dimensions and
+this functionality might be good to include if anyone would find it useful.
+
+HTH
+
+Robin
+
+
+<hankin.robin at gmail.com>
+
+
+On Sat, Feb 13, 2021 at 12:26 AM Rui Barradas <ruipbarradas at sapo.pt> wrote:
+
+> Hello,
+>
+> This came up in this StackOverflow post [1].
+>
+> If x is an array with n dimensions, how to subset by just one dimension?
+> If n is known, it's simple, add the required number of commas in their
+> proper places.
+> But what if the user doesn't know the value of n?
+>
+> The example below has n = 3, and subsets by the 1st dim. The apply loop
+> solves the problem as expected but note that the index i has length(i) > 1.
+>
+>
+> x <- array(1:60, dim = c(10, 2, 3))
+>
+> d <- 1L
+> i <- 1:5
+> apply(x, MARGIN = -d, '[', i)
+> x[i, , ]
+>
+>
+> If length(i) == 1, argument drop = FALSE doesn't work as I expected it
+> to work, only the other way does:
+>
+>
+> i <- 1L
+> apply(x, MARGIN = -d, '[', i, drop = FALSE)
+> x[i, , drop = FALSE]
+>
+>
+> What am I missing?
+>
+> [1]
+>
+> https://stackoverflow.com/questions/66168564/is-there-a-native-r-syntax-to-extract-rows-of-an-array
+>
+> Thanks in advance,
+>
+> Rui Barradas
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From ru|pb@rr@d@@ @end|ng |rom @@po@pt  Fri Feb 12 22:23:38 2021
+From: ru|pb@rr@d@@ @end|ng |rom @@po@pt (Rui Barradas)
+Date: Fri, 12 Feb 2021 21:23:38 +0000
+Subject: [Rd] Unexpected behavior of '[' in an apply instruction
+In-Reply-To: <CAHHjBM5PhQfxw3xSZXxuQAuWqTi83eN=EiuCQC7rtC35bS3R9A@mail.gmail.com>
+References: <a8eac065-c1ea-a165-2d92-c4802b4d0373@sapo.pt>
+ <CAHHjBM5PhQfxw3xSZXxuQAuWqTi83eN=EiuCQC7rtC35bS3R9A@mail.gmail.com>
+Message-ID: <f13cf55f-1210-cfb6-bf74-ea73fcaaa707@sapo.pt>
+
+Hello,
+
+Yes, although there is an accepted solution, I believe you should post 
+this solution there. It's a base R solution, what the question asks for.
+
+And thanks, I would have never reminded myself of slice.index.
+
+Rui Barradas
+
+?s 20:45 de 12/02/21, robin hankin escreveu:
+> Rui
+> 
+>  > x <- array(runif(60), dim = c(10, 2, 3))
+>  > array(x[slice.index(x,1) %in% 1:5],c(5,dim(x)[-1]))
+> 
+> (I don't see this on stackoverflow; should I post this there too?)? Most 
+> of the magic package is devoted to handling arrays of arbitrary 
+> dimensions and this functionality might be good to include if anyone 
+> would find it useful.
+> 
+> HTH
+> 
+> Robin
+> 
+> 
+> <mailto:hankin.robin at gmail.com>
+> 
+> 
+> On Sat, Feb 13, 2021 at 12:26 AM Rui Barradas <ruipbarradas at sapo.pt 
+> <mailto:ruipbarradas at sapo.pt>> wrote:
+> 
+>     Hello,
+> 
+>     This came up in this StackOverflow post [1].
+> 
+>     If x is an array with n dimensions, how to subset by just one dimension?
+>     If n is known, it's simple, add the required number of commas in their
+>     proper places.
+>     But what if the user doesn't know the value of n?
+> 
+>     The example below has n = 3, and subsets by the 1st dim. The apply loop
+>     solves the problem as expected but note that the index i has
+>     length(i) > 1.
+> 
+> 
+>     x <- array(1:60, dim = c(10, 2, 3))
+> 
+>     d <- 1L
+>     i <- 1:5
+>     apply(x, MARGIN = -d, '[', i)
+>     x[i, , ]
+> 
+> 
+>     If length(i) == 1, argument drop = FALSE doesn't work as I expected it
+>     to work, only the other way does:
+> 
+> 
+>     i <- 1L
+>     apply(x, MARGIN = -d, '[', i, drop = FALSE)
+>     x[i, , drop = FALSE]
+> 
+> 
+>     What am I missing?
+> 
+>     [1]
+>     https://stackoverflow.com/questions/66168564/is-there-a-native-r-syntax-to-extract-rows-of-an-array
+> 
+>     Thanks in advance,
+> 
+>     Rui Barradas
+> 
+>     ______________________________________________
+>     R-devel at r-project.org <mailto:R-devel at r-project.org> mailing list
+>     https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From @oko| @end|ng |rom |n@@-tou|ou@e@|r  Fri Feb 12 23:49:50 2021
+From: @oko| @end|ng |rom |n@@-tou|ou@e@|r (Sokol Serguei)
+Date: Fri, 12 Feb 2021 23:49:50 +0100
+Subject: [Rd] Unexpected behavior of '[' in an apply instruction
+In-Reply-To: <f13cf55f-1210-cfb6-bf74-ea73fcaaa707@sapo.pt>
+References: <a8eac065-c1ea-a165-2d92-c4802b4d0373@sapo.pt>
+ <CAHHjBM5PhQfxw3xSZXxuQAuWqTi83eN=EiuCQC7rtC35bS3R9A@mail.gmail.com>
+ <f13cf55f-1210-cfb6-bf74-ea73fcaaa707@sapo.pt>
+Message-ID: <8de49c5d-8e9b-31fd-4c2b-212db94a2ccf@insa-toulouse.fr>
+
+Le 12/02/2021 ? 22:23, Rui Barradas a ?crit?:
+> Hello,
+>
+> Yes, although there is an accepted solution, I believe you should post 
+> this solution there. It's a base R solution, what the question asks for.
+>
+> And thanks, I would have never reminded myself of slice.index.
+
+There is another approach -- produce a call to `[`() putting there 
+"required number of commas in their proper places" programmatically. 
+Even if it does not lead to a very readable expression, I think it 
+merits to be mentioned.
+
+ ? x <- array(1:60, dim = c(10, 2, 3))
+ ? ld=length(dim(x))
+ ? i=1 # i.e. the first row but can be a slice 1:5, whatever
+ ? do.call(`[`, c(alist(x, i), alist(,)[rep(1,ld-1)], alist(drop=FALSE)))
+
+Best,
+Serguei.
+
+>
+> Rui Barradas
+>
+> ?s 20:45 de 12/02/21, robin hankin escreveu:
+>> Rui
+>>
+>> ?> x <- array(runif(60), dim = c(10, 2, 3))
+>> ?> array(x[slice.index(x,1) %in% 1:5],c(5,dim(x)[-1]))
+>>
+>> (I don't see this on stackoverflow; should I post this there too?)? 
+>> Most of the magic package is devoted to handling arrays of arbitrary 
+>> dimensions and this functionality might be good to include if anyone 
+>> would find it useful.
+>>
+>> HTH
+>>
+>> Robin
+>>
+>>
+>> <mailto:hankin.robin at gmail.com>
+>>
+>>
+>> On Sat, Feb 13, 2021 at 12:26 AM Rui Barradas <ruipbarradas at sapo.pt 
+>> <mailto:ruipbarradas at sapo.pt>> wrote:
+>>
+>> ??? Hello,
+>>
+>> ??? This came up in this StackOverflow post [1].
+>>
+>> ??? If x is an array with n dimensions, how to subset by just one 
+>> dimension?
+>> ??? If n is known, it's simple, add the required number of commas in 
+>> their
+>> ??? proper places.
+>> ??? But what if the user doesn't know the value of n?
+>>
+>> ??? The example below has n = 3, and subsets by the 1st dim. The 
+>> apply loop
+>> ??? solves the problem as expected but note that the index i has
+>> ??? length(i) > 1.
+>>
+>>
+>> ??? x <- array(1:60, dim = c(10, 2, 3))
+>>
+>> ??? d <- 1L
+>> ??? i <- 1:5
+>> ??? apply(x, MARGIN = -d, '[', i)
+>> ??? x[i, , ]
+>>
+>>
+>> ??? If length(i) == 1, argument drop = FALSE doesn't work as I 
+>> expected it
+>> ??? to work, only the other way does:
+>>
+>>
+>> ??? i <- 1L
+>> ??? apply(x, MARGIN = -d, '[', i, drop = FALSE)
+>> ??? x[i, , drop = FALSE]
+>>
+>>
+>> ??? What am I missing?
+>>
+>> ??? [1]
+>> https://stackoverflow.com/questions/66168564/is-there-a-native-r-syntax-to-extract-rows-of-an-array
+>>
+>> ??? Thanks in advance,
+>>
+>> ??? Rui Barradas
+>>
+>> ??? ______________________________________________
+>> ??? R-devel at r-project.org <mailto:R-devel at r-project.org> mailing list
+>> ??? https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @oko| @end|ng |rom |n@@-tou|ou@e@|r  Sat Feb 13 00:08:48 2021
+From: @oko| @end|ng |rom |n@@-tou|ou@e@|r (Sokol Serguei)
+Date: Sat, 13 Feb 2021 00:08:48 +0100
+Subject: [Rd] Unexpected behavior of '[' in an apply instruction
+In-Reply-To: <8de49c5d-8e9b-31fd-4c2b-212db94a2ccf@insa-toulouse.fr>
+References: <a8eac065-c1ea-a165-2d92-c4802b4d0373@sapo.pt>
+ <CAHHjBM5PhQfxw3xSZXxuQAuWqTi83eN=EiuCQC7rtC35bS3R9A@mail.gmail.com>
+ <f13cf55f-1210-cfb6-bf74-ea73fcaaa707@sapo.pt>
+ <8de49c5d-8e9b-31fd-4c2b-212db94a2ccf@insa-toulouse.fr>
+Message-ID: <1a3b16a2-c3ca-6189-e353-3e6b6e2b9131@insa-toulouse.fr>
+
+Le 12/02/2021 ? 23:49, Sokol Serguei a ?crit?:
+> Le 12/02/2021 ? 22:23, Rui Barradas a ?crit?:
+>> Hello,
+>>
+>> Yes, although there is an accepted solution, I believe you should 
+>> post this solution there. It's a base R solution, what the question 
+>> asks for.
+>>
+>> And thanks, I would have never reminded myself of slice.index.
+>
+> There is another approach -- produce a call to `[`() putting there 
+> "required number of commas in their proper places" programmatically. 
+> Even if it does not lead to a very readable expression, I think it 
+> merits to be mentioned.
+>
+> ? x <- array(1:60, dim = c(10, 2, 3))
+> ? ld=length(dim(x))
+> ? i=1 # i.e. the first row but can be a slice 1:5, whatever
+> ? do.call(`[`, c(alist(x, i), alist(,)[rep(1,ld-1)], alist(drop=FALSE)))
+
+Or slightly shorter:
+
+ ? do.call(`[`, alist(x, i, ,drop=FALSE)[c(1,2,rep(3,ld-1),4)])
+
+>
+> Best,
+> Serguei.
+>
+>>
+>> Rui Barradas
+>>
+>> ?s 20:45 de 12/02/21, robin hankin escreveu:
+>>> Rui
+>>>
+>>> ?> x <- array(runif(60), dim = c(10, 2, 3))
+>>> ?> array(x[slice.index(x,1) %in% 1:5],c(5,dim(x)[-1]))
+>>>
+>>> (I don't see this on stackoverflow; should I post this there too?)? 
+>>> Most of the magic package is devoted to handling arrays of arbitrary 
+>>> dimensions and this functionality might be good to include if anyone 
+>>> would find it useful.
+>>>
+>>> HTH
+>>>
+>>> Robin
+>>>
+>>>
+>>> <mailto:hankin.robin at gmail.com>
+>>>
+>>>
+>>> On Sat, Feb 13, 2021 at 12:26 AM Rui Barradas <ruipbarradas at sapo.pt 
+>>> <mailto:ruipbarradas at sapo.pt>> wrote:
+>>>
+>>> ??? Hello,
+>>>
+>>> ??? This came up in this StackOverflow post [1].
+>>>
+>>> ??? If x is an array with n dimensions, how to subset by just one 
+>>> dimension?
+>>> ??? If n is known, it's simple, add the required number of commas in 
+>>> their
+>>> ??? proper places.
+>>> ??? But what if the user doesn't know the value of n?
+>>>
+>>> ??? The example below has n = 3, and subsets by the 1st dim. The 
+>>> apply loop
+>>> ??? solves the problem as expected but note that the index i has
+>>> ??? length(i) > 1.
+>>>
+>>>
+>>> ??? x <- array(1:60, dim = c(10, 2, 3))
+>>>
+>>> ??? d <- 1L
+>>> ??? i <- 1:5
+>>> ??? apply(x, MARGIN = -d, '[', i)
+>>> ??? x[i, , ]
+>>>
+>>>
+>>> ??? If length(i) == 1, argument drop = FALSE doesn't work as I 
+>>> expected it
+>>> ??? to work, only the other way does:
+>>>
+>>>
+>>> ??? i <- 1L
+>>> ??? apply(x, MARGIN = -d, '[', i, drop = FALSE)
+>>> ??? x[i, , drop = FALSE]
+>>>
+>>>
+>>> ??? What am I missing?
+>>>
+>>> ??? [1]
+>>> https://stackoverflow.com/questions/66168564/is-there-a-native-r-syntax-to-extract-rows-of-an-array 
+>>>
+>>>
+>>> ??? Thanks in advance,
+>>>
+>>> ??? Rui Barradas
+>>>
+>>> ??? ______________________________________________
+>>> ??? R-devel at r-project.org <mailto:R-devel at r-project.org> mailing list
+>>> ??? https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+>
+
+
+From @v|gro@@ @end|ng |rom ver|zon@net  Sat Feb 13 02:24:13 2021
+From: @v|gro@@ @end|ng |rom ver|zon@net (Avi Gross)
+Date: Fri, 12 Feb 2021 20:24:13 -0500
+Subject: [Rd] Unexpected behavior of '[' in an apply instruction
+In-Reply-To: <8de49c5d-8e9b-31fd-4c2b-212db94a2ccf@insa-toulouse.fr>
+References: <a8eac065-c1ea-a165-2d92-c4802b4d0373@sapo.pt>
+ <CAHHjBM5PhQfxw3xSZXxuQAuWqTi83eN=EiuCQC7rtC35bS3R9A@mail.gmail.com>
+ <f13cf55f-1210-cfb6-bf74-ea73fcaaa707@sapo.pt>
+ <8de49c5d-8e9b-31fd-4c2b-212db94a2ccf@insa-toulouse.fr>
+Message-ID: <0b6501d701a6$f0517c70$d0f47550$@verizon.net>
+
+Just to be different, the premise was that you do not know how many dimensions the array had. But that is easily available using dim() including how many items are in each dimension. So, in principle, you can use a normal indexing method perhaps in a loop to get what you want. Not sexy but doable. You can treat the array x as a vector just like lower level R does and access the contents using the formula it uses.
+
+-----Original Message-----
+From: R-devel <r-devel-bounces at r-project.org> On Behalf Of Sokol Serguei
+Sent: Friday, February 12, 2021 5:50 PM
+To: r-devel at r-project.org
+Subject: Re: [Rd] Unexpected behavior of '[' in an apply instruction
+
+Le 12/02/2021 ? 22:23, Rui Barradas a ?crit :
+> Hello,
+>
+> Yes, although there is an accepted solution, I believe you should post 
+> this solution there. It's a base R solution, what the question asks for.
+>
+> And thanks, I would have never reminded myself of slice.index.
+
+There is another approach -- produce a call to `[`() putting there "required number of commas in their proper places" programmatically. 
+Even if it does not lead to a very readable expression, I think it merits to be mentioned.
+
+   x <- array(1:60, dim = c(10, 2, 3))
+   ld=length(dim(x))
+   i=1 # i.e. the first row but can be a slice 1:5, whatever
+   do.call(`[`, c(alist(x, i), alist(,)[rep(1,ld-1)], alist(drop=FALSE)))
+
+Best,
+Serguei.
+
+>
+> Rui Barradas
+>
+> ?s 20:45 de 12/02/21, robin hankin escreveu:
+>> Rui
+>>
+>>  > x <- array(runif(60), dim = c(10, 2, 3))
+>>  > array(x[slice.index(x,1) %in% 1:5],c(5,dim(x)[-1]))
+>>
+>> (I don't see this on stackoverflow; should I post this there too?) 
+>> Most of the magic package is devoted to handling arrays of arbitrary 
+>> dimensions and this functionality might be good to include if anyone 
+>> would find it useful.
+>>
+>> HTH
+>>
+>> Robin
+>>
+>>
+>> <mailto:hankin.robin at gmail.com>
+>>
+>>
+>> On Sat, Feb 13, 2021 at 12:26 AM Rui Barradas <ruipbarradas at sapo.pt 
+>> <mailto:ruipbarradas at sapo.pt>> wrote:
+>>
+>>     Hello,
+>>
+>>     This came up in this StackOverflow post [1].
+>>
+>>     If x is an array with n dimensions, how to subset by just one 
+>> dimension?
+>>     If n is known, it's simple, add the required number of commas in 
+>> their
+>>     proper places.
+>>     But what if the user doesn't know the value of n?
+>>
+>>     The example below has n = 3, and subsets by the 1st dim. The 
+>> apply loop
+>>     solves the problem as expected but note that the index i has
+>>     length(i) > 1.
+>>
+>>
+>>     x <- array(1:60, dim = c(10, 2, 3))
+>>
+>>     d <- 1L
+>>     i <- 1:5
+>>     apply(x, MARGIN = -d, '[', i)
+>>     x[i, , ]
+>>
+>>
+>>     If length(i) == 1, argument drop = FALSE doesn't work as I 
+>> expected it
+>>     to work, only the other way does:
+>>
+>>
+>>     i <- 1L
+>>     apply(x, MARGIN = -d, '[', i, drop = FALSE)
+>>     x[i, , drop = FALSE]
+>>
+>>
+>>     What am I missing?
+>>
+>>     [1]
+>> https://stackoverflow.com/questions/66168564/is-there-a-native-r-synt
+>> ax-to-extract-rows-of-an-array
+>>
+>>     Thanks in advance,
+>>
+>>     Rui Barradas
+>>
+>>     ______________________________________________
+>>     R-devel at r-project.org <mailto:R-devel at r-project.org> mailing list
+>>     https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From ggrothend|eck @end|ng |rom gm@||@com  Sat Feb 13 14:08:33 2021
+From: ggrothend|eck @end|ng |rom gm@||@com (Gabor Grothendieck)
+Date: Sat, 13 Feb 2021 08:08:33 -0500
+Subject: [Rd] replicate evaluates its second argument in wrong environment
+Message-ID: <CAP01uRm4Px6T7rMK3+Mho9S1Sv3aVmteM4gjDS19_14yPZtG6A@mail.gmail.com>
+
+Currently replicate used within sapply within a function can fail
+because it gets the environment for its second argument, which is
+currently hard coded to be the parent frame, wrong.  See this link for
+a full example of how it goes wrong and how it could be made to work
+if it were possible to pass an envir argument to it.
+
+https://stackoverflow.com/questions/66184446/sapplya-replicate-b-expression-no-longer-works-inside-a-function/66185079#66185079
+
+-- 
+Statistics & Software Consulting
+GKX Group, GKX Associates Inc.
+tel: 1-877-GKX-GROUP
+email: ggrothendieck at gmail.com
+
+
+From d@v|@ @end|ng |rom r@tud|o@com  Sun Feb 14 15:50:35 2021
+From: d@v|@ @end|ng |rom r@tud|o@com (Davis Vaughan)
+Date: Sun, 14 Feb 2021 09:50:35 -0500
+Subject: [Rd] Corrupt internal row names when creating a data.frame with
+ `attributes<-`
+Message-ID: <CABzLhzyY3uMhRuGZmQvHmx9Ua-9a8Ne3sB_BBBV-_40kOECszA@mail.gmail.com>
+
+Hi all,
+
+I believe that the internal row names object created at this line in
+`row_names_gets()` should be using `-n`, not `n`.
+https://github.com/wch/r-source/blob/b30641d3f58703bbeafee101f983b6b263b7f27d/src/main/attrib.c#L71
+
+This can currently generate corrupt internal row names when using
+`attributes<-` or `structure()`, which calls `attributes<-`.
+
+# internal row names are typically `c(NA, -n)`
+df <- data.frame(x = 1:3)
+.row_names_info(df, type = 0L)
+#> [1] NA -3
+
+# using `attributes()` materializes their non-internal form
+attrs <- attributes(df)
+attrs
+#> $names
+#> [1] "x"
+#>
+#> $class
+#> [1] "data.frame"
+#>
+#> $row.names
+#> [1] 1 2 3
+
+# let's make a data frame from scratch with `attributes<-`
+data <- list(x = 1:3)
+attributes(data) <- attrs
+
+# oh no!
+.row_names_info(data, type = 0L)
+#> [1] NA  3
+
+# Note: Must have `nrow(df) > 2` to demonstrate this bug, as otherwise
+# internal row names are not attempted to be created in the C level
+# `row_names_gets()`
+
+Thanks,
+Davis
+
+	[[alternative HTML version deleted]]
+
+
+From pd@|gd @end|ng |rom gm@||@com  Mon Feb 15 10:18:01 2021
+From: pd@|gd @end|ng |rom gm@||@com (Peter Dalgaard)
+Date: Mon, 15 Feb 2021 10:18:01 +0100
+Subject: [Rd] R 4.0.4 is released
+Message-ID: <02D540F5-498E-41D5-9C6A-7E83EC322ADD@gmail.com>
+
+The build system rolled up R-4.0.4.tar.gz (codename "Lost Library Book") this morning.
+
+The list below details the changes in this release.
+
+You can get the source code from
+
+https://cran.r-project.org/src/base/R-4/R-4.0.4.tar.gz
+
+or wait for it to be mirrored at a CRAN site nearer to you.
+
+Binaries for various platforms will appear in due course.
+
+
+For the R Core Team,
+
+Peter Dalgaard
+
+These are the checksums (md5 and SHA-256) for the freshly created files, in case you wish
+to check that they are uncorrupted:
+
+MD5 (AUTHORS) = b9c44f9f78cab3184ad9898bebc854b4
+MD5 (COPYING) = eb723b61539feef013de476e68b5c50a
+MD5 (COPYING.LIB) = a6f89e2100d9b6cdffcea4f398e37343
+MD5 (FAQ) = a5596520508b8749aa18baea2cf8ff80
+MD5 (INSTALL) = 7893f754308ca31f1ccf62055090ad7b
+MD5 (NEWS) = eeb2d15f39e0a38935de2c419b4263f7
+MD5 (NEWS.0) = bfcd7c147251b5474d96848c6f57e5a8
+MD5 (NEWS.1) = eb78c4d053ec9c32b815cf0c2ebea801
+MD5 (NEWS.2) = 496062c138e2def06cebccddfb814ac6
+MD5 (NEWS.3) = 012e7f4a80cc8ec947bf3f0ff6117ec8
+MD5 (R-latest.tar.gz) = e205f000947f99eeba0fb6311bd61970
+MD5 (README) = f468f281c919665e276a1b691decbbe6
+MD5 (RESOURCES) = 529223fd3ffef95731d0a87353108435
+MD5 (THANKS) = 251d20510bfc3cc93b82c5a99f7efcc6
+MD5 (VERSION-INFO.dcf) = 6a5ad95f3b708ce0dc19bab8bbfc3bc0
+MD5 (R-4/R-4.0.4.tar.gz) = e205f000947f99eeba0fb6311bd61970
+
+
+2cde824a7b18958e5f06b391c801c8288be0f84fa8934b7ddefef23c67e60c09  AUTHORS
+e6d6a009505e345fe949e1310334fcb0747f28dae2856759de102ab66b722cb4  COPYING
+6095e9ffa777dd22839f7801aa845b31c9ed07f3d6bf8a26dc5d2dec8ccc0ef3  COPYING.LIB
+e9783551b3724b368a42c1300a8e5795ae84add34823c4eb9d8054a0e76f592c  FAQ
+f87461be6cbaecc4dce44ac58e5bd52364b0491ccdadaf846cb9b452e9550f31  INSTALL
+2227d48d78c4d70d07c367ecd4c5ba60a04a699ed0391fabac3da6edffdaa5db  NEWS
+4e21b62f515b749f80997063fceab626d7258c7d650e81a662ba8e0640f12f62  NEWS.0
+12b30c724117b1b2b11484673906a6dcd48a361f69fc420b36194f9218692d01  NEWS.1
+e80de410c77f05ff2012fa70051b89119845f734a7fa5c55857e61e4ed7d5f6e  NEWS.2
+7201d139947afa52b5e09d26dc01445edf444506264355b2185122bc1ed3dce0  NEWS.3
+523f27d69744a08c8f0bd5e1e6c3d89a4db29ed983388ba70963a3cd3a4a802e  R-latest.tar.gz
+2fdd3e90f23f32692d4b3a0c0452f2c219a10882033d1774f8cadf25886c3ddc  README
+408737572ecc6e1135fdb2cf7a9dbb1a6cb27967c757f1771b8c39d1fd2f1ab9  RESOURCES
+c9c7cb32308b4e560a22c858819ade9de524a602abd4e92d1c328c89f8037d73  THANKS
+6c5117e36f4e69f0cd90f3bab6e7fd47ec90b0047e2aaed145300ad4ece20ede  VERSION-INFO.dcf
+523f27d69744a08c8f0bd5e1e6c3d89a4db29ed983388ba70963a3cd3a4a802e  R-4/R-4.0.4.tar.gz
+
+This is the relevant part of the NEWS file
+
+CHANGES IN R 4.0.4:
+
+  NEW FEATURES:
+
+    * File share/texmf/tex/latex/jss.cls has been updated to work with
+      LaTeX versions since Oct 2020.
+
+    * Unicode character width tables (as used by nchar(, type = "w"))
+      have been updated to Unicode 12.1 by Brodie Gaslam (PR#17781),
+      including many emoji.
+
+    * The internal table for iswprint (used on Windows, macOS and AIX)
+      has been updated to include many recent Unicode characters.
+
+  INSTALLATION on a UNIX-ALIKE:
+
+    * If an external BLAS is specified by --with-blas=foo or _via_
+      environment variable BLAS_LIBS is not found, this is now a
+      configuration error.  The previous behaviour was not clear from
+      the documentation: it was to continue the search as if
+      --with-blas=yes was specified.
+
+  BUG FIXES:
+
+    * all.equal(x,y) now "sees" the two different NAs in factors,
+      thanks to Bill Dunlap and others in PR#17897.
+
+    * (~ NULL)[1] and similar formula subsetting now works, thanks to a
+      report and patch by Henrik Bengtsson in PR#17935.  Additionally,
+      subsetting leaving an empty formula now works too, thanks to
+      suggestions by Suharto Anggono.
+
+    * .traceback(n) keeps source references again, as before R 4.0.0,
+      fixing a regression; introduced by the PR#17580, reported
+      including two patch proposals by Brodie Gaslam.
+
+    * unlist(plst, recursive=FALSE) no longer drops content for
+      pairlists with list components, thanks to the report and patch by
+      Suharto Anggono in PR#17950.
+
+    * iconvlist() now also works on MUSL based (Linux) systems, from a
+      report and patch suggestion by Wesley Chan in PR#17970.
+
+    * round() and signif() no longer tolerate wrong argument names,
+      notably in 1-argument calls; reported by Shane Mueller on R-devel
+      (mailing list); later reported as PR#17976.
+
+    * .Machine has longdouble.* elements only if
+      capabilities("long.double") is true, as documented.  (Previously
+      they were included if the platform had long double identical to
+      double, as ARM does.)
+
+    * p.adjust(numeric(), n=0) now works, fixing PR#18002.
+
+    * identical(x,y) no longer prints "Unknown Type .." for typeof(x)
+      == "..." objects.
+
+    * Fix (auto-)print()ing of named complex vectors, see PR#17868 and
+      PR#18019.
+
+    * all.equal(<language>, <...>) now works, fixing PR#18029.
+
+    * as.data.frame.list(L, row.names=NULL) now behaves in line with
+      data.frame(), disregarding names of components of L, fixing
+      PR#18034, reported by Kevin Tappe.
+
+    * checkRdaFiles(ff)$version is now correct also when ff contains
+      files of different versions, thanks to a report and patch from
+      Sebastian Meyer in PR#18041.
+
+    * macOS: Quartz device live drawing could fail (no plot is shown)
+      if the system changes the drawing context after view update
+      (often the case since macOS Big Sur). System log may show
+      "CGContextDelegateCreateForContext: invalid context" error.
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From h@w|ckh@m @end|ng |rom gm@||@com  Mon Feb 15 22:10:07 2021
+From: h@w|ckh@m @end|ng |rom gm@||@com (Hadley Wickham)
+Date: Mon, 15 Feb 2021 15:10:07 -0600
+Subject: [Rd] 
+ replicate evaluates its second argument in wrong environment
+In-Reply-To: <CAP01uRm4Px6T7rMK3+Mho9S1Sv3aVmteM4gjDS19_14yPZtG6A@mail.gmail.com>
+References: <CAP01uRm4Px6T7rMK3+Mho9S1Sv3aVmteM4gjDS19_14yPZtG6A@mail.gmail.com>
+Message-ID: <CABdHhvFaY1mL5DxBX_+pVorZw0rLpxW9e2G9eb7mwy=R29f_dA@mail.gmail.com>
+
+This is a nice example of the motivation for tidy evaluation ? since
+enquo() captures the environment in which the promise should be
+evaluated, there's no need for an additional explicit argument.
+
+library(rlang)
+
+replicate2 <- function (n, expr, simplify = "array") {
+  exnr <- enquo(expr)
+  sapply(integer(n), function(i) eval_tidy(expr), simplify = simplify)
+}
+
+doRep2 <- function(a, b) sapply(a, replicate2, b)
+doRep2(3, 2)
+#>      [,1]
+#> [1,]    2
+#> [2,]    2
+#> [3,]    2
+
+Hadley
+
+On Sat, Feb 13, 2021 at 7:09 AM Gabor Grothendieck
+<ggrothendieck at gmail.com> wrote:
+>
+> Currently replicate used within sapply within a function can fail
+> because it gets the environment for its second argument, which is
+> currently hard coded to be the parent frame, wrong.  See this link for
+> a full example of how it goes wrong and how it could be made to work
+> if it were possible to pass an envir argument to it.
+>
+> https://stackoverflow.com/questions/66184446/sapplya-replicate-b-expression-no-longer-works-inside-a-function/66185079#66185079
+>
+> --
+> Statistics & Software Consulting
+> GKX Group, GKX Associates Inc.
+> tel: 1-877-GKX-GROUP
+> email: ggrothendieck at gmail.com
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+
+-- 
+http://hadley.nz
+
+
+From dw|n@em|u@ @end|ng |rom comc@@t@net  Tue Feb 16 00:05:17 2021
+From: dw|n@em|u@ @end|ng |rom comc@@t@net (David Winsemius)
+Date: Mon, 15 Feb 2021 15:05:17 -0800
+Subject: [Rd] 
+ replicate evaluates its second argument in wrong environment
+In-Reply-To: <CABdHhvFaY1mL5DxBX_+pVorZw0rLpxW9e2G9eb7mwy=R29f_dA@mail.gmail.com>
+References: <CAP01uRm4Px6T7rMK3+Mho9S1Sv3aVmteM4gjDS19_14yPZtG6A@mail.gmail.com>
+ <CABdHhvFaY1mL5DxBX_+pVorZw0rLpxW9e2G9eb7mwy=R29f_dA@mail.gmail.com>
+Message-ID: <9f2c712b-1c8e-c944-2db8-94bed0f2f6d2@comcast.net>
+
+
+On 2/15/21 1:10 PM, Hadley Wickham wrote:
+> This is a nice example of the motivation for tidy evaluation ? since
+> enquo() captures the environment in which the promise should be
+> evaluated, there's no need for an additional explicit argument.
+>
+> library(rlang)
+>
+> replicate2 <- function (n, expr, simplify = "array") {
+>    exnr <- enquo(expr)
+
+It does not appear that the line above would accomplish anything given 
+the succeeding line. Or am I missing something? Taking it out doesn't 
+seem to affect results. Whatever magic there is seems to be in the 
+`eval_tidy` function, whose mechanism or rules seem opaque. Was "exnr" 
+supposed to be passed to `eval_tidy`?
+
+-- 
+
+David.
+
+>    sapply(integer(n), function(i) eval_tidy(expr), simplify = simplify)
+> }
+>
+> doRep2 <- function(a, b) sapply(a, replicate2, b)
+> doRep2(3, 2)
+> #>      [,1]
+> #> [1,]    2
+> #> [2,]    2
+> #> [3,]    2
+>
+> Hadley
+>
+> On Sat, Feb 13, 2021 at 7:09 AM Gabor Grothendieck
+> <ggrothendieck at gmail.com> wrote:
+>> Currently replicate used within sapply within a function can fail
+>> because it gets the environment for its second argument, which is
+>> currently hard coded to be the parent frame, wrong.  See this link for
+>> a full example of how it goes wrong and how it could be made to work
+>> if it were possible to pass an envir argument to it.
+>>
+>> https://stackoverflow.com/questions/66184446/sapplya-replicate-b-expression-no-longer-works-inside-a-function/66185079#66185079
+>>
+>> --
+>> Statistics & Software Consulting
+>> GKX Group, GKX Associates Inc.
+>> tel: 1-877-GKX-GROUP
+>> email: ggrothendieck at gmail.com
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+>
+
+
+From h@w|ckh@m @end|ng |rom gm@||@com  Tue Feb 16 00:17:28 2021
+From: h@w|ckh@m @end|ng |rom gm@||@com (Hadley Wickham)
+Date: Mon, 15 Feb 2021 17:17:28 -0600
+Subject: [Rd] 
+ replicate evaluates its second argument in wrong environment
+In-Reply-To: <9f2c712b-1c8e-c944-2db8-94bed0f2f6d2@comcast.net>
+References: <CAP01uRm4Px6T7rMK3+Mho9S1Sv3aVmteM4gjDS19_14yPZtG6A@mail.gmail.com>
+ <CABdHhvFaY1mL5DxBX_+pVorZw0rLpxW9e2G9eb7mwy=R29f_dA@mail.gmail.com>
+ <9f2c712b-1c8e-c944-2db8-94bed0f2f6d2@comcast.net>
+Message-ID: <CABdHhvE45uxDJaGAyRoX7C7pTrO-vdmCx6mffvVB02iXS=sJQA@mail.gmail.com>
+
+On Monday, February 15, 2021, David Winsemius <dwinsemius at comcast.net>
+wrote:
+
+>
+> On 2/15/21 1:10 PM, Hadley Wickham wrote:
+>
+>> This is a nice example of the motivation for tidy evaluation ? since
+>> enquo() captures the environment in which the promise should be
+>> evaluated, there's no need for an additional explicit argument.
+>>
+>> library(rlang)
+>>
+>> replicate2 <- function (n, expr, simplify = "array") {
+>>    exnr <- enquo(expr)
+>>
+>
+> It does not appear that the line above would accomplish anything given the
+> succeeding line. Or am I missing something? Taking it out doesn't seem to
+> affect results. Whatever magic there is seems to be in the `eval_tidy`
+> function, whose mechanism or rules seem opaque. Was "exnr" supposed to be
+> passed to `eval_tidy`?
+>
+>
+Oops, yes, obviously that was supposed to be expr. It doesn?t matter in
+Gabor?s example because it evaluates to a constant but obviously would
+matter in other cases.
+
+Hadley
+
+
+> --
+>
+> David.
+>
+>    sapply(integer(n), function(i) eval_tidy(expr), simplify = simplify)
+>> }
+>>
+>> doRep2 <- function(a, b) sapply(a, replicate2, b)
+>> doRep2(3, 2)
+>> #>      [,1]
+>> #> [1,]    2
+>> #> [2,]    2
+>> #> [3,]    2
+>>
+>> Hadley
+>>
+>> On Sat, Feb 13, 2021 at 7:09 AM Gabor Grothendieck
+>> <ggrothendieck at gmail.com> wrote:
+>>
+>>> Currently replicate used within sapply within a function can fail
+>>> because it gets the environment for its second argument, which is
+>>> currently hard coded to be the parent frame, wrong.  See this link for
+>>> a full example of how it goes wrong and how it could be made to work
+>>> if it were possible to pass an envir argument to it.
+>>>
+>>> https://stackoverflow.com/questions/66184446/sapplya-replica
+>>> te-b-expression-no-longer-works-inside-a-function/66185079#66185079
+>>>
+>>> --
+>>> Statistics & Software Consulting
+>>> GKX Group, GKX Associates Inc.
+>>> tel: 1-877-GKX-GROUP
+>>> email: ggrothendieck at gmail.com
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>
+>>
+>>
+>>
+
+-- 
+http://hadley.nz
+
+	[[alternative HTML version deleted]]
+
+
+From egonu|@te@ @end|ng |rom gm@||@com  Tue Feb 16 00:03:08 2021
+From: egonu|@te@ @end|ng |rom gm@||@com (Emre Gonulates)
+Date: Mon, 15 Feb 2021 18:03:08 -0500
+Subject: [Rd] Checking multiple inheritance of S4 objects using R's C API
+Message-ID: <CAMdpnod3g0um5uOs+oiz57Dc9ntb5rhgiqivrbBpzT4HuzbkKw@mail.gmail.com>
+
+Hi,
+
+Suppose I have the following two classes in R:
+
+
+setClass("Person", representation(name = "character", age = "numeric"))
+setClass("Employee", representation(boss = "Person"), contains = "Person")
+
+
+I can successfully check inheritance in base R:
+
+
+employee <- new("Employee", name = "Jack", age = 25)
+
+inherits(employee, "Employee")
+#> [1] TRUE
+inherits(employee, "Person")
+#> [1] TRUE
+
+
+I could not achieve the same in Rcpp:
+
+
+Rcpp::cppFunction('
+void check_class(Rcpp::S4 x) {
+  Rcout << "Class: " << as<std::string>(x.attr("class")) << std::endl;
+  Rcout << "Rf_inherits(x, \\"Employee\\") : " << Rf_inherits(x,
+"Employee") << std::endl;
+  Rcout << "Rf_inherits(x, \\"Person\\")   : " << Rf_inherits(x, "Person")
+<< std::endl;
+  Rcout << "R_extends : " << R_extends(x, Rf_mkString("Person"),
+R_GlobalEnv) << std::endl;
+}')
+
+check_class(employee)
+#> Class: Employee
+#> Rf_inherits(x, "Employee") : 1
+#> Rf_inherits(x, "Person")   : 0
+#> R_extends :
+#> Error in extends(new("Employee", boss = new("Person", name =
+character(0), : 'class1' must be the name of a class or a class definition
+
+
+I expected `Rf_inherits(x, "Person")` to be true as well.
+
+How can I check whether an object inherits from parent classes in R's C API?
+
+Thanks,
+Emre.
+
+
+P.S. This question originally posted <a href="
+https://stackoverflow.com/q/66201929/2275286">here</a>.
+
+	[[alternative HTML version deleted]]
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Tue Feb 16 02:58:22 2021
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Tue, 16 Feb 2021 14:58:22 +1300
+Subject: [Rd] 
+ Checking multiple inheritance of S4 objects using R's C API
+In-Reply-To: <CAMdpnod3g0um5uOs+oiz57Dc9ntb5rhgiqivrbBpzT4HuzbkKw@mail.gmail.com>
+References: <CAMdpnod3g0um5uOs+oiz57Dc9ntb5rhgiqivrbBpzT4HuzbkKw@mail.gmail.com>
+Message-ID: <15E7DDB7-01CC-4297-B404-7989E073E61D@R-project.org>
+
+Emre,
+
+inherits() was designed for S3 classes and at C level only ever works for S3 classes.
+
+In S4 world you should use is().
+
+There is no equivalent C-level API for is() so, unfortunately, you likely have to use Rf_eval() of is(x, "class").
+
+At low-level there is R_S4_extends() which allows you to get the list of superclasses for S4 objects, but according to the definition of some people it is not part of the official R API so your mileage may vary.
+
+Cheers,
+Simon
+
+
+
+
+> On Feb 16, 2021, at 12:03 PM, Emre Gonulates <egonulates at gmail.com> wrote:
+> 
+> Hi,
+> 
+> Suppose I have the following two classes in R:
+> 
+> 
+> setClass("Person", representation(name = "character", age = "numeric"))
+> setClass("Employee", representation(boss = "Person"), contains = "Person")
+> 
+> 
+> I can successfully check inheritance in base R:
+> 
+> 
+> employee <- new("Employee", name = "Jack", age = 25)
+> 
+> inherits(employee, "Employee")
+> #> [1] TRUE
+> inherits(employee, "Person")
+> #> [1] TRUE
+> 
+> 
+> I could not achieve the same in Rcpp:
+> 
+> 
+> Rcpp::cppFunction('
+> void check_class(Rcpp::S4 x) {
+>  Rcout << "Class: " << as<std::string>(x.attr("class")) << std::endl;
+>  Rcout << "Rf_inherits(x, \\"Employee\\") : " << Rf_inherits(x,
+> "Employee") << std::endl;
+>  Rcout << "Rf_inherits(x, \\"Person\\")   : " << Rf_inherits(x, "Person")
+> << std::endl;
+>  Rcout << "R_extends : " << R_extends(x, Rf_mkString("Person"),
+> R_GlobalEnv) << std::endl;
+> }')
+> 
+> check_class(employee)
+> #> Class: Employee
+> #> Rf_inherits(x, "Employee") : 1
+> #> Rf_inherits(x, "Person")   : 0
+> #> R_extends :
+> #> Error in extends(new("Employee", boss = new("Person", name =
+> character(0), : 'class1' must be the name of a class or a class definition
+> 
+> 
+> I expected `Rf_inherits(x, "Person")` to be true as well.
+> 
+> How can I check whether an object inherits from parent classes in R's C API?
+> 
+> Thanks,
+> Emre.
+> 
+> 
+> P.S. This question originally posted <a href="
+> https://stackoverflow.com/q/66201929/2275286">here</a>.
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
+From therne@u @end|ng |rom m@yo@edu  Tue Feb 16 15:39:36 2021
+From: therne@u @end|ng |rom m@yo@edu (Therneau, Terry M., Ph.D.)
+Date: Tue, 16 Feb 2021 08:39:36 -0600
+Subject: [Rd] issue with data()
+Message-ID: <28fddd$fejae9@ironport10.mayo.edu>
+
+I am testing out the next release of survival, which involves running R CMD check on 868 
+CRAN packages that import, depend or suggest it.
+
+The survival package has a lot of data sets, most of which are non-trivial real examples 
+(something I'm proud of).? To save space I've bundled many of them, .e.g., data/cancer.rda 
+has 19 different dataframes.
+
+This caused failures in 4 packages, each because they have a line such as "data(lung)"? or 
+data(breast, package= "survival"); and the data() command looks for a file name.
+
+This is a question about which option is considered the best (perhaps more of a poll), 
+between two choices
+
+1. unbundle them again? (it does save 1/3 of the space, and I do get complaints from R CMD 
+build about size)
+2. send notes to the 4 maintainers.? The help files for the data sets have the usage 
+documented as? "lung" or "breast", and not data(lung), so I am technically legal to claim 
+they have a mistake.
+
+A third option to make the data sets a separate package is not on the table.? I use them 
+heavily in my help files and test suite, and since survival is a recommended package I 
+can't add library(x) statements for? !(x %in% recommended).?? I am guessing that this 
+would also break many dependent packages.
+
+Terry T.
+
+-- 
+Terry M Therneau, PhD
+Department of Health Science Research
+Mayo Clinic
+therneau at mayo.edu
+
+"TERR-ree THUR-noh"
+
+
+	[[alternative HTML version deleted]]
+
+
+From ||@t@ @end|ng |rom dewey@myzen@co@uk  Tue Feb 16 17:20:09 2021
+From: ||@t@ @end|ng |rom dewey@myzen@co@uk (Michael Dewey)
+Date: Tue, 16 Feb 2021 16:20:09 +0000
+Subject: [Rd] issue with data()
+In-Reply-To: <28fddd$fejae9@ironport10.mayo.edu>
+References: <28fddd$fejae9@ironport10.mayo.edu>
+Message-ID: <57f492a9-206f-8010-5b59-f4f8b86264ad@dewey.myzen.co.uk>
+
+Dear Terry
+
+Option 2 looks the best to me. They have a relatively simple change to 
+make and there are only four of them.
+
+Michael
+
+On 16/02/2021 14:39, Therneau, Terry M., Ph.D. via R-devel wrote:
+> I am testing out the next release of survival, which involves running R CMD check on 868
+> CRAN packages that import, depend or suggest it.
+> 
+> The survival package has a lot of data sets, most of which are non-trivial real examples
+> (something I'm proud of).? To save space I've bundled many of them, .e.g., data/cancer.rda
+> has 19 different dataframes.
+> 
+> This caused failures in 4 packages, each because they have a line such as "data(lung)"? or
+> data(breast, package= "survival"); and the data() command looks for a file name.
+> 
+> This is a question about which option is considered the best (perhaps more of a poll),
+> between two choices
+> 
+> 1. unbundle them again? (it does save 1/3 of the space, and I do get complaints from R CMD
+> build about size)
+> 2. send notes to the 4 maintainers.? The help files for the data sets have the usage
+> documented as? "lung" or "breast", and not data(lung), so I am technically legal to claim
+> they have a mistake.
+> 
+> A third option to make the data sets a separate package is not on the table.? I use them
+> heavily in my help files and test suite, and since survival is a recommended package I
+> can't add library(x) statements for? !(x %in% recommended).?? I am guessing that this
+> would also break many dependent packages.
+> 
+> Terry T.
+> 
+
+-- 
+Michael
+http://www.dewey.myzen.co.uk/home.html
+
+
+From kev|nu@hey @end|ng |rom gm@||@com  Tue Feb 16 20:05:33 2021
+From: kev|nu@hey @end|ng |rom gm@||@com (Kevin Ushey)
+Date: Tue, 16 Feb 2021 11:05:33 -0800
+Subject: [Rd] Corrupt internal row names when creating a data.frame with
+ `attributes<-`
+In-Reply-To: <CABzLhzyY3uMhRuGZmQvHmx9Ua-9a8Ne3sB_BBBV-_40kOECszA@mail.gmail.com>
+References: <CABzLhzyY3uMhRuGZmQvHmx9Ua-9a8Ne3sB_BBBV-_40kOECszA@mail.gmail.com>
+Message-ID: <CAJXgQP2zfZ6Z13-K8HsHsYwEfwzTaX71HEs0a1hioB=mcS1a=w@mail.gmail.com>
+
+Strictly speaking, I don't think this is a "corrupt" representation,
+given that any APIs used to access that internal representation will
+call abs() on the row count encoded within. At least, as far as I can
+tell, there aren't any adverse downstream effects from having the row
+names attribute encoded with this particular internal representation.
+
+On the other hand, the documentation in ?.row_names_info states, for
+the 'type' argument:
+
+integer. Currently type = 0 returns the internal "row.names" attribute
+(possibly NULL), type = 2 the number of rows implied by the attribute,
+and type = 1 the latter with a negative sign for ?automatic? row
+names.
+
+so one could argue that it's incorrect in light of that documentation
+(the row names are "automatic", but the row count is not marked with a
+negative sign). Or perhaps this is a different "type" of internal
+automatic row name, since it was generated from an already-existing
+integer sequence rather than "automatically" in a call to
+data.frame().
+
+Kevin
+
+On Sun, Feb 14, 2021 at 6:51 AM Davis Vaughan <davis at rstudio.com> wrote:
+>
+> Hi all,
+>
+> I believe that the internal row names object created at this line in
+> `row_names_gets()` should be using `-n`, not `n`.
+> https://github.com/wch/r-source/blob/b30641d3f58703bbeafee101f983b6b263b7f27d/src/main/attrib.c#L71
+>
+> This can currently generate corrupt internal row names when using
+> `attributes<-` or `structure()`, which calls `attributes<-`.
+>
+> # internal row names are typically `c(NA, -n)`
+> df <- data.frame(x = 1:3)
+> .row_names_info(df, type = 0L)
+> #> [1] NA -3
+>
+> # using `attributes()` materializes their non-internal form
+> attrs <- attributes(df)
+> attrs
+> #> $names
+> #> [1] "x"
+> #>
+> #> $class
+> #> [1] "data.frame"
+> #>
+> #> $row.names
+> #> [1] 1 2 3
+>
+> # let's make a data frame from scratch with `attributes<-`
+> data <- list(x = 1:3)
+> attributes(data) <- attrs
+>
+> # oh no!
+> .row_names_info(data, type = 0L)
+> #> [1] NA  3
+>
+> # Note: Must have `nrow(df) > 2` to demonstrate this bug, as otherwise
+> # internal row names are not attempted to be created in the C level
+> # `row_names_gets()`
+>
+> Thanks,
+> Davis
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From w||||@mwdun|@p @end|ng |rom gm@||@com  Tue Feb 16 20:29:48 2021
+From: w||||@mwdun|@p @end|ng |rom gm@||@com (Bill Dunlap)
+Date: Tue, 16 Feb 2021 11:29:48 -0800
+Subject: [Rd] Corrupt internal row names when creating a data.frame with
+ `attributes<-`
+In-Reply-To: <CAJXgQP2zfZ6Z13-K8HsHsYwEfwzTaX71HEs0a1hioB=mcS1a=w@mail.gmail.com>
+References: <CABzLhzyY3uMhRuGZmQvHmx9Ua-9a8Ne3sB_BBBV-_40kOECszA@mail.gmail.com>
+ <CAJXgQP2zfZ6Z13-K8HsHsYwEfwzTaX71HEs0a1hioB=mcS1a=w@mail.gmail.com>
+Message-ID: <CAHqSRuSDwDHpWOrM=1bmv5ZM8T5LunMvppqfF+fYFgwLqDrkhw@mail.gmail.com>
+
+as.matrix.data.frame does not take the absolute value of that number:
+  > dPos <- structure(list(X=101:103,201:203),class="data.frame",row.names=c(NA_integer_,+3L))
+  > dNeg <- structure(list(X=101:103,201:203),class="data.frame",row.names=c(NA_integer_,-3L))
+  > rownames(as.matrix(dPos))
+  [1] "1" "2" "3"
+  > rownames(as.matrix(dNeg))
+  NULL
+
+-Bill
+
+On Tue, Feb 16, 2021 at 11:06 AM Kevin Ushey <kevinushey at gmail.com> wrote:
+>
+> Strictly speaking, I don't think this is a "corrupt" representation,
+> given that any APIs used to access that internal representation will
+> call abs() on the row count encoded within. At least, as far as I can
+> tell, there aren't any adverse downstream effects from having the row
+> names attribute encoded with this particular internal representation.
+>
+> On the other hand, the documentation in ?.row_names_info states, for
+> the 'type' argument:
+>
+> integer. Currently type = 0 returns the internal "row.names" attribute
+> (possibly NULL), type = 2 the number of rows implied by the attribute,
+> and type = 1 the latter with a negative sign for ?automatic? row
+> names.
+>
+> so one could argue that it's incorrect in light of that documentation
+> (the row names are "automatic", but the row count is not marked with a
+> negative sign). Or perhaps this is a different "type" of internal
+> automatic row name, since it was generated from an already-existing
+> integer sequence rather than "automatically" in a call to
+> data.frame().
+>
+> Kevin
+>
+> On Sun, Feb 14, 2021 at 6:51 AM Davis Vaughan <davis at rstudio.com> wrote:
+> >
+> > Hi all,
+> >
+> > I believe that the internal row names object created at this line in
+> > `row_names_gets()` should be using `-n`, not `n`.
+> > https://github.com/wch/r-source/blob/b30641d3f58703bbeafee101f983b6b263b7f27d/src/main/attrib.c#L71
+> >
+> > This can currently generate corrupt internal row names when using
+> > `attributes<-` or `structure()`, which calls `attributes<-`.
+> >
+> > # internal row names are typically `c(NA, -n)`
+> > df <- data.frame(x = 1:3)
+> > .row_names_info(df, type = 0L)
+> > #> [1] NA -3
+> >
+> > # using `attributes()` materializes their non-internal form
+> > attrs <- attributes(df)
+> > attrs
+> > #> $names
+> > #> [1] "x"
+> > #>
+> > #> $class
+> > #> [1] "data.frame"
+> > #>
+> > #> $row.names
+> > #> [1] 1 2 3
+> >
+> > # let's make a data frame from scratch with `attributes<-`
+> > data <- list(x = 1:3)
+> > attributes(data) <- attrs
+> >
+> > # oh no!
+> > .row_names_info(data, type = 0L)
+> > #> [1] NA  3
+> >
+> > # Note: Must have `nrow(df) > 2` to demonstrate this bug, as otherwise
+> > # internal row names are not attempted to be created in the C level
+> > # `row_names_gets()`
+> >
+> > Thanks,
+> > Davis
+> >
+> >         [[alternative HTML version deleted]]
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From d@v|@ @end|ng |rom r@tud|o@com  Tue Feb 16 20:50:33 2021
+From: d@v|@ @end|ng |rom r@tud|o@com (Davis Vaughan)
+Date: Tue, 16 Feb 2021 14:50:33 -0500
+Subject: [Rd] Corrupt internal row names when creating a data.frame with
+ `attributes<-`
+In-Reply-To: <CAHqSRuSDwDHpWOrM=1bmv5ZM8T5LunMvppqfF+fYFgwLqDrkhw@mail.gmail.com>
+References: <CABzLhzyY3uMhRuGZmQvHmx9Ua-9a8Ne3sB_BBBV-_40kOECszA@mail.gmail.com>
+ <CAJXgQP2zfZ6Z13-K8HsHsYwEfwzTaX71HEs0a1hioB=mcS1a=w@mail.gmail.com>
+ <CAHqSRuSDwDHpWOrM=1bmv5ZM8T5LunMvppqfF+fYFgwLqDrkhw@mail.gmail.com>
+Message-ID: <CABzLhzyfq9DR7iHLFGRscfXVkYwX-YDTFtB09peKH_CAtr7Srw@mail.gmail.com>
+
+This originally came up in this dplyr issue:
+https://github.com/tidyverse/dplyr/issues/5745
+
+Where `tibble::column_to_rownames()` failed because it eventually checks
+`.row_names_info(.data) > 0L` to see if there are automatic row names,
+which is in line with the documentation that Kevin pointed out: "type = 1
+the latter with a negative sign for ?automatic? row names."
+
+Davis
+
+On Tue, Feb 16, 2021 at 2:29 PM Bill Dunlap <williamwdunlap at gmail.com>
+wrote:
+
+> as.matrix.data.frame does not take the absolute value of that number:
+>   > dPos <-
+> structure(list(X=101:103,201:203),class="data.frame",row.names=c(NA_integer_,+3L))
+>   > dNeg <-
+> structure(list(X=101:103,201:203),class="data.frame",row.names=c(NA_integer_,-3L))
+>   > rownames(as.matrix(dPos))
+>   [1] "1" "2" "3"
+>   > rownames(as.matrix(dNeg))
+>   NULL
+>
+> -Bill
+>
+> On Tue, Feb 16, 2021 at 11:06 AM Kevin Ushey <kevinushey at gmail.com> wrote:
+> >
+> > Strictly speaking, I don't think this is a "corrupt" representation,
+> > given that any APIs used to access that internal representation will
+> > call abs() on the row count encoded within. At least, as far as I can
+> > tell, there aren't any adverse downstream effects from having the row
+> > names attribute encoded with this particular internal representation.
+> >
+> > On the other hand, the documentation in ?.row_names_info states, for
+> > the 'type' argument:
+> >
+> > integer. Currently type = 0 returns the internal "row.names" attribute
+> > (possibly NULL), type = 2 the number of rows implied by the attribute,
+> > and type = 1 the latter with a negative sign for ?automatic? row
+> > names.
+> >
+> > so one could argue that it's incorrect in light of that documentation
+> > (the row names are "automatic", but the row count is not marked with a
+> > negative sign). Or perhaps this is a different "type" of internal
+> > automatic row name, since it was generated from an already-existing
+> > integer sequence rather than "automatically" in a call to
+> > data.frame().
+> >
+> > Kevin
+> >
+> > On Sun, Feb 14, 2021 at 6:51 AM Davis Vaughan <davis at rstudio.com> wrote:
+> > >
+> > > Hi all,
+> > >
+> > > I believe that the internal row names object created at this line in
+> > > `row_names_gets()` should be using `-n`, not `n`.
+> > >
+> https://github.com/wch/r-source/blob/b30641d3f58703bbeafee101f983b6b263b7f27d/src/main/attrib.c#L71
+> > >
+> > > This can currently generate corrupt internal row names when using
+> > > `attributes<-` or `structure()`, which calls `attributes<-`.
+> > >
+> > > # internal row names are typically `c(NA, -n)`
+> > > df <- data.frame(x = 1:3)
+> > > .row_names_info(df, type = 0L)
+> > > #> [1] NA -3
+> > >
+> > > # using `attributes()` materializes their non-internal form
+> > > attrs <- attributes(df)
+> > > attrs
+> > > #> $names
+> > > #> [1] "x"
+> > > #>
+> > > #> $class
+> > > #> [1] "data.frame"
+> > > #>
+> > > #> $row.names
+> > > #> [1] 1 2 3
+> > >
+> > > # let's make a data frame from scratch with `attributes<-`
+> > > data <- list(x = 1:3)
+> > > attributes(data) <- attrs
+> > >
+> > > # oh no!
+> > > .row_names_info(data, type = 0L)
+> > > #> [1] NA  3
+> > >
+> > > # Note: Must have `nrow(df) > 2` to demonstrate this bug, as otherwise
+> > > # internal row names are not attempted to be created in the C level
+> > > # `row_names_gets()`
+> > >
+> > > Thanks,
+> > > Davis
+> > >
+> > >         [[alternative HTML version deleted]]
+> > >
+> > > ______________________________________________
+> > > R-devel at r-project.org mailing list
+> > > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From g@bembecker @end|ng |rom gm@||@com  Tue Feb 16 23:49:44 2021
+From: g@bembecker @end|ng |rom gm@||@com (Gabriel Becker)
+Date: Tue, 16 Feb 2021 14:49:44 -0800
+Subject: [Rd] NCOL, as.matrix, cbind and NULL
+Message-ID: <CAD4oTHF=RNygXRSLCBuRj7QPQ3+FsiZCcaJRBTwUYYX8MwASBw@mail.gmail.com>
+
+Hi all,
+
+so I've known for a while that NROW(NULL) gives 0, where nrow(NULL) gives
+an error, so I naively expected NCOL to do the same.
+
+Of course, it does not, and is documented* (more on this in a bit) as not
+doing so. For those reading without the documentation open, it gives 1.
+
+The relevant doc states:
+
+?nrow? and ?ncol? return the number of rows or columns present in ?x?.
+ ?NCOL? and ?NROW? do the same treating a vector as 1-column matrix, even a
+0-length vector, compatibly with ?as.matrix()? or ?cbind()?, see the
+example.
+
+But there are a couple of fiddly bits here. First is that it says "even a
+0-length *vector*" (emphasis mine), but we have
+
+> is.vector(NULL)
+[1] FALSE
+
+As opposed, of course, to, e.g., numeric(0).
+
+Next is the claim of compatibility with as.matrix and cbind, but in both my
+released version of R (4.0.2) and devel that I just built from trunk, we
+have
+
+> NCOL(NULL)
+
+[1] 1
+
+> cbind(NULL)
+
+NULL
+
+> as.matrix(NULL)
+
+*Error in array(x, c(length(x), 1L), if (!is.null(names(x)))
+list(names(x),  : *
+
+*  'data' must be of a vector type, was 'NULL'*
+
+
+So in fact each function is treating NULL completely differently.
+
+
+The fix (to change behavior or to add a mention in the documentation that
+NULL is treated as a 0-length vector) would be easy to do, should I file a
+bug with a patch for this?
+
+
+Best,
+
+~G
+
+	[[alternative HTML version deleted]]
+
+
+From yut@n|@|n| @end|ng |rom gm@||@com  Wed Feb 17 05:58:19 2021
+From: yut@n|@|n| @end|ng |rom gm@||@com (Hiroaki Yutani)
+Date: Wed, 17 Feb 2021 13:58:19 +0900
+Subject: [Rd] issue with print()ing multibyte characters on R 4.0.4
+Message-ID: <CALyqOb-jU_ub7ASBFdbmE3hm+KpBE7QeqpTkSzwEw5DkL=Cn9A@mail.gmail.com>
+
+Hi all,
+
+I saw several people on Japanese locale claim that, on R 4.0.4,
+print() doesn't display
+Japanese characters correctly. This seems to happen only on Windows
+and on macOS (I
+usually use Linux and I don't see this problem).
+
+For example, in the result below, "?" and "?" are displayed in
+"\uXXXX" format. What's
+curious here is that "?" is displayed as it is, by the way.
+
+> "???"
+[1] "\u9b3c?\u5916"
+
+But, if I use such functions as message() or cat(), the string is
+displayed as it is.
+
+> message("???")
+???
+
+Considering the fact that it seems only Windows and macOS are
+affected, I suspect this
+is somehow related to this change described in the release note,
+(though I have no idea
+what change this is):
+
+    The internal table for iswprint (used on Windows, macOS and AIX) has been
+    updated to include many recent Unicode characters.
+    (https://cran.r-project.org/doc/manuals/r-release/NEWS.html)
+
+Before I'm going to file this issue on Bugzilla, I'd like to confirm
+if this is not the intended
+change, and, if this is actually intended, I want to discuss how to
+improve this behaviour.
+
+Best,
+Hiroaki Yutani
+
+
+From d@@cott @end|ng |rom @uck|@nd@@c@nz  Wed Feb 17 10:28:06 2021
+From: d@@cott @end|ng |rom @uck|@nd@@c@nz (David Scott)
+Date: Wed, 17 Feb 2021 09:28:06 +0000
+Subject: [Rd] issue with data()
+In-Reply-To: <28fddd$fejae9@ironport10.mayo.edu>
+References: <28fddd$fejae9@ironport10.mayo.edu>
+Message-ID: <760d9d81-9a98-8ac7-46f0-17392a36ab7f@auckland.ac.nz>
+
+I would recommend option 2. I have done that when changes to xtable broke some packages. xtable has a number of dependencies but not on the scale of survival. Just 4 packages out of 868 seems minimal to me.
+
+David Scott
+
+On 17/02/2021 3:39 am, Therneau, Terry M., Ph.D. via R-devel wrote:
+I am testing out the next release of survival, which involves running R CMD check on 868
+CRAN packages that import, depend or suggest it.
+
+The survival package has a lot of data sets, most of which are non-trivial real examples
+(something I'm proud of).  To save space I've bundled many of them, .e.g., data/cancer.rda
+has 19 different dataframes.
+
+This caused failures in 4 packages, each because they have a line such as "data(lung)"  or
+data(breast, package= "survival"); and the data() command looks for a file name.
+
+This is a question about which option is considered the best (perhaps more of a poll),
+between two choices
+
+1. unbundle them again  (it does save 1/3 of the space, and I do get complaints from R CMD
+build about size)
+2. send notes to the 4 maintainers.  The help files for the data sets have the usage
+documented as  "lung" or "breast", and not data(lung), so I am technically legal to claim
+they have a mistake.
+
+A third option to make the data sets a separate package is not on the table.  I use them
+heavily in my help files and test suite, and since survival is a recommended package I
+can't add library(x) statements for  !(x %in% recommended).   I am guessing that this
+would also break many dependent packages.
+
+Terry T.
+
+--
+Terry M Therneau, PhD
+Department of Health Science Research
+Mayo Clinic
+therneau at mayo.edu<mailto:therneau at mayo.edu>
+
+"TERR-ree THUR-noh"
+
+
+[[alternative HTML version deleted]]
+
+______________________________________________
+R-devel at r-project.org<mailto:R-devel at r-project.org> mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel<https://stat.ethz.ch/mailman/listinfo/r-devel>
+
+
+--
+_________________________________________________________________
+David Scott
+Department of Statistics
+The University of Auckland, PB 92019
+Auckland 1142,    NEW ZEALAND
+Email:    d.scott at auckland.ac.nz<mailto:d.scott at auckland.ac.nz>
+
+	[[alternative HTML version deleted]]
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Wed Feb 17 11:16:42 2021
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Wed, 17 Feb 2021 11:16:42 +0100
+Subject: [Rd] issue with print()ing multibyte characters on R 4.0.4
+In-Reply-To: <CALyqOb-jU_ub7ASBFdbmE3hm+KpBE7QeqpTkSzwEw5DkL=Cn9A@mail.gmail.com>
+References: <CALyqOb-jU_ub7ASBFdbmE3hm+KpBE7QeqpTkSzwEw5DkL=Cn9A@mail.gmail.com>
+Message-ID: <91739c3a-9a7d-f881-3d4f-c36bf25d9d6a@gmail.com>
+
+Thanks for the report, I can reproduce this on Windows, we'll investigate.
+
+Best
+Tomas
+
+On 2/17/21 5:58 AM, Hiroaki Yutani wrote:
+> Hi all,
+>
+> I saw several people on Japanese locale claim that, on R 4.0.4,
+> print() doesn't display
+> Japanese characters correctly. This seems to happen only on Windows
+> and on macOS (I
+> usually use Linux and I don't see this problem).
+>
+> For example, in the result below, "?" and "?" are displayed in
+> "\uXXXX" format. What's
+> curious here is that "?" is displayed as it is, by the way.
+>
+>> "???"
+> [1] "\u9b3c?\u5916"
+>
+> But, if I use such functions as message() or cat(), the string is
+> displayed as it is.
+>
+>> message("???")
+> ???
+>
+> Considering the fact that it seems only Windows and macOS are
+> affected, I suspect this
+> is somehow related to this change described in the release note,
+> (though I have no idea
+> what change this is):
+>
+>      The internal table for iswprint (used on Windows, macOS and AIX) has been
+>      updated to include many recent Unicode characters.
+>      (https://cran.r-project.org/doc/manuals/r-release/NEWS.html)
+>
+> Before I'm going to file this issue on Bugzilla, I'd like to confirm
+> if this is not the intended
+> change, and, if this is actually intended, I want to discuss how to
+> improve this behaviour.
+>
+> Best,
+> Hiroaki Yutani
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From r|p|ey @end|ng |rom @t@t@@ox@@c@uk  Wed Feb 17 11:20:03 2021
+From: r|p|ey @end|ng |rom @t@t@@ox@@c@uk (Prof Brian Ripley)
+Date: Wed, 17 Feb 2021 10:20:03 +0000
+Subject: [Rd] issue with print()ing multibyte characters on R 4.0.4
+In-Reply-To: <CALyqOb-jU_ub7ASBFdbmE3hm+KpBE7QeqpTkSzwEw5DkL=Cn9A@mail.gmail.com>
+References: <CALyqOb-jU_ub7ASBFdbmE3hm+KpBE7QeqpTkSzwEw5DkL=Cn9A@mail.gmail.com>
+Message-ID: <9882d2c2-6b29-0b14-e9ae-d3cde58d77a0@stats.ox.ac.uk>
+
+On 17/02/2021 04:58, Hiroaki Yutani wrote:
+> Hi all,
+> 
+> I saw several people on Japanese locale claim that, on R 4.0.4,
+> print() doesn't display
+> Japanese characters correctly. This seems to happen only on Windows
+> and on macOS (I
+> usually use Linux and I don't see this problem).
+> 
+> For example, in the result below, "?" and "?" are displayed in
+> "\uXXXX" format. What's
+> curious here is that "?" is displayed as it is, by the way.
+> 
+>> "???"
+> [1] "\u9b3c?\u5916"
+> 
+> But, if I use such functions as message() or cat(), the string is
+> displayed as it is.
+> 
+>> message("???")
+> ???
+
+that does not escape non-printable characters, so as expected.
+> 
+> Considering the fact that it seems only Windows and macOS are
+> affected, I suspect this
+> is somehow related to this change described in the release note,
+> (though I have no idea
+> what change this is):
+> 
+>      The internal table for iswprint (used on Windows, macOS and AIX) has been
+>      updated to include many recent Unicode characters.
+>      (https://cran.r-project.org/doc/manuals/r-release/NEWS.html)
+> 
+> Before I'm going to file this issue on Bugzilla, I'd like to confirm
+> if this is not the intended
+> change, and, if this is actually intended, I want to discuss how to
+> improve this behaviour.
+
+I am sorry: this was not intended but it was no one reported in the run 
+up to 4.0.4.  It seems to be working in R-devel so I suggest you check 
+that or go back to 4.0.3.
+
+It looks like a line in the iswprint table got deleted in the merge from 
+R-devel.  I will try to set up some automated checks to see if I can 
+find any other problems, but that will take a few days.
+
+-- 
+Brian D. Ripley,                  ripley at stats.ox.ac.uk
+Emeritus Professor of Applied Statistics, University of Oxford
+
+
+From yut@n|@|n| @end|ng |rom gm@||@com  Wed Feb 17 14:47:59 2021
+From: yut@n|@|n| @end|ng |rom gm@||@com (Hiroaki Yutani)
+Date: Wed, 17 Feb 2021 22:47:59 +0900
+Subject: [Rd] issue with print()ing multibyte characters on R 4.0.4
+In-Reply-To: <9882d2c2-6b29-0b14-e9ae-d3cde58d77a0@stats.ox.ac.uk>
+References: <CALyqOb-jU_ub7ASBFdbmE3hm+KpBE7QeqpTkSzwEw5DkL=Cn9A@mail.gmail.com>
+ <9882d2c2-6b29-0b14-e9ae-d3cde58d77a0@stats.ox.ac.uk>
+Message-ID: <CALyqOb8wUjhChXufrLRWspgJ=+eQEO4voBybBjWnXXmdO_T0Cw@mail.gmail.com>
+
+Thanks for confirming and investigating.
+
+> but it was no one reported in the run up to 4.0.4.
+
+Yes, it was unfortunate that no one had reported it to the right place
+before the release...
+
+2021?2?17?(?) 19:20 Prof Brian Ripley <ripley at stats.ox.ac.uk>:
+
+>
+> On 17/02/2021 04:58, Hiroaki Yutani wrote:
+> > Hi all,
+> >
+> > I saw several people on Japanese locale claim that, on R 4.0.4,
+> > print() doesn't display
+> > Japanese characters correctly. This seems to happen only on Windows
+> > and on macOS (I
+> > usually use Linux and I don't see this problem).
+> >
+> > For example, in the result below, "?" and "?" are displayed in
+> > "\uXXXX" format. What's
+> > curious here is that "?" is displayed as it is, by the way.
+> >
+> >> "???"
+> > [1] "\u9b3c?\u5916"
+> >
+> > But, if I use such functions as message() or cat(), the string is
+> > displayed as it is.
+> >
+> >> message("???")
+> > ???
+>
+> that does not escape non-printable characters, so as expected.
+> >
+> > Considering the fact that it seems only Windows and macOS are
+> > affected, I suspect this
+> > is somehow related to this change described in the release note,
+> > (though I have no idea
+> > what change this is):
+> >
+> >      The internal table for iswprint (used on Windows, macOS and AIX) has been
+> >      updated to include many recent Unicode characters.
+> >      (https://cran.r-project.org/doc/manuals/r-release/NEWS.html)
+> >
+> > Before I'm going to file this issue on Bugzilla, I'd like to confirm
+> > if this is not the intended
+> > change, and, if this is actually intended, I want to discuss how to
+> > improve this behaviour.
+>
+> I am sorry: this was not intended but it was no one reported in the run
+> up to 4.0.4.  It seems to be working in R-devel so I suggest you check
+> that or go back to 4.0.3.
+>
+> It looks like a line in the iswprint table got deleted in the merge from
+> R-devel.  I will try to set up some automated checks to see if I can
+> find any other problems, but that will take a few days.
+>
+> --
+> Brian D. Ripley,                  ripley at stats.ox.ac.uk
+> Emeritus Professor of Applied Statistics, University of Oxford
+
+
+From yut@n|@|n| @end|ng |rom gm@||@com  Wed Feb 17 23:57:24 2021
+From: yut@n|@|n| @end|ng |rom gm@||@com (Hiroaki Yutani)
+Date: Thu, 18 Feb 2021 07:57:24 +0900
+Subject: [Rd] issue with print()ing multibyte characters on R 4.0.4
+In-Reply-To: <CALyqOb8wUjhChXufrLRWspgJ=+eQEO4voBybBjWnXXmdO_T0Cw@mail.gmail.com>
+References: <CALyqOb-jU_ub7ASBFdbmE3hm+KpBE7QeqpTkSzwEw5DkL=Cn9A@mail.gmail.com>
+ <9882d2c2-6b29-0b14-e9ae-d3cde58d77a0@stats.ox.ac.uk>
+ <CALyqOb8wUjhChXufrLRWspgJ=+eQEO4voBybBjWnXXmdO_T0Cw@mail.gmail.com>
+Message-ID: <CALyqOb__ut2ZJsKfFLrchb=1B1aGNF6uBGE9_LRRdovrdbQEQA@mail.gmail.com>
+
+I filed an issue for this on R's Bugzilla as well, in case this makes
+it easier to track (This is my first time to submit a bug report,
+please excuse me if I'm failing to follow the appropriate steps to do
+this).
+
+https://bugs.r-project.org/bugzilla/show_bug.cgi?id=18059
+
+2021?2?17?(?) 22:47 Hiroaki Yutani <yutani.ini at gmail.com>:
+>
+> Thanks for confirming and investigating.
+>
+> > but it was no one reported in the run up to 4.0.4.
+>
+> Yes, it was unfortunate that no one had reported it to the right place
+> before the release...
+>
+> 2021?2?17?(?) 19:20 Prof Brian Ripley <ripley at stats.ox.ac.uk>:
+>
+> >
+> > On 17/02/2021 04:58, Hiroaki Yutani wrote:
+> > > Hi all,
+> > >
+> > > I saw several people on Japanese locale claim that, on R 4.0.4,
+> > > print() doesn't display
+> > > Japanese characters correctly. This seems to happen only on Windows
+> > > and on macOS (I
+> > > usually use Linux and I don't see this problem).
+> > >
+> > > For example, in the result below, "?" and "?" are displayed in
+> > > "\uXXXX" format. What's
+> > > curious here is that "?" is displayed as it is, by the way.
+> > >
+> > >> "???"
+> > > [1] "\u9b3c?\u5916"
+> > >
+> > > But, if I use such functions as message() or cat(), the string is
+> > > displayed as it is.
+> > >
+> > >> message("???")
+> > > ???
+> >
+> > that does not escape non-printable characters, so as expected.
+> > >
+> > > Considering the fact that it seems only Windows and macOS are
+> > > affected, I suspect this
+> > > is somehow related to this change described in the release note,
+> > > (though I have no idea
+> > > what change this is):
+> > >
+> > >      The internal table for iswprint (used on Windows, macOS and AIX) has been
+> > >      updated to include many recent Unicode characters.
+> > >      (https://cran.r-project.org/doc/manuals/r-release/NEWS.html)
+> > >
+> > > Before I'm going to file this issue on Bugzilla, I'd like to confirm
+> > > if this is not the intended
+> > > change, and, if this is actually intended, I want to discuss how to
+> > > improve this behaviour.
+> >
+> > I am sorry: this was not intended but it was no one reported in the run
+> > up to 4.0.4.  It seems to be working in R-devel so I suggest you check
+> > that or go back to 4.0.3.
+> >
+> > It looks like a line in the iswprint table got deleted in the merge from
+> > R-devel.  I will try to set up some automated checks to see if I can
+> > find any other problems, but that will take a few days.
+> >
+> > --
+> > Brian D. Ripley,                  ripley at stats.ox.ac.uk
+> > Emeritus Professor of Applied Statistics, University of Oxford
+
+
+From |@g|ne @end|ng |rom p@@jd@org  Thu Feb 18 15:44:24 2021
+From: |@g|ne @end|ng |rom p@@jd@org (=?iso-8859-1?Q?IAGO_GIN=C9_V=C1ZQUEZ?=)
+Date: Thu, 18 Feb 2021 14:44:24 +0000
+Subject: [Rd] A wish on t.test.formula values
+Message-ID: <AM6PR02MB4423B827B283267F4B4ABD1E92859@AM6PR02MB4423.eurprd02.prod.outlook.com>
+
+Dear all,
+
+In `?t.test`, **Value** section we can read: "data.name a character string giving the name(s) of the data."
+But, for *formula* class:
+
+t.test(mpg ~ am, data = mtcars, subset = cyl==4, na.action = "na.omit")$data.name
+[1] "mpg by am"
+
+I believe it would be desirable to have all the information on data, adding something like
+
+DNAME <- paste(DNAME, paste(m[-c(grep("^(|formula)$", names(m), perl = TRUE))], collapse = "; "), sep = "; dataframe: ")
+
+after the line
+
+DNAME <- paste(names(mf), collapse = " by ")
+
+to the S3 method for class `stats:::t.test.formula`, so we would get
+[1] "mpg by am; data: mtcars; cyl == 4; na.omit"
+
+Thank you for reading and stay safe.
+
+Iago
+
+	[[alternative HTML version deleted]]
+
+
+From therne@u @end|ng |rom m@yo@edu  Thu Feb 18 19:30:31 2021
+From: therne@u @end|ng |rom m@yo@edu (Therneau, Terry M., Ph.D.)
+Date: Thu, 18 Feb 2021 12:30:31 -0600
+Subject: [Rd] Compression
+Message-ID: <28fddd$ff3ocq@ironport10.mayo.edu>
+
+This is a CRAN question:
+
+I have taken care to compress files in the data directory using "xz" (and checked that it 
+is the best).? Is there then any impact or use for the LazyDataCompression option in the 
+DESCRIPTION file?
+
+
+-- 
+Terry M Therneau, PhD
+Department of Health Science Research
+Mayo Clinic
+therneau at mayo.edu
+
+"TERR-ree THUR-noh"
+
+
+	[[alternative HTML version deleted]]
+
+
+From therne@u @end|ng |rom m@yo@edu  Thu Feb 18 19:58:09 2021
+From: therne@u @end|ng |rom m@yo@edu (Therneau, Terry M., Ph.D.)
+Date: Thu, 18 Feb 2021 12:58:09 -0600
+Subject: [Rd] reverse dependency checks
+Message-ID: <28fddd$ff41op@ironport10.mayo.edu>
+
+There are some nice tools to automate reverse dependency checks, but for a large package 
+the real issue is the envirionment.? The description of the crandalf site on github has a 
+nice summary.? One package uses a cryto libraries (oops, install those), another uses some 
+latex macros I've never heard of, etc.??? In any case, I am seeing some failures in my 
+reverse checks for survival that I'm not sure how to fix.?? If anyone has a hint or two 
+I'd be grateful.
+
+1. A half dozen fail with "graphics API mismatch"
+
+2. Over a dozen have a latex failure of
+! pdfTeX error (\pdfsetmatrix): Unrecognized format..
+\AtBegShi at Output ...ipout \box \AtBeginShipoutBox
+ ????????????????????????????????????????????????? \fi \fi
+
+A check of kpsewhich shows I have all the packages, and I don't see a pattern in the .tex 
+files at the point of failure.
+
+Terry T.
+
+-- 
+Terry M Therneau, PhD
+Department of Health Science Research
+Mayo Clinic
+therneau at mayo.edu
+
+"TERR-ree THUR-noh"
+
+
+	[[alternative HTML version deleted]]
+
+
+From joh@nne@@r@nke @end|ng |rom jrwb@de  Thu Feb 18 22:36:38 2021
+From: joh@nne@@r@nke @end|ng |rom jrwb@de (Johannes Ranke)
+Date: Thu, 18 Feb 2021 22:36:38 +0100
+Subject: [Rd] reverse dependency checks
+In-Reply-To: <28fddd$ff41op@ironport10.mayo.edu>
+References: <28fddd$ff41op@ironport10.mayo.edu>
+Message-ID: <17755867.fmvGhhH65g@ryz>
+
+Am Donnerstag, 18. Februar 2021, 19:58:09 CET schrieb Therneau, Terry M., 
+Ph.D. via R-devel:
+> There are some nice tools to automate reverse dependency checks, but for a
+> large package the real issue is the envirionment.  The description of the
+> crandalf site on github has a nice summary.  One package uses a cryto
+> libraries (oops, install those), another uses some latex macros I've never
+> heard of, etc.    In any case, I am seeing some failures in my reverse
+> checks for survival that I'm not sure how to fix.   If anyone has a hint or
+> two I'd be grateful.
+> 
+> 1. A half dozen fail with "graphics API mismatch"
+
+Such error messages could occur if visual diffs (of SVG plots) are run with R > 
+4.0 (i.e. R-devel) where the reference files were generated with R <= 4.0. This 
+is described in
+
+  https://github.com/r-lib/vdiffr/issues/86
+
+However the vdiffr tests are only run if you set the NOT_CRAN environment 
+variable, for example because you use devtools for running tests, see
+
+  https://github.com/r-lib/vdiffr#testing-versus-monitoring
+
+Kind regards,
+
+Johannes
+
+> 
+> 2. Over a dozen have a latex failure of
+> ! pdfTeX error (\pdfsetmatrix): Unrecognized format..
+> \AtBegShi at Output ...ipout \box \AtBeginShipoutBox
+>                                                    \fi \fi
+> 
+> A check of kpsewhich shows I have all the packages, and I don't see a
+> pattern in the .tex files at the point of failure.
+> 
+> Terry T.
+
+
+From joh@nne@@r@nke @end|ng |rom jrwb@de  Fri Feb 19 08:13:45 2021
+From: joh@nne@@r@nke @end|ng |rom jrwb@de (Johannes Ranke)
+Date: Fri, 19 Feb 2021 08:13:45 +0100
+Subject: [Rd] reverse dependency checks
+In-Reply-To: <17755867.fmvGhhH65g@ryz>
+References: <28fddd$ff41op@ironport10.mayo.edu> <17755867.fmvGhhH65g@ryz>
+Message-ID: <2651280.gUM4oFR71i@ryz>
+
+Am Donnerstag, 18. Februar 2021, 22:36:38 CET schrieb Johannes Ranke:
+> Am Donnerstag, 18. Februar 2021, 19:58:09 CET schrieb Therneau, Terry M.,
+> 
+...
+
+> > checks for survival that I'm not sure how to fix.   If anyone has a hint
+> > or two I'd be grateful.
+> > 
+> > 1. A half dozen fail with "graphics API mismatch"
+> 
+> Such error messages could occur if visual diffs (of SVG plots) are run 
+
+I was not thinking clearly enought yesterday night (I hope I am this 
+morning...). These error message you are known to occur if a graphics package 
+such as svglite [1] has to be reinstalled. The error message has also been 
+associated  [2] to the issue I was referring to, but I am not sure this is 
+correct.
+
+Johannes
+
+[1] https://github.com/r-lib/svglite/issues/71 
+[2] https://github.com/r-lib/vdiffr/issues/103 
+
+> with
+> R > 4.0 (i.e. R-devel) where the reference files were generated with R <=
+> 4.0. This is described in
+> 
+>   https://github.com/r-lib/vdiffr/issues/86
+> 
+> However the vdiffr tests are only run if you set the NOT_CRAN environment
+> variable, for example because you use devtools for running tests, see
+> 
+>   https://github.com/r-lib/vdiffr#testing-versus-monitoring
+> 
+> Kind regards,
+> 
+> Johannes
+> 
+> > 2. Over a dozen have a latex failure of
+> > ! pdfTeX error (\pdfsetmatrix): Unrecognized format..
+> > \AtBegShi at Output ...ipout \box \AtBeginShipoutBox
+> > 
+> >                                                    \fi \fi
+> > 
+> > A check of kpsewhich shows I have all the packages, and I don't see a
+> > pattern in the .tex files at the point of failure.
+> > 
+> > Terry T.
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+-- 
+Johannes Ranke
+Wissenschaftlicher Berater
+07624 8099027
+https://jrwb.de
+	[[alternative HTML version deleted]]
+
+
+From r|p|ey @end|ng |rom @t@t@@ox@@c@uk  Fri Feb 19 11:28:14 2021
+From: r|p|ey @end|ng |rom @t@t@@ox@@c@uk (Prof Brian Ripley)
+Date: Fri, 19 Feb 2021 10:28:14 +0000
+Subject: [Rd] Compression (really about LazyDate)
+In-Reply-To: <28fddd$ff3ocq@ironport10.mayo.edu>
+References: <28fddd$ff3ocq@ironport10.mayo.edu>
+Message-ID: <ed47a39d-3883-fcba-fc45-c2bcbece1e5b@stats.ox.ac.uk>
+
+On 18/02/2021 18:30, Therneau, Terry M., Ph.D. via R-devel wrote:
+> This is a CRAN question:
+> 
+> I have taken care to compress files in the data directory using "xz" (and checked that it
+> is the best).? Is there then any impact or use for the LazyDataCompression option in the
+> DESCRIPTION file?
+> 
+
+I have difficulty comprehending that, so I will try to answer my guess 
+at what you meant to ask.
+
+What LazyDataCompression does is completely separate from the contents 
+of the data directory.  As the manual say
+
+<quote>
+Some packages using ?LazyData? will benefit from using a form of 
+compression other than gzip in the installed lazy-loading database. This 
+can be selected by the --data-compress option to R CMD INSTALL or by 
+using the ?LazyDataCompression? field in the DESCRIPTION file. Useful 
+values are bzip2, xz and the default, gzip. The only way to discover 
+which is best is to try them all and look at the size of the 
+pkgname/data/Rdata.rdb file.
+</quote>
+
+When a package is installed with LazyData (and you neglected to tell us 
+if that is the case), the datasets in the data directory are loaded (and 
+hence decompressed), and stored in a database.  For a LazyData package 
+the compression used in the data directory only affects the source 
+package size (I guess your criterion for 'best') and how fast it is 
+installed (rarely a consideration but there have been LazyData packages 
+where installing the data takes most of the time).  At run-time only the 
+compression specified by LazyDataCompression is relevant.
+
+-- 
+Brian D. Ripley,                  ripley at stats.ox.ac.uk
+Emeritus Professor of Applied Statistics, University of Oxford
+
+
+From therne@u @end|ng |rom m@yo@edu  Fri Feb 19 14:12:45 2021
+From: therne@u @end|ng |rom m@yo@edu (Therneau, Terry M., Ph.D.)
+Date: Fri, 19 Feb 2021 07:12:45 -0600
+Subject: [Rd] Compression (really about LazyDate)
+In-Reply-To: <ed47a39d-3883-fcba-fc45-c2bcbece1e5b@stats.ox.ac.uk>
+References: <28fddd$ff3ocq@ironport10.mayo.edu>
+ <ed47a39d-3883-fcba-fc45-c2bcbece1e5b@stats.ox.ac.uk>
+Message-ID: <28fddd$ff85ab@ironport10.mayo.edu>
+
+Thank you Brian.?? I had not quite grasped how the process works, now the descriptions and 
+usage make sense.
+
+Terry
+
+
+On 2/19/21 4:28 AM, Prof Brian Ripley wrote:
+> On 18/02/2021 18:30, Therneau, Terry M., Ph.D. via R-devel wrote:
+>> This is a CRAN question:
+>>
+>> I have taken care to compress files in the data directory using "xz" (and checked that it
+>> is the best).? Is there then any impact or use for the LazyDataCompression option in the
+>> DESCRIPTION file?
+>>
+>
+> I have difficulty comprehending that, so I will try to answer my guess at what you meant 
+> to ask.
+>
+> What LazyDataCompression does is completely separate from the contents of the data 
+> directory.? As the manual say
+>
+> <quote>
+> Some packages using ?LazyData? will benefit from using a form of compression other than 
+> gzip in the installed lazy-loading database. This can be selected by the --data-compress 
+> option to R CMD INSTALL or by using the ?LazyDataCompression? field in the DESCRIPTION 
+> file. Useful values are bzip2, xz and the default, gzip. The only way to discover which 
+> is best is to try them all and look at the size of the pkgname/data/Rdata.rdb file.
+> </quote>
+>
+> When a package is installed with LazyData (and you neglected to tell us if that is the 
+> case), the datasets in the data directory are loaded (and hence decompressed), and 
+> stored in a database. For a LazyData package the compression used in the data directory 
+> only affects the source package size (I guess your criterion for 'best') and how fast it 
+> is installed (rarely a consideration but there have been LazyData packages where 
+> installing the data takes most of the time).? At run-time only the compression specified 
+> by LazyDataCompression is relevant.
+>
+
+
+	[[alternative HTML version deleted]]
+
+
+From tr@ver@c @end|ng |rom gm@||@com  Mon Feb 22 09:30:23 2021
+From: tr@ver@c @end|ng |rom gm@||@com (Travers Ching)
+Date: Mon, 22 Feb 2021 00:30:23 -0800
+Subject: [Rd] Apple M1 CRAN checks
+Message-ID: <CAPLMX9EvaNB6P3Kx1WhimmnJ2QQi9XvGuY8Ps0SM7BCBSRs6hg@mail.gmail.com>
+
+I noticed CRAN is now doing checks against Apple M1, and some packages are
+failing including a dependency I use.
+
+Is building on M1 now a requirement, or can the check be ignored? If it's a
+requirement, how can one test it out?
+
+Travers
+
+	[[alternative HTML version deleted]]
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Mon Feb 22 11:06:18 2021
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Mon, 22 Feb 2021 11:06:18 +0100
+Subject: [Rd] sprintf, check number of parameters
+In-Reply-To: <1M5QJJ-1l7Xtn0F3F-001USW@mail.gmx.net>
+References: <1M5QJJ-1l7Xtn0F3F-001USW@mail.gmx.net>
+Message-ID: <80d06d92-b5f7-e5fd-2a7b-41148fd2c15b@gmail.com>
+
+Dear Matthias,
+
+On 2/6/21 2:11 PM, Matthias Gondan wrote:
+> Dear developers,
+>
+> This is a follow-up from an earlier mail about warnings of unused arguments in sprintf:
+>
+> 1. This should obviously raise an error (and it does):
+> sprintf('%i %i', 1)
+> Fehler in sprintf("%i %i", 1) : zu wenig Argumente [= too few arguments]
+>
+> 2. This should, in my opinion, raise a warning about an unused argument (and I think it does in now R-devel):
+> sprintf('%i', 1, 2)
+yes, it does.
+> 3. From the conversation below, it seems that this also raises a warning (in R-devel):
+> sprintf('%1$i', 1, 2)
+yes, it does as well
+> I think that one should be suppressed. When I reported this a few months ago, I didn?t really have a use case for (3), but now I think I have found something. Suppose I have a function that calculates some descriptive statistics, mean, sd, available cases, missings, something like the one below:
+>
+> msnx = function(x, mask='%1$.1f (SD=%2$.1f, n=%3$i, NA=%4$i)')
+> {
+>    m = mean(x, na.rm=TRUE)
+>    s = sd(x, na.rm=TRUE)
+>    n = sum(!is.na(x))
+>    na = sum(is.na(x))
+>    
+>    sprintf(mask, m, s, n, na)
+> }
+>
+> The mask is meant to help formatting it a bit.
+>
+> msnx(T0)
+> [1] "30.7 (SD=4.7, n=104, NA=0)"
+>
+> Now I want a ?less detailed? summary, so I invoke the function with something like
+>
+> msnx(T0, mask='%1$.1f (SD=%2$.1f)')
+> [1] "30.7 (SD=4.7)"
+>
+> In my opinion, in the last example, sprintf should not raise the warning in (2) if all arguments in the mask are ?dollared?. I am still a bit unsure since the example uses a function that calculate things that aren?t being used (n and na), and this could be considered bad programming style. But there might be other use cases, and it is, nevertheless, a deliberate choice to skip arguments 3$ and 4$.
+
+Thanks for the example. I am sympathetic with your concerns about the 
+programming style in it: the caller needs to know exactly how "mask" 
+will be used, that it would be in a call to sprintf() and what would be 
+the indices of the arguments.
+
+The warning has been introduced a while ago and there has not been any 
+report yet that it would break existing good style code (particularly 
+CRAN packages have been tested extensively), which indicates that 
+currently the R code base does not rely on unused $- arguments.
+
+It is hence I think wise to keep the warning to prevent R code base from 
+relying on that in the future, because gcc/clang already warn on unused 
+$-arguments. Not only that gcc developers must have been thinking hard 
+about the same thing before us getting to this conclusion: $- arguments 
+are a POSIX extension and gcc/clang are the key compilers for POSIX 
+systems, so it is safer to abide by their rules. In principle POSIX may 
+mandate that $- arguments are used explicitly in the future (now it is 
+rather vague, it seems unused are fine only when last), and even if not, 
+deviations from gcc/clang could cause confusion for applications and 
+developers using both C/C++ and R.
+
+Best
+Tomas
+
+
+
+>
+> Best wishes,
+>
+> Matthias
+>
+>
+>
+> Dear Matthias,
+>
+> thanks for the suggestion, R-devel now warns on unused arguments by
+> format (both numbered and un-numbered). It seems that the new warning is
+> useful, often it finds cases when arguments were accidentally passed to
+> sprintf but had been meant for a different function.
+>
+> R allows combining both numbered and un-numbered references in a single
+> format, even though it may be better to avoid and POSIX does not allow
+> that.
+>
+> Best
+> Tomas
+>
+> On 9/20/20 1:03 PM, Matthias Gondan wrote:
+>> Dear R developers,
+>>
+>> I am wondering if this should raise an error or a warning.
+>>
+>>> sprintf('%.f, %.f', 1, 2, 3)
+>> [1] "1, 2"
+>>
+>> I am aware that R has ?numbered? sprintf arguments (sprintf('%1$.f', ?), and in that case, omissing of specific arguments may be intended. But in the usual syntax, omission of an argument is probably a mistake.
+>>
+>> Thank you for your consideration.
+>>
+>> Best wishes,
+>>
+>> Matthias
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Mon Feb 22 11:34:26 2021
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Mon, 22 Feb 2021 05:34:26 -0500
+Subject: [Rd] sprintf, check number of parameters
+In-Reply-To: <80d06d92-b5f7-e5fd-2a7b-41148fd2c15b@gmail.com>
+References: <1M5QJJ-1l7Xtn0F3F-001USW@mail.gmx.net>
+ <80d06d92-b5f7-e5fd-2a7b-41148fd2c15b@gmail.com>
+Message-ID: <c21079da-4769-9d0c-a068-41f25fcb8581@gmail.com>
+
+This is ugly, but I think it's legal, and it doesn't trigger a warning: 
+  output unused parameters as zero-length strings:
+
+  msnx(T0, mask = '%1$.1f (SD=%2$.1f)%3$.0s%4$.0s')
+
+Perhaps an example using %.0s could be included to show how to skip a value.
+
+Duncan Murdoch
+
+On 22/02/2021 5:06 a.m., Tomas Kalibera wrote:
+> Dear Matthias,
+> 
+> On 2/6/21 2:11 PM, Matthias Gondan wrote:
+>> Dear developers,
+>>
+>> This is a follow-up from an earlier mail about warnings of unused arguments in sprintf:
+>>
+>> 1. This should obviously raise an error (and it does):
+>> sprintf('%i %i', 1)
+>> Fehler in sprintf("%i %i", 1) : zu wenig Argumente [= too few arguments]
+>>
+>> 2. This should, in my opinion, raise a warning about an unused argument (and I think it does in now R-devel):
+>> sprintf('%i', 1, 2)
+> yes, it does.
+>> 3. From the conversation below, it seems that this also raises a warning (in R-devel):
+>> sprintf('%1$i', 1, 2)
+> yes, it does as well
+>> I think that one should be suppressed. When I reported this a few months ago, I didn?t really have a use case for (3), but now I think I have found something. Suppose I have a function that calculates some descriptive statistics, mean, sd, available cases, missings, something like the one below:
+>>
+>> msnx = function(x, mask='%1$.1f (SD=%2$.1f, n=%3$i, NA=%4$i)')
+>> {
+>>     m = mean(x, na.rm=TRUE)
+>>     s = sd(x, na.rm=TRUE)
+>>     n = sum(!is.na(x))
+>>     na = sum(is.na(x))
+>>     
+>>     sprintf(mask, m, s, n, na)
+>> }
+>>
+>> The mask is meant to help formatting it a bit.
+>>
+>> msnx(T0)
+>> [1] "30.7 (SD=4.7, n=104, NA=0)"
+>>
+>> Now I want a ?less detailed? summary, so I invoke the function with something like
+>>
+>> msnx(T0, mask='%1$.1f (SD=%2$.1f)')
+>> [1] "30.7 (SD=4.7)"
+>>
+>> In my opinion, in the last example, sprintf should not raise the warning in (2) if all arguments in the mask are ?dollared?. I am still a bit unsure since the example uses a function that calculate things that aren?t being used (n and na), and this could be considered bad programming style. But there might be other use cases, and it is, nevertheless, a deliberate choice to skip arguments 3$ and 4$.
+> 
+> Thanks for the example. I am sympathetic with your concerns about the
+> programming style in it: the caller needs to know exactly how "mask"
+> will be used, that it would be in a call to sprintf() and what would be
+> the indices of the arguments.
+> 
+> The warning has been introduced a while ago and there has not been any
+> report yet that it would break existing good style code (particularly
+> CRAN packages have been tested extensively), which indicates that
+> currently the R code base does not rely on unused $- arguments.
+> 
+> It is hence I think wise to keep the warning to prevent R code base from
+> relying on that in the future, because gcc/clang already warn on unused
+> $-arguments. Not only that gcc developers must have been thinking hard
+> about the same thing before us getting to this conclusion: $- arguments
+> are a POSIX extension and gcc/clang are the key compilers for POSIX
+> systems, so it is safer to abide by their rules. In principle POSIX may
+> mandate that $- arguments are used explicitly in the future (now it is
+> rather vague, it seems unused are fine only when last), and even if not,
+> deviations from gcc/clang could cause confusion for applications and
+> developers using both C/C++ and R.
+> 
+> Best
+> Tomas
+> 
+> 
+> 
+>>
+>> Best wishes,
+>>
+>> Matthias
+>>
+>>
+>>
+>> Dear Matthias,
+>>
+>> thanks for the suggestion, R-devel now warns on unused arguments by
+>> format (both numbered and un-numbered). It seems that the new warning is
+>> useful, often it finds cases when arguments were accidentally passed to
+>> sprintf but had been meant for a different function.
+>>
+>> R allows combining both numbered and un-numbered references in a single
+>> format, even though it may be better to avoid and POSIX does not allow
+>> that.
+>>
+>> Best
+>> Tomas
+>>
+>> On 9/20/20 1:03 PM, Matthias Gondan wrote:
+>>> Dear R developers,
+>>>
+>>> I am wondering if this should raise an error or a warning.
+>>>
+>>>> sprintf('%.f, %.f', 1, 2, 3)
+>>> [1] "1, 2"
+>>>
+>>> I am aware that R has ?numbered? sprintf arguments (sprintf('%1$.f', ?), and in that case, omissing of specific arguments may be intended. But in the usual syntax, omission of an argument is probably a mistake.
+>>>
+>>> Thank you for your consideration.
+>>>
+>>> Best wishes,
+>>>
+>>> Matthias
+>> 	[[alternative HTML version deleted]]
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From hp@ge@@on@g|thub @end|ng |rom gm@||@com  Mon Feb 22 20:34:38 2021
+From: hp@ge@@on@g|thub @end|ng |rom gm@||@com (=?UTF-8?B?SGVydsOpIFBhZ8Oocw==?=)
+Date: Mon, 22 Feb 2021 11:34:38 -0800
+Subject: [Rd] surprised matrix (1:256, 8, 8) doesn't cause error/warning
+In-Reply-To: <24599.50430.981659.510862@stat.math.ethz.ch>
+References: <CAB8pepzJtA0k+xwucuPgsX1U5YJSymy2eX5+XMvi=po5UGmJHw@mail.gmail.com>
+ <24599.50430.981659.510862@stat.math.ethz.ch>
+Message-ID: <ce6f2e41-d7bf-2408-8731-7053966022ee@gmail.com>
+
+Hi Martin,
+
+It kind of does make sense to issue the warning when **recycling** (and 
+this is consistent with what happens with recycling in general):
+
+   > matrix(1:4, 6, 6)
+        [,1] [,2] [,3] [,4] [,5] [,6]
+   [1,]    1    3    1    3    1    3
+   [2,]    2    4    2    4    2    4
+   [3,]    3    1    3    1    3    1
+   [4,]    4    2    4    2    4    2
+   [5,]    1    3    1    3    1    3
+   [6,]    2    4    2    4    2    4
+
+   > matrix(1:4, 5, 6)
+        [,1] [,2] [,3] [,4] [,5] [,6]
+   [1,]    1    2    3    4    1    2
+   [2,]    2    3    4    1    2    3
+   [3,]    3    4    1    2    3    4
+   [4,]    4    1    2    3    4    1
+   [5,]    1    2    3    4    1    2
+   Warning message:
+   In matrix(1:4, 5, 6) :
+     data length [4] is not a sub-multiple or multiple of the number of 
+rows [5]
+
+(Note that the warning is misleading. matrix() is happy to take data 
+with a length that is not a sub-multiple of the number of rows or cols 
+as long as it's a sub-multiple of the length of the matrix.)
+
+However I'm not sure that **truncating** the data is desirable behavior:
+
+   > matrix(1:6, 1, 3)
+        [,1] [,2] [,3]
+   [1,]    1    2    3
+
+   > matrix(1:6, 1, 5)
+        [,1] [,2] [,3] [,4] [,5]
+   [1,]    1    2    3    4    5
+   Warning message:
+   In matrix(1:6, 1, 5) :
+   data length [6] is not a sub-multiple or multiple of the number of 
+columns [5]
+
+Maybe you get a warning sometimes, if you are lucky, but still.
+
+Finally note that you never get any warning with array():
+
+   > array(1:4, c(5, 6))
+        [,1] [,2] [,3] [,4] [,5] [,6]
+   [1,]    1    2    3    4    1    2
+   [2,]    2    3    4    1    2    3
+   [3,]    3    4    1    2    3    4
+   [4,]    4    1    2    3    4    1
+   [5,]    1    2    3    4    1    2
+
+   > array(1:6, c(1, 5))
+        [,1] [,2] [,3] [,4] [,5]
+   [1,]    1    2    3    4    5
+
+Cheers,
+H.
+
+
+On 2/1/21 1:08 AM, Martin Maechler wrote:
+>>>>>> Abby Spurdle (/??bi/)
+>>>>>>      on Mon, 1 Feb 2021 19:50:32 +1300 writes:
+> 
+>      > I'm a little surprised that the following doesn't trigger an error or a warning.
+>      > matrix (1:256, 8, 8)
+> 
+>      > The help file says that the main argument is recycled, if it's too short.
+>      > But doesn't say what happens if it's too long.
+> 
+> It's somewhat subtler than one may assume :
+> 
+>> matrix(1:9, 2,3)
+>       [,1] [,2] [,3]
+> [1,]    1    3    5
+> [2,]    2    4    6
+> Warning message:
+> In matrix(1:9, 2, 3) :
+>    data length [9] is not a sub-multiple or multiple of the number of rows [2]
+> 
+>> matrix(1:8, 2,3)
+>       [,1] [,2] [,3]
+> [1,]    1    3    5
+> [2,]    2    4    6
+> Warning message:
+> In matrix(1:8, 2, 3) :
+>    data length [8] is not a sub-multiple or multiple of the number of columns [3]
+> 
+>> matrix(1:12, 2,3)
+>       [,1] [,2] [,3]
+> [1,]    1    3    5
+> [2,]    2    4    6
+>>
+> 
+> So it looks to me the current behavior is quite on purpose.
+> Are you sure it's not documented at all when reading the docs
+> carefully?  (I did *not*, just now).
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+-- 
+Herv? Pag?s
+
+Bioconductor Core Team
+hpages.on.github at gmail.com
+
+
+From r|p|ey @end|ng |rom @t@t@@ox@@c@uk  Tue Feb 23 08:25:02 2021
+From: r|p|ey @end|ng |rom @t@t@@ox@@c@uk (Prof Brian Ripley)
+Date: Tue, 23 Feb 2021 07:25:02 +0000
+Subject: [Rd] Apple M1 CRAN checks
+In-Reply-To: <CAPLMX9EvaNB6P3Kx1WhimmnJ2QQi9XvGuY8Ps0SM7BCBSRs6hg@mail.gmail.com>
+References: <CAPLMX9EvaNB6P3Kx1WhimmnJ2QQi9XvGuY8Ps0SM7BCBSRs6hg@mail.gmail.com>
+Message-ID: <9e7bb326-2c49-bceb-a3b9-6bdfd16f4cac@stats.ox.ac.uk>
+
+On 22/02/2021 08:30, Travers Ching wrote:
+> I noticed CRAN is now doing checks against Apple M1, and some packages are
+> failing including a dependency I use.
+
+I don't know what this refers to: M1 Mac CRAN checks are planned but 
+AFAICS not yet included in the main results tables.
+
+OTOH, 'Additional issues' on M1 Mac have been reported on the results 
+pages since early December.
+
+> Is building on M1 now a requirement, or can the check be ignored? If it's a
+> requirement, how can one test it out?
+
+'requirement' for what?
+
+I am not aware of any CRAN package for which 'R CMD build' does not work 
+on an M1 Mac.
+
+*Checking* might need an M1 Mac machine.  CRAN has only been notifying 
+issues which can easily be corrected without access to M1 hardware (such 
+as using suggested packages unconditionally or using optional 
+capabilities without checking).
+
+> Travers
+> 
+> 	[[alternative HTML version deleted]]
+
+Please do re-read the posting guide (and 'Writing R Extensions').
+Also, this is not r-package-devel ....
+
+-- 
+Brian D. Ripley,                  ripley at stats.ox.ac.uk
+Emeritus Professor of Applied Statistics, University of Oxford
+
+
+From tr@ver@c @end|ng |rom gm@||@com  Tue Feb 23 08:34:04 2021
+From: tr@ver@c @end|ng |rom gm@||@com (Travers Ching)
+Date: Mon, 22 Feb 2021 23:34:04 -0800
+Subject: [Rd] Apple M1 CRAN checks
+In-Reply-To: <9e7bb326-2c49-bceb-a3b9-6bdfd16f4cac@stats.ox.ac.uk>
+References: <CAPLMX9EvaNB6P3Kx1WhimmnJ2QQi9XvGuY8Ps0SM7BCBSRs6hg@mail.gmail.com>
+ <9e7bb326-2c49-bceb-a3b9-6bdfd16f4cac@stats.ox.ac.uk>
+Message-ID: <CAPLMX9Eq6vaopuMsHBTQ3zTB6nGT-8Zh0zYW3g12vFT0HGQ2Hg@mail.gmail.com>
+
+Hi Prof Ripley,
+
+Here is the automated message from CRAN which I thought meant needing to
+fix an M1 issue:
+
+"The auto-check found additional issues for the *last* version released on
+CRAN:
+  M1mac <https://www.stats.ox.ac.uk/pub/bdr/M1mac/stringfish.out>
+CRAN incoming checks do not test for these additional issues and you will
+need an appropriately instrumented build of R to reproduce these.
+Hence please reply-all and explain: Have these been fixed? "
+
+However, RcppParallel (a dependency) isn't building on M1:
+https://www.stats.ox.ac.uk/pub/bdr/M1mac/RcppParallel.out
+
+If I understand you correctly, I can ignore the M1 "Additional issues"
+until official R support?
+
+Thank you,
+Travers
+
+On Mon, Feb 22, 2021 at 11:25 PM Prof Brian Ripley <ripley at stats.ox.ac.uk>
+wrote:
+
+> On 22/02/2021 08:30, Travers Ching wrote:
+> > I noticed CRAN is now doing checks against Apple M1, and some packages
+> are
+> > failing including a dependency I use.
+>
+> I don't know what this refers to: M1 Mac CRAN checks are planned but
+> AFAICS not yet included in the main results tables.
+>
+> OTOH, 'Additional issues' on M1 Mac have been reported on the results
+> pages since early December.
+>
+> > Is building on M1 now a requirement, or can the check be ignored? If
+> it's a
+> > requirement, how can one test it out?
+>
+> 'requirement' for what?
+>
+> I am not aware of any CRAN package for which 'R CMD build' does not work
+> on an M1 Mac.
+>
+> *Checking* might need an M1 Mac machine.  CRAN has only been notifying
+> issues which can easily be corrected without access to M1 hardware (such
+> as using suggested packages unconditionally or using optional
+> capabilities without checking).
+>
+> > Travers
+> >
+> >       [[alternative HTML version deleted]]
+>
+> Please do re-read the posting guide (and 'Writing R Extensions').
+> Also, this is not r-package-devel ....
+>
+> --
+> Brian D. Ripley,                  ripley at stats.ox.ac.uk
+> Emeritus Professor of Applied Statistics, University of Oxford
+>
+
+	[[alternative HTML version deleted]]
+
+
+From benj@m|n@t@y|or3 @end|ng |rom nh@@net  Thu Feb 25 10:11:55 2021
+From: benj@m|n@t@y|or3 @end|ng |rom nh@@net (TAYLOR, Benjamin (BLACKPOOL TEACHING HOSPITALS NHS FOUNDATION TRUST))
+Date: Thu, 25 Feb 2021 09:11:55 +0000
+Subject: [Rd] read.csv, worrying behaviour?
+Message-ID: <LO3P265MB2395ED7A88E5205F128F97A4D69E9@LO3P265MB2395.GBRP265.PROD.OUTLOOK.COM>
+
+Dear all
+
+I've been using R for around 16 years now and I've only just become aware of a behaviour of read.csv that I find worrying which is why I'm contacting this list. A simplified example of the behaviour is as follows
+
+I created a "test.csv" file containing the following lines:
+
+a,b,c,d,e,f,g
+1,2,3,4
+
+And then read it into R using:
+
+> d = read.csv("test.csv")
+> d
+  a b c d  e  f  g
+1 1 2 3 4 NA NA NA
+
+I was surprised that this did not issue a warning. I can understand why the following csv would not issue a warning:
+
+a,b,c,d,e,f,g
+1,2,3,4,,,
+
+But the missing commas in the first example? Thoughts from others would be welcome.
+
+Kind regards
+
+Ben
+
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Benjamin M. Taylor, MSci, MSc, PhD
+Lead Data Scientist
+Blackpool Teaching Hospitals NHS Foundation Trust
+Home 15
+Whinney Heys Road
+Blackpool
+FY3 8NR
+
+Scholar: https://scholar.google.co.uk/citations?user=6Hf0CJkAAAAJ&hl=en
+Github: https://github.com/bentaylor1
+Gitlab: https://gitlab.com/ben_taylor
+ORCID: http://orcid.org/0000-0001-8667-4089
+
+
+
+********************************************************************************************************************
+
+This message may contain confidential information. If yo...{{dropped:19}}
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Thu Feb 25 18:32:17 2021
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Thu, 25 Feb 2021 18:32:17 +0100
+Subject: [Rd] sprintf, check number of parameters
+In-Reply-To: <c21079da-4769-9d0c-a068-41f25fcb8581@gmail.com>
+References: <1M5QJJ-1l7Xtn0F3F-001USW@mail.gmx.net>
+ <80d06d92-b5f7-e5fd-2a7b-41148fd2c15b@gmail.com>
+ <c21079da-4769-9d0c-a068-41f25fcb8581@gmail.com>
+Message-ID: <7875cf98-4a2a-26f2-7669-ff1ae0936e84@gmail.com>
+
+On 2/22/21 11:34 AM, Duncan Murdoch wrote:
+> This is ugly, but I think it's legal, and it doesn't trigger a 
+> warning: ?output unused parameters as zero-length strings:
+>
+> ?msnx(T0, mask = '%1$.1f (SD=%2$.1f)%3$.0s%4$.0s')
+>
+> Perhaps an example using %.0s could be included to show how to skip a 
+> value.
+
+Thanks, I've added a sentence to that effect.
+
+Best
+Tomas
+
+>
+> Duncan Murdoch
+>
+> On 22/02/2021 5:06 a.m., Tomas Kalibera wrote:
+>> Dear Matthias,
+>>
+>> On 2/6/21 2:11 PM, Matthias Gondan wrote:
+>>> Dear developers,
+>>>
+>>> This is a follow-up from an earlier mail about warnings of unused 
+>>> arguments in sprintf:
+>>>
+>>> 1. This should obviously raise an error (and it does):
+>>> sprintf('%i %i', 1)
+>>> Fehler in sprintf("%i %i", 1) : zu wenig Argumente [= too few 
+>>> arguments]
+>>>
+>>> 2. This should, in my opinion, raise a warning about an unused 
+>>> argument (and I think it does in now R-devel):
+>>> sprintf('%i', 1, 2)
+>> yes, it does.
+>>> 3. From the conversation below, it seems that this also raises a 
+>>> warning (in R-devel):
+>>> sprintf('%1$i', 1, 2)
+>> yes, it does as well
+>>> I think that one should be suppressed. When I reported this a few 
+>>> months ago, I didn?t really have a use case for (3), but now I think 
+>>> I have found something. Suppose I have a function that calculates 
+>>> some descriptive statistics, mean, sd, available cases, missings, 
+>>> something like the one below:
+>>>
+>>> msnx = function(x, mask='%1$.1f (SD=%2$.1f, n=%3$i, NA=%4$i)')
+>>> {
+>>> ??? m = mean(x, na.rm=TRUE)
+>>> ??? s = sd(x, na.rm=TRUE)
+>>> ??? n = sum(!is.na(x))
+>>> ??? na = sum(is.na(x))
+>>> ??? ??? sprintf(mask, m, s, n, na)
+>>> }
+>>>
+>>> The mask is meant to help formatting it a bit.
+>>>
+>>> msnx(T0)
+>>> [1] "30.7 (SD=4.7, n=104, NA=0)"
+>>>
+>>> Now I want a ?less detailed? summary, so I invoke the function with 
+>>> something like
+>>>
+>>> msnx(T0, mask='%1$.1f (SD=%2$.1f)')
+>>> [1] "30.7 (SD=4.7)"
+>>>
+>>> In my opinion, in the last example, sprintf should not raise the 
+>>> warning in (2) if all arguments in the mask are ?dollared?. I am 
+>>> still a bit unsure since the example uses a function that calculate 
+>>> things that aren?t being used (n and na), and this could be 
+>>> considered bad programming style. But there might be other use 
+>>> cases, and it is, nevertheless, a deliberate choice to skip 
+>>> arguments 3$ and 4$.
+>>
+>> Thanks for the example. I am sympathetic with your concerns about the
+>> programming style in it: the caller needs to know exactly how "mask"
+>> will be used, that it would be in a call to sprintf() and what would be
+>> the indices of the arguments.
+>>
+>> The warning has been introduced a while ago and there has not been any
+>> report yet that it would break existing good style code (particularly
+>> CRAN packages have been tested extensively), which indicates that
+>> currently the R code base does not rely on unused $- arguments.
+>>
+>> It is hence I think wise to keep the warning to prevent R code base from
+>> relying on that in the future, because gcc/clang already warn on unused
+>> $-arguments. Not only that gcc developers must have been thinking hard
+>> about the same thing before us getting to this conclusion: $- arguments
+>> are a POSIX extension and gcc/clang are the key compilers for POSIX
+>> systems, so it is safer to abide by their rules. In principle POSIX may
+>> mandate that $- arguments are used explicitly in the future (now it is
+>> rather vague, it seems unused are fine only when last), and even if not,
+>> deviations from gcc/clang could cause confusion for applications and
+>> developers using both C/C++ and R.
+>>
+>> Best
+>> Tomas
+>>
+>>
+>>
+>>>
+>>> Best wishes,
+>>>
+>>> Matthias
+>>>
+>>>
+>>>
+>>> Dear Matthias,
+>>>
+>>> thanks for the suggestion, R-devel now warns on unused arguments by
+>>> format (both numbered and un-numbered). It seems that the new 
+>>> warning is
+>>> useful, often it finds cases when arguments were accidentally passed to
+>>> sprintf but had been meant for a different function.
+>>>
+>>> R allows combining both numbered and un-numbered references in a single
+>>> format, even though it may be better to avoid and POSIX does not allow
+>>> that.
+>>>
+>>> Best
+>>> Tomas
+>>>
+>>> On 9/20/20 1:03 PM, Matthias Gondan wrote:
+>>>> Dear R developers,
+>>>>
+>>>> I am wondering if this should raise an error or a warning.
+>>>>
+>>>>> sprintf('%.f, %.f', 1, 2, 3)
+>>>> [1] "1, 2"
+>>>>
+>>>> I am aware that R has ?numbered? sprintf arguments 
+>>>> (sprintf('%1$.f', ?), and in that case, omissing of specific 
+>>>> arguments may be intended. But in the usual syntax, omission of an 
+>>>> argument is probably a mistake.
+>>>>
+>>>> Thank you for your consideration.
+>>>>
+>>>> Best wishes,
+>>>>
+>>>> Matthias
+>>> ????[[alternative HTML version deleted]]
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+
+
+From kev|n@r@coombe@ @end|ng |rom gm@||@com  Thu Feb 25 18:50:02 2021
+From: kev|n@r@coombe@ @end|ng |rom gm@||@com (Kevin R. Coombes)
+Date: Thu, 25 Feb 2021 12:50:02 -0500
+Subject: [Rd] read.csv, worrying behaviour?
+In-Reply-To: <LO3P265MB2395ED7A88E5205F128F97A4D69E9@LO3P265MB2395.GBRP265.PROD.OUTLOOK.COM>
+References: <LO3P265MB2395ED7A88E5205F128F97A4D69E9@LO3P265MB2395.GBRP265.PROD.OUTLOOK.COM>
+Message-ID: <296a5edc-ab72-455a-3b8b-fbab43dd51a7@gmail.com>
+
+I believe this is documented behavior. The 'read.csv' function is a 
+front-end to 'read.table' with different default values. IN this 
+particular case, read.csv sets fill = TRUE, which means that it is 
+supposed to fill incomplete lines with NA's. It also sets header=TRUE, 
+which is presumably what it is using to determine the expected length of 
+a line-row.
+ ? -- Kevin
+
+On 2/25/2021 4:11 AM, TAYLOR, Benjamin (BLACKPOOL TEACHING HOSPITALS NHS 
+FOUNDATION TRUST) via R-devel wrote:
+> Dear all
+>
+> I've been using R for around 16 years now and I've only just become aware of a behaviour of read.csv that I find worrying which is why I'm contacting this list. A simplified example of the behaviour is as follows
+>
+> I created a "test.csv" file containing the following lines:
+>
+> a,b,c,d,e,f,g
+> 1,2,3,4
+>
+> And then read it into R using:
+>
+>> d = read.csv("test.csv")
+>> d
+>    a b c d  e  f  g
+> 1 1 2 3 4 NA NA NA
+>
+> I was surprised that this did not issue a warning. I can understand why the following csv would not issue a warning:
+>
+> a,b,c,d,e,f,g
+> 1,2,3,4,,,
+>
+> But the missing commas in the first example? Thoughts from others would be welcome.
+>
+> Kind regards
+>
+> Ben
+>
+>
+> ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+>
+> Benjamin M. Taylor, MSci, MSc, PhD
+> Lead Data Scientist
+> Blackpool Teaching Hospitals NHS Foundation Trust
+> Home 15
+> Whinney Heys Road
+> Blackpool
+> FY3 8NR
+>
+> Scholar: https://scholar.google.co.uk/citations?user=6Hf0CJkAAAAJ&hl=en
+> Github: https://github.com/bentaylor1
+> Gitlab: https://gitlab.com/ben_taylor
+> ORCID: http://orcid.org/0000-0001-8667-4089
+>
+>
+>
+> ********************************************************************************************************************
+>
+> This message may contain confidential information. If ...{{dropped:6}}
+
+
+From pg||bert902 @end|ng |rom gm@||@com  Sun Feb 28 16:50:23 2021
+From: pg||bert902 @end|ng |rom gm@||@com (Paul Gilbert)
+Date: Sun, 28 Feb 2021 10:50:23 -0500
+Subject: [Rd] Apple M1 CRAN checks
+In-Reply-To: <CAPLMX9EvaNB6P3Kx1WhimmnJ2QQi9XvGuY8Ps0SM7BCBSRs6hg@mail.gmail.com>
+References: <CAPLMX9EvaNB6P3Kx1WhimmnJ2QQi9XvGuY8Ps0SM7BCBSRs6hg@mail.gmail.com>
+Message-ID: <16957316-e574-ff1a-7c5a-6cb9911e2b3b@gmail.com>
+
+If there was a response to the "how can I test it out" part of this 
+question then I missed it. Can anyone point to a Win-builder like site 
+for testing on M1mac, or to the M1mac results from testing packages 
+already on CRAN?  They still do not seem to be on the CRAN daily site. 
+Even a link to the 'Additional issues' on M1 Mac on the results pages 
+would be helpful because it does not seem to be in an obvious place. I 
+am trying to respond to a demand to relax or remove some package testing 
+that fails because M1mac gives results outside my specified tolerances.
+
+The tests in question (in package EvalEst) have been used since very 
+early R versions (0.16 circa 1995), and used on Splus prior to that. 
+There has been a need to adjust tolerances occasionally, but they have 
+been stable for a long time (more than 20 years I believe). Since these 
+tests date from a time when simple double precision was the norm, the 
+tolerances are already fairly relaxed so I hesitate to adjust them with 
+actually examining the results.
+
+Paul Gilbert
+
+On 2021-02-22 3:30 a.m., Travers Ching wrote:
+> I noticed CRAN is now doing checks against Apple M1, and some packages are
+> failing including a dependency I use.
+> 
+> Is building on M1 now a requirement, or can the check be ignored? If it's a
+> requirement, how can one test it out?
+> 
+> Travers
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From @ndre@@@b|@ette @end|ng |rom un|-due@de  Sun Feb 28 17:13:56 2021
+From: @ndre@@@b|@ette @end|ng |rom un|-due@de (=?utf-8?B?QmzDpHR0ZSwgQW5kcmVhcw==?=)
+Date: Sun, 28 Feb 2021 16:13:56 +0000
+Subject: [Rd] Apple M1 CRAN checks
+In-Reply-To: <16957316-e574-ff1a-7c5a-6cb9911e2b3b@gmail.com>
+References: <CAPLMX9EvaNB6P3Kx1WhimmnJ2QQi9XvGuY8Ps0SM7BCBSRs6hg@mail.gmail.com>
+ <16957316-e574-ff1a-7c5a-6cb9911e2b3b@gmail.com>
+Message-ID: <8F5A3904-8D0F-4394-9CDA-F998F6E8BFCD@uni-due.de>
+
+Dear Gilbert, 
+
+it would obviously great to have something like Win-builder/R-hub for the architecture of the M1 macs.  I had an issue with the RcppCWB package I maintain in January and I could not get hold of a M1 Mac mini quickly. So I resorted to hiring one with MacStadium (https://www.macstadium.com/). That worked nicely and I had a testing environment within a few hours. But it is an expensive solution (~ 100$ per month)!
+
+In the meantime I got myself a Mac mini... Great machine, but obviously not everybody should not be forced to buy one. So it would be great to learn whether there are plans to offer testing environments for Apple M1. 
+
+Andreas Bl?tte 
+
+
+?Am 28.02.21, 16:50 schrieb "R-devel im Auftrag von Paul Gilbert" <r-devel-bounces at r-project.org im Auftrag von pgilbert902 at gmail.com>:
+
+    If there was a response to the "how can I test it out" part of this 
+    question then I missed it. Can anyone point to a Win-builder like site 
+    for testing on M1mac, or to the M1mac results from testing packages 
+    already on CRAN?  They still do not seem to be on the CRAN daily site. 
+    Even a link to the 'Additional issues' on M1 Mac on the results pages 
+    would be helpful because it does not seem to be in an obvious place. I 
+    am trying to respond to a demand to relax or remove some package testing 
+    that fails because M1mac gives results outside my specified tolerances.
+
+    The tests in question (in package EvalEst) have been used since very 
+    early R versions (0.16 circa 1995), and used on Splus prior to that. 
+    There has been a need to adjust tolerances occasionally, but they have 
+    been stable for a long time (more than 20 years I believe). Since these 
+    tests date from a time when simple double precision was the norm, the 
+    tolerances are already fairly relaxed so I hesitate to adjust them with 
+    actually examining the results.
+
+    Paul Gilbert
+
+    On 2021-02-22 3:30 a.m., Travers Ching wrote:
+    > I noticed CRAN is now doing checks against Apple M1, and some packages are
+    > failing including a dependency I use.
+    > 
+    > Is building on M1 now a requirement, or can the check be ignored? If it's a
+    > requirement, how can one test it out?
+    > 
+    > Travers
+    > 
+    > 	[[alternative HTML version deleted]]
+    > 
+    > ______________________________________________
+    > R-devel at r-project.org mailing list
+    > https://stat.ethz.ch/mailman/listinfo/r-devel
+    >
+
+    ______________________________________________
+    R-devel at r-project.org mailing list
+    https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Sun Feb 28 22:23:06 2021
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Mon, 1 Mar 2021 10:23:06 +1300
+Subject: [Rd] Apple M1 CRAN checks
+In-Reply-To: <16957316-e574-ff1a-7c5a-6cb9911e2b3b@gmail.com>
+References: <CAPLMX9EvaNB6P3Kx1WhimmnJ2QQi9XvGuY8Ps0SM7BCBSRs6hg@mail.gmail.com>
+ <16957316-e574-ff1a-7c5a-6cb9911e2b3b@gmail.com>
+Message-ID: <0109881E-9D6E-4A08-8205-EF07D68C9105@R-project.org>
+
+Paul,
+
+this is being worked on. As you can imagine testing over 17,000 package in a M1 Mac mini isn't quite trivial. The first priority was to get the nightly R builds to work. Second was to get CRAN package builds to work. Third is to provide checks. The first two have finished last week and the checks have been running for the past two days. Unfortunately, some pieces (like XQuartz) are still not quite stable so it takes more manual interventions than one would expect. We are at close to 16k packags checked, so we're getting there.
+
+As for EvalEst the check has finished so I have:
+
+  Running ?dse2tstgd2.R? [13s/14s]
+Running the tests in ?tests/dse2tstgd2.R? failed.
+Last 13 lines of output:
+  >   ok <-  fuzz.large > error 
+  >   if (!ok) {if (is.na(max.error)) max.error <- error
+  +             else max.error <- max(error, max.error)}
+  >   all.ok <- all.ok & ok 
+  >   {if (ok) cat("ok\n") else cat("failed! error= ", error,"\n") }
+  ok
+  > 
+  >   cat("All Brief User Guide example tests part 2 completed")
+  All Brief User Guide example tests part 2 completed>      if (all.ok) cat(" OK\n")  else 
+  +         cat(", some FAILED! max.error = ", max.error,"\n")
+  , some FAILED! max.error =  1.065814e-14 
+  > 
+  >   if (!all.ok) stop("Some tests FAILED")
+  Error: Some tests FAILED
+  Execution halted
+
+when I run it by hand I get ok for all but:
+
+Guide part 2 test 10... 
+failed! error=  1.065814e-14 
+
+>  sum(fc1$forecastCov[[1]])
+[1] 14.933660144821400806
+>  sum(fc2$forecastCov[[1]])
+[1] 14.933660144821400806
+> sum(fc2$forecastCov.zero)
+[1] 31.654672476928304548
+> sum(fc2$forecastCov.trend) 
+[1] 18.324461923341957004
+> c(14.933660144821400806 - sum(fc1$forecastCov[[1]]),
++                         14.933660144821400806 - sum(fc2$forecastCov[[1]]),
++                         31.654672476928297442 - sum(fc2$forecastCov.zero),
++                         18.324461923341953451 - sum(fc2$forecastCov.trend) )
+[1]  0.0000000000000000000e+00  0.0000000000000000000e+00 -1.0658141036401502788e-14
+[4] -3.5527136788005009294e-15
+
+I hope this helps you to track it down.
+
+Cheers,
+Simon
+
+
+> On Mar 1, 2021, at 4:50 AM, Paul Gilbert <pgilbert902 at gmail.com> wrote:
+> 
+> If there was a response to the "how can I test it out" part of this question then I missed it. Can anyone point to a Win-builder like site for testing on M1mac, or to the M1mac results from testing packages already on CRAN?  They still do not seem to be on the CRAN daily site. Even a link to the 'Additional issues' on M1 Mac on the results pages would be helpful because it does not seem to be in an obvious place. I am trying to respond to a demand to relax or remove some package testing that fails because M1mac gives results outside my specified tolerances.
+> 
+> The tests in question (in package EvalEst) have been used since very early R versions (0.16 circa 1995), and used on Splus prior to that. There has been a need to adjust tolerances occasionally, but they have been stable for a long time (more than 20 years I believe). Since these tests date from a time when simple double precision was the norm, the tolerances are already fairly relaxed so I hesitate to adjust them with actually examining the results.
+> 
+> Paul Gilbert
+> 
+> On 2021-02-22 3:30 a.m., Travers Ching wrote:
+>> I noticed CRAN is now doing checks against Apple M1, and some packages are
+>> failing including a dependency I use.
+>> Is building on M1 now a requirement, or can the check be ignored? If it's a
+>> requirement, how can one test it out?
+>> Travers
+>> 	[[alternative HTML version deleted]]
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>> 
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
+From pg||bert902 @end|ng |rom gm@||@com  Sun Feb 28 23:47:04 2021
+From: pg||bert902 @end|ng |rom gm@||@com (Paul Gilbert)
+Date: Sun, 28 Feb 2021 17:47:04 -0500
+Subject: [Rd] Apple M1 CRAN checks
+In-Reply-To: <0109881E-9D6E-4A08-8205-EF07D68C9105@R-project.org>
+References: <CAPLMX9EvaNB6P3Kx1WhimmnJ2QQi9XvGuY8Ps0SM7BCBSRs6hg@mail.gmail.com>
+ <16957316-e574-ff1a-7c5a-6cb9911e2b3b@gmail.com>
+ <0109881E-9D6E-4A08-8205-EF07D68C9105@R-project.org>
+Message-ID: <1fce3323-5424-52aa-d1bd-ceabfb90945a@gmail.com>
+
+Simon,
+
+Yes, I can imagine it is not trivial testing. I hope you have a stack of 
+minis in a cluster.
+
+It looks like a trivial transgression,  max.error =  1.065814e-14 where 
+my tolerance is set at 1e-14. Many of the other tests already have a 
+larger tolerance. Very possibly it is not actually the tolerance that is 
+the problem. The test value itself is just determined by a run on 
+another machine, so that may not be in the middle of the result 
+distribution.
+
+I'll fix it shortly.
+
+Thanks,
+Paul
+
+On 2021-02-28 4:23 p.m., Simon Urbanek wrote:
+> Paul,
+> 
+> this is being worked on. As you can imagine testing over 17,000 package in a M1 Mac mini isn't quite trivial. The first priority was to get the nightly R builds to work. Second was to get CRAN package builds to work. Third is to provide checks. The first two have finished last week and the checks have been running for the past two days. Unfortunately, some pieces (like XQuartz) are still not quite stable so it takes more manual interventions than one would expect. We are at close to 16k packags checked, so we're getting there.
+> 
+> As for EvalEst the check has finished so I have:
+> 
+>    Running ?dse2tstgd2.R? [13s/14s]
+> Running the tests in ?tests/dse2tstgd2.R? failed.
+> Last 13 lines of output:
+>    >   ok <-  fuzz.large > error
+>    >   if (!ok) {if (is.na(max.error)) max.error <- error
+>    +             else max.error <- max(error, max.error)}
+>    >   all.ok <- all.ok & ok
+>    >   {if (ok) cat("ok\n") else cat("failed! error= ", error,"\n") }
+>    ok
+>    >
+>    >   cat("All Brief User Guide example tests part 2 completed")
+>    All Brief User Guide example tests part 2 completed>      if (all.ok) cat(" OK\n")  else
+>    +         cat(", some FAILED! max.error = ", max.error,"\n")
+>    , some FAILED! max.error =  1.065814e-14
+>    >
+>    >   if (!all.ok) stop("Some tests FAILED")
+>    Error: Some tests FAILED
+>    Execution halted
+> 
+> when I run it by hand I get ok for all but:
+> 
+> Guide part 2 test 10...
+> failed! error=  1.065814e-14
+> 
+>>   sum(fc1$forecastCov[[1]])
+> [1] 14.933660144821400806
+>>   sum(fc2$forecastCov[[1]])
+> [1] 14.933660144821400806
+>> sum(fc2$forecastCov.zero)
+> [1] 31.654672476928304548
+>> sum(fc2$forecastCov.trend)
+> [1] 18.324461923341957004
+>> c(14.933660144821400806 - sum(fc1$forecastCov[[1]]),
+> +                         14.933660144821400806 - sum(fc2$forecastCov[[1]]),
+> +                         31.654672476928297442 - sum(fc2$forecastCov.zero),
+> +                         18.324461923341953451 - sum(fc2$forecastCov.trend) )
+> [1]  0.0000000000000000000e+00  0.0000000000000000000e+00 -1.0658141036401502788e-14
+> [4] -3.5527136788005009294e-15
+> 
+> I hope this helps you to track it down.
+> 
+> Cheers,
+> Simon
+> 
+> 
+>> On Mar 1, 2021, at 4:50 AM, Paul Gilbert <pgilbert902 at gmail.com> wrote:
+>>
+>> If there was a response to the "how can I test it out" part of this question then I missed it. Can anyone point to a Win-builder like site for testing on M1mac, or to the M1mac results from testing packages already on CRAN?  They still do not seem to be on the CRAN daily site. Even a link to the 'Additional issues' on M1 Mac on the results pages would be helpful because it does not seem to be in an obvious place. I am trying to respond to a demand to relax or remove some package testing that fails because M1mac gives results outside my specified tolerances.
+>>
+>> The tests in question (in package EvalEst) have been used since very early R versions (0.16 circa 1995), and used on Splus prior to that. There has been a need to adjust tolerances occasionally, but they have been stable for a long time (more than 20 years I believe). Since these tests date from a time when simple double precision was the norm, the tolerances are already fairly relaxed so I hesitate to adjust them with actually examining the results.
+>>
+>> Paul Gilbert
+>>
+>> On 2021-02-22 3:30 a.m., Travers Ching wrote:
+>>> I noticed CRAN is now doing checks against Apple M1, and some packages are
+>>> failing including a dependency I use.
+>>> Is building on M1 now a requirement, or can the check be ignored? If it's a
+>>> requirement, how can one test it out?
+>>> Travers
+>>> 	[[alternative HTML version deleted]]
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+
+

@@ -1,0 +1,4962 @@
+From g@bembecker @end|ng |rom gm@||@com  Thu Jul  1 01:02:53 2021
+From: g@bembecker @end|ng |rom gm@||@com (Gabriel Becker)
+Date: Wed, 30 Jun 2021 16:02:53 -0700
+Subject: [Rd] On read.csv and write.csv
+In-Reply-To: <CWXP265MB3208A3DC3EE8F8E8489E258B81019@CWXP265MB3208.GBRP265.PROD.OUTLOOK.COM>
+References: <CWXP265MB3208A3DC3EE8F8E8489E258B81019@CWXP265MB3208.GBRP265.PROD.OUTLOOK.COM>
+Message-ID: <CAD4oTHFdxdrbjmxYsy8_ZEvjkxPh5SdDGqhOJ2_-RiiYXt=Q5A@mail.gmail.com>
+
+Hi Stephen,
+
+Personally, I don't have super strong feelings about this, but
+https://datatracker.ietf.org/doc/html/rfc4180#section-2 does say that the
+optional header line should have the same number of fields as the data
+records, so in as much as that is the "CSV specification", R's read.csv
+behavior is supporting an extension, whereas its write.csv is
+outputting "standard" compliant csv.
+
+It is possible that one or a few of the mentioned multitude of independent
+specs do specify header can have one less, I don't know, but if so,
+according to the ietf, its not overly common.
+
+I can't even speak to whether that is why the behavior is as it is, but I
+figured it was worth mentioning.
+
+~G
+
+On Wed, Jun 30, 2021 at 2:15 PM Stephen Ellison <S.Ellison at lgcgroup.com>
+wrote:
+
+> Apologies if this is a well-worn question; I haven?t found it so far but
+> there's a lot of r-dev and I may have missed it in the archives. In the
+> mean time:
+>
+> I've managed to avoid writing csv files with R for a couple of decades but
+> we're swopping data with a collaborator and I've tripped over an
+> inconsistency between read.csv and write.csv that seems less than helpful.
+> The default line number behaviour for read.csv is to assume that, when the
+> number of items in the first row is one less than the number in the second,
+> that the first column contains row names. write.csv, however, includes an
+> empty string ("") as the first header entry over row names when writing. On
+> rereading, the original row names are then treated as data with unknown
+> name, replaced by "X".
+>
+> That means that, unlike read.table and write.table,  something written
+> with write.csv is not read back correctly by read.csv .
+>
+> Is that intentional?
+> And whether it is intentional or not, is it wise?
+>
+> Example:
+>
+> ( D1 <- data.frame(A=letters[1:5], N=1:5, Y=rnorm(5) ) )
+> write.csv(D1, "temp.csv")
+>
+> ( D1w <- read.csv("temp.csv") )
+>
+> # Note the unnecessary new X column ...
+> #Tidy up
+> unlink("temp.csv")
+>
+> This differs from the parent .table defaults; write.table doesn?t add the
+> extra "" column label, so the object read back with read.table does not
+> contain an unwanted extra column.
+>
+> Wouldn?t it be more sensible if write.csv() and read.csv() were consistent
+> in the same sense as read.table and write.table?
+> Or at least if there were a switch (as.read.csv=TRUE ?) to tell write.csv
+> to omit the initial "", or vice versa?
+>
+> Currently using R version 4.1.0 on Windows, but this reproduces at least
+> as far back as 3.6
+>
+> Steve E
+>
+>
+> *******************************************************************
+> This email and any attachments are confidential. Any u...{{dropped:15}}
+
+
+From bbo|ker @end|ng |rom gm@||@com  Thu Jul  1 02:23:27 2021
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Wed, 30 Jun 2021 20:23:27 -0400
+Subject: [Rd] undefined subclass warning
+Message-ID: <d8920721-4a4d-820e-ab1c-55b693b15496@gmail.com>
+
+
+   A colleague recently submitted a paper to JSS and was advised to 
+address the following warning which occurs when their package 
+(https://CRAN.R-project.org/package=pcoxtime) is loaded:
+
+Warning message:
+In .recacheSubclasses(def at className, def, env) :
+   undefined subclass "numericVector" of class "Mnumeric"; definition 
+not updated
+
+After much digging I *think* I've concluded that this comes from the 
+following import chain:
+
+pcoxtime -> riskRegression -> rms -> quantreg -> MatrixModels
+
+   that is, loading any of these packages throws the warning. 
+MatrixModels Imports: *only* {stats, methods, Matrix} and loading these 
+by themselves is warning-less.
+
+    I assume there is some mismatch/incompatibility between MatrixModels 
+(which was last updated 2021-03-01) and Matrix (2021-05-24), which has 
+this NEWS item in the most release 1.3-3 
+<https://cran.r-project.org/web/packages/Matrix/news.html>:
+
+* removed the nowhere used (and unexported but still active) class union 
+"Mnumeric" which actually trickled into many base classes properties. 
+Notably would it break validity of factor with a proposed change in 
+validity checking, as factors were also "Mnumeric" but did not fulfill 
+its validity method. Similarly removed (disabled) unused class union 
+"numericVector".
+
+    It seems that REINSTALLING the package from source solves the 
+problem, which is nice, but I don't fully understand why; I guess ???? 
+there are class structures that are evaluated at install time and stored 
+in the package environment ...
+
+   Any more explanations would be welcome.
+
+   cheers
+     Ben
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Thu Jul  1 04:18:08 2021
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Thu, 1 Jul 2021 14:18:08 +1200
+Subject: [Rd] On read.csv and write.csv
+In-Reply-To: <CWXP265MB3208A3DC3EE8F8E8489E258B81019@CWXP265MB3208.GBRP265.PROD.OUTLOOK.COM>
+References: <CWXP265MB3208A3DC3EE8F8E8489E258B81019@CWXP265MB3208.GBRP265.PROD.OUTLOOK.COM>
+Message-ID: <029F6720-64AB-4F19-A823-8DB0768E153F@R-project.org>
+
+
+Stephen,
+
+the "unhelpful" column are the row names. They are considered an important part of a data frame and therefore the default (row.names = TRUE) is to not lose them (as there is no way back once you do). If you don't want to preserve the row names you can simply set row.names=FALSE.
+
+Cheers,
+Simon
+
+PS: this is likely a question for R-help rather than R-devel
+
+
+
+> On 1/07/2021, at 9:15 AM, Stephen Ellison <S.Ellison at LGCGroup.com> wrote:
+> 
+> Apologies if this is a well-worn question; I haven?t found it so far but there's a lot of r-dev and I may have missed it in the archives. In the mean time:
+> 
+> I've managed to avoid writing csv files with R for a couple of decades but we're swopping data with a collaborator and I've tripped over an inconsistency between read.csv and write.csv that seems less than helpful.
+> The default line number behaviour for read.csv is to assume that, when the number of items in the first row is one less than the number in the second, that the first column contains row names. write.csv, however, includes an empty string ("") as the first header entry over row names when writing. On rereading, the original row names are then treated as data with unknown name, replaced by "X".
+> 
+> That means that, unlike read.table and write.table,  something written with write.csv is not read back correctly by read.csv .
+> 
+> Is that intentional?
+> And whether it is intentional or not, is it wise?
+> 
+> Example:
+> 
+> ( D1 <- data.frame(A=letters[1:5], N=1:5, Y=rnorm(5) ) )
+> write.csv(D1, "temp.csv")
+> 
+> ( D1w <- read.csv("temp.csv") )
+> 
+> # Note the unnecessary new X column ...
+> #Tidy up
+> unlink("temp.csv")
+> 
+> This differs from the parent .table defaults; write.table doesn?t add the extra "" column label, so the object read back with read.table does not contain an unwanted extra column.
+> 
+> Wouldn?t it be more sensible if write.csv() and read.csv() were consistent in the same sense as read.table and write.table?
+> Or at least if there were a switch (as.read.csv=TRUE ?) to tell write.csv to omit the initial "", or vice versa?
+> 
+> Currently using R version 4.1.0 on Windows, but this reproduces at least as far back as 3.6 
+> 
+> Steve E
+> 
+> 
+> *******************************************************************
+> This email and any attachments are confidential. Any u...{{dropped:13}}
+
+
+From m|n@h@|| @end|ng |rom um|ch@edu  Thu Jul  1 05:55:32 2021
+From: m|n@h@|| @end|ng |rom um|ch@edu (Greg Minshall)
+Date: Thu, 01 Jul 2021 06:55:32 +0300
+Subject: [Rd] S3 dispatch does not work for generics defined inside an
+ environment
+In-Reply-To: Your message of "Wed, 30 Jun 2021 11:22:15 +0200."
+ <08D56DDA-856D-4F1F-A7DE-FA9EFDFFB9FC@uzh.ch>
+Message-ID: <3777905.1625111732@apollo2.minshall.org>
+
+Taras,
+
+> P.S. If you are wondering what I am trying to achieve here ? we have a
+> very large codebase and I am trying to use environments as a type of
+> ?poor man?s namespaces? to organize code in a modular fashion. But of
+> course it?s all pointless if I can?t get the generics to work
+> reliably.
+
+i'm not knowledgeable about S3.  but, a different way to try to
+modularize large code bases is to split them into separate packages.
+just in case you hadn't already thought about, and rejected, that idea.
+
+cheers, Greg
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Jul  1 08:16:46 2021
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 1 Jul 2021 08:16:46 +0200
+Subject: [Rd] undefined subclass warning
+In-Reply-To: <d8920721-4a4d-820e-ab1c-55b693b15496@gmail.com>
+References: <d8920721-4a4d-820e-ab1c-55b693b15496@gmail.com>
+Message-ID: <24797.24014.946818.673060@stat.math.ethz.ch>
+
+>>>>> Ben Bolker 
+>>>>>     on Wed, 30 Jun 2021 20:23:27 -0400 writes:
+
+    >    A colleague recently submitted a paper to JSS and was
+    > advised to address the following warning which occurs when
+    > their package
+    > (https://CRAN.R-project.org/package=pcoxtime) is loaded:
+
+    > Warning message: In .recacheSubclasses(def at className, def,
+    > env) : undefined subclass "numericVector" of class
+    > "Mnumeric"; definition not updated
+
+    > After much digging I *think* I've concluded that this
+    > comes from the following import chain:
+
+    > pcoxtime -> riskRegression -> rms -> quantreg ->
+    > MatrixModels
+
+    >    that is, loading any of these packages throws the
+    > warning.  MatrixModels Imports: *only* {stats, methods,
+    > Matrix} and loading these by themselves is warning-less.
+
+    >     I assume there is some mismatch/incompatibility
+    > between MatrixModels (which was last updated 2021-03-01)
+    > and Matrix (2021-05-24), which has this NEWS item in the
+    > most release 1.3-3
+    > <https://cran.r-project.org/web/packages/Matrix/news.html>:
+
+    > * removed the nowhere used (and unexported but still
+    > active) class union "Mnumeric" which actually trickled
+    > into many base classes properties.  Notably would it break
+    > validity of factor with a proposed change in validity
+    > checking, as factors were also "Mnumeric" but did not
+    > fulfill its validity method. Similarly removed (disabled)
+    > unused class union "numericVector".
+
+    >     It seems that REINSTALLING the package from source
+    > solves the problem, which is nice, but I don't fully
+    > understand why; I guess ????  there are class structures
+    > that are evaluated at install time and stored in the
+    > package environment ...
+
+    >    Any more explanations would be welcome.
+    >    cheers Ben
+
+Yes, Ben,
+you are right on spot and very close with your final guess.
+
+Installation and even building of packages using S4 classes (their own *or* of
+other packages where they import from) does store the class
+definitions already in the binary "dump" of all the R code.
+
+So yes, Matrix cleanup (dropping unused classes actually
+helping/improving the class hiearchy by making it slightly
+simpler) does need to re-installation of direct Matrix
+dependencies in order to avoid the above warning --- which
+otherwise has zero consequences.
+
+So the referees of your colleague's paper / package should really learn
+that they are wrong in their requirement of getting rid of that
+warning.
+
+and as you've suggested in another thread, I should alleviate
+the problem by uploading a new version of 'MatrixModels' models
+to CRAN {solving another small unrelated buglet} so the warnings
+will go away for everyone who updates their installed packages.
+
+Martin
+
+
+From t@r@@@z@kh@rko @end|ng |rom uzh@ch  Thu Jul  1 09:27:13 2021
+From: t@r@@@z@kh@rko @end|ng |rom uzh@ch (Taras Zakharko)
+Date: Thu, 1 Jul 2021 09:27:13 +0200
+Subject: [Rd] S3 dispatch does not work for generics defined inside an
+ environment
+In-Reply-To: <3777905.1625111732@apollo2.minshall.org>
+References: <3777905.1625111732@apollo2.minshall.org>
+Message-ID: <5E29C4DA-197A-4C17-9E5D-9CD7E1EA8D48@uzh.ch>
+
+Hi Greg, 
+
+That was my original plan as well, but managing and deploying dozens of little packages that are all under active development is a nightmare even with devtools. Just too much overhead, not to mention that coming up with names that would not have namespace conflicts was getting silly. 
+
+In the end, I wrote a package that implements lightweight python-like modules for R and that has really improved my workflow. I hope to publish this package later this year after I have cleaned it up a bit. 
+
+Thanks, 
+
+Taras
+
+> On 1 Jul 2021, at 05:55, Greg Minshall <minshall at umich.edu> wrote:
+> 
+> Taras,
+> 
+>> P.S. If you are wondering what I am trying to achieve here ? we have a
+>> very large codebase and I am trying to use environments as a type of
+>> ?poor man?s namespaces? to organize code in a modular fashion. But of
+>> course it?s all pointless if I can?t get the generics to work
+>> reliably.
+> 
+> i'm not knowledgeable about S3.  but, a different way to try to
+> modularize large code bases is to split them into separate packages.
+> just in case you hadn't already thought about, and rejected, that idea.
+> 
+> cheers, Greg
+
+
+From t@r@@@z@kh@rko @end|ng |rom uzh@ch  Thu Jul  1 09:55:08 2021
+From: t@r@@@z@kh@rko @end|ng |rom uzh@ch (Taras Zakharko)
+Date: Thu, 1 Jul 2021 09:55:08 +0200
+Subject: [Rd] On read.csv and write.csv
+In-Reply-To: <CWXP265MB3208A3DC3EE8F8E8489E258B81019@CWXP265MB3208.GBRP265.PROD.OUTLOOK.COM>
+References: <CWXP265MB3208A3DC3EE8F8E8489E258B81019@CWXP265MB3208.GBRP265.PROD.OUTLOOK.COM>
+Message-ID: <273E35E6-67D9-41BD-8BAA-737FDF32D4CC@uzh.ch>
+
+Stephen, 
+
+I am sure one can find a lot of small issues and inconsistencies with R and it?s standard library. It has to support a lot of legacy cruft and the design process ? especially in the early days ? focused on getting things done rather than delivering a standard library of immaculate quality. And it is way too late to make dramatic changes lest you want to risk breaking existing software. That ship has sailed decades ago. 
+
+Personally, I have taught myself a while ago to always use explicit configuration when using built-in functions, and in the last couple of years I have completely replaced them in favor of other packages (such as readr) that come with (arguably) more sane defaults and better diagnostics. 
+
+Best, 
+
+Taras
+
+
+> On 30 Jun 2021, at 23:15, Stephen Ellison <S.Ellison at LGCGroup.com> wrote:
+> 
+> Apologies if this is a well-worn question; I haven?t found it so far but there's a lot of r-dev and I may have missed it in the archives. In the mean time:
+> 
+> I've managed to avoid writing csv files with R for a couple of decades but we're swopping data with a collaborator and I've tripped over an inconsistency between read.csv and write.csv that seems less than helpful.
+> The default line number behaviour for read.csv is to assume that, when the number of items in the first row is one less than the number in the second, that the first column contains row names. write.csv, however, includes an empty string ("") as the first header entry over row names when writing. On rereading, the original row names are then treated as data with unknown name, replaced by "X".
+> 
+> That means that, unlike read.table and write.table,  something written with write.csv is not read back correctly by read.csv .
+> 
+> Is that intentional?
+> And whether it is intentional or not, is it wise?
+> 
+> Example:
+> 
+> ( D1 <- data.frame(A=letters[1:5], N=1:5, Y=rnorm(5) ) )
+> write.csv(D1, "temp.csv")
+> 
+> ( D1w <- read.csv("temp.csv") )
+> 
+> # Note the unnecessary new X column ...
+> #Tidy up
+> unlink("temp.csv")
+> 
+> This differs from the parent .table defaults; write.table doesn?t add the extra "" column label, so the object read back with read.table does not contain an unwanted extra column.
+> 
+> Wouldn?t it be more sensible if write.csv() and read.csv() were consistent in the same sense as read.table and write.table?
+> Or at least if there were a switch (as.read.csv=TRUE ?) to tell write.csv to omit the initial "", or vice versa?
+> 
+> Currently using R version 4.1.0 on Windows, but this reproduces at least as far back as 3.6 
+> 
+> Steve E
+> 
+> 
+> *******************************************************************
+> This email and any attachments are confidential. Any u...{{dropped:13}}
+
+
+From m|n@h@|| @end|ng |rom um|ch@edu  Thu Jul  1 10:42:24 2021
+From: m|n@h@|| @end|ng |rom um|ch@edu (Greg Minshall)
+Date: Thu, 01 Jul 2021 11:42:24 +0300
+Subject: [Rd] S3 dispatch does not work for generics defined inside an
+ environment
+In-Reply-To: Your message of "Thu, 01 Jul 2021 09:27:13 +0200."
+ <5E29C4DA-197A-4C17-9E5D-9CD7E1EA8D48@uzh.ch>
+Message-ID: <3792700.1625128944@apollo2.minshall.org>
+
+Taras,
+> That was my original plan as well, but managing and deploying dozens
+> of little packages that are all under active development is a
+> nightmare even with devtools. Just too much overhead, not to mention
+> that coming up with names that would not have namespace conflicts was
+> getting silly.
+
+i can imagine.
+
+> In the end, I wrote a package that implements lightweight python-like
+> modules for R and that has really improved my workflow. I hope to
+> publish this package later this year after I have cleaned it up a bit.
+
+cool -- good luck with it.
+
+Greg
+
+
+From joh@nne@@r@nke @end|ng |rom jrwb@de  Thu Jul  1 11:42:50 2021
+From: joh@nne@@r@nke @end|ng |rom jrwb@de (Johannes Ranke)
+Date: Thu, 01 Jul 2021 11:42:50 +0200
+Subject: [Rd] S3 dispatch does not work for generics defined inside an
+ environment
+In-Reply-To: <5E29C4DA-197A-4C17-9E5D-9CD7E1EA8D48@uzh.ch>
+References: <3777905.1625111732@apollo2.minshall.org>
+ <5E29C4DA-197A-4C17-9E5D-9CD7E1EA8D48@uzh.ch>
+Message-ID: <2361425.tvUGSieqk4@ryz>
+
+> In the end, I wrote a package that implements lightweight python-like
+> modules for R and that has really improved my workflow. I hope to publish
+> this package later this year after I have cleaned it up a bit.
+
+Hi, are you aware of the previous work in this direction
+
+https://github.com/klmr/box
+
+and
+
+https://github.com/wahani/modules 
+
+Johannes
+
+
+	[[alternative HTML version deleted]]
+
+
+From t@r@@@z@kh@rko @end|ng |rom uzh@ch  Thu Jul  1 12:15:12 2021
+From: t@r@@@z@kh@rko @end|ng |rom uzh@ch (Taras Zakharko)
+Date: Thu, 1 Jul 2021 12:15:12 +0200
+Subject: [Rd] S3 dispatch does not work for generics defined inside an
+ environment
+In-Reply-To: <2361425.tvUGSieqk4@ryz>
+References: <3777905.1625111732@apollo2.minshall.org>
+ <5E29C4DA-197A-4C17-9E5D-9CD7E1EA8D48@uzh.ch> <2361425.tvUGSieqk4@ryz>
+Message-ID: <B4EDBB4C-F7AE-4E3B-A3BC-2677ED53A4C0@uzh.ch>
+
+Thanks Johannes, 
+
+I was aware of the modules package (it was not suitable for my needs unfortunately), but I did not know about box? somehow I managed to completely miss it in my search (embarrassing, really).  
+
+My own package offers similar functionality to box, but is designed to closely follow the behavior of regular R packages and heavily relies on Roxygen2 to manage imports and exports. The idea is that you can convert a module to an R package (or via versa) with no additional effort.  Basically, where box offers an opinionated implementation of modules, my design aims to be as ?boring? as possible. You just write the code as you usually would do for a package and then you use a single new function to load it in a modular fashion. 
+
+At any rate, I am exited that there is work in this area and I am looking forward to further exploring the design space. Maybe one day these efforts will culminate in an official R module system.  
+
+Thanks, 
+
+Taras
+
+> On 1 Jul 2021, at 11:42, Johannes Ranke <johannes.ranke at jrwb.de> wrote:
+> 
+>> In the end, I wrote a package that implements lightweight python-like
+>> modules for R and that has really improved my workflow. I hope to publish
+>> this package later this year after I have cleaned it up a bit.
+> 
+> Hi, are you aware of the previous work in this direction
+> 
+> https://github.com/klmr/box
+> 
+> and
+> 
+> https://github.com/wahani/modules 
+> 
+> Johannes
+> 
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From konr@d@@|ek @end|ng |rom gm@||@com  Thu Jul  1 12:16:08 2021
+From: konr@d@@|ek @end|ng |rom gm@||@com (Konrad Siek)
+Date: Thu, 1 Jul 2021 12:16:08 +0200
+Subject: [Rd] [External] SET_COMPLEX_ELT and SET_RAW_ELT missing from
+ Rinternals.h
+In-Reply-To: <335585-e80-509f-9598-4b737b5ccba9@uiowa.edu>
+References: <CAN6cAk1T4sQFMZXtNqjTKJCQyn_21ic1zAm6P=rQZxy4uAikfg@mail.gmail.com>
+ <335585-e80-509f-9598-4b737b5ccba9@uiowa.edu>
+Message-ID: <CAN6cAk0g9b8jfALE2TjnNv_F7WobMBEaAii5i1PzzdQKYAz5pw@mail.gmail.com>
+
+Thanks!
+
+So what would be the prescribed way of assigning elements to a CPLXSXP if I
+needed to?
+
+One way I see is to do what most of the code inside the interpreter does
+and grab the vector's data pointer:
+
+    COMPLEX(sexp)[index] = value;
+    COMPLEX0(sexp)[index] = value;
+
+This will materialize an ALTREP CPLXSXP though, so maybe the best way would
+be to mirror what SET_COMPLEX_ELT does in Rinlinedfuns.h?
+
+    if (ALTREP(sexp)) ALTCOMPLEX_SET_ELT(sexp, index, value); else
+COMPLEX0(sexp)[index] = vector;
+
+This seems better, but it's not used in the interpreter anywhere as far as
+I can tell, presumably because of the setter interface not being complete,
+as you point out. But should I be avoiding this second approach for some
+reaosn?
+
+k
+
+On Tue, Jun 29, 2021 at 4:06 AM <luke-tierney at uiowa.edu> wrote:
+
+> The setter interface for atomic types is not yer implemented. It may
+> be some day.
+>
+> Best,
+>
+> luke
+>
+> On Fri, 25 Jun 2021, Konrad Siek wrote:
+>
+> > Hello,
+> >
+> > I am working on a package that works with various types of R vectors,
+> > implemented in C. My code has a lot of SET_*_ELT operations in it for
+> > various types of vectors, including for CPLXSXPs and RAWSXPs.
+> >
+> > I noticed SET_COMPLEX_ELT and SET_RAW_ELT are defined in Rinlinedfuns.h
+> but
+> > not declared in Rinternals.h, so they cannot be used in packages. I was
+> > going to re-implement them or extern them in my package, however,
+> > interestingly, ALTCOMPLEX_SET_ELT and ALTRAW_SET_ELT  are both declared
+> in
+> > Rinternals.h, making me think SET_COMPLEX_ELT and SET_RAW_ELT could be
+> > purposefully obscured. Otherwise it may just be an oversight and I should
+> > bring it to someone's attention anyway.
+> >
+> > I have three questions that I hope R-devel could help me with.
+> >
+> > 1. Is this an oversight, or are SET_COMPLEX_ELT and SET_RAW_ELT not
+> exposed
+> > on purpose? 2. If they are not exposed on purpose, I was wondering why.
+> > 3. More importantly, what would be good ways to set elements of these
+> > vectors while playing nice with ALTREP and avoiding whatever pitfalls
+> > caused these functions to be obscured in the first place?
+> >
+> > Best regards,
+> > Konrad,
+> >
+> >       [[alternative HTML version deleted]]
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+>
+> --
+> Luke Tierney
+> Ralph E. Wareham Professor of Mathematical Sciences
+> University of Iowa                  Phone:             319-335-3386
+> Department of Statistics and        Fax:               319-335-3017
+>     Actuarial Science
+> 241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+> Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+>
+
+	[[alternative HTML version deleted]]
+
+
+From S@E|||@on @end|ng |rom LGCGroup@com  Thu Jul  1 22:46:13 2021
+From: S@E|||@on @end|ng |rom LGCGroup@com (Stephen Ellison)
+Date: Thu, 1 Jul 2021 20:46:13 +0000
+Subject: [Rd] On read.csv and write.csv
+In-Reply-To: <029F6720-64AB-4F19-A823-8DB0768E153F@R-project.org>
+References: <CWXP265MB3208A3DC3EE8F8E8489E258B81019@CWXP265MB3208.GBRP265.PROD.OUTLOOK.COM>
+ <029F6720-64AB-4F19-A823-8DB0768E153F@R-project.org>
+Message-ID: <CWXP265MB32085A57128A1822E4A5C5BB81009@CWXP265MB3208.GBRP265.PROD.OUTLOOK.COM>
+
+> the "unhelpful" column are the row names. They are considered an
+> important part of a data frame and therefore the default (row.names =
+> TRUE) is to not lose them (as there is no way back once you do). If you don't
+> want to preserve the row names you can simply set row.names=FALSE.
+
+Please run the reproducible example provided. 
+When you do, you will see that write.csv writes an unnecessary empty header field ("") over the row names column. This makes the number of header fields equal to the number of columns _including_ row names. That causes the original row names to be read as data by read.csv, following the rule that the number of header fields determines whether row names are present. read.csv  accordingly assumes that the former row names are unnamed data, calls the unnamed row names column "X" (or X.1 etc if X exists) and then adds new, default, row names _instead of the original row names written by write.csv_. 
+That's not helpful.
+
+By contrast read.table correctly reads the first entry in each row as a row name when the number of header fields is one less than the number of data columns. write.table includes row names as row names _without a header field_, so a file written with write.table is correctly formatted for read.table to interpret the first data field as a row name.
+I think it would be more sensible if write.csv did the same as write.table when row.names=TRUE - as it is, by default.
+
+
+
+
+
+*******************************************************************
+This email and any attachments are confidential. Any use, copying or
+disclosure other than by the intended recipient is unauthorised. If 
+you have received this message in error, please notify the sender 
+immediately via +44(0)20 8943 7000 or notify postmaster at lgcgroup.com 
+and delete this message and any copies from your computer and network. 
+LGC Limited. Registered in England 2991879. 
+Registered office: Queens Road, Teddington, Middlesex, TW11 0LY, UK
+
+From g@bembecker @end|ng |rom gm@||@com  Fri Jul  2 00:29:40 2021
+From: g@bembecker @end|ng |rom gm@||@com (Gabriel Becker)
+Date: Thu, 1 Jul 2021 15:29:40 -0700
+Subject: [Rd] On read.csv and write.csv
+In-Reply-To: <CWXP265MB32085A57128A1822E4A5C5BB81009@CWXP265MB3208.GBRP265.PROD.OUTLOOK.COM>
+References: <CWXP265MB3208A3DC3EE8F8E8489E258B81019@CWXP265MB3208.GBRP265.PROD.OUTLOOK.COM>
+ <029F6720-64AB-4F19-A823-8DB0768E153F@R-project.org>
+ <CWXP265MB32085A57128A1822E4A5C5BB81009@CWXP265MB3208.GBRP265.PROD.OUTLOOK.COM>
+Message-ID: <CAD4oTHFjYycJzEtLMM3jJ8ZbZjUCY6-Vh_-zUvHin3L15iXS1g@mail.gmail.com>
+
+On Thu, Jul 1, 2021 at 1:46 PM Stephen Ellison <S.Ellison at lgcgroup.com>
+wrote:
+
+>
+> Please run the reproducible example provided.
+> When you do, you will see that write.csv writes an unnecessary empty
+> header field ("") over the row names column. This makes the number of
+> header fields equal to the number of columns _including_ row names. That
+> causes the original row names to be read as data by read.csv, following the
+> rule that the number of header fields determines whether row names are
+> present. read.csv  accordingly assumes that the former row names are
+> unnamed data, calls the unnamed row names column "X" (or X.1 etc if X
+> exists) and then adds new, default, row names _instead of the original row
+> names written by write.csv_.
+> That's not helpful.
+>
+
+This depends on if you are reading the csv via R or something else, I would
+imagine. It not being "valid" CSV at all would likely cause some programs
+to choke entirely, I expect. I admit that's conjecture though, I don't have
+data on that one way or another.
+
+~G
+
+	[[alternative HTML version deleted]]
+
+
+From j|ox @end|ng |rom mcm@@ter@c@  Fri Jul  2 00:47:09 2021
+From: j|ox @end|ng |rom mcm@@ter@c@ (John Fox)
+Date: Thu, 1 Jul 2021 18:47:09 -0400
+Subject: [Rd] On read.csv and write.csv
+In-Reply-To: <23268_1625178608_161MU7RV006249_CAD4oTHFjYycJzEtLMM3jJ8ZbZjUCY6-Vh_-zUvHin3L15iXS1g@mail.gmail.com>
+References: <CWXP265MB3208A3DC3EE8F8E8489E258B81019@CWXP265MB3208.GBRP265.PROD.OUTLOOK.COM>
+ <029F6720-64AB-4F19-A823-8DB0768E153F@R-project.org>
+ <CWXP265MB32085A57128A1822E4A5C5BB81009@CWXP265MB3208.GBRP265.PROD.OUTLOOK.COM>
+ <23268_1625178608_161MU7RV006249_CAD4oTHFjYycJzEtLMM3jJ8ZbZjUCY6-Vh_-zUvHin3L15iXS1g@mail.gmail.com>
+Message-ID: <b913f9ae-66d3-bd33-791f-9d971b2a1cfc@mcmaster.ca>
+
+Dear Gabriel,
+
+On 2021-07-01 6:29 p.m., Gabriel Becker wrote:
+> On Thu, Jul 1, 2021 at 1:46 PM Stephen Ellison <S.Ellison at lgcgroup.com>
+> wrote:
+> 
+>>
+>> Please run the reproducible example provided.
+>> When you do, you will see that write.csv writes an unnecessary empty
+>> header field ("") over the row names column. This makes the number of
+>> header fields equal to the number of columns _including_ row names. That
+>> causes the original row names to be read as data by read.csv, following the
+>> rule that the number of header fields determines whether row names are
+>> present. read.csv  accordingly assumes that the former row names are
+>> unnamed data, calls the unnamed row names column "X" (or X.1 etc if X
+>> exists) and then adds new, default, row names _instead of the original row
+>> names written by write.csv_.
+>> That's not helpful.
+>>
+> 
+> This depends on if you are reading the csv via R or something else, I would
+> imagine. It not being "valid" CSV at all would likely cause some programs
+> to choke entirely, I expect. I admit that's conjecture though, I don't have
+> data on that one way or another.
+
+On Excel, for example, opening a .csv file without the empty initial 
+field in the first line will cause the column names to be misaligned.
+
+As others have pointed out, .csv files are meant as a sort of 
+least-common-denominator of data exchange, and so following the standard 
+is probably a good idea.
+
+Best,
+  John
+
+John Fox, Professor Emeritus
+McMaster University
+Hamilton, Ontario, Canada
+web: https://socialsciences.mcmaster.ca/jfox/
+
+> 
+> ~G
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Fri Jul  2 01:00:33 2021
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Fri, 2 Jul 2021 11:00:33 +1200
+Subject: [Rd] On read.csv and write.csv
+In-Reply-To: <CAD4oTHFjYycJzEtLMM3jJ8ZbZjUCY6-Vh_-zUvHin3L15iXS1g@mail.gmail.com>
+References: <CWXP265MB3208A3DC3EE8F8E8489E258B81019@CWXP265MB3208.GBRP265.PROD.OUTLOOK.COM>
+ <029F6720-64AB-4F19-A823-8DB0768E153F@R-project.org>
+ <CWXP265MB32085A57128A1822E4A5C5BB81009@CWXP265MB3208.GBRP265.PROD.OUTLOOK.COM>
+ <CAD4oTHFjYycJzEtLMM3jJ8ZbZjUCY6-Vh_-zUvHin3L15iXS1g@mail.gmail.com>
+Message-ID: <784D9F39-4215-4FC2-BCE4-FBEF52DCDB59@R-project.org>
+
+
+Just for completeness, all this is well documented:
+
+CSV files:
+
+     By default there is no column name for a column of row names.  If
+     ?col.names = NA? and ?row.names = TRUE? a blank column name is
+     added, which is the convention used for CSV files to be read by
+     spreadsheets.  Note that such CSV files can be read in R by
+
+       read.csv(file = "<filename>", row.names = 1)
+
+Cheers,
+Simon
+
+
+
+> On 2/07/2021, at 10:29 AM, Gabriel Becker <gabembecker at gmail.com> wrote:
+> 
+> 
+> 
+> On Thu, Jul 1, 2021 at 1:46 PM Stephen Ellison <S.Ellison at lgcgroup.com> wrote:
+> 
+> Please run the reproducible example provided. 
+> When you do, you will see that write.csv writes an unnecessary empty header field ("") over the row names column. This makes the number of header fields equal to the number of columns _including_ row names. That causes the original row names to be read as data by read.csv, following the rule that the number of header fields determines whether row names are present. read.csv  accordingly assumes that the former row names are unnamed data, calls the unnamed row names column "X" (or X.1 etc if X exists) and then adds new, default, row names _instead of the original row names written by write.csv_. 
+> That's not helpful.
+> 
+> This depends on if you are reading the csv via R or something else, I would imagine. It not being "valid" CSV at all would likely cause some programs to choke entirely, I expect. I admit that's conjecture though, I don't have data on that one way or another.
+> 
+> ~G
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Sat Jul  3 02:37:40 2021
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Fri, 2 Jul 2021 19:37:40 -0500 (CDT)
+Subject: [Rd] [External] SET_COMPLEX_ELT and SET_RAW_ELT missing from
+ Rinternals.h
+In-Reply-To: <CAN6cAk0g9b8jfALE2TjnNv_F7WobMBEaAii5i1PzzdQKYAz5pw@mail.gmail.com>
+References: <CAN6cAk1T4sQFMZXtNqjTKJCQyn_21ic1zAm6P=rQZxy4uAikfg@mail.gmail.com>
+ <335585-e80-509f-9598-4b737b5ccba9@uiowa.edu>
+ <CAN6cAk0g9b8jfALE2TjnNv_F7WobMBEaAii5i1PzzdQKYAz5pw@mail.gmail.com>
+Message-ID: <alpine.DEB.2.21.2107021929220.3252@luke-Latitude-7480>
+
+On Thu, 1 Jul 2021, Konrad Siek wrote:
+
+> Thanks!
+> 
+> So what would be the prescribed way of assigning elements to a CPLXSXP if I
+> needed to?
+
+The first question is whether you need to do this. Or, more to the
+point, whether it is safe to do this. In R objects should behave as if
+they are not mutable. Mutation in C code may be OK if the objects are
+not reachable from any R variables, but that almost always means they
+are private to your code so yo can use what you know about internal
+structure.
+
+If it is legitimate to mutate you can use SET_COMPLEX_ELT. I've added
+the declaration to Rinternals in R-devel and R-patched.
+
+For SET_COMPLEX_ELT(x, in v) is equivalent to COMPLEX(sexp)[index] = value,
+but that could change in the future it Set methods are supported.
+
+This does materialize a potentially compact object, but again the most
+important question is whether mutation is legitimate at all.
+
+> One way I see is to do what most of the code inside the interpreter does and
+> grab the vector's data pointer:
+> 
+> ??? COMPLEX(sexp)[index] = value;
+> ??? COMPLEX0(sexp)[index] = value;
+>
+
+COMPLEX0 is not in the API; it will probably be removed from the
+installed header files as we clean these up.
+
+> This will materialize an ALTREP CPLXSXP though, so maybe the best way would
+> be to mirror what SET_COMPLEX_ELT does in Rinlinedfuns.h?
+> 
+> ??? if (ALTREP(sexp)) ALTCOMPLEX_SET_ELT(sexp, index, value); else
+> COMPLEX0(sexp)[index] = vector;
+
+ALTCOMPLEX_SET_ELT is an internal implementation feature and not in the API.
+Again, it will probably be removed from the installed headers.
+
+Best,
+
+luke
+
+> This seems better, but it's not used in the interpreter anywhere as far as I
+> can tell, presumably because of the setter interface not being complete, as
+> you point out. But should I be avoiding this second approach for some
+> reaosn?
+> 
+> k
+> 
+> On Tue, Jun 29, 2021 at 4:06 AM <luke-tierney at uiowa.edu> wrote:
+>       The setter interface for atomic types is not yer implemented. It
+>       may
+>       be some day.
+>
+>       Best,
+>
+>       luke
+>
+>       On Fri, 25 Jun 2021, Konrad Siek wrote:
+>
+>       > Hello,
+>       >
+>       > I am working on a package that works with various types of R
+>       vectors,
+>       > implemented in C. My code has a lot of SET_*_ELT operations in
+>       it for
+>       > various types of vectors, including for CPLXSXPs and RAWSXPs.
+>       >
+>       > I noticed SET_COMPLEX_ELT and SET_RAW_ELT are defined in
+>       Rinlinedfuns.h but
+>       > not declared in Rinternals.h, so they cannot be used in
+>       packages. I was
+>       > going to re-implement them or extern them in my package,
+>       however,
+>       > interestingly, ALTCOMPLEX_SET_ELT and ALTRAW_SET_ELT? are both
+>       declared in
+>       > Rinternals.h, making me think SET_COMPLEX_ELT and SET_RAW_ELT
+>       could be
+>       > purposefully obscured. Otherwise it may just be an oversight
+>       and I should
+>       > bring it to someone's attention anyway.
+>       >
+>       > I have three questions that I hope R-devel could help me with.
+>       >
+>       > 1. Is this an oversight, or are SET_COMPLEX_ELT and
+>       SET_RAW_ELT not exposed
+>       > on purpose? 2. If they are not exposed on purpose, I was
+>       wondering why.
+>       > 3. More importantly, what would be good ways to set elements
+>       of these
+>       > vectors while playing nice with ALTREP and avoiding whatever
+>       pitfalls
+>       > caused these functions to be obscured in the first place?
+>       >
+>       > Best regards,
+>       > Konrad,
+>       >
+>       >? ? ? ?[[alternative HTML version deleted]]
+>       >
+>       > ______________________________________________
+>       > R-devel at r-project.org mailing list
+>       > https://stat.ethz.ch/mailman/listinfo/r-devel
+>       >
+>
+>       --
+>       Luke Tierney
+>       Ralph E. Wareham Professor of Mathematical Sciences
+>       University of Iowa? ? ? ? ? ? ? ? ? Phone:? ? ? ? ? ?
+>       ?319-335-3386
+>       Department of Statistics and? ? ? ? Fax:? ? ? ? ? ? ?
+>       ?319-335-3017
+>       ? ? Actuarial Science
+>       241 Schaeffer Hall? ? ? ? ? ? ? ? ? email:?
+>       ?luke-tierney at uiowa.edu
+>       Iowa City, IA 52242? ? ? ? ? ? ? ? ?WWW:?
+>       http://www.stat.uiowa.edu
+> 
+> 
+>
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+
+From z@|er@b@rutcuog|u @end|ng |rom gm@||@com  Sat Jul  3 05:35:16 2021
+From: z@|er@b@rutcuog|u @end|ng |rom gm@||@com (Zafer Barutcuoglu)
+Date: Fri, 2 Jul 2021 23:35:16 -0400
+Subject: [Rd] Clearing attributes returns ALTREP, serialize still saves them
+Message-ID: <66D25FB4-C12C-4448-A9FE-3152E5D61A1A@gmail.com>
+
+Hi all,
+
+Setting names/dimnames on vectors/matrices of length>=64 returns an ALTREP wrapper which internally still contains the names/dimnames, and calling base::serialize on the result writes them out. They are unserialized in the same way, with the names/dimnames hidden in the ALTREP wrapper, so the problem is not obvious except in wasted time, bandwidth, or disk space.
+
+Example:
+   v1 <- setNames(rnorm(64), paste("element name", 1:64))
+   v2 <- unname(v1)
+   names(v2)
+   # NULL
+   length(serialize(v1, NULL))
+   # [1] 2039
+   length(serialize(v2, NULL))
+   # [1] 2132
+   length(serialize(v2[TRUE], NULL))
+   # [1] 543
+
+   con <- rawConnection(raw(), "w")
+   serialize(v2, con)
+   v3 <- unserialize(rawConnectionValue(con))
+   names(v3)
+   # NULL
+   length(serialize(v3, NULL))
+   # 2132
+
+   # Similarly for matrices:
+   m1 <- matrix(rnorm(64), 8, 8, dimnames=list(paste("row name", 1:8), paste("col name", 1:8)))
+   m2 <- unname(m1)
+   dimnames(m2)
+   # NULL
+   length(serialize(m1, NULL))
+   # [1] 918
+   length(serialize(m2, NULL))
+   # [1] 1035
+   length(serialize(m2[TRUE, TRUE], NULL))
+   # 582
+
+Previously discussed here, too:
+https://r.789695.n4.nabble.com/Invisible-names-problem-td4764688.html
+
+This happens with other attributes as well, but less predictably:
+   x1 <- structure(rnorm(100), data=rnorm(1000000))
+   x2 <- structure(x1, data=NULL)
+   length(serialize(x1, NULL))
+   # [1] 8000952
+   length(serialize(x2, NULL))
+   # [1] 924
+
+   x1b <- rnorm(100)
+   attr(x1b, "data") <- rnorm(1000000)
+   x2b <- x1b
+   attr(x2b, "data") <- NULL
+   length(serialize(x1b, NULL))
+   # [1] 8000863
+   length(serialize(x2b, NULL))
+   # [1] 8000956
+
+This is pretty severe, trying to track down why serializing a small object kills the network, because of which large attributes it may have once had during its lifetime around the codebase that are still secretly tagging along.
+
+Is there a plan to resolve this? Any suggestions for maybe a C++ workaround until then? Or an alternative performant serialization solution?
+
+Best,
+--
+Zafer
+
+
+	[[alternative HTML version deleted]]
+
+
+From g@bembecker @end|ng |rom gm@||@com  Sat Jul  3 07:18:34 2021
+From: g@bembecker @end|ng |rom gm@||@com (Gabriel Becker)
+Date: Fri, 2 Jul 2021 22:18:34 -0700
+Subject: [Rd] 
+ Clearing attributes returns ALTREP, serialize still saves them
+In-Reply-To: <66D25FB4-C12C-4448-A9FE-3152E5D61A1A@gmail.com>
+References: <66D25FB4-C12C-4448-A9FE-3152E5D61A1A@gmail.com>
+Message-ID: <CAD4oTHG5M__A0JuF+qDr9x00OWw3LU+o1=57ufMtuetBJaQM_Q@mail.gmail.com>
+
+Hi all,
+
+I don't have a solution yet, but a bit more here:
+
+> .Internal(inspect(x2b))
+
+@7f913826d590 14 REALSXP g0c0 [REF(1)]  wrapper [srt=-2147483648,no_na=0]
+
+  @7f9137500320 14 REALSXP g0c7 [REF(2),ATT] (len=100, tl=0)
+0.45384,0.926371,0.838637,-1.71485,-0.719073,...
+
+  ATTRIB:
+
+    @7f913826dc20 02 LISTSXP g0c0 [REF(1)]
+
+      TAG: @7f91378538d0 01 SYMSXP g0c0 [MARK,REF(460)] "data"
+
+      @7f9118310000 14 REALSXP g0c7 [REF(2)] (len=1000000, tl=0)
+0.66682,0.480576,-1.13229,0.453313,-0.819498,...
+
+> attr(x2b, "data") <- "small"
+
+> .Internal(inspect(x2b))
+
+@7f913826d590 14 REALSXP g0c0 [REF(1),ATT]  wrapper
+[srt=-2147483648,no_na=0]
+
+  @7f9137500320 14 REALSXP g0c7 [REF(2),ATT] (len=100, tl=0)
+0.45384,0.926371,0.838637,-1.71485,-0.719073,...
+
+  ATTRIB:
+
+    @7f913826dc20 02 LISTSXP g0c0 [REF(1)]
+
+      TAG: @7f91378538d0 01 SYMSXP g0c0 [MARK,REF(461)] "data"
+
+      @7f9118310000 14 REALSXP g0c7 [REF(2)] (len=1000000, tl=0)
+0.66682,0.480576,-1.13229,0.453313,-0.819498,...
+
+ATTRIB:
+
+  @7f913826c870 02 LISTSXP g0c0 [REF(1)]
+
+    TAG: @7f91378538d0 01 SYMSXP g0c0 [MARK,REF(461)] "data"
+
+    @7f9120580850 16 STRSXP g0c1 [REF(3)] (len=1, tl=0)
+
+      @7f91205808c0 09 CHARSXP g0c1 [REF(3),gp=0x60] [ASCII] [cached]
+"small"
+
+
+So we can see that the assignment of attr(x2b, "data") IS doing something,
+but it isn't doing the right thing. The fact that the above code assigned
+null instead of a value was hiding this.
+
+
+I will dig into this more if someone doesn't get it fixed before me, but it
+won't be until after useR, because I'm preparing multiple talks for that
+and it is this coming week.
+
+
+Best,
+
+~G
+
+On Fri, Jul 2, 2021 at 9:15 PM Zafer Barutcuoglu <
+zafer.barutcuoglu at gmail.com> wrote:
+
+> Hi all,
+>
+> Setting names/dimnames on vectors/matrices of length>=64 returns an ALTREP
+> wrapper which internally still contains the names/dimnames, and calling
+> base::serialize on the result writes them out. They are unserialized in the
+> same way, with the names/dimnames hidden in the ALTREP wrapper, so the
+> problem is not obvious except in wasted time, bandwidth, or disk space.
+>
+> Example:
+>    v1 <- setNames(rnorm(64), paste("element name", 1:64))
+>    v2 <- unname(v1)
+>    names(v2)
+>    # NULL
+>    length(serialize(v1, NULL))
+>    # [1] 2039
+>    length(serialize(v2, NULL))
+>    # [1] 2132
+>    length(serialize(v2[TRUE], NULL))
+>    # [1] 543
+>
+>    con <- rawConnection(raw(), "w")
+>    serialize(v2, con)
+>    v3 <- unserialize(rawConnectionValue(con))
+>    names(v3)
+>    # NULL
+>    length(serialize(v3, NULL))
+>    # 2132
+>
+>    # Similarly for matrices:
+>    m1 <- matrix(rnorm(64), 8, 8, dimnames=list(paste("row name", 1:8),
+> paste("col name", 1:8)))
+>    m2 <- unname(m1)
+>    dimnames(m2)
+>    # NULL
+>    length(serialize(m1, NULL))
+>    # [1] 918
+>    length(serialize(m2, NULL))
+>    # [1] 1035
+>    length(serialize(m2[TRUE, TRUE], NULL))
+>    # 582
+>
+> Previously discussed here, too:
+> https://r.789695.n4.nabble.com/Invisible-names-problem-td4764688.html
+>
+> This happens with other attributes as well, but less predictably:
+>    x1 <- structure(rnorm(100), data=rnorm(1000000))
+>    x2 <- structure(x1, data=NULL)
+>    length(serialize(x1, NULL))
+>    # [1] 8000952
+>    length(serialize(x2, NULL))
+>    # [1] 924
+>
+>    x1b <- rnorm(100)
+>    attr(x1b, "data") <- rnorm(1000000)
+>    x2b <- x1b
+>    attr(x2b, "data") <- NULL
+>    length(serialize(x1b, NULL))
+>    # [1] 8000863
+>    length(serialize(x2b, NULL))
+>    # [1] 8000956
+>
+> This is pretty severe, trying to track down why serializing a small object
+> kills the network, because of which large attributes it may have once had
+> during its lifetime around the codebase that are still secretly tagging
+> along.
+>
+> Is there a plan to resolve this? Any suggestions for maybe a C++
+> workaround until then? Or an alternative performant serialization solution?
+>
+> Best,
+> --
+> Zafer
+>
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From g@bembecker @end|ng |rom gm@||@com  Sat Jul  3 08:22:16 2021
+From: g@bembecker @end|ng |rom gm@||@com (Gabriel Becker)
+Date: Fri, 2 Jul 2021 23:22:16 -0700
+Subject: [Rd] 
+ Clearing attributes returns ALTREP, serialize still saves them
+In-Reply-To: <CAD4oTHG5M__A0JuF+qDr9x00OWw3LU+o1=57ufMtuetBJaQM_Q@mail.gmail.com>
+References: <66D25FB4-C12C-4448-A9FE-3152E5D61A1A@gmail.com>
+ <CAD4oTHG5M__A0JuF+qDr9x00OWw3LU+o1=57ufMtuetBJaQM_Q@mail.gmail.com>
+Message-ID: <CAD4oTHHrVtcodL7BXwC7YhjLn0vknc5Zc0T7WEQ61FFQGtqwcQ@mail.gmail.com>
+
+Ok, a bit more:
+
+The relevant bit in serialize.c that I can see is:
+
+
+if (ALTREP(s) && stream->version >= 3) {
+
+SEXP info = ALTREP_SERIALIZED_CLASS(s);
+
+SEXP state = ALTREP_SERIALIZED_STATE(s);
+
+if (info != NULL && state != NULL) {
+
+   int flags = PackFlags(ALTREP_SXP, LEVELS(s), OBJECT(s), 0, 0);
+
+   PROTECT(state);
+
+   PROTECT(info);
+
+   OutInteger(stream, flags);
+
+   WriteItem(info, ref_table, stream);
+
+  * WriteItem(state, ref_table, stream);*
+
+   WriteItem(ATTRIB(s), ref_table, stream);
+
+   UNPROTECT(2); /* state, info */
+
+   return;
+
+}
+/* else fall through to standard processing */
+    }
+
+And in the wrapper altclass, we have:
+
+*static SEXP wrapper_Serialized_state(SEXP x)*
+{
+    return CONS(*WRAPPER_WRAPPED(x)*, WRAPPER_METADATA(x));
+}
+
+So whats happening, is that the data isn't being written out during the
+WriteItem(ATTRIB(s)), that actually has the correct attribute value. Its
+being written out in the bolden line above that, the state, which has the
+wrapped SEXP, which ITSELF has the attributes on it, but is not an ALTREP,
+so that goes through standard processing, which writes out the attributes
+as normal.
+
+So that, I believe, is what needs to change. One possibility is that
+wrapper_Serialized_state can be made smarter so that the inner attributes
+are duplicated and then wiped clean for any that are overridden by the
+attributes on the wrapper.  Another option is that the ALTREP WriteItem
+section could be made smarter, but that seems less robust.
+
+Finally, the wrapper might be able to be modified in such a way that
+setting the attribute on the wrapper clears taht attribute on the wrapped
+value, if present. .
+
+I think making wrapper_Serialized_state smarter is the right way to attack
+this, and thats the first thing I'll try when I get to it, but if someone
+tackles it before me hopefully this digging helped some.
+
+Best,
+~G
+
+On Fri, Jul 2, 2021 at 10:18 PM Gabriel Becker <gabembecker at gmail.com>
+wrote:
+
+> Hi all,
+>
+> I don't have a solution yet, but a bit more here:
+>
+> > .Internal(inspect(x2b))
+>
+> @7f913826d590 14 REALSXP g0c0 [REF(1)]  wrapper [srt=-2147483648,no_na=0]
+>
+>   @7f9137500320 14 REALSXP g0c7 [REF(2),ATT] (len=100, tl=0)
+> 0.45384,0.926371,0.838637,-1.71485,-0.719073,...
+>
+>   ATTRIB:
+>
+>     @7f913826dc20 02 LISTSXP g0c0 [REF(1)]
+>
+>       TAG: @7f91378538d0 01 SYMSXP g0c0 [MARK,REF(460)] "data"
+>
+>       @7f9118310000 14 REALSXP g0c7 [REF(2)] (len=1000000, tl=0)
+> 0.66682,0.480576,-1.13229,0.453313,-0.819498,...
+>
+> > attr(x2b, "data") <- "small"
+>
+> > .Internal(inspect(x2b))
+>
+> @7f913826d590 14 REALSXP g0c0 [REF(1),ATT]  wrapper
+> [srt=-2147483648,no_na=0]
+>
+>   @7f9137500320 14 REALSXP g0c7 [REF(2),ATT] (len=100, tl=0)
+> 0.45384,0.926371,0.838637,-1.71485,-0.719073,...
+>
+>   ATTRIB:
+>
+>     @7f913826dc20 02 LISTSXP g0c0 [REF(1)]
+>
+>       TAG: @7f91378538d0 01 SYMSXP g0c0 [MARK,REF(461)] "data"
+>
+>       @7f9118310000 14 REALSXP g0c7 [REF(2)] (len=1000000, tl=0)
+> 0.66682,0.480576,-1.13229,0.453313,-0.819498,...
+>
+> ATTRIB:
+>
+>   @7f913826c870 02 LISTSXP g0c0 [REF(1)]
+>
+>     TAG: @7f91378538d0 01 SYMSXP g0c0 [MARK,REF(461)] "data"
+>
+>     @7f9120580850 16 STRSXP g0c1 [REF(3)] (len=1, tl=0)
+>
+>       @7f91205808c0 09 CHARSXP g0c1 [REF(3),gp=0x60] [ASCII] [cached]
+> "small"
+>
+>
+> So we can see that the assignment of attr(x2b, "data") IS doing something,
+> but it isn't doing the right thing. The fact that the above code assigned
+> null instead of a value was hiding this.
+>
+>
+> I will dig into this more if someone doesn't get it fixed before me, but
+> it won't be until after useR, because I'm preparing multiple talks for that
+> and it is this coming week.
+>
+>
+> Best,
+>
+> ~G
+>
+> On Fri, Jul 2, 2021 at 9:15 PM Zafer Barutcuoglu <
+> zafer.barutcuoglu at gmail.com> wrote:
+>
+>> Hi all,
+>>
+>> Setting names/dimnames on vectors/matrices of length>=64 returns an
+>> ALTREP wrapper which internally still contains the names/dimnames, and
+>> calling base::serialize on the result writes them out. They are
+>> unserialized in the same way, with the names/dimnames hidden in the ALTREP
+>> wrapper, so the problem is not obvious except in wasted time, bandwidth, or
+>> disk space.
+>>
+>> Example:
+>>    v1 <- setNames(rnorm(64), paste("element name", 1:64))
+>>    v2 <- unname(v1)
+>>    names(v2)
+>>    # NULL
+>>    length(serialize(v1, NULL))
+>>    # [1] 2039
+>>    length(serialize(v2, NULL))
+>>    # [1] 2132
+>>    length(serialize(v2[TRUE], NULL))
+>>    # [1] 543
+>>
+>>    con <- rawConnection(raw(), "w")
+>>    serialize(v2, con)
+>>    v3 <- unserialize(rawConnectionValue(con))
+>>    names(v3)
+>>    # NULL
+>>    length(serialize(v3, NULL))
+>>    # 2132
+>>
+>>    # Similarly for matrices:
+>>    m1 <- matrix(rnorm(64), 8, 8, dimnames=list(paste("row name", 1:8),
+>> paste("col name", 1:8)))
+>>    m2 <- unname(m1)
+>>    dimnames(m2)
+>>    # NULL
+>>    length(serialize(m1, NULL))
+>>    # [1] 918
+>>    length(serialize(m2, NULL))
+>>    # [1] 1035
+>>    length(serialize(m2[TRUE, TRUE], NULL))
+>>    # 582
+>>
+>> Previously discussed here, too:
+>> https://r.789695.n4.nabble.com/Invisible-names-problem-td4764688.html
+>>
+>> This happens with other attributes as well, but less predictably:
+>>    x1 <- structure(rnorm(100), data=rnorm(1000000))
+>>    x2 <- structure(x1, data=NULL)
+>>    length(serialize(x1, NULL))
+>>    # [1] 8000952
+>>    length(serialize(x2, NULL))
+>>    # [1] 924
+>>
+>>    x1b <- rnorm(100)
+>>    attr(x1b, "data") <- rnorm(1000000)
+>>    x2b <- x1b
+>>    attr(x2b, "data") <- NULL
+>>    length(serialize(x1b, NULL))
+>>    # [1] 8000863
+>>    length(serialize(x2b, NULL))
+>>    # [1] 8000956
+>>
+>> This is pretty severe, trying to track down why serializing a small
+>> object kills the network, because of which large attributes it may have
+>> once had during its lifetime around the codebase that are still secretly
+>> tagging along.
+>>
+>> Is there a plan to resolve this? Any suggestions for maybe a C++
+>> workaround until then? Or an alternative performant serialization solution?
+>>
+>> Best,
+>> --
+>> Zafer
+>>
+>>
+>>         [[alternative HTML version deleted]]
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+
+	[[alternative HTML version deleted]]
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Sat Jul  3 15:40:41 2021
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Sat, 3 Jul 2021 08:40:41 -0500 (CDT)
+Subject: [Rd] [External]  Clearing attributes returns ALTREP,
+ serialize still saves them
+In-Reply-To: <66D25FB4-C12C-4448-A9FE-3152E5D61A1A@gmail.com>
+References: <66D25FB4-C12C-4448-A9FE-3152E5D61A1A@gmail.com>
+Message-ID: <alpine.DEB.2.21.2107030839400.3252@luke-Latitude-7480>
+
+Please do not cross post. You have already rased this on bugzilla. I
+will follow up there later today.
+
+luke
+
+On Sat, 3 Jul 2021, Zafer Barutcuoglu wrote:
+
+> Hi all,
+>
+> Setting names/dimnames on vectors/matrices of length>=64 returns an ALTREP wrapper which internally still contains the names/dimnames, and calling base::serialize on the result writes them out. They are unserialized in the same way, with the names/dimnames hidden in the ALTREP wrapper, so the problem is not obvious except in wasted time, bandwidth, or disk space.
+>
+> Example:
+>   v1 <- setNames(rnorm(64), paste("element name", 1:64))
+>   v2 <- unname(v1)
+>   names(v2)
+>   # NULL
+>   length(serialize(v1, NULL))
+>   # [1] 2039
+>   length(serialize(v2, NULL))
+>   # [1] 2132
+>   length(serialize(v2[TRUE], NULL))
+>   # [1] 543
+>
+>   con <- rawConnection(raw(), "w")
+>   serialize(v2, con)
+>   v3 <- unserialize(rawConnectionValue(con))
+>   names(v3)
+>   # NULL
+>   length(serialize(v3, NULL))
+>   # 2132
+>
+>   # Similarly for matrices:
+>   m1 <- matrix(rnorm(64), 8, 8, dimnames=list(paste("row name", 1:8), paste("col name", 1:8)))
+>   m2 <- unname(m1)
+>   dimnames(m2)
+>   # NULL
+>   length(serialize(m1, NULL))
+>   # [1] 918
+>   length(serialize(m2, NULL))
+>   # [1] 1035
+>   length(serialize(m2[TRUE, TRUE], NULL))
+>   # 582
+>
+> Previously discussed here, too:
+> https://r.789695.n4.nabble.com/Invisible-names-problem-td4764688.html
+>
+> This happens with other attributes as well, but less predictably:
+>   x1 <- structure(rnorm(100), data=rnorm(1000000))
+>   x2 <- structure(x1, data=NULL)
+>   length(serialize(x1, NULL))
+>   # [1] 8000952
+>   length(serialize(x2, NULL))
+>   # [1] 924
+>
+>   x1b <- rnorm(100)
+>   attr(x1b, "data") <- rnorm(1000000)
+>   x2b <- x1b
+>   attr(x2b, "data") <- NULL
+>   length(serialize(x1b, NULL))
+>   # [1] 8000863
+>   length(serialize(x2b, NULL))
+>   # [1] 8000956
+>
+> This is pretty severe, trying to track down why serializing a small object kills the network, because of which large attributes it may have once had during its lifetime around the codebase that are still secretly tagging along.
+>
+> Is there a plan to resolve this? Any suggestions for maybe a C++ workaround until then? Or an alternative performant serialization solution?
+>
+> Best,
+> --
+> Zafer
+>
+>
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+
+
+From konr@d@@|ek @end|ng |rom gm@||@com  Sat Jul  3 17:49:38 2021
+From: konr@d@@|ek @end|ng |rom gm@||@com (Konrad Siek)
+Date: Sat, 3 Jul 2021 17:49:38 +0200
+Subject: [Rd] [External] SET_COMPLEX_ELT and SET_RAW_ELT missing from
+ Rinternals.h
+In-Reply-To: <alpine.DEB.2.21.2107021929220.3252@luke-Latitude-7480>
+References: <CAN6cAk1T4sQFMZXtNqjTKJCQyn_21ic1zAm6P=rQZxy4uAikfg@mail.gmail.com>
+ <335585-e80-509f-9598-4b737b5ccba9@uiowa.edu>
+ <CAN6cAk0g9b8jfALE2TjnNv_F7WobMBEaAii5i1PzzdQKYAz5pw@mail.gmail.com>
+ <alpine.DEB.2.21.2107021929220.3252@luke-Latitude-7480>
+Message-ID: <CAN6cAk2=cyCoViW=WoSAAFQGTnqN1xTJZCR3TCrq=WqmgGX7Qg@mail.gmail.com>
+
+I think all of my questions are answered. Thank you for your attention and
+assistance.
+
+The first question is whether you need to do this. Or, more to the
+> point, whether it is safe to do this. In R objects should behave as if
+> they are not mutable. Mutation in C code may be OK if the objects are
+> not reachable from any R variables, but that almost always means they
+> are private to your code so yo can use what you know about internal
+> structure.
+>
+>
+Thank you for the warning. I believe it's a legitimate use. In extremely
+rough summary: A C function is called via .Call. Inside it, I create the
+vector and use SET_*_ELT to populate it. I then return the vector. There is
+some amount of complexity between creation and population, and the vector
+can potentially be ALTREP.
+
+I don't use SET_*_ELT on any vector I have not created.
+
+COMPLEX0 is not in the API; it will probably be removed from the
+> installed header files as we clean these up.
+>
+
+My mistake, thank you.
+
+ALTCOMPLEX_SET_ELT is an internal implementation feature and not in the API.
+> Again, it will probably be removed from the installed headers.
+>
+>
+Thanks for the warning. I'll make sure to avoid it.
+
+k
+
+On Sat, Jul 3, 2021 at 2:37 AM <luke-tierney at uiowa.edu> wrote:
+
+> On Thu, 1 Jul 2021, Konrad Siek wrote:
+>
+> > Thanks!
+> >
+> > So what would be the prescribed way of assigning elements to a CPLXSXP
+> if I
+> > needed to?
+>
+> The first question is whether you need to do this. Or, more to the
+> point, whether it is safe to do this. In R objects should behave as if
+> they are not mutable. Mutation in C code may be OK if the objects are
+> not reachable from any R variables, but that almost always means they
+> are private to your code so yo can use what you know about internal
+> structure.
+>
+
+> If it is legitimate to mutate you can use SET_COMPLEX_ELT. I've added
+> the declaration to Rinternals in R-devel and R-patched.
+>
+> For SET_COMPLEX_ELT(x, in v) is equivalent to COMPLEX(sexp)[index] = value,
+> but that could change in the future it Set methods are supported.
+>
+> This does materialize a potentially compact object, but again the most
+> important question is whether mutation is legitimate at all.
+>
+> > One way I see is to do what most of the code inside the interpreter does
+> and
+> > grab the vector's data pointer:
+> >
+> >     COMPLEX(sexp)[index] = value;
+> >     COMPLEX0(sexp)[index] = value;
+> >
+>
+> COMPLEX0 is not in the API; it will probably be removed from the
+> installed header files as we clean these up.
+>
+
+> > This will materialize an ALTREP CPLXSXP though, so maybe the best way
+> would
+> > be to mirror what SET_COMPLEX_ELT does in Rinlinedfuns.h?
+> >
+> >     if (ALTREP(sexp)) ALTCOMPLEX_SET_ELT(sexp, index, value); else
+> > COMPLEX0(sexp)[index] = vector;
+>
+> ALTCOMPLEX_SET_ELT is an internal implementation feature and not in the
+> API.
+> Again, it will probably be removed from the installed headers.
+>
+> Best,
+>
+> luke
+>
+> > This seems better, but it's not used in the interpreter anywhere as far
+> as I
+> > can tell, presumably because of the setter interface not being complete,
+> as
+> > you point out. But should I be avoiding this second approach for some
+> > reaosn?
+> >
+> > k
+> >
+> > On Tue, Jun 29, 2021 at 4:06 AM <luke-tierney at uiowa.edu> wrote:
+> >       The setter interface for atomic types is not yer implemented. It
+> >       may
+> >       be some day.
+> >
+> >       Best,
+> >
+> >       luke
+> >
+> >       On Fri, 25 Jun 2021, Konrad Siek wrote:
+> >
+> >       > Hello,
+> >       >
+> >       > I am working on a package that works with various types of R
+> >       vectors,
+> >       > implemented in C. My code has a lot of SET_*_ELT operations in
+> >       it for
+> >       > various types of vectors, including for CPLXSXPs and RAWSXPs.
+> >       >
+> >       > I noticed SET_COMPLEX_ELT and SET_RAW_ELT are defined in
+> >       Rinlinedfuns.h but
+> >       > not declared in Rinternals.h, so they cannot be used in
+> >       packages. I was
+> >       > going to re-implement them or extern them in my package,
+> >       however,
+> >       > interestingly, ALTCOMPLEX_SET_ELT and ALTRAW_SET_ELT  are both
+> >       declared in
+> >       > Rinternals.h, making me think SET_COMPLEX_ELT and SET_RAW_ELT
+> >       could be
+> >       > purposefully obscured. Otherwise it may just be an oversight
+> >       and I should
+> >       > bring it to someone's attention anyway.
+> >       >
+> >       > I have three questions that I hope R-devel could help me with.
+> >       >
+> >       > 1. Is this an oversight, or are SET_COMPLEX_ELT and
+> >       SET_RAW_ELT not exposed
+> >       > on purpose? 2. If they are not exposed on purpose, I was
+> >       wondering why.
+> >       > 3. More importantly, what would be good ways to set elements
+> >       of these
+> >       > vectors while playing nice with ALTREP and avoiding whatever
+> >       pitfalls
+> >       > caused these functions to be obscured in the first place?
+> >       >
+> >       > Best regards,
+> >       > Konrad,
+> >       >
+> >       >       [[alternative HTML version deleted]]
+> >       >
+> >       > ______________________________________________
+> >       > R-devel at r-project.org mailing list
+> >       > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >       >
+> >
+> >       --
+> >       Luke Tierney
+> >       Ralph E. Wareham Professor of Mathematical Sciences
+> >       University of Iowa                  Phone:
+> >        319-335-3386
+> >       Department of Statistics and        Fax:
+> >        319-335-3017
+> >           Actuarial Science
+> >       241 Schaeffer Hall                  email:
+> >        luke-tierney at uiowa.edu
+> >       Iowa City, IA 52242                 WWW:
+> >       http://www.stat.uiowa.edu
+> >
+> >
+> >
+>
+> --
+> Luke Tierney
+> Ralph E. Wareham Professor of Mathematical Sciences
+> University of Iowa                  Phone:             319-335-3386
+> Department of Statistics and        Fax:               319-335-3017
+>     Actuarial Science
+> 241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+> Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+>
+
+	[[alternative HTML version deleted]]
+
+
+From S@E|||@on @end|ng |rom LGCGroup@com  Mon Jul  5 12:37:11 2021
+From: S@E|||@on @end|ng |rom LGCGroup@com (Stephen Ellison)
+Date: Mon, 5 Jul 2021 10:37:11 +0000
+Subject: [Rd] On read.csv and write.csv
+In-Reply-To: <784D9F39-4215-4FC2-BCE4-FBEF52DCDB59@R-project.org>
+References: <CWXP265MB3208A3DC3EE8F8E8489E258B81019@CWXP265MB3208.GBRP265.PROD.OUTLOOK.COM>
+ <029F6720-64AB-4F19-A823-8DB0768E153F@R-project.org>
+ <CWXP265MB32085A57128A1822E4A5C5BB81009@CWXP265MB3208.GBRP265.PROD.OUTLOOK.COM>
+ <CAD4oTHFjYycJzEtLMM3jJ8ZbZjUCY6-Vh_-zUvHin3L15iXS1g@mail.gmail.com>
+ <784D9F39-4215-4FC2-BCE4-FBEF52DCDB59@R-project.org>
+Message-ID: <CWXP265MB32080AF023D38026656FB6AB811C9@CWXP265MB3208.GBRP265.PROD.OUTLOOK.COM>
+
+> From: Simon Urbanek <simon.urbanek at R-project.org>
+>      By default there is no column name for a column of row names.  
+<snip> 
+>      spreadsheets.  Note that such CSV files can be read in R by
+> 
+>        read.csv(file = "<filename>", row.names = 1)
+AHA!! Many thanks. 
+I see this clue is in ?write.table, though; I was looking for help on reading CSVs in ?read.csv etc. 
+<sigh>
+
+Thanks to all for your time answering this; much appreciated.
+
+S
+
+
+*******************************************************************
+This email and any attachments are confidential. Any use, copying or
+disclosure other than by the intended recipient is unauthorised. If 
+you have received this message in error, please notify the sender 
+immediately via +44(0)20 8943 7000 or notify postmaster at lgcgroup.com 
+and delete this message and any copies from your computer and network. 
+LGC Limited. Registered in England 2991879. 
+Registered office: Queens Road, Teddington, Middlesex, TW11 0LY, UK
+
+From k@ro||@@koncev|c|u@ @end|ng |rom gm@||@com  Mon Jul  5 18:17:37 2021
+From: k@ro||@@koncev|c|u@ @end|ng |rom gm@||@com (Karolis K)
+Date: Mon, 5 Jul 2021 19:17:37 +0300
+Subject: [Rd] speed of cor(...,
+ use="pairwise.complete.obs") when no NAs are present.
+Message-ID: <14B9D50C-D6E5-498D-924C-5F9E886E7880@gmail.com>
+
+Hello,
+
+I was iterating over some matrices with cor(x, use=?pairwise.complete.obs?) to handle cases with NA values and noticed that such ?use=? setting had a big influence on speed even for matrices that had no NAs. Given that anyNA(x) is so quick, maybe in the case of use=?pairwise.complete.obs? it would make sense to first check if the arguments have any NAs, and switch to use=?everything? in such cases?
+
+Below are my quick benchmarks.
+
+x <- matrix(rnorm(1e6), ncol=1e3)
+
+system.time(cor(x))                                                                                                                                 
+#    user  system elapsed                                                                                                                               
+ #  0.636   0.003   0.641
+
+system.time(cor(x, use="pair"))                                                                                                                     
+#    user  system elapsed                                                                                                                               
+#   3.509   0.013   3.538
+
+system.time(anyNA(x))                                                                                                                               
+#    user  system elapsed                                                                                                                               
+#  0.001   0.000   0.001
+
+
+Warm regards,
+Karolis K.
+
+From pd@|gd @end|ng |rom gm@||@com  Fri Jul  9 10:00:56 2021
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Fri, 9 Jul 2021 10:00:56 +0200
+Subject: [Rd] On read.csv and write.csv
+In-Reply-To: <CWXP265MB32080AF023D38026656FB6AB811C9@CWXP265MB3208.GBRP265.PROD.OUTLOOK.COM>
+References: <CWXP265MB3208A3DC3EE8F8E8489E258B81019@CWXP265MB3208.GBRP265.PROD.OUTLOOK.COM>
+ <029F6720-64AB-4F19-A823-8DB0768E153F@R-project.org>
+ <CWXP265MB32085A57128A1822E4A5C5BB81009@CWXP265MB3208.GBRP265.PROD.OUTLOOK.COM>
+ <CAD4oTHFjYycJzEtLMM3jJ8ZbZjUCY6-Vh_-zUvHin3L15iXS1g@mail.gmail.com>
+ <784D9F39-4215-4FC2-BCE4-FBEF52DCDB59@R-project.org>
+ <CWXP265MB32080AF023D38026656FB6AB811C9@CWXP265MB3208.GBRP265.PROD.OUTLOOK.COM>
+Message-ID: <44E757A8-CA4E-49D6-8C6F-12138531FC36@gmail.com>
+
+?read.csv does actually have
+
+row.names: a vector of row names.  This can be a vector giving the
+          actual row names, or a single number giving the column of the
+          table which contains the row names, or character string
+          giving the name of the table column containing the row names.
+
+-pd
+
+> On 5 Jul 2021, at 12:37 , Stephen Ellison <S.Ellison at LGCGroup.com> wrote:
+> 
+>> From: Simon Urbanek <simon.urbanek at R-project.org>
+>>     By default there is no column name for a column of row names.  
+> <snip> 
+>>     spreadsheets.  Note that such CSV files can be read in R by
+>> 
+>>       read.csv(file = "<filename>", row.names = 1)
+> AHA!! Many thanks. 
+> I see this clue is in ?write.table, though; I was looking for help on reading CSVs in ?read.csv etc. 
+> <sigh>
+> 
+> Thanks to all for your time answering this; much appreciated.
+> 
+> S
+> 
+> 
+> *******************************************************************
+> This email and any attachments are confidential. Any u...{{dropped:21}}
+
+
+From pd@me@ @end|ng |rom cb@@dk  Sat Jul 10 11:51:41 2021
+From: pd@me@ @end|ng |rom cb@@dk (Peter Dalgaard)
+Date: Sat, 10 Jul 2021 09:51:41 +0000
+Subject: [Rd] R 4.1.1 scheduled for August 10
+Message-ID: <4CAF26B5-9712-4083-8839-F77BC51453C9@cbs.dk>
+
+Full schedule is available on developer.r-project.org.
+
+(This comes somewhat late this year, partly because we needed to squeeze in 4.0.5 before 4.1.0 could be released.)
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From m|ch@e|ch|r|co4 @end|ng |rom gm@||@com  Mon Jul 12 08:43:15 2021
+From: m|ch@e|ch|r|co4 @end|ng |rom gm@||@com (Michael Chirico)
+Date: Sun, 11 Jul 2021 23:43:15 -0700
+Subject: [Rd] tools::update_pkg_po() doesn't work on Solaris?
+Message-ID: <CAPRVBcx5GDLJ0ZGFF_wZwHFTbrjwEbM1qWx=yt1sH7E7fkp8kw@mail.gmail.com>
+
+Hi all,
+
+I am about 99% sure tools::update_pkg_po() is using an invocation that
+is not supported by the Solaris version of msgfmt.
+
+The invocation[1]:
+
+msgfmt -c --statistics -o /path/to/file.mo /path/to/file.po
+
+AFAICT neither -c nor --statistics appear to be supported by Solaris [2]:
+
+I don't have access to a Solaris machine where I can try this, but I
+did manage to get r-hub to pass by disabling those options in potools
+which similarly relies on msgfmt to generate .mo files [3], [4].
+
+So I wanted to check with the list if anyone can confirm this before
+filing a bug report.
+
+Thanks,
+Mike C
+
+[1] per https://github.com/wch/r-source/blob/59a1965239143ca6242b9cc948d8834e1194e84a/src/library/tools/R/translations.R#L142
+[2] https://docs.oracle.com/cd/E36784_01/html/E36870/msgfmt-1.html#REFMAN1msgfmt-1
+[3] https://github.com/MichaelChirico/potools/pull/219
+[4] https://builder.r-hub.io/status/potools_0.2.1.tar.gz-f4e936eec1b74bebb91e07c59c23b1cf
+
+
+From m|ch@e|ch|r|co4 @end|ng |rom gm@||@com  Mon Jul 12 23:21:14 2021
+From: m|ch@e|ch|r|co4 @end|ng |rom gm@||@com (Michael Chirico)
+Date: Mon, 12 Jul 2021 14:21:14 -0700
+Subject: [Rd] translation domain is not inferred correctly from a package's
+ print methods -- intended behavior?
+Message-ID: <CAPRVBcx4PXAAOSs6jqw4cio0E7GxnOft1McUma6TBh_hcaBWLg@mail.gmail.com>
+
+Here is a reprex:
+
+# initialize reprex package
+cd /tmp
+mkdir myPkg && cd myPkg
+echo "Package: myPkg" > DESCRIPTION
+echo "Version: 0.0.1" >> DESCRIPTION
+mkdir R
+echo "print.my_class = function(x, ...) { cat(gettext(\"'%s' is
+deprecated.\"), '\n', gettext(\"'%s' is deprecated.\",
+domain='R-myPkg'), '\n') }" > R/foo.R
+echo "S3method(print, my_class)" > NAMESPACE
+# extract string for translation
+Rscript -e "tools::update_pkg_po('.')"
+# add dummy translation
+msginit -i po/R-myPkg.pot -o po/R-ja.po -l ja --no-translator
+head -n -1 po/R-ja.po > tmp && mv tmp po/R-ja.po
+echo 'msgstr "%s successfully translated"' >> po/R-ja.po
+# install .mo translations
+Rscript -e "tools::update_pkg_po('.')"
+# install package & test
+R CMD INSTALL .
+LANGUAGE=ja Rscript -e "library(myPkg); print(structure(1, class = 'my_class'))"
+#  '%s' ???????
+#  %s successfully translated
+
+Note that the first gettext() call, which doesn't supply domain=,
+returns the corresponding translation from base R (i.e., the output is
+the same as gettext("'%s' is deprecated.", domain="R-base")).
+
+The second gettext() call, where domain= is supplied, returns our
+dummy translation, which is what I would have expected from the first
+execution.
+
+Here is what's in ?gettext:
+
+> If domain is NULL or "", and gettext or ngettext is called from a function in the namespace of package pkg the domain is set to "R-pkg". Otherwise there is no default domain.
+
+Does that mean the S3 print method is not "in the namespace of myPkg"?
+Or is there a bug here?
+
+If the former, is the edge case of concern here just S3 methods where
+the "top level" S3 method is defined in another package? Can we refine
+the manual text wording here to be more clear about when we should
+expect we need to supply domain= vs have it set automatically?
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue Jul 13 12:26:05 2021
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 13 Jul 2021 12:26:05 +0200
+Subject: [Rd] R Can Use Your Help: Testing R Before Release
+Message-ID: <c26bcbb8-6139-a887-636a-7e31be239f81@gmail.com>
+
+If anyone is interested in helping out, this is a good time to test R 
+4.1.1 before it is released. Now is the time to look for and report
+
+- regressions (things that worked in 4.1.0, but not in 4.1.1)
+- regressions in 4.1.0 not fixed by 4.1.1
+- bugs in new features in 4.1.0 not fixed by 4.1.1
+
+For more tips and details, please see
+https://developer.r-project.org/Blog/public/2021/04/28/r-can-use-your-help-testing-r-before-release
+
+Thanks
+Tomas
+
+
+From |reder|k @end|ng |rom o|b@net  Tue Jul 13 17:37:05 2021
+From: |reder|k @end|ng |rom o|b@net (Frederick Eaton)
+Date: Tue, 13 Jul 2021 08:37:05 -0700
+Subject: [Rd] unicode in R documentation
+Message-ID: <20210713153705.joq4fbqmcfgggi64@localhost>
+
+Dear R Team,
+
+I am running R from the terminal command line (not RStudio). I've noticed that R has been using Unicode quotes in its documentation for some time, maybe since before I started using it.
+
+I am wondering if it is possible to compile the documentation to use normal quotes instead.
+
+I find it useful to be able to search documentation for strings with quotes, for example when reading "?options" I might search for "'dev" to find an option starting with the letters "dev". Without the single-quote at the front, there would be a lot of matches that I'm not interested in, but the single-quote at the front helps narrow it down to the parameters that are being indexed in the documentation. However, I can't actually search for "'dev" in "?options" because it is written with curly quotes "?device?" and "'" does not match "?" on my machine.
+
+Similarly, when I read manual pages for commands on Linux, I sometimes search for "-r" instead of "r" because "-r" is likely to find documentation for the option "-r", while searching for "r" will match almost every line.
+
+I'm wondering what other people do when reading through documentation. Do you search for things at all or just read it straight through? Is there a hyperlinked version that just lets you jump to the "device" entry in "?options" or do you have to type out a search string? What search string do you use? Do you have a way to enter Unicode quotes when doing this, or does your pager provide a special regular expression syntax which makes it easier to match them?
+
+Thanks,
+
+Frederick
+
+
+From mtmorg@n@b|oc @end|ng |rom gm@||@com  Tue Jul 13 18:00:05 2021
+From: mtmorg@n@b|oc @end|ng |rom gm@||@com (Martin Morgan)
+Date: Tue, 13 Jul 2021 16:00:05 +0000
+Subject: [Rd] unicode in R documentation
+In-Reply-To: <20210713153705.joq4fbqmcfgggi64@localhost>
+References: <20210713153705.joq4fbqmcfgggi64@localhost>
+Message-ID: <BN8PR04MB6241932F7B480A59546AC13AF9149@BN8PR04MB6241.namprd04.prod.outlook.com>
+
+I have options(useFancyQuotes = FALSE) in my ~/.Rprofile.
+
+Martin Morgan
+
+?On 7/13/21, 11:37 AM, "R-devel on behalf of Frederick Eaton" <r-devel-bounces at r-project.org on behalf of frederik at ofb.net> wrote:
+
+    Dear R Team,
+
+    I am running R from the terminal command line (not RStudio). I've noticed that R has been using Unicode quotes in its documentation for some time, maybe since before I started using it.
+
+    I am wondering if it is possible to compile the documentation to use normal quotes instead.
+
+    I find it useful to be able to search documentation for strings with quotes, for example when reading "?options" I might search for "'dev" to find an option starting with the letters "dev". Without the single-quote at the front, there would be a lot of matches that I'm not interested in, but the single-quote at the front helps narrow it down to the parameters that are being indexed in the documentation. However, I can't actually search for "'dev" in "?options" because it is written with curly quotes "?device?" and "'" does not match "?" on my machine.
+
+    Similarly, when I read manual pages for commands on Linux, I sometimes search for "-r" instead of "r" because "-r" is likely to find documentation for the option "-r", while searching for "r" will match almost every line.
+
+    I'm wondering what other people do when reading through documentation. Do you search for things at all or just read it straight through? Is there a hyperlinked version that just lets you jump to the "device" entry in "?options" or do you have to type out a search string? What search string do you use? Do you have a way to enter Unicode quotes when doing this, or does your pager provide a special regular expression syntax which makes it easier to match them?
+
+    Thanks,
+
+    Frederick
+
+    ______________________________________________
+    R-devel at r-project.org mailing list
+    https://stat.ethz.ch/mailman/listinfo/r-devel
+
+From @eb@meyer @end|ng |rom |@u@de  Tue Jul 13 18:03:59 2021
+From: @eb@meyer @end|ng |rom |@u@de (Sebastian Meyer)
+Date: Tue, 13 Jul 2021 18:03:59 +0200
+Subject: [Rd] unicode in R documentation
+In-Reply-To: <20210713153705.joq4fbqmcfgggi64@localhost>
+References: <20210713153705.joq4fbqmcfgggi64@localhost>
+Message-ID: <992f7ee1-061a-9b27-3c27-e8bf5cde93eb@fau.de>
+
+Am 13.07.21 um 17:37 schrieb Frederick Eaton:
+> Dear R Team,
+> 
+> I am running R from the terminal command line (not RStudio). I've 
+> noticed that R has been using Unicode quotes in its documentation for 
+> some time, maybe since before I started using it.
+> 
+> I am wondering if it is possible to compile the documentation to use 
+> normal quotes instead.
+
+
+Not sure if this is more of an R-help topic. I use
+
+     options(useFancyQuotes = FALSE)
+
+in my .Rprofile.
+
+Best regards,
+
+	Sebastian
+
+
+> I find it useful to be able to search documentation for strings with 
+> quotes, for example when reading "?options" I might search for "'dev" to 
+> find an option starting with the letters "dev". Without the single-quote 
+> at the front, there would be a lot of matches that I'm not interested 
+> in, but the single-quote at the front helps narrow it down to the 
+> parameters that are being indexed in the documentation. However, I can't 
+> actually search for "'dev" in "?options" because it is written with 
+> curly quotes "?device?" and "'" does not match "?" on my machine.
+> 
+> Similarly, when I read manual pages for commands on Linux, I sometimes 
+> search for "-r" instead of "r" because "-r" is likely to find 
+> documentation for the option "-r", while searching for "r" will match 
+> almost every line.
+> 
+> I'm wondering what other people do when reading through documentation. 
+> Do you search for things at all or just read it straight through? Is 
+> there a hyperlinked version that just lets you jump to the "device" 
+> entry in "?options" or do you have to type out a search string? What 
+> search string do you use? Do you have a way to enter Unicode quotes when 
+> doing this, or does your pager provide a special regular expression 
+> syntax which makes it easier to match them?
+> 
+> Thanks,
+> 
+> Frederick
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From |reder|k @end|ng |rom o|b@net  Tue Jul 13 21:00:48 2021
+From: |reder|k @end|ng |rom o|b@net (Frederick Eaton)
+Date: Tue, 13 Jul 2021 12:00:48 -0700
+Subject: [Rd] unicode in R documentation
+In-Reply-To: <BN8PR04MB6241932F7B480A59546AC13AF9149@BN8PR04MB6241.namprd04.prod.outlook.com>
+ <992f7ee1-061a-9b27-3c27-e8bf5cde93eb@fau.de>
+Message-ID: <20210713190048.nbx2hznjouvqv6ec@localhost>
+
+Thank you both! it works
+
+On Tue, Jul 13, 2021 at 04:00:05PM +0000, Martin Morgan wrote:
+>I have options(useFancyQuotes = FALSE) in my ~/.Rprofile.
+>
+>Martin Morgan
+
+>Not sure if this is more of an R-help topic. I use
+>
+>    options(useFancyQuotes = FALSE)
+>
+>in my .Rprofile.
+>
+>Best regards,
+>
+>	Sebastian
+>
+>
+>>I find it useful to be able to search documentation for strings with 
+>>quotes, for example when reading "?options" I might search for 
+>>"'dev" to find an option starting with the letters "dev". Without 
+>>the single-quote at the front, there would be a lot of matches that 
+>>I'm not interested in, but the single-quote at the front helps 
+>>narrow it down to the parameters that are being indexed in the 
+>>documentation. However, I can't actually search for "'dev" in 
+>>"?options" because it is written with curly quotes "?device?" and 
+>>"'" does not match "?" on my machine.
+>>
+>>Similarly, when I read manual pages for commands on Linux, I 
+>>sometimes search for "-r" instead of "r" because "-r" is likely to 
+>>find documentation for the option "-r", while searching for "r" will 
+>>match almost every line.
+>>
+>>I'm wondering what other people do when reading through 
+>>documentation. Do you search for things at all or just read it 
+>>straight through? Is there a hyperlinked version that just lets you 
+>>jump to the "device" entry in "?options" or do you have to type out 
+>>a search string? What search string do you use? Do you have a way to 
+>>enter Unicode quotes when doing this, or does your pager provide a 
+>>special regular expression syntax which makes it easier to match 
+>>them?
+>>
+>>Thanks,
+>>
+>>Frederick
+>>
+>>______________________________________________
+>>R-devel at r-project.org mailing list
+>>https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From pro|jcn@@h @end|ng |rom gm@||@com  Wed Jul 14 01:21:56 2021
+From: pro|jcn@@h @end|ng |rom gm@||@com (J C Nash)
+Date: Tue, 13 Jul 2021 19:21:56 -0400
+Subject: [Rd] subset argument in nls() and possibly other functions
+Message-ID: <9903076b-9f7b-81c8-d81e-b47f9a9f1cad@gmail.com>
+
+In mentoring and participating in a Google Summer of Code project "Improvements to nls()",
+I've not found examples of use of the "subset" argument in the call to nls(). Moreover,
+in searching through the source code for the various functions related to nls(), I can't
+seem to find where subset is used, but a simple example, included below, indicates it works.
+Three approaches all seem to give the same results.
+
+Can someone point to documentation or code so we can make sure we get our revised programs
+to work properly? The aim is to make them more maintainable and provide maintainer documentation,
+along with some improved functionality. We seem, for example, to already be able to offer
+analytic derivatives where they are feasible, and should be able to add Marquardt-Levenberg
+stabilization as an option.
+
+Note that this "subset" does not seem to be the "subset()" function of R.
+
+John Nash
+
+# CroucherSubset.R -- https://walkingrandomly.com/?p=5254
+
+xdata = c(-2,-1.64,-1.33,-0.7,0,0.45,1.2,1.64,2.32,2.9)
+ydata = c(0.699369,0.700462,0.695354,1.03905,1.97389,2.41143,1.91091,0.919576,-0.730975,-1.42001)
+Cform <- ydata ~ p1*cos(p2*xdata) + p2*sin(p1*xdata)
+Cstart<-list(p1=1,p2=0.2)
+Cdata<-data.frame(xdata, ydata)
+Csubset<-1:8 # just first 8 points
+
+# Original problem - no subset
+fit0 = nls(ydata ~ p1*cos(p2*xdata) + p2*sin(p1*xdata), data=Cdata, start=list(p1=1,p2=.2))
+summary(fit0)
+
+# via subset argument
+fit1 = nls(ydata ~ p1*cos(p2*xdata) + p2*sin(p1*xdata), data=Cdata, start=list(p1=1,p2=.2), subset=Csubset)
+summary(fit1)
+
+# via explicit subsetting
+Csdata <- Cdata[Csubset, ]
+Csdata
+fit2 = nls(ydata ~ p1*cos(p2*xdata) + p2*sin(p1*xdata), data=Csdata, start=list(p1=1,p2=.2))
+summary(fit2)
+
+# via weights -- seems to give correct observation count if zeros not recognized
+wts <- c(rep(1,8), rep(0,2))
+fit3 = nls(ydata ~ p1*cos(p2*xdata) + p2*sin(p1*xdata), data=Cdata, weights=wts, start=list(p1=1,p2=.2))
+summary(fit3)
+
+
+From m@rc_@chw@rtz @end|ng |rom me@com  Wed Jul 14 03:14:20 2021
+From: m@rc_@chw@rtz @end|ng |rom me@com (Marc Schwartz)
+Date: Tue, 13 Jul 2021 21:14:20 -0400
+Subject: [Rd] subset argument in nls() and possibly other functions
+In-Reply-To: <9903076b-9f7b-81c8-d81e-b47f9a9f1cad@gmail.com>
+References: <9903076b-9f7b-81c8-d81e-b47f9a9f1cad@gmail.com>
+Message-ID: <4344adbf-e4f2-901e-d7aa-9e7e1eaee0e6@me.com>
+
+Hi John,
+
+In scanning some of the more popular model functions (e.g. lm(), glm(), 
+lme(), coxph(), etc.), none seem to provide examples of the use of the 
+'subset' argument, even though it is documented for them.
+
+That being said, there is some old (2003) documentation by Prof Ripley here:
+
+https://developer.r-project.org/model-fitting-functions.html
+
+that may be helpful, and where the link to the lm() function source code 
+on the above page should be:
+
+ ? https://svn.r-project.org/R/trunk/src/library/stats/R/lm.R
+
+Within that source file, you might want to focus upon the 
+model.frame.lm() function, the basic form which is used internally in 
+many (most?, all?) of the typical model related functions in R to create 
+the internal data frame from the specified formula, that is then used to 
+create the model.
+
+There is a parallel model.frame.glm() function for glm() here:
+
+https://svn.r-project.org/R/trunk/src/library/stats/R/glm.R
+
+There is also a 2003 paper by Thomas Lumley on non-standard evaluation 
+that may be helpful:
+
+https://developer.r-project.org/nonstandard-eval.pdf
+
+The help for the generic ?model.frame has the following text for the 
+'subset' argument:
+
+"a specification of the rows to be used: defaults to all rows. This can 
+be any valid indexing vector (see|[.data.frame 
+<http://127.0.0.1:13384/library/stats/help/[.data.frame>|) for the rows 
+of|data|or if that is not supplied, a data frame made up of the 
+variables used in|formula|."
+
+I cannot recall off-hand, using the 'subset' argument myself in ~20 
+years of using R, but do seem to recall some old discussions on the 
+e-mail lists, which I cannot seem to locate at present. A search via 
+rseek.org may yield some benefit.
+
+Regards,
+
+Marc Schwartz
+
+
+J C Nash wrote on 7/13/21 7:21 PM:
+> In mentoring and participating in a Google Summer of Code project "Improvements to nls()",
+> I've not found examples of use of the "subset" argument in the call to nls(). Moreover,
+> in searching through the source code for the various functions related to nls(), I can't
+> seem to find where subset is used, but a simple example, included below, indicates it works.
+> Three approaches all seem to give the same results.
+>
+> Can someone point to documentation or code so we can make sure we get our revised programs
+> to work properly? The aim is to make them more maintainable and provide maintainer documentation,
+> along with some improved functionality. We seem, for example, to already be able to offer
+> analytic derivatives where they are feasible, and should be able to add Marquardt-Levenberg
+> stabilization as an option.
+>
+> Note that this "subset" does not seem to be the "subset()" function of R.
+>
+> John Nash
+>
+> # CroucherSubset.R -- https://walkingrandomly.com/?p=5254
+>
+> xdata = c(-2,-1.64,-1.33,-0.7,0,0.45,1.2,1.64,2.32,2.9)
+> ydata = c(0.699369,0.700462,0.695354,1.03905,1.97389,2.41143,1.91091,0.919576,-0.730975,-1.42001)
+> Cform <- ydata ~ p1*cos(p2*xdata) + p2*sin(p1*xdata)
+> Cstart<-list(p1=1,p2=0.2)
+> Cdata<-data.frame(xdata, ydata)
+> Csubset<-1:8 # just first 8 points
+>
+> # Original problem - no subset
+> fit0 = nls(ydata ~ p1*cos(p2*xdata) + p2*sin(p1*xdata), data=Cdata, start=list(p1=1,p2=.2))
+> summary(fit0)
+>
+> # via subset argument
+> fit1 = nls(ydata ~ p1*cos(p2*xdata) + p2*sin(p1*xdata), data=Cdata, start=list(p1=1,p2=.2), subset=Csubset)
+> summary(fit1)
+>
+> # via explicit subsetting
+> Csdata <- Cdata[Csubset, ]
+> Csdata
+> fit2 = nls(ydata ~ p1*cos(p2*xdata) + p2*sin(p1*xdata), data=Csdata, start=list(p1=1,p2=.2))
+> summary(fit2)
+>
+> # via weights -- seems to give correct observation count if zeros not recognized
+> wts <- c(rep(1,8), rep(0,2))
+> fit3 = nls(ydata ~ p1*cos(p2*xdata) + p2*sin(p1*xdata), data=Cdata, weights=wts, start=list(p1=1,p2=.2))
+> summary(fit3)
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @orenh @end|ng |rom m@th@@@u@dk  Wed Jul 14 09:24:01 2021
+From: @orenh @end|ng |rom m@th@@@u@dk (=?utf-8?B?U8O4cmVuIEjDuGpzZ2FhcmQ=?=)
+Date: Wed, 14 Jul 2021 07:24:01 +0000
+Subject: [Rd] R for windows: Why is Rtools not part of the R-distribution
+Message-ID: <ee2af10e66bb73e6eabe71379b32c4f0f94d30af.camel@math.aau.dk>
+
+Dear all,
+
+This issue may have come up before, but then I have overlooked it: I
+wonder if there are good reasons that rtools is not a part of R for
+windows? 
+
+If, for example, in a teaching situation you want the students to fetch
+a recent version of a package from e.g. github, then it would be easy
+if one needed not go through the steps of installing the rtools outside
+of R. There may of course also be alternatives that I am not aware of?
+
+As I wrote, the must be good reasons - I just can't spot them (it can't
+really be the size of distribution any longer).
+
+Best regards
+S?ren
+
+From n@r@@ @end|ng |rom @t@n|ord@edu  Thu Jul 15 00:16:17 2021
+From: n@r@@ @end|ng |rom @t@n|ord@edu (Balasubramanian Narasimhan)
+Date: Wed, 14 Jul 2021 15:16:17 -0700
+Subject: [Rd] subset argument in nls() and possibly other functions
+In-Reply-To: <9903076b-9f7b-81c8-d81e-b47f9a9f1cad@gmail.com>
+References: <9903076b-9f7b-81c8-d81e-b47f9a9f1cad@gmail.com>
+Message-ID: <d5c1f984-0e63-491e-2f0e-78a075acc7af@stanford.edu>
+
+For the example provided below, the subsetting happens in evaluating the 
+call to stats::model.formula in line 583 of nls.R 
+(https://github.com/wch/r-source/blob/e91be22f6f37644e5a0ba74a3dfe504a3a29e9f7/src/library/stats/R/nls.R#L583) 
+returning an appropriate (subsetted) data frame.
+
+-Naras
+
+On 7/13/21 4:21 PM, J C Nash wrote:
+> In mentoring and participating in a Google Summer of Code project "Improvements to nls()",
+> I've not found examples of use of the "subset" argument in the call to nls(). Moreover,
+> in searching through the source code for the various functions related to nls(), I can't
+> seem to find where subset is used, but a simple example, included below, indicates it works.
+> Three approaches all seem to give the same results.
+>
+> Can someone point to documentation or code so we can make sure we get our revised programs
+> to work properly? The aim is to make them more maintainable and provide maintainer documentation,
+> along with some improved functionality. We seem, for example, to already be able to offer
+> analytic derivatives where they are feasible, and should be able to add Marquardt-Levenberg
+> stabilization as an option.
+>
+> Note that this "subset" does not seem to be the "subset()" function of R.
+>
+> John Nash
+>
+> # CroucherSubset.R -- https://walkingrandomly.com/?p=5254
+>
+> xdata = c(-2,-1.64,-1.33,-0.7,0,0.45,1.2,1.64,2.32,2.9)
+> ydata = c(0.699369,0.700462,0.695354,1.03905,1.97389,2.41143,1.91091,0.919576,-0.730975,-1.42001)
+> Cform <- ydata ~ p1*cos(p2*xdata) + p2*sin(p1*xdata)
+> Cstart<-list(p1=1,p2=0.2)
+> Cdata<-data.frame(xdata, ydata)
+> Csubset<-1:8 # just first 8 points
+>
+> # Original problem - no subset
+> fit0 = nls(ydata ~ p1*cos(p2*xdata) + p2*sin(p1*xdata), data=Cdata, start=list(p1=1,p2=.2))
+> summary(fit0)
+>
+> # via subset argument
+> fit1 = nls(ydata ~ p1*cos(p2*xdata) + p2*sin(p1*xdata), data=Cdata, start=list(p1=1,p2=.2), subset=Csubset)
+> summary(fit1)
+>
+> # via explicit subsetting
+> Csdata <- Cdata[Csubset, ]
+> Csdata
+> fit2 = nls(ydata ~ p1*cos(p2*xdata) + p2*sin(p1*xdata), data=Csdata, start=list(p1=1,p2=.2))
+> summary(fit2)
+>
+> # via weights -- seems to give correct observation count if zeros not recognized
+> wts <- c(rep(1,8), rep(0,2))
+> fit3 = nls(ydata ~ p1*cos(p2*xdata) + p2*sin(p1*xdata), data=Cdata, weights=wts, start=list(p1=1,p2=.2))
+> summary(fit3)
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From edd @end|ng |rom deb|@n@org  Mon Jul 19 22:03:35 2021
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Mon, 19 Jul 2021 15:03:35 -0500
+Subject: [Rd] R-Forge http link redirection setup busted
+Message-ID: <24821.55959.410770.236993@rob.eddelbuettel.com>
+
+
+(Sorry for posting here but the top-level r-forge page does not make it all
+that clear where to contact its admins.)
+
+When an old-style 'http' URL at r-forge is resolved / redirected to 'https',
+it is corrupted and the redirect breaks.  That required a package re-upload
+for me a few days ago (as the CRAN url checker is unhappy about a borked URL)
+and you can see it live too e.g. via
+
+  https://lists.r-forge.r-project.org/cgi-bin/mailman/listinfo/rcpp-devel
+
+and going to 'rcpp-devel archives' where the hover URL is (note 'http')
+
+  http://lists.r-forge.r-project.org/pipermail/rcpp-devel/
+
+which when followed 'naively' drops the / between .org and pipermail and
+gets a 404
+
+  https://lists.r-forge.r-project.orgpipermail/rcpp-devel/
+
+Reinjecting the missing / helps as
+
+  https://lists.r-forge.r-project.org/pipermail/rcpp-devel/
+
+works fine.  This is likely a typo / error in the redirection setup of the
+web server.
+
+I would be very grateful if someone could pass this on to whoever looks after
+r-forge these days.
+
+Best,  Dirk
+
+-- 
+https://dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From m@rc_@chw@rtz @end|ng |rom me@com  Mon Jul 19 22:36:01 2021
+From: m@rc_@chw@rtz @end|ng |rom me@com (Marc Schwartz)
+Date: Mon, 19 Jul 2021 16:36:01 -0400
+Subject: [Rd] R-Forge http link redirection setup busted
+In-Reply-To: <24821.55959.410770.236993@rob.eddelbuettel.com>
+References: <24821.55959.410770.236993@rob.eddelbuettel.com>
+Message-ID: <990b450a-66f2-8e2d-3b8f-0a0dfee886f2@me.com>
+
+Dirk,
+
+I have not use R-Forge in years, but on the main page 
+(https://r-forge.r-project.org), just before the blue "Latest News" box, 
+it shows:
+
+"If you experience any problems or need help you can submit a support 
+request to the R-Forge team or write an email to R-Forge at R-Project.org."
+
+I have copied that e-mail address here. The URL for the support request 
+form requires a login to R-Forge to access.
+
+Also, there appears to be a top level project associated with the 
+R-Forge Admins here:
+
+   https://r-forge.r-project.org/projects/site/
+
+with references to the project members in the upper right hand corner.
+
+No activity from the Admins there since December 2020, from what I can 
+tell...
+
+Regards,
+
+Marc Schwartz
+
+
+Dirk Eddelbuettel wrote on 7/19/21 4:03 PM:
+> 
+> (Sorry for posting here but the top-level r-forge page does not make it all
+> that clear where to contact its admins.)
+> 
+> When an old-style 'http' URL at r-forge is resolved / redirected to 'https',
+> it is corrupted and the redirect breaks.  That required a package re-upload
+> for me a few days ago (as the CRAN url checker is unhappy about a borked URL)
+> and you can see it live too e.g. via
+> 
+>    https://lists.r-forge.r-project.org/cgi-bin/mailman/listinfo/rcpp-devel
+> 
+> and going to 'rcpp-devel archives' where the hover URL is (note 'http')
+> 
+>    http://lists.r-forge.r-project.org/pipermail/rcpp-devel/
+> 
+> which when followed 'naively' drops the / between .org and pipermail and
+> gets a 404
+> 
+>    https://lists.r-forge.r-project.orgpipermail/rcpp-devel/
+> 
+> Reinjecting the missing / helps as
+> 
+>    https://lists.r-forge.r-project.org/pipermail/rcpp-devel/
+> 
+> works fine.  This is likely a typo / error in the redirection setup of the
+> web server.
+> 
+> I would be very grateful if someone could pass this on to whoever looks after
+> r-forge these days.
+> 
+> Best,  Dirk
+>
+
+
+From @pencer@gr@ve@ @end|ng |rom prod@y@e@com  Mon Jul 19 23:14:43 2021
+From: @pencer@gr@ve@ @end|ng |rom prod@y@e@com (Spencer Graves)
+Date: Mon, 19 Jul 2021 16:14:43 -0500
+Subject: [Rd] R-Forge http link redirection setup busted
+In-Reply-To: <990b450a-66f2-8e2d-3b8f-0a0dfee886f2@me.com>
+References: <24821.55959.410770.236993@rob.eddelbuettel.com>
+ <990b450a-66f2-8e2d-3b8f-0a0dfee886f2@me.com>
+Message-ID: <7b5b2e25-4721-4c15-b7ec-65c8a4231897@prodsyse.com>
+
+
+
+On 7/19/21 3:36 PM, Marc Schwartz via R-devel wrote:
+> Dirk,
+> 
+> I have not use R-Forge in years, but on the main page 
+> (https://r-forge.r-project.org), just before the blue "Latest News" box, 
+> it shows:
+> 
+> "If you experience any problems or need help you can submit a support 
+> request to the R-Forge team or write an email to R-Forge at R-Project.org."
+> 
+> I have copied that e-mail address here. The URL for the support request 
+> form requires a login to R-Forge to access.
+> 
+> Also, there appears to be a top level project associated with the 
+> R-Forge Admins here:
+> 
+>  ? https://r-forge.r-project.org/projects/site/
+> 
+> with references to the project members in the upper right hand corner.
+> 
+> No activity from the Admins there since December 2020, from what I can 
+> tell...
+
+
+	  I encourage anyone still trying to use R-Forge to migrate to GitHub. 
+  I migrated in 2019 after having many problems with changes not 
+triggering checks and getting messages like, "there is no package called 
+'Matrix'".  There was a discussion on r-package-devel at r-project.org in 
+January and February of this year on how to do that.  That thread could 
+probably help anyone interested in doing this.
+
+
+	  Spencer Graves
+
+> 
+> Regards,
+> 
+> Marc Schwartz
+> 
+> 
+> Dirk Eddelbuettel wrote on 7/19/21 4:03 PM:
+>>
+>> (Sorry for posting here but the top-level r-forge page does not make 
+>> it all
+>> that clear where to contact its admins.)
+>>
+>> When an old-style 'http' URL at r-forge is resolved / redirected to 
+>> 'https',
+>> it is corrupted and the redirect breaks.? That required a package 
+>> re-upload
+>> for me a few days ago (as the CRAN url checker is unhappy about a 
+>> borked URL)
+>> and you can see it live too e.g. via
+>>
+>>    
+>> https://lists.r-forge.r-project.org/cgi-bin/mailman/listinfo/rcpp-devel
+>>
+>> and going to 'rcpp-devel archives' where the hover URL is (note 'http')
+>>
+>> ?? http://lists.r-forge.r-project.org/pipermail/rcpp-devel/
+>>
+>> which when followed 'naively' drops the / between .org and pipermail and
+>> gets a 404
+>>
+>> ?? https://lists.r-forge.r-project.orgpipermail/rcpp-devel/
+>>
+>> Reinjecting the missing / helps as
+>>
+>> ?? https://lists.r-forge.r-project.org/pipermail/rcpp-devel/
+>>
+>> works fine.? This is likely a typo / error in the redirection setup of 
+>> the
+>> web server.
+>>
+>> I would be very grateful if someone could pass this on to whoever 
+>> looks after
+>> r-forge these days.
+>>
+>> Best,? Dirk
+>>
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From m@rc_@chw@rtz @end|ng |rom me@com  Tue Jul 20 01:02:44 2021
+From: m@rc_@chw@rtz @end|ng |rom me@com (Marc Schwartz)
+Date: Mon, 19 Jul 2021 19:02:44 -0400
+Subject: [Rd] R-Forge http link redirection setup busted
+In-Reply-To: <CA+Cy7mZ+VqV_2dmOf95ob6XyN9ZdGzCn+fFToPLxm6JyK+01tA@mail.gmail.com>
+References: <CA+Cy7mZ+VqV_2dmOf95ob6XyN9ZdGzCn+fFToPLxm6JyK+01tA@mail.gmail.com>
+Message-ID: <F0BBC147-4296-4328-843B-A3E351F8DE4D@me.com>
+
+Hi,
+
+Only you can unsubscribe yourself.
+
+Please visit:
+
+https://stat.ethz.ch/mailman/options/r-devel
+
+where you can unsubscribe from this list and if needed, get a password reminder, after entering your email address.
+
+Regards,
+
+Marc Schwartz 
+
+
+> On Jul 19, 2021, at 5:30 PM, Arlene Battishill <arlenebattishill at gmail.com> wrote:
+> 
+> ?
+> Please unsubscribe me.
+> 
+>> On Mon, Jul 19, 2021 at 5:15 PM Spencer Graves <spencer.graves at prodsyse.com> wrote:
+>> 
+>> 
+>> On 7/19/21 3:36 PM, Marc Schwartz via R-devel wrote:
+>> > Dirk,
+>> > 
+>> > I have not use R-Forge in years, but on the main page 
+>> > (https://r-forge.r-project.org), just before the blue "Latest News" box, 
+>> > it shows:
+>> > 
+>> > "If you experience any problems or need help you can submit a support 
+>> > request to the R-Forge team or write an email to R-Forge at R-Project.org."
+>> > 
+>> > I have copied that e-mail address here. The URL for the support request 
+>> > form requires a login to R-Forge to access.
+>> > 
+>> > Also, there appears to be a top level project associated with the 
+>> > R-Forge Admins here:
+>> > 
+>> >    https://r-forge.r-project.org/projects/site/
+>> > 
+>> > with references to the project members in the upper right hand corner.
+>> > 
+>> > No activity from the Admins there since December 2020, from what I can 
+>> > tell...
+>> 
+>> 
+>>           I encourage anyone still trying to use R-Forge to migrate to GitHub. 
+>>   I migrated in 2019 after having many problems with changes not 
+>> triggering checks and getting messages like, "there is no package called 
+>> 'Matrix'".  There was a discussion on r-package-devel at r-project.org in 
+>> January and February of this year on how to do that.  That thread could 
+>> probably help anyone interested in doing this.
+>> 
+>> 
+>>           Spencer Graves
+>> 
+>> > 
+>> > Regards,
+>> > 
+>> > Marc Schwartz
+>> > 
+>> > 
+>> > Dirk Eddelbuettel wrote on 7/19/21 4:03 PM:
+>> >>
+>> >> (Sorry for posting here but the top-level r-forge page does not make 
+>> >> it all
+>> >> that clear where to contact its admins.)
+>> >>
+>> >> When an old-style 'http' URL at r-forge is resolved / redirected to 
+>> >> 'https',
+>> >> it is corrupted and the redirect breaks.  That required a package 
+>> >> re-upload
+>> >> for me a few days ago (as the CRAN url checker is unhappy about a 
+>> >> borked URL)
+>> >> and you can see it live too e.g. via
+>> >>
+>> >>    
+>> >> https://lists.r-forge.r-project.org/cgi-bin/mailman/listinfo/rcpp-devel
+>> >>
+>> >> and going to 'rcpp-devel archives' where the hover URL is (note 'http')
+>> >>
+>> >>    http://lists.r-forge.r-project.org/pipermail/rcpp-devel/
+>> >>
+>> >> which when followed 'naively' drops the / between .org and pipermail and
+>> >> gets a 404
+>> >>
+>> >>    https://lists.r-forge.r-project.orgpipermail/rcpp-devel/
+>> >>
+>> >> Reinjecting the missing / helps as
+>> >>
+>> >>    https://lists.r-forge.r-project.org/pipermail/rcpp-devel/
+>> >>
+>> >> works fine.  This is likely a typo / error in the redirection setup of 
+>> >> the
+>> >> web server.
+>> >>
+>> >> I would be very grateful if someone could pass this on to whoever 
+>> >> looks after
+>> >> r-forge these days.
+>> >>
+>> >> Best,  Dirk
+>> >>
+>> > 
+>> > ______________________________________________
+>> > R-devel at r-project.org mailing list
+>> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>> 
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+	[[alternative HTML version deleted]]
+
+
+From @zwj|08 @end|ng |rom gm@||@com  Tue Jul 20 09:55:39 2021
+From: @zwj|08 @end|ng |rom gm@||@com (Jiefei Wang)
+Date: Tue, 20 Jul 2021 15:55:39 +0800
+Subject: [Rd] User interrupts parallel excution. Why it works or why not?
+Message-ID: <CAGiFhPNXT2g3e8JqV9kf-+=eT+YsXku3-Ln0YCX5MykuNhCNwg@mail.gmail.com>
+
+Hi all,
+
+I just notice this interesting problem a few days before, but I cannot
+find an answer for it. Say if you have a long-running job in a cluster
+made by the parallel package and you decide to stop the execution by
+pressing ctr + c in the terminal or the stop button in Rstudio for
+some reason. After the interrupt, is the cluster still valid or not?
+Below is a simple example code
+
+library(parallel)
+cl <- makeCluster(1)
+## run and interrupt it
+parLapply(cl, 1, function(i){Sys.sleep(10);Sys.getpid()})
+## run another apply function to check the cluster status
+parLapply(cl, 1, function(i)i)
+
+>From my test result, the answer is yes. The worker is interrupted
+immediately and the cluster is ready for the next command, but when I
+create the worker manually, things seem different.
+
+library(parallel)
+cl <- makeCluster(1, manual = TRUE)
+## run and interrupt it
+parLapply(cl, 1, function(i){Sys.sleep(10);Sys.getpid()})
+## run another apply function to check the cluster status
+parLapply(cl, 1, function(i)i)
+
+It seems like the worker does not know the manager has been
+interrupted and still runs the current task. I have to wait for 10
+seconds before I can get the result from the last line of the code and
+the return value is the PID from the first apply function.
+
+Both cases are reasonable, but it is surprising to see them at the
+same time. I start to wonder how the user interrupt is handled, so I
+looked at the code in the parallel package. However, it looks like
+there is no related code, there is no try-catch statement in the
+manager's code to handle the user interrupt, but the worker just
+magically knows it should stop the current execution.
+
+I can see this behavior in both Win and Ubuntu. It is kind of beyond
+my knowledge, so I wonder if anyone can help me with it. Does the
+cluster support the user interrupt? Why the above code works or not
+works? Many thanks!
+
+Best,
+Jiefei
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue Jul 20 10:31:40 2021
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 20 Jul 2021 10:31:40 +0200
+Subject: [Rd] 
+ User interrupts parallel excution. Why it works or why not?
+In-Reply-To: <CAGiFhPNXT2g3e8JqV9kf-+=eT+YsXku3-Ln0YCX5MykuNhCNwg@mail.gmail.com>
+References: <CAGiFhPNXT2g3e8JqV9kf-+=eT+YsXku3-Ln0YCX5MykuNhCNwg@mail.gmail.com>
+Message-ID: <2f591e47-74a2-33e7-2a35-5dc9f1693561@gmail.com>
+
+Hi Jiefei,
+
+when you run the cluster "automatically" in your terminal and pres 
+Ctrl-C in Unix, both the master and the worker processes get the SIGINT 
+signal, because they belong to the same foreground process group. So you 
+are directly interrupting also the worker process.
+
+When you run the cluster "manually", that is the master in one terminal 
+window and the worker in another, they are in different process groups 
+and if you pres Ctrl-C in the terminal running the master, only the 
+master will receive SIGINT signal, not the worker.
+
+If you wanted to read the sources more, look for SIGINT handling in R, 
+the onintrEx() function, etc. A good source on signal handling is e.g. 
+http://www.linusakesson.net/programming/tty/
+
+Best
+Tomas
+
+On 7/20/21 9:55 AM, Jiefei Wang wrote:
+> Hi all,
+>
+> I just notice this interesting problem a few days before, but I cannot
+> find an answer for it. Say if you have a long-running job in a cluster
+> made by the parallel package and you decide to stop the execution by
+> pressing ctr + c in the terminal or the stop button in Rstudio for
+> some reason. After the interrupt, is the cluster still valid or not?
+> Below is a simple example code
+>
+> library(parallel)
+> cl <- makeCluster(1)
+> ## run and interrupt it
+> parLapply(cl, 1, function(i){Sys.sleep(10);Sys.getpid()})
+> ## run another apply function to check the cluster status
+> parLapply(cl, 1, function(i)i)
+>
+>  From my test result, the answer is yes. The worker is interrupted
+> immediately and the cluster is ready for the next command, but when I
+> create the worker manually, things seem different.
+>
+> library(parallel)
+> cl <- makeCluster(1, manual = TRUE)
+> ## run and interrupt it
+> parLapply(cl, 1, function(i){Sys.sleep(10);Sys.getpid()})
+> ## run another apply function to check the cluster status
+> parLapply(cl, 1, function(i)i)
+>
+> It seems like the worker does not know the manager has been
+> interrupted and still runs the current task. I have to wait for 10
+> seconds before I can get the result from the last line of the code and
+> the return value is the PID from the first apply function.
+>
+> Both cases are reasonable, but it is surprising to see them at the
+> same time. I start to wonder how the user interrupt is handled, so I
+> looked at the code in the parallel package. However, it looks like
+> there is no related code, there is no try-catch statement in the
+> manager's code to handle the user interrupt, but the worker just
+> magically knows it should stop the current execution.
+>
+> I can see this behavior in both Win and Ubuntu. It is kind of beyond
+> my knowledge, so I wonder if anyone can help me with it. Does the
+> cluster support the user interrupt? Why the above code works or not
+> works? Many thanks!
+>
+> Best,
+> Jiefei
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @zwj|08 @end|ng |rom gm@||@com  Tue Jul 20 12:26:16 2021
+From: @zwj|08 @end|ng |rom gm@||@com (Jiefei Wang)
+Date: Tue, 20 Jul 2021 18:26:16 +0800
+Subject: [Rd] 
+ User interrupts parallel excution. Why it works or why not?
+In-Reply-To: <2f591e47-74a2-33e7-2a35-5dc9f1693561@gmail.com>
+References: <CAGiFhPNXT2g3e8JqV9kf-+=eT+YsXku3-Ln0YCX5MykuNhCNwg@mail.gmail.com>
+ <2f591e47-74a2-33e7-2a35-5dc9f1693561@gmail.com>
+Message-ID: <CAGiFhPPtv7TVr+-Uoyx7iX1iBt6+sb1U5Fig0483VTonOZqt1A@mail.gmail.com>
+
+Thanks for your explanation. This makes a lot of sense! SIGINT
+handling is a blind spot to me, this introduction looks perfect!
+
+Best,
+Jiefei
+
+On Tue, Jul 20, 2021 at 4:31 PM Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+>
+> Hi Jiefei,
+>
+> when you run the cluster "automatically" in your terminal and pres
+> Ctrl-C in Unix, both the master and the worker processes get the SIGINT
+> signal, because they belong to the same foreground process group. So you
+> are directly interrupting also the worker process.
+>
+> When you run the cluster "manually", that is the master in one terminal
+> window and the worker in another, they are in different process groups
+> and if you pres Ctrl-C in the terminal running the master, only the
+> master will receive SIGINT signal, not the worker.
+>
+> If you wanted to read the sources more, look for SIGINT handling in R,
+> the onintrEx() function, etc. A good source on signal handling is e.g.
+> http://www.linusakesson.net/programming/tty/
+>
+> Best
+> Tomas
+>
+> On 7/20/21 9:55 AM, Jiefei Wang wrote:
+> > Hi all,
+> >
+> > I just notice this interesting problem a few days before, but I cannot
+> > find an answer for it. Say if you have a long-running job in a cluster
+> > made by the parallel package and you decide to stop the execution by
+> > pressing ctr + c in the terminal or the stop button in Rstudio for
+> > some reason. After the interrupt, is the cluster still valid or not?
+> > Below is a simple example code
+> >
+> > library(parallel)
+> > cl <- makeCluster(1)
+> > ## run and interrupt it
+> > parLapply(cl, 1, function(i){Sys.sleep(10);Sys.getpid()})
+> > ## run another apply function to check the cluster status
+> > parLapply(cl, 1, function(i)i)
+> >
+> >  From my test result, the answer is yes. The worker is interrupted
+> > immediately and the cluster is ready for the next command, but when I
+> > create the worker manually, things seem different.
+> >
+> > library(parallel)
+> > cl <- makeCluster(1, manual = TRUE)
+> > ## run and interrupt it
+> > parLapply(cl, 1, function(i){Sys.sleep(10);Sys.getpid()})
+> > ## run another apply function to check the cluster status
+> > parLapply(cl, 1, function(i)i)
+> >
+> > It seems like the worker does not know the manager has been
+> > interrupted and still runs the current task. I have to wait for 10
+> > seconds before I can get the result from the last line of the code and
+> > the return value is the PID from the first apply function.
+> >
+> > Both cases are reasonable, but it is surprising to see them at the
+> > same time. I start to wonder how the user interrupt is handled, so I
+> > looked at the code in the parallel package. However, it looks like
+> > there is no related code, there is no try-catch statement in the
+> > manager's code to handle the user interrupt, but the worker just
+> > magically knows it should stop the current execution.
+> >
+> > I can see this behavior in both Win and Ubuntu. It is kind of beyond
+> > my knowledge, so I wonder if anyone can help me with it. Does the
+> > cluster support the user interrupt? Why the above code works or not
+> > works? Many thanks!
+> >
+> > Best,
+> > Jiefei
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From genn@d|y@@t@ro@t|n @end|ng |rom wu@@c@@t  Tue Jul 20 10:25:38 2021
+From: genn@d|y@@t@ro@t|n @end|ng |rom wu@@c@@t (Gennadiy Starostin)
+Date: Tue, 20 Jul 2021 10:25:38 +0200
+Subject: [Rd] R-Forge http link redirection setup busted
+In-Reply-To: <24821.55959.410770.236993@rob.eddelbuettel.com>
+References: <24821.55959.410770.236993@rob.eddelbuettel.com>
+Message-ID: <a9804760-8878-4471-2fed-0c7e182ddc30@wu.ac.at>
+
+Dear Dirk,
+
+Thank you for your feedback. There was a misconfigured redirection 
+indeed. It should work well now.
+
+The top page does say "If you experience any problems or need help you 
+can submit a support request to the R-Forge team or write an email to 
+R-Forge at R-Project.org.
+Thanks... and enjoy the site."
+
+But I`ll put it on the list of improvements anyway, to make the contact 
+options more visible.
+
+Best,
+
+Gennadiy.
+
+On 19.07.21 22:03, Dirk Eddelbuettel wrote:
+> (Sorry for posting here but the top-level r-forge page does not make it all
+> that clear where to contact its admins.)
+>
+> When an old-style 'http' URL at r-forge is resolved / redirected to 'https',
+> it is corrupted and the redirect breaks.  That required a package re-upload
+> for me a few days ago (as the CRAN url checker is unhappy about a borked URL)
+> and you can see it live too e.g. via
+>
+>    https://lists.r-forge.r-project.org/cgi-bin/mailman/listinfo/rcpp-devel
+>
+> and going to 'rcpp-devel archives' where the hover URL is (note 'http')
+>
+>    http://lists.r-forge.r-project.org/pipermail/rcpp-devel/
+>
+> which when followed 'naively' drops the / between .org and pipermail and
+> gets a 404
+>
+>    https://lists.r-forge.r-project.orgpipermail/rcpp-devel/
+>
+> Reinjecting the missing / helps as
+>
+>    https://lists.r-forge.r-project.org/pipermail/rcpp-devel/
+>
+> works fine.  This is likely a typo / error in the redirection setup of the
+> web server.
+>
+> I would be very grateful if someone could pass this on to whoever looks after
+> r-forge these days.
+>
+> Best,  Dirk
+>
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Tue Jul 20 21:57:14 2021
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Tue, 20 Jul 2021 14:57:14 -0500 (CDT)
+Subject: [Rd] changes in some header files
+Message-ID: <alpine.DEB.2.21.2107201456270.19764@luke-Latitude-7480>
+
+We are working on rearranging some of our header files with the goal
+of making the installed headers correspond more closely to the C API
+available to packages. Packages that only use entry points and
+definitions that are part of the API as specified in Chapter 6 of
+Writing R Extensions should not be affected.
+
+I have committed an initial set of changes to R-devel in
+r80644. About 10 CRAN packages that use non-API features will fail
+under R-devel after these changes and their maintainers have been
+notified.
+
+If you are currently using non-API features in a package it would be a
+good idea to review what you are doing and to try to revise your code
+to work within the API. If you feel there are features missing in the
+API then you can suggest additions on this mailing list or bugzilla.
+
+Best,
+
+luke
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+
+
+From edd @end|ng |rom deb|@n@org  Tue Jul 20 22:30:45 2021
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Tue, 20 Jul 2021 15:30:45 -0500
+Subject: [Rd] R-Forge http link redirection setup busted
+In-Reply-To: <a9804760-8878-4471-2fed-0c7e182ddc30@wu.ac.at>
+References: <24821.55959.410770.236993@rob.eddelbuettel.com>
+ <a9804760-8878-4471-2fed-0c7e182ddc30@wu.ac.at>
+Message-ID: <24823.12917.547403.732288@rob.eddelbuettel.com>
+
+
+Hi Gennadiy,
+
+On 20 July 2021 at 10:25, Gennadiy Starostin wrote:
+| Thank you for your feedback. There was a misconfigured redirection 
+| indeed. It should work well now.
+
+Fabulous, thanks as always.
+ 
+| The top page does say "If you experience any problems or need help you 
+| can submit a support request to the R-Forge team or write an email to 
+| R-Forge at R-Project.org.
+| Thanks... and enjoy the site."
+
+Yes, thanks. I must have missed it. Marc also pointed me to it.
+ 
+| But I`ll put it on the list of improvements anyway, to make the contact 
+| options more visible.
+
+That would be excellent. Thanks for looking after r-forge, even if my main
+use is down to the mailing list portion of it.
+
+Best,  Dirk
+
+-- 
+https://dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From w||||@mwdun|@p @end|ng |rom gm@||@com  Thu Jul 22 20:18:30 2021
+From: w||||@mwdun|@p @end|ng |rom gm@||@com (Bill Dunlap)
+Date: Thu, 22 Jul 2021 11:18:30 -0700
+Subject: [Rd] [R-pkg-devel] Tracking down inconsistent errors and notes
+ across operating systems
+In-Reply-To: <CAHqSRuR2HW0grqNCUJQT_VAZTvJzyYQn7w3kUhWxLqNZj_BHRQ@mail.gmail.com>
+References: <CAB_Q2xK-pDFmU482YWWB6dzNC_M0dou9N3DZO4_D+4AF-JrtOw@mail.gmail.com>
+ <CALEXWq12a4SxVXO=t28fEbS0oV-XaZ9ndMgsW-EOqQnJK7gYpw@mail.gmail.com>
+ <CAHqSRuR2HW0grqNCUJQT_VAZTvJzyYQn7w3kUhWxLqNZj_BHRQ@mail.gmail.com>
+Message-ID: <CAHqSRuT5a41_1q4UotF6Wjiyyi1m7S9gW2JfUfG81Gdr6wCpNw@mail.gmail.com>
+
+A small example of the problem is
+
+#define USE_RINTERNALS 1
+#include <R.h>
+#include <Rinternals.h>
+#include <Rdefines.h>
+static s_object* obj = NULL;
+
+Prior to 2021-07-20, with svn 80639, this compiled but after, svn 80647,
+that I get
+
+$ gcc -I"/mnt/c/R/R-svn/trunk/src/include" -I.   -I/usr/local/include
+-fpic  -g -O2 -flto -c s_object.c 2>&1
+In file included from s_object.c:5:
+/mnt/c/R/R-svn/trunk/src/include/Rdefines.h:168:33: error: unknown type
+name ?SEXPREC?
+  168 | #define s_object                SEXPREC
+      |                                 ^~~~~~~
+s_object.c:7:8: note: in expansion of macro ?s_object?
+    7 | static s_object* obj = NULL;
+      |        ^~~~~~~~
+
+
+
+On Thu, Jul 22, 2021 at 10:18 AM Bill Dunlap <williamwdunlap at gmail.com>
+wrote:
+
+> I think the problem with RPostgreSQL/sec/RS-DBI.c comes from some changes
+> to Defn.h and Rinternals.h in RHOME/include that Luke made recently
+> (2021-07-20, svn 80647).  Since then the line
+>    #define s_object SEXPREC
+> in Rdefines.h causes problems.  Should it now be 'struct SEXPREC'?
+>
+> -Bill
+>
+>
+> On Thu, Jul 22, 2021 at 7:04 AM I?aki Ucar <iucar at fedoraproject.org>
+> wrote:
+>
+>> Hi,
+>>
+>> On Thu, 22 Jul 2021 at 15:51, Hannah Owens <hannah.owens at gmail.com>
+>> wrote:
+>> >
+>> > Hi all,
+>> > I am working on an update to a package I have on CRAN called occCite. My
+>> > latest release attempt didn?t pass incoming automated checks, because
+>> there
+>> > is an outstanding error. Additionally, there are some weird notes I
+>> would
+>> > like to get rid of, if anyone has suggestions.
+>> >
+>> > The killing error is in r-devel-linux-x86_64-debian-gcc, which is:
+>> Packages
+>> > required but not available: 'BIEN', 'taxize', ?RPostgreSQL'
+>> >
+>> > I don?t understand this, as it is the only system that throws this
+>> error,
+>> > and the packages mentioned are available via CRAN. Any suggestions?
+>>
+>> This kind of message usually arises when there is some problem with
+>> those packages on CRAN. Indeed,
+>>
+>> https://cran.r-project.org/web/checks/check_results_BIEN.html
+>> https://cran.r-project.org/web/checks/check_results_taxize.html
+>> https://cran.r-project.org/web/checks/check_results_RPostgreSQL.html
+>>
+>> the three of them have ERRORs in that platform. No issue on your end.
+>> You reply pointing to that.
+>>
+>> > Additionally, there are multiple platforms
+>> > (r-devel-linux-x86_64-fedora-clang; r-devel-linux-x86_64-fedora-gcc;
+>> > r-devel-windows-x86_64-gcc10-UCRT; r-patched-solaris-x86;
+>> > r-release-macos-arm64; r-release-macos-x86_64; r-oldrel-macos-x86_64)
+>> where
+>> > two notes pop up:
+>> >
+>> > NOTE 1: Namespace in Imports field not imported from: ?bit64? All
+>> declared
+>> > Imports should be used.
+>> >
+>> > The package does use bit64. Any tips on how to address this note?
+>>
+>> Are you sure? Your NAMESPACE file does not import(bit64) nor
+>> importFrom(bit64,) anything.
+>>
+>> > NOTE 2: Found 6 marked UTF-8 strings.
+>> >
+>> > I presume this is thrown because of the small sample dataset I?ve
+>> included
+>> > in the package, but why is it not thrown for all the platforms?
+>>
+>> Not all the checks are necessarily done in all the platforms. You can
+>> silence this NOTE by converting the offending strings in your datasets
+>> to ASCII and resaving them.
+>>
+>> --
+>> I?aki ?car
+>>
+>> ______________________________________________
+>> R-package-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-package-devel
+>>
+>
+
+	[[alternative HTML version deleted]]
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Thu Jul 22 21:22:28 2021
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Thu, 22 Jul 2021 14:22:28 -0500 (CDT)
+Subject: [Rd] 
+ [External] Re: [R-pkg-devel] Tracking down inconsistent errors
+ and notes across operating systems
+In-Reply-To: <CAHqSRuT5a41_1q4UotF6Wjiyyi1m7S9gW2JfUfG81Gdr6wCpNw@mail.gmail.com>
+References: <CAB_Q2xK-pDFmU482YWWB6dzNC_M0dou9N3DZO4_D+4AF-JrtOw@mail.gmail.com>
+ <CALEXWq12a4SxVXO=t28fEbS0oV-XaZ9ndMgsW-EOqQnJK7gYpw@mail.gmail.com>
+ <CAHqSRuR2HW0grqNCUJQT_VAZTvJzyYQn7w3kUhWxLqNZj_BHRQ@mail.gmail.com>
+ <CAHqSRuT5a41_1q4UotF6Wjiyyi1m7S9gW2JfUfG81Gdr6wCpNw@mail.gmail.com>
+Message-ID: <alpine.DEB.2.21.2107221422011.19764@luke-Latitude-7480>
+
+Thanks; fix committed in r80654.
+
+Best,
+
+luke
+
+On Thu, 22 Jul 2021, Bill Dunlap wrote:
+
+> A small example of the problem is?
+> #define USE_RINTERNALS 1
+> #include <R.h>
+> #include <Rinternals.h>
+> #include <Rdefines.h>
+> static s_object* obj = NULL;
+> 
+> Prior to 2021-07-20, with svn 80639, this compiled but after, svn 80647,
+> that I get
+> 
+> $ gcc -I"/mnt/c/R/R-svn/trunk/src/include" -I. ? -I/usr/local/include ?
+> -fpic ?-g -O2 -flto -c s_object.c 2>&1
+> In file included from s_object.c:5:
+> /mnt/c/R/R-svn/trunk/src/include/Rdefines.h:168:33: error: unknown type name
+> ?SEXPREC?
+> ? 168 | #define s_object ? ? ? ? ? ? ? ?SEXPREC
+> ? ? ? | ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ^~~~~~~
+> s_object.c:7:8: note: in expansion of macro ?s_object?
+> ? ? 7 | static s_object* obj = NULL;
+> ? ? ? | ? ? ? ?^~~~~~~~
+> 
+> 
+> 
+> On Thu, Jul 22, 2021 at 10:18 AM Bill Dunlap <williamwdunlap at gmail.com>
+> wrote:
+>       I think the problem with RPostgreSQL/sec/RS-DBI.c comes from
+>       some changes to Defn.h and Rinternals.h in RHOME/include that
+>       Luke made recently (2021-07-20, svn 80647).? Since then the
+>       line? ?#define s_object SEXPREC
+> in Rdefines.h causes problems.? Should it now be 'struct SEXPREC'?
+> 
+> -Bill
+> 
+> 
+> On Thu, Jul 22, 2021 at 7:04 AM I?aki Ucar <iucar at fedoraproject.org>
+> wrote:
+>       Hi,
+>
+>       On Thu, 22 Jul 2021 at 15:51, Hannah Owens
+>       <hannah.owens at gmail.com> wrote:
+>       >
+>       > Hi all,
+>       > I am working on an update to a package I have on CRAN
+>       called occCite. My
+>       > latest release attempt didn?t pass incoming automated
+>       checks, because there
+>       > is an outstanding error. Additionally, there are some
+>       weird notes I would
+>       > like to get rid of, if anyone has suggestions.
+>       >
+>       > The killing error is in r-devel-linux-x86_64-debian-gcc,
+>       which is: Packages
+>       > required but not available: 'BIEN', 'taxize',
+>       ?RPostgreSQL'
+>       >
+>       > I don?t understand this, as it is the only system that
+>       throws this error,
+>       > and the packages mentioned are available via CRAN. Any
+>       suggestions?
+>
+>       This kind of message usually arises when there is some
+>       problem with
+>       those packages on CRAN. Indeed,
+>
+>       https://cran.r-project.org/web/checks/check_results_BIEN.html
+>       https://cran.r-project.org/web/checks/check_results_taxize.html
+>       https://cran.r-project.org/web/checks/check_results_RPostgreSQL.html
+>
+>       the three of them have ERRORs in that platform. No issue
+>       on your end.
+>       You reply pointing to that.
+>
+>       > Additionally, there are multiple platforms
+>       > (r-devel-linux-x86_64-fedora-clang;
+>       r-devel-linux-x86_64-fedora-gcc;
+>       > r-devel-windows-x86_64-gcc10-UCRT;
+>       r-patched-solaris-x86;
+>       > r-release-macos-arm64; r-release-macos-x86_64;
+>       r-oldrel-macos-x86_64) where
+>       > two notes pop up:
+>       >
+>       > NOTE 1: Namespace in Imports field not imported from:
+>       ?bit64? All declared
+>       > Imports should be used.
+>       >
+>       > The package does use bit64. Any tips on how to address
+>       this note?
+>
+>       Are you sure? Your NAMESPACE file does not import(bit64)
+>       nor
+>       importFrom(bit64,) anything.
+>
+>       > NOTE 2: Found 6 marked UTF-8 strings.
+>       >
+>       > I presume this is thrown because of the small sample
+>       dataset I?ve included
+>       > in the package, but why is it not thrown for all the
+>       platforms?
+>
+>       Not all the checks are necessarily done in all the
+>       platforms. You can
+>       silence this NOTE by converting the offending strings in
+>       your datasets
+>       to ASCII and resaving them.
+>
+>       --
+>       I?aki ?car
+>
+>       ______________________________________________
+>       R-package-devel at r-project.org mailing list
+>       https://stat.ethz.ch/mailman/listinfo/r-package-devel
+> 
+> 
+>
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+
+From @teve@h@roz @end|ng |rom gm@||@com  Sat Jul 24 22:53:33 2021
+From: @teve@h@roz @end|ng |rom gm@||@com (Steve Haroz)
+Date: Sat, 24 Jul 2021 15:53:33 -0500
+Subject: [Rd] Feature request: Change default library path on Windows
+Message-ID: <CAJhjiQmEP6Rw_jM8PEz4gD1VXWWW9E0p7Pw31dyk4TQsEPJRdw@mail.gmail.com>
+
+Hello,
+
+I'd like to propose moving the default library install location on Windows from:
+%USERPROFILE%/Documents/R
+to some other location such as:
+%USERPROFILE%/R
+
+For many users the Documents folder is backed up or synchronized.
+Installing libraries thrashes Documents, and it causes synchronization
+issues with Dropbox (I confirm this one), OneDrive, and users with
+Network IT policies.
+
+The vast majority of R users won't touch that folder and don't need it
+backed up. And, its contents are not really "documents".
+
+There are many blog posts and websites with people complaining about
+it or offering workarounds that involve hand editing setting and
+environment files, which reduces R's usability and accessibility.
+* https://community.rstudio.com/t/help-regarding-package-installation-renviron-rprofile-r-libs-r-libs-site-and-r-libs-user-oh-my/13888/5
+* https://accelebrate.com/library/how-to-articles/r-rstudio-library
+* https://community.rstudio.com/t/r-studio-library-installation-directory/30725/2
+* https://twitter.com/sharoz/status/1418712098444546057
+* https://twitter.com/JoeHilgard/status/1419025358070878210
+
+This change should not interfere with any project environment managers
+like renv. It should just change the global default for Windows R
+users.
+Also, I believe that on Mac it is not in Documents, but it's in the
+equivalent of %USERPROFILE%/R.
+
+Thanks,
+Steve Haroz
+
+
+From edd @end|ng |rom deb|@n@org  Sun Jul 25 00:56:36 2021
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Sat, 24 Jul 2021 17:56:36 -0500
+Subject: [Rd] Feature request: Change default library path on Windows
+In-Reply-To: <CAJhjiQmEP6Rw_jM8PEz4gD1VXWWW9E0p7Pw31dyk4TQsEPJRdw@mail.gmail.com>
+References: <CAJhjiQmEP6Rw_jM8PEz4gD1VXWWW9E0p7Pw31dyk4TQsEPJRdw@mail.gmail.com>
+Message-ID: <24828.39588.993618.574749@rob.eddelbuettel.com>
+
+
+On 24 July 2021 at 15:53, Steve Haroz wrote:
+| I'd like to propose moving the default library install location on Windows from:
+| %USERPROFILE%/Documents/R
+| to some other location such as:
+| %USERPROFILE%/R
+
+Can you not set .Library.site in R_HOME/etc/Rprofile.site (or maybe setting
+R_LIBS_SITE either in R_HOME/etc/Renviron.site, or system-wide as an env
+variable so that you do not have to copy R_HOME/etc/Renviron.site once you
+upgrade R).
+
+See 'R Installation and Administration: 6.2 Managing libraries' for more:
+https://cran.r-project.org/doc/manuals/r-release/R-admin.html#Managing-libraries
+
+Dirk
+
+-- 
+https://dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From @purd|e@@ @end|ng |rom gm@||@com  Sun Jul 25 05:59:32 2021
+From: @purd|e@@ @end|ng |rom gm@||@com (Abby Spurdle)
+Date: Sun, 25 Jul 2021 15:59:32 +1200
+Subject: [Rd] Using R on kFreeBSD/Debian Hybrid
+Message-ID: <CAB8pepy+GFrrAvjOggO_H3KYrZojCXVmf5a2JZgR+aREmy0o+w@mail.gmail.com>
+
+Dear All,
+
+I'm considering installing a kFreeBSD/Debian hybrid operating system.
+i.e. A Debian OS but with a FreeBSD kernel.
+Which subsequently requires running (and compiling) R.
+And at some point, looking at the relationship between the R source and fortran.
+
+I thought I'd be prudent, and ask if anyone has done this before?
+Also, if I should expect nontrivial problems (especially compiling R),
+and if so, how nontrivial?
+Hopefully, someone more experienced than I, can offer useful advice on
+this subject...
+
+Note (1):
+I wasn't sure which mailing list this should go on.
+So, just decided to roll with R-devel.
+
+Note (2):
+If I understand things correctly, the most recent version is based on
+Debian 8, so there are possible problems there.
+
+
+From jeroen @end|ng |rom berke|ey@edu  Sun Jul 25 11:09:51 2021
+From: jeroen @end|ng |rom berke|ey@edu (Jeroen Ooms)
+Date: Sun, 25 Jul 2021 11:09:51 +0200
+Subject: [Rd] Feature request: Change default library path on Windows
+In-Reply-To: <CAJhjiQmEP6Rw_jM8PEz4gD1VXWWW9E0p7Pw31dyk4TQsEPJRdw@mail.gmail.com>
+References: <CAJhjiQmEP6Rw_jM8PEz4gD1VXWWW9E0p7Pw31dyk4TQsEPJRdw@mail.gmail.com>
+Message-ID: <CABFfbXvEQGejh069Ni7UZKub7UPA26QfvcH6waPcw+Z1jGSMMA@mail.gmail.com>
+
+On Sun, Jul 25, 2021 at 12:15 AM Steve Haroz <steve.haroz at gmail.com> wrote:
+>
+> Hello,
+>
+> I'd like to propose moving the default library install location on Windows from:
+> %USERPROFILE%/Documents/R
+> to some other location such as:
+> %USERPROFILE%/R
+>
+> For many users the Documents folder is backed up or synchronized.
+> Installing libraries thrashes Documents, and it causes synchronization
+> issues with Dropbox (I confirm this one), OneDrive, and users with
+> Network IT policies.
+>
+> The vast majority of R users won't touch that folder and don't need it
+> backed up. And, its contents are not really "documents".
+
+I very much support this request. R's behavior of defaulting HOME to
+an unusual (legacy) directory is also a source of bugs and
+interoperability problems:
+
+R packages that interface c/c++ libraries that require a user config
+file (libssh, libgit2, etc) sometimes cannot find the user config
+because it gets stored on a different location than expected. A good
+example is 'git'. The 'git for windows' command line utility stores my
+user config in C:\users\Jeroen\.gitconfig. However, for R packages
+that link to libgit2 (e.g. git2r, gert) the user config gets
+loaded/stored from C:\users\Jeroen\Documents\.gitconfig because
+libgit2 inherits the R home directory. Having 2 different git
+configurations is obviously confusing for users.
+
+Another problem is that when you start R from "windows bash" or the
+msys2 shell (including "git for windows" or rtools40), the "~"
+directory is different than in RGui. This is because these shells do set
+the HOME variable (to the usual value), and R inherits that.
+
+For example: when I start R in RGui for Windows I see:
+
+  > normalizePath("~")
+  [1] "C:\\Users\\jeroen\\Documents"
+
+But when I start R or Rterm from the "git for windows" shell we get:
+
+  > normalizePath("~")
+  [1] "C:\\Users\\jeroen"
+
+An ambiguous home directory is obviously going to break R code that
+refers to paths in your home.
+
+Because these problems affect all Windows users, I think the benefits
+of fixing the default behavior easily outweigh the
+backward-compatibility and "there is a documented workaround"
+arguments.
+
+
+From @teve@h@roz @end|ng |rom gm@||@com  Sun Jul 25 12:17:59 2021
+From: @teve@h@roz @end|ng |rom gm@||@com (Steve Haroz)
+Date: Sun, 25 Jul 2021 05:17:59 -0500
+Subject: [Rd] Feature request: Change default library path on Windows
+In-Reply-To: <CABFfbXvEQGejh069Ni7UZKub7UPA26QfvcH6waPcw+Z1jGSMMA@mail.gmail.com>
+References: <CAJhjiQmEP6Rw_jM8PEz4gD1VXWWW9E0p7Pw31dyk4TQsEPJRdw@mail.gmail.com>
+ <CABFfbXvEQGejh069Ni7UZKub7UPA26QfvcH6waPcw+Z1jGSMMA@mail.gmail.com>
+Message-ID: <CAJhjiQmLUqHJW8PFGdqJU1T3cYX7bQQ7-6DRb34UZ_r7vKqBbw@mail.gmail.com>
+
+> I think the benefits of fixing the default behavior easily outweigh the
+> backward-compatibility and "there is a documented workaround"
+> arguments.
+
+Exactly. This is an accessibility issue and a serious barrier for some
+beginners. It's possible to work around the error message, but users
+should not have to do a workaround the very first time they install a
+couple libraries.
+Many users synching with one of several popular cloud services and
+many users whose Documents folder is managed by a Network IT policy
+will run into this issue.
+
+Moving the R libraries from USER/Documents/R to USER/R will help avoid
+"attrition" of beginners.
+
+-Steve
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sun Jul 25 15:31:55 2021
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sun, 25 Jul 2021 09:31:55 -0400
+Subject: [Rd] Feature request: Change default library path on Windows
+In-Reply-To: <CAJhjiQmLUqHJW8PFGdqJU1T3cYX7bQQ7-6DRb34UZ_r7vKqBbw@mail.gmail.com>
+References: <CAJhjiQmEP6Rw_jM8PEz4gD1VXWWW9E0p7Pw31dyk4TQsEPJRdw@mail.gmail.com>
+ <CABFfbXvEQGejh069Ni7UZKub7UPA26QfvcH6waPcw+Z1jGSMMA@mail.gmail.com>
+ <CAJhjiQmLUqHJW8PFGdqJU1T3cYX7bQQ7-6DRb34UZ_r7vKqBbw@mail.gmail.com>
+Message-ID: <b09f5373-4d0e-64d7-1d5e-91e948e12a28@gmail.com>
+
+On 25/07/2021 6:17 a.m., Steve Haroz wrote:
+>> I think the benefits of fixing the default behavior easily outweigh the
+>> backward-compatibility and "there is a documented workaround"
+>> arguments.
+> 
+> Exactly. This is an accessibility issue and a serious barrier for some
+> beginners. It's possible to work around the error message, but users
+> should not have to do a workaround the very first time they install a
+> couple libraries.
+> Many users synching with one of several popular cloud services and
+> many users whose Documents folder is managed by a Network IT policy
+> will run into this issue.
+> 
+> Moving the R libraries from USER/Documents/R to USER/R will help avoid
+> "attrition" of beginners.
+
+Shouldn't it be in one of the AppData directories?  (I'm not sure of 
+this; Windows guidelines for file locations are not easy to find, and 
+change between versions.)
+
+Duncan Murdoch
+
+
+From @teve@h@roz @end|ng |rom gm@||@com  Sun Jul 25 15:54:04 2021
+From: @teve@h@roz @end|ng |rom gm@||@com (Steve Haroz)
+Date: Sun, 25 Jul 2021 08:54:04 -0500
+Subject: [Rd] Feature request: Change default library path on Windows
+In-Reply-To: <b09f5373-4d0e-64d7-1d5e-91e948e12a28@gmail.com>
+References: <CAJhjiQmEP6Rw_jM8PEz4gD1VXWWW9E0p7Pw31dyk4TQsEPJRdw@mail.gmail.com>
+ <CABFfbXvEQGejh069Ni7UZKub7UPA26QfvcH6waPcw+Z1jGSMMA@mail.gmail.com>
+ <CAJhjiQmLUqHJW8PFGdqJU1T3cYX7bQQ7-6DRb34UZ_r7vKqBbw@mail.gmail.com>
+ <b09f5373-4d0e-64d7-1d5e-91e948e12a28@gmail.com>
+Message-ID: <CAJhjiQnbggTG_7Hicp1PgbujhrJ5FW8mPRAgb7YhhpSPOx5syw@mail.gmail.com>
+
+> Shouldn't it be in one of the AppData directories?
+
+I asked that same question on twitter. Here was a response
+(https://twitter.com/bmwiernik/status/1419033079495147522):
+* But it's not for files that should be user-accessible, like a
+library (cf. Zotero has preferences in AppData , but library files in
+%USERPROFILE%/Zotero)
+* So, for example, in R's case it could make sense for the core
+packages to be installed in %APPDATA%/R/R-4.1.0/library" rather than
+"C:/Program Files/R/R-4.1.0/library" (either is fairly common), but
+user packages should be somewhere more accessible.
+
+Here is a quote from
+https://docs.microsoft.com/en-us/windows/apps/design/app-settings/store-and-retrieve-app-data:
+"App data is mutable data that is created and managed by a specific
+app. It includes runtime state, app settings, user preferences,
+reference content (such as the dictionary definitions in a dictionary
+app), and other settings"
+I don't think libraries fall into the categories of state or settings.
+
+-Steve Haroz
+
+
+From ggrothend|eck @end|ng |rom gm@||@com  Sun Jul 25 16:16:41 2021
+From: ggrothend|eck @end|ng |rom gm@||@com (Gabor Grothendieck)
+Date: Sun, 25 Jul 2021 10:16:41 -0400
+Subject: [Rd] Feature request: Change default library path on Windows
+In-Reply-To: <CAJhjiQmEP6Rw_jM8PEz4gD1VXWWW9E0p7Pw31dyk4TQsEPJRdw@mail.gmail.com>
+References: <CAJhjiQmEP6Rw_jM8PEz4gD1VXWWW9E0p7Pw31dyk4TQsEPJRdw@mail.gmail.com>
+Message-ID: <CAP01uRkVmhXZ=pixVqJNM51kJr6gNHn+z0UA56QCdXj5E_cUpA@mail.gmail.com>
+
+At the very least it would be nice if there were a function that displays all
+the locations/paths currently being used in R.
+
+On Sat, Jul 24, 2021 at 6:15 PM Steve Haroz <steve.haroz at gmail.com> wrote:
+>
+> Hello,
+>
+> I'd like to propose moving the default library install location on Windows from:
+> %USERPROFILE%/Documents/R
+> to some other location such as:
+> %USERPROFILE%/R
+>
+> For many users the Documents folder is backed up or synchronized.
+> Installing libraries thrashes Documents, and it causes synchronization
+> issues with Dropbox (I confirm this one), OneDrive, and users with
+> Network IT policies.
+>
+> The vast majority of R users won't touch that folder and don't need it
+> backed up. And, its contents are not really "documents".
+>
+> There are many blog posts and websites with people complaining about
+> it or offering workarounds that involve hand editing setting and
+> environment files, which reduces R's usability and accessibility.
+> * https://community.rstudio.com/t/help-regarding-package-installation-renviron-rprofile-r-libs-r-libs-site-and-r-libs-user-oh-my/13888/5
+> * https://accelebrate.com/library/how-to-articles/r-rstudio-library
+> * https://community.rstudio.com/t/r-studio-library-installation-directory/30725/2
+> * https://twitter.com/sharoz/status/1418712098444546057
+> * https://twitter.com/JoeHilgard/status/1419025358070878210
+>
+> This change should not interfere with any project environment managers
+> like renv. It should just change the global default for Windows R
+> users.
+> Also, I believe that on Mac it is not in Documents, but it's in the
+> equivalent of %USERPROFILE%/R.
+>
+> Thanks,
+> Steve Haroz
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+
+-- 
+Statistics & Software Consulting
+GKX Group, GKX Associates Inc.
+tel: 1-877-GKX-GROUP
+email: ggrothendieck at gmail.com
+
+
+From g@bembecker @end|ng |rom gm@||@com  Sun Jul 25 22:14:42 2021
+From: g@bembecker @end|ng |rom gm@||@com (Gabriel Becker)
+Date: Sun, 25 Jul 2021 13:14:42 -0700
+Subject: [Rd] Feature request: Change default library path on Windows
+In-Reply-To: <CAJhjiQnbggTG_7Hicp1PgbujhrJ5FW8mPRAgb7YhhpSPOx5syw@mail.gmail.com>
+References: <CAJhjiQmEP6Rw_jM8PEz4gD1VXWWW9E0p7Pw31dyk4TQsEPJRdw@mail.gmail.com>
+ <CABFfbXvEQGejh069Ni7UZKub7UPA26QfvcH6waPcw+Z1jGSMMA@mail.gmail.com>
+ <CAJhjiQmLUqHJW8PFGdqJU1T3cYX7bQQ7-6DRb34UZ_r7vKqBbw@mail.gmail.com>
+ <b09f5373-4d0e-64d7-1d5e-91e948e12a28@gmail.com>
+ <CAJhjiQnbggTG_7Hicp1PgbujhrJ5FW8mPRAgb7YhhpSPOx5syw@mail.gmail.com>
+Message-ID: <CAD4oTHECfgyH7WL9gtJ3i=wCLE3QJ3kEnsimB1B4ndrijdFnaQ@mail.gmail.com>
+
+On Sun, Jul 25, 2021, 6:54 AM Steve Haroz <steve.haroz at gmail.com> wrote:
+
+> > Shouldn't it be in one of the AppData directories?
+>
+> I asked that same question on twitter. Here was a response
+> (https://twitter.com/bmwiernik/status/1419033079495147522):
+> * But it's not for files that should be user-accessible, like a
+> library (cf. Zotero has preferences in AppData , but library files in
+> %USERPROFILE%/Zotero)
+> * So, for example, in R's case it could make sense for the core
+> packages to be installed in %APPDATA%/R/R-4.1.0/library" rather than
+> "C:/Program Files/R/R-4.1.0/library" (either is fairly common), but
+> user packages should be somewhere more accessible.
+>
+> Here is a quote from
+>
+> https://docs.microsoft.com/en-us/windows/apps/design/app-settings/store-and-retrieve-app-data
+> :
+> "App data is mutable data that is created and managed by a specific
+> app. It includes runtime state, app settings, user preferences,
+> reference content (such as the dictionary definitions in a dictionary
+> app), and other settings"
+> I don't think libraries fall into the categories of state or settings.
+>
+
+Well, no,  but installed, and thus available for use by scripts, extension
+packages are somewhat more comparable to dictionary definitions in in a
+dictionary app.
+
+They seem fairly analogous, in fact. Packages are essentially dictionaries
+of available functions that scripts (equivalent roughly to text documents
+here) can call.
+
+That said I dont have a super strong opinion and don't use windows, just
+pointing out that its not clear this would violate the intent of the cited
+guidance.
+
+Another option would be to allow users to set the default library location
+from within the windows installer (if you can't already).
+
+~G
+
+
+
+
+> -Steve Haroz
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From @teve@h@roz @end|ng |rom gm@||@com  Sun Jul 25 22:33:31 2021
+From: @teve@h@roz @end|ng |rom gm@||@com (Steve Haroz)
+Date: Sun, 25 Jul 2021 15:33:31 -0500
+Subject: [Rd] Feature request: Change default library path on Windows
+In-Reply-To: <CAD4oTHECfgyH7WL9gtJ3i=wCLE3QJ3kEnsimB1B4ndrijdFnaQ@mail.gmail.com>
+References: <CAJhjiQmEP6Rw_jM8PEz4gD1VXWWW9E0p7Pw31dyk4TQsEPJRdw@mail.gmail.com>
+ <CABFfbXvEQGejh069Ni7UZKub7UPA26QfvcH6waPcw+Z1jGSMMA@mail.gmail.com>
+ <CAJhjiQmLUqHJW8PFGdqJU1T3cYX7bQQ7-6DRb34UZ_r7vKqBbw@mail.gmail.com>
+ <b09f5373-4d0e-64d7-1d5e-91e948e12a28@gmail.com>
+ <CAJhjiQnbggTG_7Hicp1PgbujhrJ5FW8mPRAgb7YhhpSPOx5syw@mail.gmail.com>
+ <CAD4oTHECfgyH7WL9gtJ3i=wCLE3QJ3kEnsimB1B4ndrijdFnaQ@mail.gmail.com>
+Message-ID: <CAJhjiQmczMM-zGi2JBfFhGrynet56wZE533DSQo6QcPrb30Y3Q@mail.gmail.com>
+
+> That said I dont have a super strong opinion
+Neither do I. As long as it's somewhere other than USER/Documents
+
+> Another option would be to allow users to set the default library location from within the windows installer (if you can't already).
+Currently, there is no option during install, but that is a separate issue.
+I'm more concerned with the default location rather than how to change
+it. Users won't know that the current default (User/Documents) is
+incompatible with their cloud service until after they've installed R
+and tried adding libraries.
+
+-Steve
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sun Jul 25 23:56:24 2021
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sun, 25 Jul 2021 17:56:24 -0400
+Subject: [Rd] Feature request: Change default library path on Windows
+In-Reply-To: <CAJhjiQnbggTG_7Hicp1PgbujhrJ5FW8mPRAgb7YhhpSPOx5syw@mail.gmail.com>
+References: <CAJhjiQmEP6Rw_jM8PEz4gD1VXWWW9E0p7Pw31dyk4TQsEPJRdw@mail.gmail.com>
+ <CABFfbXvEQGejh069Ni7UZKub7UPA26QfvcH6waPcw+Z1jGSMMA@mail.gmail.com>
+ <CAJhjiQmLUqHJW8PFGdqJU1T3cYX7bQQ7-6DRb34UZ_r7vKqBbw@mail.gmail.com>
+ <b09f5373-4d0e-64d7-1d5e-91e948e12a28@gmail.com>
+ <CAJhjiQnbggTG_7Hicp1PgbujhrJ5FW8mPRAgb7YhhpSPOx5syw@mail.gmail.com>
+Message-ID: <522686cd-645d-4a62-9dcf-5f701f3f9ab1@gmail.com>
+
+On 25/07/2021 9:54 a.m., Steve Haroz wrote:
+>> Shouldn't it be in one of the AppData directories?
+> 
+> I asked that same question on twitter. Here was a response
+> (https://twitter.com/bmwiernik/status/1419033079495147522):
+> * But it's not for files that should be user-accessible, like a
+> library (cf. Zotero has preferences in AppData , but library files in
+> %USERPROFILE%/Zotero)
+> * So, for example, in R's case it could make sense for the core
+> packages to be installed in %APPDATA%/R/R-4.1.0/library" rather than
+> "C:/Program Files/R/R-4.1.0/library" (either is fairly common), but
+> user packages should be somewhere more accessible.
+> 
+> Here is a quote from
+> https://docs.microsoft.com/en-us/windows/apps/design/app-settings/store-and-retrieve-app-data:
+> "App data is mutable data that is created and managed by a specific
+> app. It includes runtime state, app settings, user preferences,
+> reference content (such as the dictionary definitions in a dictionary
+> app), and other settings"
+> I don't think libraries fall into the categories of state or settings.
+
+I saw that link, and like you and Gabe, found it somewhat ambiguous.
+
+I don't know bmwiernik, but from the sound of it, he doesn't speak for 
+Microsoft.
+
+So I would say that I still believe Microsoft doesn't give clear 
+guidance for this.  Yes, %USERPROFILE%/R has some non-Microsoft 
+precedents, but that's irrelevant.  This is an issue to take up with MS, 
+not with R.  Let them describe *clearly* what they want, and R will 
+(eventually) do it (but probably not before they've changed their clear 
+guidance).
+
+Duncan Murdoch
+
+P.S. I am a former member of R Core who did Windows support.  I now 
+detest that OS.  I suspect nobody who is still on R Core doesn't detest it.
+
+
+From @vr@h@m@@d|er @end|ng |rom gm@||@com  Mon Jul 26 00:33:13 2021
+From: @vr@h@m@@d|er @end|ng |rom gm@||@com (Avraham Adler)
+Date: Sun, 25 Jul 2021 18:33:13 -0400
+Subject: [Rd] Feature request: Change default library path on Windows
+In-Reply-To: <522686cd-645d-4a62-9dcf-5f701f3f9ab1@gmail.com>
+References: <CAJhjiQmEP6Rw_jM8PEz4gD1VXWWW9E0p7Pw31dyk4TQsEPJRdw@mail.gmail.com>
+ <CABFfbXvEQGejh069Ni7UZKub7UPA26QfvcH6waPcw+Z1jGSMMA@mail.gmail.com>
+ <CAJhjiQmLUqHJW8PFGdqJU1T3cYX7bQQ7-6DRb34UZ_r7vKqBbw@mail.gmail.com>
+ <b09f5373-4d0e-64d7-1d5e-91e948e12a28@gmail.com>
+ <CAJhjiQnbggTG_7Hicp1PgbujhrJ5FW8mPRAgb7YhhpSPOx5syw@mail.gmail.com>
+ <522686cd-645d-4a62-9dcf-5f701f3f9ab1@gmail.com>
+Message-ID: <CAL6gwnKHNyaiQbgt27Vty7aNhSgHsFkJ=hb56kZp2vUVK_KE2w@mail.gmail.com>
+
+On Sun, Jul 25, 2021 at 5:56 PM Duncan Murdoch <murdoch.duncan at gmail.com>
+wrote:
+
+> On 25/07/2021 9:54 a.m., Steve Haroz wrote:
+> >> Shouldn't it be in one of the AppData directories?
+> >
+> > I asked that same question on twitter. Here was a response
+> > (https://twitter.com/bmwiernik/status/1419033079495147522):
+> > * But it's not for files that should be user-accessible, like a
+> > library (cf. Zotero has preferences in AppData , but library files in
+> > %USERPROFILE%/Zotero)
+> > * So, for example, in R's case it could make sense for the core
+> > packages to be installed in %APPDATA%/R/R-4.1.0/library" rather than
+> > "C:/Program Files/R/R-4.1.0/library" (either is fairly common), but
+> > user packages should be somewhere more accessible.
+> >
+> > Here is a quote from
+> >
+> https://docs.microsoft.com/en-us/windows/apps/design/app-settings/store-and-retrieve-app-data
+> :
+> > "App data is mutable data that is created and managed by a specific
+> > app. It includes runtime state, app settings, user preferences,
+> > reference content (such as the dictionary definitions in a dictionary
+> > app), and other settings"
+> > I don't think libraries fall into the categories of state or settings.
+>
+> I saw that link, and like you and Gabe, found it somewhat ambiguous.
+>
+> I don't know bmwiernik, but from the sound of it, he doesn't speak for
+> Microsoft.
+>
+> So I would say that I still believe Microsoft doesn't give clear
+> guidance for this.  Yes, %USERPROFILE%/R has some non-Microsoft
+> precedents, but that's irrelevant.  This is an issue to take up with MS,
+> not with R.  Let them describe *clearly* what they want, and R will
+> (eventually) do it (but probably not before they've changed their clear
+> guidance).
+>
+> Duncan Murdoch
+>
+> P.S. I am a former member of R Core who did Windows support.  I now
+> detest that OS.  I suspect nobody who is still on R Core doesn't detest it.
+
+
+
+I remember well and greatly appreciate your work, Dr. Murdoch. As someone
+whose R work must be almost exclusively on Windows due to the nature of my
+employment, I want to once again show appreciation to the members of R Core
+and others, specifically Drs. Liggs and Tierney, and Jeroen Oomes, Dirk
+Eddelbuttel, and the many others who continue to support R for Windows.
+
+Avi
+
+> --
+Sent from Gmail Mobile
+
+	[[alternative HTML version deleted]]
+
+
+From @teve@h@roz @end|ng |rom gm@||@com  Mon Jul 26 00:35:02 2021
+From: @teve@h@roz @end|ng |rom gm@||@com (Steve Haroz)
+Date: Sun, 25 Jul 2021 17:35:02 -0500
+Subject: [Rd] Feature request: Change default library path on Windows
+In-Reply-To: <522686cd-645d-4a62-9dcf-5f701f3f9ab1@gmail.com>
+References: <CAJhjiQmEP6Rw_jM8PEz4gD1VXWWW9E0p7Pw31dyk4TQsEPJRdw@mail.gmail.com>
+ <CABFfbXvEQGejh069Ni7UZKub7UPA26QfvcH6waPcw+Z1jGSMMA@mail.gmail.com>
+ <CAJhjiQmLUqHJW8PFGdqJU1T3cYX7bQQ7-6DRb34UZ_r7vKqBbw@mail.gmail.com>
+ <b09f5373-4d0e-64d7-1d5e-91e948e12a28@gmail.com>
+ <CAJhjiQnbggTG_7Hicp1PgbujhrJ5FW8mPRAgb7YhhpSPOx5syw@mail.gmail.com>
+ <522686cd-645d-4a62-9dcf-5f701f3f9ab1@gmail.com>
+Message-ID: <CAJhjiQnBAucSkeQmONTz1oBDoO4eC=b_0WJVZ=bg89bqw0SYTw@mail.gmail.com>
+
+> So I would say that I still believe Microsoft doesn't give clear
+> guidance for this.
+
+Sure, there is some ambiguity on where MS would prefer these kinds of
+files. But what is clear is that the current location USER/Documents
+is causing a serious issue.
+
+And while we can all understand frustration with Microsoft, Windows
+users represent a major proportion of the R install base. So let's see
+what we can do to help out those users. Changing the default location
+to either USER/R or USER/AppData/Local/R would help a lot of users,
+both beginners and those with moderate experience who switch to a new
+cloud backup.
+
+Microsoft is unlikely to put out new guidance any time soon. And the
+current guidance doesn't seem opposed to putting R libraries in either
+suggested location. So how about we just pick one (I suggest USER/R
+for simplicity) and discuss how to go about making the change?
+
+-Steve
+
+
+From bbo|ker @end|ng |rom gm@||@com  Mon Jul 26 01:23:48 2021
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Sun, 25 Jul 2021 19:23:48 -0400
+Subject: [Rd] Feature request: Change default library path on Windows
+In-Reply-To: <CAJhjiQnBAucSkeQmONTz1oBDoO4eC=b_0WJVZ=bg89bqw0SYTw@mail.gmail.com>
+References: <CAJhjiQmEP6Rw_jM8PEz4gD1VXWWW9E0p7Pw31dyk4TQsEPJRdw@mail.gmail.com>
+ <CABFfbXvEQGejh069Ni7UZKub7UPA26QfvcH6waPcw+Z1jGSMMA@mail.gmail.com>
+ <CAJhjiQmLUqHJW8PFGdqJU1T3cYX7bQQ7-6DRb34UZ_r7vKqBbw@mail.gmail.com>
+ <b09f5373-4d0e-64d7-1d5e-91e948e12a28@gmail.com>
+ <CAJhjiQnbggTG_7Hicp1PgbujhrJ5FW8mPRAgb7YhhpSPOx5syw@mail.gmail.com>
+ <522686cd-645d-4a62-9dcf-5f701f3f9ab1@gmail.com>
+ <CAJhjiQnBAucSkeQmONTz1oBDoO4eC=b_0WJVZ=bg89bqw0SYTw@mail.gmail.com>
+Message-ID: <c8e8bbda-35b4-c61f-46df-91708e1a88d8@gmail.com>
+
+   Given (AFAICS) the absence of any actual R-core members 
+<https://www.r-project.org/contributors.html> chiming into the 
+discussion here, and provided that you think that the issue has been 
+sufficiently discussed, I would say the next step ("how to go about 
+making the change") is to compose & submit a wishlist request to the R 
+bug tracker ...
+   It might also be worth reaching out to/double-checking with Jeroen 
+Ooms (Rtools maintainer and Windows infrastructure expert; I don't know 
+if he has any more formal association with R-core/CRAN ?)
+
+   cheers
+    Ben Bolker
+
+
+On 7/25/21 6:35 PM, Steve Haroz wrote:
+>> So I would say that I still believe Microsoft doesn't give clear
+>> guidance for this.
+> 
+> Sure, there is some ambiguity on where MS would prefer these kinds of
+> files. But what is clear is that the current location USER/Documents
+> is causing a serious issue.
+> 
+> And while we can all understand frustration with Microsoft, Windows
+> users represent a major proportion of the R install base. So let's see
+> what we can do to help out those users. Changing the default location
+> to either USER/R or USER/AppData/Local/R would help a lot of users,
+> both beginners and those with moderate experience who switch to a new
+> cloud backup.
+> 
+> Microsoft is unlikely to put out new guidance any time soon. And the
+> current guidance doesn't seem opposed to putting R libraries in either
+> suggested location. So how about we just pick one (I suggest USER/R
+> for simplicity) and discuss how to go about making the change?
+> 
+> -Steve
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Mon Jul 26 01:30:33 2021
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sun, 25 Jul 2021 19:30:33 -0400
+Subject: [Rd] Feature request: Change default library path on Windows
+In-Reply-To: <c8e8bbda-35b4-c61f-46df-91708e1a88d8@gmail.com>
+References: <CAJhjiQmEP6Rw_jM8PEz4gD1VXWWW9E0p7Pw31dyk4TQsEPJRdw@mail.gmail.com>
+ <CABFfbXvEQGejh069Ni7UZKub7UPA26QfvcH6waPcw+Z1jGSMMA@mail.gmail.com>
+ <CAJhjiQmLUqHJW8PFGdqJU1T3cYX7bQQ7-6DRb34UZ_r7vKqBbw@mail.gmail.com>
+ <b09f5373-4d0e-64d7-1d5e-91e948e12a28@gmail.com>
+ <CAJhjiQnbggTG_7Hicp1PgbujhrJ5FW8mPRAgb7YhhpSPOx5syw@mail.gmail.com>
+ <522686cd-645d-4a62-9dcf-5f701f3f9ab1@gmail.com>
+ <CAJhjiQnBAucSkeQmONTz1oBDoO4eC=b_0WJVZ=bg89bqw0SYTw@mail.gmail.com>
+ <c8e8bbda-35b4-c61f-46df-91708e1a88d8@gmail.com>
+Message-ID: <cdf2b8ad-05ac-4a49-267f-b7cfe7263a11@gmail.com>
+
+On 25/07/2021 7:23 p.m., Ben Bolker wrote:
+>     Given (AFAICS) the absence of any actual R-core members
+> <https://www.r-project.org/contributors.html> chiming into the
+> discussion here, and provided that you think that the issue has been
+> sufficiently discussed, I would say the next step ("how to go about
+> making the change") is to compose & submit a wishlist request to the R
+> bug tracker ...
+
+With a patch attached, it might be accepted.
+
+Duncan Murdoch
+
+>     It might also be worth reaching out to/double-checking with Jeroen
+> Ooms (Rtools maintainer and Windows infrastructure expert; I don't know
+> if he has any more formal association with R-core/CRAN ?)
+> 
+>     cheers
+>      Ben Bolker
+> 
+> 
+> On 7/25/21 6:35 PM, Steve Haroz wrote:
+>>> So I would say that I still believe Microsoft doesn't give clear
+>>> guidance for this.
+>>
+>> Sure, there is some ambiguity on where MS would prefer these kinds of
+>> files. But what is clear is that the current location USER/Documents
+>> is causing a serious issue.
+>>
+>> And while we can all understand frustration with Microsoft, Windows
+>> users represent a major proportion of the R install base. So let's see
+>> what we can do to help out those users. Changing the default location
+>> to either USER/R or USER/AppData/Local/R would help a lot of users,
+>> both beginners and those with moderate experience who switch to a new
+>> cloud backup.
+>>
+>> Microsoft is unlikely to put out new guidance any time soon. And the
+>> current guidance doesn't seem opposed to putting R libraries in either
+>> suggested location. So how about we just pick one (I suggest USER/R
+>> for simplicity) and discuss how to go about making the change?
+>>
+>> -Steve
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From @teve@h@roz @end|ng |rom gm@||@com  Mon Jul 26 01:44:35 2021
+From: @teve@h@roz @end|ng |rom gm@||@com (Steve Haroz)
+Date: Sun, 25 Jul 2021 18:44:35 -0500
+Subject: [Rd] Feature request: Change default library path on Windows
+In-Reply-To: <c8e8bbda-35b4-c61f-46df-91708e1a88d8@gmail.com>
+References: <CAJhjiQmEP6Rw_jM8PEz4gD1VXWWW9E0p7Pw31dyk4TQsEPJRdw@mail.gmail.com>
+ <CABFfbXvEQGejh069Ni7UZKub7UPA26QfvcH6waPcw+Z1jGSMMA@mail.gmail.com>
+ <CAJhjiQmLUqHJW8PFGdqJU1T3cYX7bQQ7-6DRb34UZ_r7vKqBbw@mail.gmail.com>
+ <b09f5373-4d0e-64d7-1d5e-91e948e12a28@gmail.com>
+ <CAJhjiQnbggTG_7Hicp1PgbujhrJ5FW8mPRAgb7YhhpSPOx5syw@mail.gmail.com>
+ <522686cd-645d-4a62-9dcf-5f701f3f9ab1@gmail.com>
+ <CAJhjiQnBAucSkeQmONTz1oBDoO4eC=b_0WJVZ=bg89bqw0SYTw@mail.gmail.com>
+ <c8e8bbda-35b4-c61f-46df-91708e1a88d8@gmail.com>
+Message-ID: <CAJhjiQk6H_Fb=fxKqRmZiZcX+Cb7vSiiDeJnSaJ1t8Fj_Bmyjw@mail.gmail.com>
+
+Thanks Ben. I just sent a request for a bugzilla login.
+Jeroen chimed in earlier in support.
+
+Cheers,
+Steve
+
+
+From d@v|d @end|ng |rom prec|@|onmethod@@guru  Mon Jul 26 10:52:29 2021
+From: d@v|d @end|ng |rom prec|@|onmethod@@guru (David Norris)
+Date: Mon, 26 Jul 2021 08:52:29 +0000
+Subject: [Rd] Progress reporting from parallel::mclapply
+Message-ID: <B039112C-42D0-45E9-BB04-75A54484CA1B@precisionmethods.guru>
+
+The following git diff shows that just a few lines of code suffice to add useful progress reporting to mclapply:
+https://github.com/dcnorris/precautionary/commit/3e561cc8bea7305a03faf000cd21da19d285842f#diff-328c889e85e15d64ac52741999d1afe338d9f299076fe4a7448625301317d887
+
+I've done this in package https://dcnorris.github.io/precautionary/ to support the 'odometer' that you can appreciate by loading the following app:
+https://precision-methodologies.shinyapps.io/EscRisk/
+... and clicking the "CRM" radio button about halfway down on the left.
+
+1. In this application, I report *absolute* progress because it's not knowable in advance what the final total will be. But the more customary type of "% complete" reporting would easily be managed by a 'progreport' function that knows the denominator in advance.
+2. The 'proginit' argument is needed for my application because the initial single-threaded unrolling (to generate partial computations which the parallel workers finish) may yield some completed computations as well.
+
+Would there be interest in discussing modifications to parallel::mclapply along these lines?
+
+Kind regards,
+David Norris
+
+
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue Jul 27 13:12:49 2021
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 27 Jul 2021 13:12:49 +0200
+Subject: [Rd] Feature request: Change default library path on Windows
+In-Reply-To: <CAJhjiQk6H_Fb=fxKqRmZiZcX+Cb7vSiiDeJnSaJ1t8Fj_Bmyjw@mail.gmail.com>
+References: <CAJhjiQmEP6Rw_jM8PEz4gD1VXWWW9E0p7Pw31dyk4TQsEPJRdw@mail.gmail.com>
+ <CABFfbXvEQGejh069Ni7UZKub7UPA26QfvcH6waPcw+Z1jGSMMA@mail.gmail.com>
+ <CAJhjiQmLUqHJW8PFGdqJU1T3cYX7bQQ7-6DRb34UZ_r7vKqBbw@mail.gmail.com>
+ <b09f5373-4d0e-64d7-1d5e-91e948e12a28@gmail.com>
+ <CAJhjiQnbggTG_7Hicp1PgbujhrJ5FW8mPRAgb7YhhpSPOx5syw@mail.gmail.com>
+ <522686cd-645d-4a62-9dcf-5f701f3f9ab1@gmail.com>
+ <CAJhjiQnBAucSkeQmONTz1oBDoO4eC=b_0WJVZ=bg89bqw0SYTw@mail.gmail.com>
+ <c8e8bbda-35b4-c61f-46df-91708e1a88d8@gmail.com>
+ <CAJhjiQk6H_Fb=fxKqRmZiZcX+Cb7vSiiDeJnSaJ1t8Fj_Bmyjw@mail.gmail.com>
+Message-ID: <1973d4dc-b514-2993-5dbc-28668fcaa2ce@gmail.com>
+
+On 7/26/21 1:44 AM, Steve Haroz wrote:
+> Thanks Ben. I just sent a request for a bugzilla login.
+> Jeroen chimed in earlier in support.
+
+Please note this has been reported, discussed and considered already, 
+last time in PR#17842 (though proposing a different replacement for the 
+default).
+
+I think changing the default from user documents to something else would 
+make sense to consider together with some other breaking change for 
+users, not in isolation, if at all. While the change may help users with 
+a quota on the documents directory (e.g. shared on a cloud, backup, 
+etc), it will make it harder to find the library for others, who would 
+not notice the change to the documented behavior, and I assume that 
+would still be a much larger group.
+
+Of course it does not help that it is not clear what the correct 
+location should be now, and certainly there is little hope it won't 
+change again, soon. My understanding is that the choice was originally 
+correct when made, following the Microsoft guidelines.
+
+As discussed here as well, users may choose their own library path 
+(?.libPaths).
+
+The installation location for R itself can be changed e.g. via /DIR 
+option of the installer (see /?). This is useful e.g. when installing R 
+only for the current user (/CURRENTUSER) and it impacts also the 
+location of the library - it is then inside the given tree.
+
+Best
+Tomas
+
+
+
+>
+> Cheers,
+> Steve
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From ru|pb@rr@d@@ @end|ng |rom @@po@pt  Thu Jul 29 08:52:02 2021
+From: ru|pb@rr@d@@ @end|ng |rom @@po@pt (Rui Barradas)
+Date: Thu, 29 Jul 2021 07:52:02 +0100
+Subject: [Rd] Trivial typo in help("browser")
+Message-ID: <7630f255-9f36-377c-26b8-7c11083e4dcd@sapo.pt>
+
+Hello,
+
+R 4.1.0 on Ubuntu 20.04, session info below.
+
+I am not an English  native speaker but in help("browser"), section 
+Arguments, argument expr, there is a wrong verb tense:
+
+"invoked" should be "invoke", right?
+
+expr	
+An expression, which if it evaluates to TRUE the debugger will invoked, 
+otherwise control is returned directly.
+
+
+
+sessionInfo()
+R version 4.1.0 (2021-05-18)
+Platform: x86_64-pc-linux-gnu (64-bit)
+Running under: Ubuntu 20.04.2 LTS
+
+Matrix products: default
+BLAS:   /usr/lib/x86_64-linux-gnu/blas/libblas.so.3.9.0
+LAPACK: /usr/lib/x86_64-linux-gnu/lapack/liblapack.so.3.9.0
+
+locale:
+  [1] LC_CTYPE=pt_PT.UTF-8       LC_NUMERIC=C
+  [3] LC_TIME=pt_PT.UTF-8        LC_COLLATE=pt_PT.UTF-8
+  [5] LC_MONETARY=pt_PT.UTF-8    LC_MESSAGES=pt_PT.UTF-8
+  [7] LC_PAPER=pt_PT.UTF-8       LC_NAME=C
+  [9] LC_ADDRESS=C               LC_TELEPHONE=C
+[11] LC_MEASUREMENT=pt_PT.UTF-8 LC_IDENTIFICATION=C
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base
+
+loaded via a namespace (and not attached):
+[1] compiler_4.1.0
+
+
+
+Thanks to all R Core Team members for their great work for all of us.
+
+Hope this helps,
+
+Rui Barradas
+
+
+From peter@|@ng|e|der @end|ng |rom gm@||@com  Thu Jul 29 08:59:32 2021
+From: peter@|@ng|e|der @end|ng |rom gm@||@com (Peter Langfelder)
+Date: Wed, 28 Jul 2021 23:59:32 -0700
+Subject: [Rd] Trivial typo in help("browser")
+In-Reply-To: <7630f255-9f36-377c-26b8-7c11083e4dcd@sapo.pt>
+References: <7630f255-9f36-377c-26b8-7c11083e4dcd@sapo.pt>
+Message-ID: <CA+hbrhVA2AYVuND_G2R0709MgBALo-2fwsppDkoVqYkV+wf0Yw@mail.gmail.com>
+
+I'm also not a native speaker but my take is that a "be" is missing in
+the sentence and it should read
+
+An expression, which if it evaluates to TRUE the debugger will be invoked,
+otherwise control is returned directly.
+
+On Wed, Jul 28, 2021 at 11:52 PM Rui Barradas <ruipbarradas at sapo.pt> wrote:
+>
+> Hello,
+>
+> R 4.1.0 on Ubuntu 20.04, session info below.
+>
+> I am not an English  native speaker but in help("browser"), section
+> Arguments, argument expr, there is a wrong verb tense:
+>
+> "invoked" should be "invoke", right?
+>
+> expr
+> An expression, which if it evaluates to TRUE the debugger will invoked,
+> otherwise control is returned directly.
+>
+>
+>
+> sessionInfo()
+> R version 4.1.0 (2021-05-18)
+> Platform: x86_64-pc-linux-gnu (64-bit)
+> Running under: Ubuntu 20.04.2 LTS
+>
+> Matrix products: default
+> BLAS:   /usr/lib/x86_64-linux-gnu/blas/libblas.so.3.9.0
+> LAPACK: /usr/lib/x86_64-linux-gnu/lapack/liblapack.so.3.9.0
+>
+> locale:
+>   [1] LC_CTYPE=pt_PT.UTF-8       LC_NUMERIC=C
+>   [3] LC_TIME=pt_PT.UTF-8        LC_COLLATE=pt_PT.UTF-8
+>   [5] LC_MONETARY=pt_PT.UTF-8    LC_MESSAGES=pt_PT.UTF-8
+>   [7] LC_PAPER=pt_PT.UTF-8       LC_NAME=C
+>   [9] LC_ADDRESS=C               LC_TELEPHONE=C
+> [11] LC_MEASUREMENT=pt_PT.UTF-8 LC_IDENTIFICATION=C
+>
+> attached base packages:
+> [1] stats     graphics  grDevices utils     datasets  methods   base
+>
+> loaded via a namespace (and not attached):
+> [1] compiler_4.1.0
+>
+>
+>
+> Thanks to all R Core Team members for their great work for all of us.
+>
+> Hope this helps,
+>
+> Rui Barradas
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Thu Jul 29 09:31:51 2021
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Thu, 29 Jul 2021 09:31:51 +0200
+Subject: [Rd] Trivial typo in help("browser")
+In-Reply-To: <CA+hbrhVA2AYVuND_G2R0709MgBALo-2fwsppDkoVqYkV+wf0Yw@mail.gmail.com>
+References: <7630f255-9f36-377c-26b8-7c11083e4dcd@sapo.pt>
+ <CA+hbrhVA2AYVuND_G2R0709MgBALo-2fwsppDkoVqYkV+wf0Yw@mail.gmail.com>
+Message-ID: <2ef9517c-af72-1cce-e36b-a70206f637ce@gmail.com>
+
+Thanks, fixed now.
+Tomas
+
+On 7/29/21 8:59 AM, Peter Langfelder wrote:
+> I'm also not a native speaker but my take is that a "be" is missing in
+> the sentence and it should read
+>
+> An expression, which if it evaluates to TRUE the debugger will be invoked,
+> otherwise control is returned directly.
+>
+> On Wed, Jul 28, 2021 at 11:52 PM Rui Barradas <ruipbarradas at sapo.pt> wrote:
+>> Hello,
+>>
+>> R 4.1.0 on Ubuntu 20.04, session info below.
+>>
+>> I am not an English  native speaker but in help("browser"), section
+>> Arguments, argument expr, there is a wrong verb tense:
+>>
+>> "invoked" should be "invoke", right?
+>>
+>> expr
+>> An expression, which if it evaluates to TRUE the debugger will invoked,
+>> otherwise control is returned directly.
+>>
+>>
+>>
+>> sessionInfo()
+>> R version 4.1.0 (2021-05-18)
+>> Platform: x86_64-pc-linux-gnu (64-bit)
+>> Running under: Ubuntu 20.04.2 LTS
+>>
+>> Matrix products: default
+>> BLAS:   /usr/lib/x86_64-linux-gnu/blas/libblas.so.3.9.0
+>> LAPACK: /usr/lib/x86_64-linux-gnu/lapack/liblapack.so.3.9.0
+>>
+>> locale:
+>>    [1] LC_CTYPE=pt_PT.UTF-8       LC_NUMERIC=C
+>>    [3] LC_TIME=pt_PT.UTF-8        LC_COLLATE=pt_PT.UTF-8
+>>    [5] LC_MONETARY=pt_PT.UTF-8    LC_MESSAGES=pt_PT.UTF-8
+>>    [7] LC_PAPER=pt_PT.UTF-8       LC_NAME=C
+>>    [9] LC_ADDRESS=C               LC_TELEPHONE=C
+>> [11] LC_MEASUREMENT=pt_PT.UTF-8 LC_IDENTIFICATION=C
+>>
+>> attached base packages:
+>> [1] stats     graphics  grDevices utils     datasets  methods   base
+>>
+>> loaded via a namespace (and not attached):
+>> [1] compiler_4.1.0
+>>
+>>
+>>
+>> Thanks to all R Core Team members for their great work for all of us.
+>>
+>> Hope this helps,
+>>
+>> Rui Barradas
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Jul 29 09:57:53 2021
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 29 Jul 2021 09:57:53 +0200
+Subject: [Rd] Trivial typo in help("browser")
+In-Reply-To: <7630f255-9f36-377c-26b8-7c11083e4dcd@sapo.pt>
+References: <7630f255-9f36-377c-26b8-7c11083e4dcd@sapo.pt>
+Message-ID: <24834.24449.783114.186972@stat.math.ethz.ch>
+
+>>>>> Rui Barradas 
+>>>>>     on Thu, 29 Jul 2021 07:52:02 +0100 writes:
+
+    > Hello,
+
+    > R 4.1.0 on Ubuntu 20.04, session info below.
+
+    > I am not an English native speaker but in help("browser"),
+    > section Arguments, argument expr, there is a wrong verb
+    > tense:
+
+    > "invoked" should be "invoke", right?
+
+    > expr An expression, which if it evaluates to TRUE the
+    > debugger will invoked, otherwise control is returned
+    > directly.
+
+    > sessionInfo()   R version 4.1.0  .....
+
+Thank you, Rui.   Indeed, there's a typo there.
+I claim that it is a missing 'be':  "be invoked" almost surealy
+was intended.
+
+As we are on the R-devel mailing list, however, let's dig and learn a bit more:
+
+Note that the *default*  is  `expr = TRUE`
+which is already a bit "special" for an "expression"..
+
+Let's try to understand what was meant --- NB a strategy I
+strongly recommend even if you're somewhat experienced :
+
+> ff <- function(x) { y <- x^2; browser("in ff():", expr = (y == 4)); y }
+> ff(1)
+[1] 1
+> ff(2)
+Called from: ff(2)
+Browse[1]> debug at #1: y
+Browse[2]> ls.str()
+x :  num 2
+y :  num 4
+Browse[2]> c
+[1] 4
+> ff(3)
+[1] 9
+> 
+
+So indeed, it does behave as I expected.
+A further experiment, play with
+
+   f2 <- function(x, e=1) { y <- x^2; browser("in ff():", expr = e); y }
+
+shows that  'evaluates to TRUE'  is also
+not as precise as it could be, and even "wrong":
+ 'expr = pi'  also behaves as TRUE,  and even
+ 'expr = NA'  behaves the same.
+
+
+I don't know when/how  `expr` was introduced (probably taken
+from 'S / S+' ..), but to me it seems actually somewhat a
+misnomer because in that generalized sense, *every* 
+argument passed to an R function is an "expression".
+Instead, what counts is that a low-level as.logical(expr) is not TRUE.
+
+So, yes, the documentation about `expr` definitely needs to be
+changed.
+
+Unless I get convincing suggestions for improvements, I'll commit
+
+  \item{expr}{a \dQuote{condition}.  By default, and whenever not false
+    after being coerced to \code{\link{logical}}, the debugger will be
+    invoked, otherwise control is returned directly.}
+
+(and also amend the formulation a bit later on the help page
+ where expr is mentioned again).
+
+Martin
+
+
+    > Thanks to all R Core Team members for their great work for
+    > all of us.
+
+    > Hope this helps,
+
+    > Rui Barradas
+
+
+From ru|pb@rr@d@@ @end|ng |rom @@po@pt  Thu Jul 29 11:30:03 2021
+From: ru|pb@rr@d@@ @end|ng |rom @@po@pt (Rui Barradas)
+Date: Thu, 29 Jul 2021 10:30:03 +0100
+Subject: [Rd] Trivial typo in help("browser")
+In-Reply-To: <CA+hbrhVA2AYVuND_G2R0709MgBALo-2fwsppDkoVqYkV+wf0Yw@mail.gmail.com>
+References: <7630f255-9f36-377c-26b8-7c11083e4dcd@sapo.pt>
+ <CA+hbrhVA2AYVuND_G2R0709MgBALo-2fwsppDkoVqYkV+wf0Yw@mail.gmail.com>
+Message-ID: <49b08777-b4e3-3310-7e7c-053fbc49c628@sapo.pt>
+
+Hello,
+
+Thanks, you are absolutely right. I had noticed that last night and then 
+I din't know what happened but it went like that.
+Thanks for the correction.
+
+Rui Barradas
+
+?s 07:59 de 29/07/21, Peter Langfelder escreveu:
+> I'm also not a native speaker but my take is that a "be" is missing in
+> the sentence and it should read
+> 
+> An expression, which if it evaluates to TRUE the debugger will be invoked,
+> otherwise control is returned directly.
+> 
+> On Wed, Jul 28, 2021 at 11:52 PM Rui Barradas <ruipbarradas at sapo.pt> wrote:
+>>
+>> Hello,
+>>
+>> R 4.1.0 on Ubuntu 20.04, session info below.
+>>
+>> I am not an English  native speaker but in help("browser"), section
+>> Arguments, argument expr, there is a wrong verb tense:
+>>
+>> "invoked" should be "invoke", right?
+>>
+>> expr
+>> An expression, which if it evaluates to TRUE the debugger will invoked,
+>> otherwise control is returned directly.
+>>
+>>
+>>
+>> sessionInfo()
+>> R version 4.1.0 (2021-05-18)
+>> Platform: x86_64-pc-linux-gnu (64-bit)
+>> Running under: Ubuntu 20.04.2 LTS
+>>
+>> Matrix products: default
+>> BLAS:   /usr/lib/x86_64-linux-gnu/blas/libblas.so.3.9.0
+>> LAPACK: /usr/lib/x86_64-linux-gnu/lapack/liblapack.so.3.9.0
+>>
+>> locale:
+>>    [1] LC_CTYPE=pt_PT.UTF-8       LC_NUMERIC=C
+>>    [3] LC_TIME=pt_PT.UTF-8        LC_COLLATE=pt_PT.UTF-8
+>>    [5] LC_MONETARY=pt_PT.UTF-8    LC_MESSAGES=pt_PT.UTF-8
+>>    [7] LC_PAPER=pt_PT.UTF-8       LC_NAME=C
+>>    [9] LC_ADDRESS=C               LC_TELEPHONE=C
+>> [11] LC_MEASUREMENT=pt_PT.UTF-8 LC_IDENTIFICATION=C
+>>
+>> attached base packages:
+>> [1] stats     graphics  grDevices utils     datasets  methods   base
+>>
+>> loaded via a namespace (and not attached):
+>> [1] compiler_4.1.0
+>>
+>>
+>>
+>> Thanks to all R Core Team members for their great work for all of us.
+>>
+>> Hope this helps,
+>>
+>> Rui Barradas
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From ru|pb@rr@d@@ @end|ng |rom @@po@pt  Thu Jul 29 11:34:00 2021
+From: ru|pb@rr@d@@ @end|ng |rom @@po@pt (Rui Barradas)
+Date: Thu, 29 Jul 2021 10:34:00 +0100
+Subject: [Rd] Trivial typo in help("browser")
+In-Reply-To: <24834.24449.783114.186972@stat.math.ethz.ch>
+References: <7630f255-9f36-377c-26b8-7c11083e4dcd@sapo.pt>
+ <24834.24449.783114.186972@stat.math.ethz.ch>
+Message-ID: <2dfcb941-1379-787f-286b-d864cc5bcf88@sapo.pt>
+
+Hello,
+
+Double thanks, for the correction and for the lesson.
+In particular, I had never noticed the f2() example's behavior.
+It's always good to learn something new.
+
+Rui Barradas
+
+
+?s 08:57 de 29/07/21, Martin Maechler escreveu:
+>>>>>> Rui Barradas
+>>>>>>      on Thu, 29 Jul 2021 07:52:02 +0100 writes:
+> 
+>      > Hello,
+> 
+>      > R 4.1.0 on Ubuntu 20.04, session info below.
+> 
+>      > I am not an English native speaker but in help("browser"),
+>      > section Arguments, argument expr, there is a wrong verb
+>      > tense:
+> 
+>      > "invoked" should be "invoke", right?
+> 
+>      > expr An expression, which if it evaluates to TRUE the
+>      > debugger will invoked, otherwise control is returned
+>      > directly.
+> 
+>      > sessionInfo()   R version 4.1.0  .....
+> 
+> Thank you, Rui.   Indeed, there's a typo there.
+> I claim that it is a missing 'be':  "be invoked" almost surealy
+> was intended.
+> 
+> As we are on the R-devel mailing list, however, let's dig and learn a bit more:
+> 
+> Note that the *default*  is  `expr = TRUE`
+> which is already a bit "special" for an "expression"..
+> 
+> Let's try to understand what was meant --- NB a strategy I
+> strongly recommend even if you're somewhat experienced :
+> 
+>> ff <- function(x) { y <- x^2; browser("in ff():", expr = (y == 4)); y }
+>> ff(1)
+> [1] 1
+>> ff(2)
+> Called from: ff(2)
+> Browse[1]> debug at #1: y
+> Browse[2]> ls.str()
+> x :  num 2
+> y :  num 4
+> Browse[2]> c
+> [1] 4
+>> ff(3)
+> [1] 9
+>>
+> 
+> So indeed, it does behave as I expected.
+> A further experiment, play with
+> 
+>     f2 <- function(x, e=1) { y <- x^2; browser("in ff():", expr = e); y }
+> 
+> shows that  'evaluates to TRUE'  is also
+> not as precise as it could be, and even "wrong":
+>   'expr = pi'  also behaves as TRUE,  and even
+>   'expr = NA'  behaves the same.
+> 
+> 
+> I don't know when/how  `expr` was introduced (probably taken
+> from 'S / S+' ..), but to me it seems actually somewhat a
+> misnomer because in that generalized sense, *every*
+> argument passed to an R function is an "expression".
+> Instead, what counts is that a low-level as.logical(expr) is not TRUE.
+> 
+> So, yes, the documentation about `expr` definitely needs to be
+> changed.
+> 
+> Unless I get convincing suggestions for improvements, I'll commit
+> 
+>    \item{expr}{a \dQuote{condition}.  By default, and whenever not false
+>      after being coerced to \code{\link{logical}}, the debugger will be
+>      invoked, otherwise control is returned directly.}
+> 
+> (and also amend the formulation a bit later on the help page
+>   where expr is mentioned again).
+> 
+> Martin
+> 
+> 
+>      > Thanks to all R Core Team members for their great work for
+>      > all of us.
+> 
+>      > Hope this helps,
+> 
+>      > Rui Barradas
+>
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Thu Jul 29 14:50:09 2021
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Thu, 29 Jul 2021 14:50:09 +0200
+Subject: [Rd] Check if (embedded) R has been initialized from C code
+In-Reply-To: <1McpJg-1lJsPy0vRK-00ZyiV@mail.gmx.net>
+References: <1McpJg-1lJsPy0vRK-00ZyiV@mail.gmx.net>
+Message-ID: <20a777fc-63dc-a6e4-520f-f7547572ace7@gmail.com>
+
+Dear Matthias,
+
+On 6/17/21 8:25 AM, Matthias Gondan wrote:
+> Dear R developers,
+>
+> (This email has also been sent to R-help before, but I was told that it doesn?t really fit there)
+>
+> I am currently trying to write a piece of C code that uses ?embedded R?, and for specific reasons*, I cannot keep track if R already has been initialized. So the code snippet looks like this:
+>
+> LibExtern char *R_TempDir;
+>
+> if(R_TempDir == NULL)
+>  ? ? ?throw exception R not initialized?
+>
+> I have seen that the source code of Rf_initialize_R itself checks if it is ivoked twice (num_initialized), but this latter flag does not seem to accessible, or is it?
+No, it is static (private) in the file.
+>
+> int Rf_initialize_R(int ac, char **av)
+> {
+>  ? ? int i, ioff = 1, j;
+>  ? ? Rboolean useX11 = TRUE, useTk = FALSE;
+>  ? ? char *p, msg[1024], cmdlines[10000], **avv;
+>  ? ? structRstart rstart;
+>  ? ? Rstart Rp = &rstart;
+>  ? ? Rboolean force_interactive = FALSE;
+>
+>  ? ? if (num_initialized++) {
+>  ? ? ? ? fprintf(stderr, "%s", "R is already initialized\n");
+>  ? ? ? ? exit(1);
+>  ? ? }
+>
+>
+> Is the test of the TempDir a good substitute, or should I choose another solution? Having said this, it may be a good idea to expose a function Rf_R_initialized that performs such a test.
+
+I think using R_TempDir should be fine (as long as you are not setting 
+it yourself to a non-NULL value, which would be permitted by the 
+documentation).
+
+The documentation does not say explicitly that R_TempDir is actually set 
+to a non-NULL value by R, so technically speaking one should not be 
+relying on that, but in case of embedding there are probably a number of 
+"worse" assumptions about R behavior one makes. In the unlikely case 
+that this behavior would change, and R_TempDir remain NULL after R 
+initialization, your program would trigger repeated initialization and 
+exit, so that would be immediately discovered by testing. So I think 
+this is reasonably safe.
+
+> Thank you for your consideration.
+>
+> Best regards,
+>
+> Matthias
+>
+> *The use case is an R library that connects to swi-prolog and allows the ?embedded? swi-prolog to establish an additional reverse connection to R. In that case, i.e., R -> Prolog -> R, I do not want to initialize R a second time. But since the interaction may also start from the swi-prolog system (and in the latter case, R needs to be initialized), I need a function such as the one mentioned here.
+
+In principle, it would be easy to add a function to tell if R has been 
+initialized, but I am not sure I fully understand the problem, why is it 
+needed.
+
+You have a Prolog library, which can be used from an R package (then 
+should not initialize R), or from some other application (then should 
+initialize R)? And you can modify the code of the Prolog library, but 
+would prefer not to require that the Prolog library is being told 
+whether it is linked to an R package, or not? And you would prefer not 
+having to modify that other application to initialize R before calling 
+the Prolog library, because, the library may not use R? So - having a 
+flag in the Prolog library, set from the R package wrapper/external 
+application - telling if used as an R package or not - would not work 
+for you?
+
+Best
+Tomas
+
+>
+>
+>
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Thu Jul 29 16:20:20 2021
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Thu, 29 Jul 2021 10:20:20 -0400
+Subject: [Rd] Suggested change to cor.test.default
+Message-ID: <f4737247-6251-2529-6a78-7dab2b6b19dc@stats.uwo.ca>
+
+The stats:::cor.test.default function has these tests near the start:
+
+ ??? if (length(x) != length(y))
+ ??????? stop("'x' and 'y' must have the same length")
+ ??? if (!is.numeric(x))
+ ??????? stop("'x' must be a numeric vector")
+ ??? if (!is.numeric(y))
+ ??????? stop("'y' must be a numeric vector")
+
+I'd like to suggest putting the first test in last place instead, which 
+would make some user errors easier to diagnose.? For example, if I 
+misspell one of the column names, I get
+
+ ? df <- data.frame(x = 1:10, y = 1:10)
+ ? cor.test(df$X, df$y)
+ ? #> Error in cor.test.default(df$X, df$y): 'x' and 'y' must have the 
+same length
+
+because df$X is NULL.? It would be more obvious what went wrong if the 
+error said
+
+ ? Error in cor.test.default(df$X, df$y):? 'x' must be a numeric vector
+
+Duncan Murdoch
+
+P.S. An even more friendly error message would give the actual 
+expression for x instead, i.e.
+
+ ? Error in cor.test.default(df$X, df$y):? 'df$X' is not a numeric vector
+
+but that's not the style of error used in most stats functions.
+
+
+From m@tth|@@-gond@n @end|ng |rom gmx@de  Thu Jul 29 15:23:36 2021
+From: m@tth|@@-gond@n @end|ng |rom gmx@de (Matthias Gondan)
+Date: Thu, 29 Jul 2021 15:23:36 +0200
+Subject: [Rd] Check if (embedded) R has been initialized from C code
+In-Reply-To: <20a777fc-63dc-a6e4-520f-f7547572ace7@gmail.com>
+References: <1McpJg-1lJsPy0vRK-00ZyiV@mail.gmx.net>
+ <20a777fc-63dc-a6e4-520f-f7547572ace7@gmail.com>
+Message-ID: <1N7R1J-1nGZfz0sbl-017ioB@mail.gmx.net>
+
+Dear Tomas,
+
+It?s exactly how you describe it. And, you?re right, the R library can tell SWI-prolog that R has been initialized, so there?s no need to expose a function such as Rf_initialized().
+
+Best wishes,
+
+Matthias
+
+
+
+Von: Tomas Kalibera
+Gesendet: Donnerstag, 29. Juli 2021 14:50
+An: Matthias Gondan; r-devel at r-project.org
+Betreff: Re: [Rd] Check if (embedded) R has been initialized from C code
+
+Dear Matthias,
+
+On 6/17/21 8:25 AM, Matthias Gondan wrote:
+> Dear R developers,
+>
+> (This email has also been sent to R-help before, but I was told that it doesn?t really fit there)
+>
+> I am currently trying to write a piece of C code that uses ?embedded R?, and for specific reasons*, I cannot keep track if R already has been initialized. So the code snippet looks like this:
+>
+> LibExtern char *R_TempDir;
+>
+> if(R_TempDir == NULL)
+>  ? ? ?throw exception R not initialized?
+>
+> I have seen that the source code of Rf_initialize_R itself checks if it is ivoked twice (num_initialized), but this latter flag does not seem to accessible, or is it?
+No, it is static (private) in the file.
+>
+> int Rf_initialize_R(int ac, char **av)
+> {
+>  ? ? int i, ioff = 1, j;
+>  ? ? Rboolean useX11 = TRUE, useTk = FALSE;
+>  ? ? char *p, msg[1024], cmdlines[10000], **avv;
+>  ? ? structRstart rstart;
+>  ? ? Rstart Rp = &rstart;
+>  ? ? Rboolean force_interactive = FALSE;
+>
+>  ? ? if (num_initialized++) {
+>  ? ? ? ? fprintf(stderr, "%s", "R is already initialized\n");
+>  ? ? ? ? exit(1);
+>  ? ? }
+>
+>
+> Is the test of the TempDir a good substitute, or should I choose another solution? Having said this, it may be a good idea to expose a function Rf_R_initialized that performs such a test.
+
+I think using R_TempDir should be fine (as long as you are not setting 
+it yourself to a non-NULL value, which would be permitted by the 
+documentation).
+
+The documentation does not say explicitly that R_TempDir is actually set 
+to a non-NULL value by R, so technically speaking one should not be 
+relying on that, but in case of embedding there are probably a number of 
+"worse" assumptions about R behavior one makes. In the unlikely case 
+that this behavior would change, and R_TempDir remain NULL after R 
+initialization, your program would trigger repeated initialization and 
+exit, so that would be immediately discovered by testing. So I think 
+this is reasonably safe.
+
+> Thank you for your consideration.
+>
+> Best regards,
+>
+> Matthias
+>
+> *The use case is an R library that connects to swi-prolog and allows the ?embedded? swi-prolog to establish an additional reverse connection to R. In that case, i.e., R -> Prolog -> R, I do not want to initialize R a second time. But since the interaction may also start from the swi-prolog system (and in the latter case, R needs to be initialized), I need a function such as the one mentioned here.
+
+In principle, it would be easy to add a function to tell if R has been 
+initialized, but I am not sure I fully understand the problem, why is it 
+needed.
+
+You have a Prolog library, which can be used from an R package (then 
+should not initialize R), or from some other application (then should 
+initialize R)? And you can modify the code of the Prolog library, but 
+would prefer not to require that the Prolog library is being told 
+whether it is linked to an R package, or not? And you would prefer not 
+having to modify that other application to initialize R before calling 
+the Prolog library, because, the library may not use R? So - having a 
+flag in the Prolog library, set from the R package wrapper/external 
+application - telling if used as an R package or not - would not work 
+for you?
+
+Best
+Tomas
+
+>
+>
+>
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+	[[alternative HTML version deleted]]
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Thu Jul 29 17:48:38 2021
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Thu, 29 Jul 2021 17:48:38 +0200
+Subject: [Rd] \Sexpr[results=hide] produces \verb{ newlines }
+Message-ID: <20210729174838.658c0da7@trisector>
+
+Hello R-devel!
+
+Here's an Rd file that produces a large empty area when converted to
+HTML:
+
+\name{repro}
+\title{title}
+\description{description}
+\details{
+  Hello
+  \Sexpr[stage=build,results=hide]{
+    invisible(NULL)
+    invisible(NULL)
+    invisible(NULL)
+    invisible(NULL)
+    invisible(NULL)
+    invisible(NULL)
+    invisible(NULL)
+    invisible(NULL)
+    invisible(NULL)
+    invisible(NULL)
+    invisible(NULL)
+    "" # workaround: remove results=hide and use the return value
+  }
+}
+
+This seems to happen because \Sexpr gets expanded to \verb{ as many
+newlines as there were code lines } by processRdChunk, by first storing
+a newline for each line of the code:
+
+https://github.com/wch/r-source/blob/d7a4ed9aaeee1f57c3c165aefa08b8d69dfe59fa/src/library/tools/R/RdConv2.R#L257
+
+...and then the newlines get translated to \verb because res is
+not empty:
+
+https://github.com/wch/r-source/blob/d7a4ed9aaeee1f57c3c165aefa08b8d69dfe59fa/src/library/tools/R/RdConv2.R#L332
+
+As long as Rd above doesn't stem from my misuse of \Sexpr, I would like
+to propose the following patch, which seems to fix the problem:
+
+Index: src/library/tools/R/RdConv2.R
+===================================================================
+--- src/library/tools/R/RdConv2.R	(revision 80675)
++++ src/library/tools/R/RdConv2.R	(working copy)
+@@ -329,6 +329,8 @@
+ 	    }
+ 	} else if (options$results == "text")
+ 	    res <- tagged(err, "TEXT")
++	else if (options$results == "hide")
++	    res <- tagged("", "COMMENT")
+ 	else if (length(res)) {
+ 	    res <- lapply(as.list(res), function(x) tagged(x, "VERB"))
+ 	    res <- tagged(res, "\\verb")
+
+There are probably other ways of fixing this problem, e.g. by only
+populating res if options$results != "hide" or only appending newlines
+if res is non-empty.
+
+-- 
+Best regards,
+Ivan
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Sat Jul 31 20:18:15 2021
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Sat, 31 Jul 2021 20:18:15 +0200
+Subject: [Rd] Rd2txt: frmt() overestimates width of multi-line arguments
+Message-ID: <20210731201815.1e988954@trisector>
+
+Hi!
+
+I wanted to use the second argument of \figure{}{} to provide a
+pseudo-graphic rendition of the image and noticed that it's not centered
+despite the intent to do so is visible in the code.
+
+I traced it to a line in the frmt() function. It seems to me that
+frmt() doesn't expect its input to consist of more than one line
+because it sums the lengths of its components. A similar problem could
+be observed in a \deqn{} consisting of multiple relatively short lines:
+it would not be centered despite the available space.
+
+A fix would be to change the width calculation:
+
+Index: src/library/tools/R/Rd2txt.R
+===================================================================
+--- src/library/tools/R/Rd2txt.R        (revision 80675)
++++ src/library/tools/R/Rd2txt.R        (working copy)
+@@ -356,7 +356,7 @@
+     ## Use display widths as used by cat not print.
+     frmt <- function(x, justify="left", width = 0L) {
+         justify <- match.arg(justify, c("left", "right", "centre", "none"))
+-        w <- sum(nchar(x, "width")) # copes with 0-length x
++        w <- max(nchar(c("", x), "width")) # copes with 0-length x
+         if(w < width && justify != "none") {
+             excess <- width - w
+             left <- right <- 0L
+
+I would like to clarify: should such small problems be raised first in
+R-devel for discussion (e.g. whether it should be considered a bug)? Or
+should I just file a bug in the Bugzilla and attach a patch there?
+
+-- 
+Best regards,
+Ivan
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Sat Jul 31 22:14:17 2021
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Sat, 31 Jul 2021 22:14:17 +0200
+Subject: [Rd] \Sexpr[results=hide] produces \verb{ newlines }
+In-Reply-To: <20210729174838.658c0da7@trisector>
+References: <20210729174838.658c0da7@trisector>
+Message-ID: <24837.44825.296961.407663@stat.math.ethz.ch>
+
+>>>>> Ivan Krylov 
+>>>>>     on Thu, 29 Jul 2021 17:48:38 +0200 writes:
+
+> Hello R-devel!
+> 
+> Here's an Rd file that produces a large empty area when converted to
+> HTML:
+> 
+> \name{repro}
+> \title{title}
+> \description{description}
+> \details{
+>   Hello
+>   \Sexpr[stage=build,results=hide]{
+>     invisible(NULL)
+>     invisible(NULL)
+>     invisible(NULL)
+>     invisible(NULL)
+>     invisible(NULL)
+>     invisible(NULL)
+>     invisible(NULL)
+>     invisible(NULL)
+>     invisible(NULL)
+>     invisible(NULL)
+>     invisible(NULL)
+>     "" # workaround: remove results=hide and use the return value
+>   }
+> }
+> 
+> This seems to happen because \Sexpr gets expanded to \verb{ as many
+> newlines as there were code lines } by processRdChunk, by first storing
+> a newline for each line of the code:
+> 
+> https://github.com/wch/r-source/blob/d7a4ed9aaeee1f57c3c165aefa08b8d69dfe59fa/src/library/tools/R/RdConv2.R#L257
+> 
+> ...and then the newlines get translated to \verb because res is
+> not empty:
+> 
+> https://github.com/wch/r-source/blob/d7a4ed9aaeee1f57c3c165aefa08b8d69dfe59fa/src/library/tools/R/RdConv2.R#L332
+> 
+> As long as Rd above doesn't stem from my misuse of \Sexpr, I would like
+> to propose the following patch, which seems to fix the problem:
+> 
+> Index: src/library/tools/R/RdConv2.R
+> ===================================================================
+> --- src/library/tools/R/RdConv2.R	(revision 80675)
+> +++ src/library/tools/R/RdConv2.R	(working copy)
+> @@ -329,6 +329,8 @@
+>  	    }
+>  	} else if (options$results == "text")
+>  	    res <- tagged(err, "TEXT")
+> +	else if (options$results == "hide")
+> +	    res <- tagged("", "COMMENT")
+>  	else if (length(res)) {
+>  	    res <- lapply(as.list(res), function(x) tagged(x, "VERB"))
+>  	    res <- tagged(res, "\\verb")
+> 
+> There are probably other ways of fixing this problem, e.g. by only
+> populating res if options$results != "hide" or only appending newlines
+> if res is non-empty.
+
+Thank you, Ivan, for the example and patch,
+
+I have implemented a version of your patch in my local copy of
+R-devel and tested your example, also with  Rd2latex() ..
+interestingly   Rd2txt()  does not produce the extra new lines
+even without your patch.
+
+I plan to commit your proposal after the weekend unless has 
+reasons against that.
+
+Best regards,
+Martin
+
+
