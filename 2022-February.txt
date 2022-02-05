@@ -440,3 +440,568 @@ Trevor
 	[[alternative HTML version deleted]]
 
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Feb  3 12:14:06 2022
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 3 Feb 2022 12:14:06 +0100
+Subject: [Rd] model.weights and model.offset: request for adjustment
+In-Reply-To: <1e70261f-3379-092a-2c11-f835d3d8ff70@gmail.com>
+References: <1e70261f-3379-092a-2c11-f835d3d8ff70@gmail.com>
+Message-ID: <25083.47358.617639.35342@stat.math.ethz.ch>
+
+>>>>> Ben Bolker 
+>>>>>     on Tue, 1 Feb 2022 21:21:46 -0500 writes:
+
+    > The model.weights() and model.offset() functions from the 'stats' 
+    > package index possibly-missing elements of a data frame via $, e.g.
+
+    > x$"(offset)"
+    > x$"(weights)"
+
+    > This returns NULL without comment when x is a data frame:
+
+    > x <- data.frame(a=1)
+    > x$"(offset)"  ## NULL
+    > x$"(weights)"  ## NULL
+
+    > However, when x is a tibble we get a warning as well:
+
+    > x <- tibble::as_tibble(x)
+    > x$"(offset)"
+    > ## NULL
+    > ## Warning message:
+    > ## Unknown or uninitialised column: `(offset)`.
+
+    > I know it's not R-core's responsibility to manage forward 
+    > compatibility with tibbles, but in this case [[-indexing would seem to 
+    > be better practice in any case.
+
+Yes, I would agree:  we should use  [[ instead of $ here
+in order to force exact matching just as principle
+
+Importantly, because  also  mf[["(weights)"]]
+will return  NULL without a warning for a model/data frame, and
+it seems it does so also for tibbles.
+
+    > Might a patch be accepted ... ?
+
+That would not be necessary.
+
+There's one remaining problem however:
+`$` access is clearly faster than `[[` for small data frames
+(because `$` is a primitive function doing everything in C, 
+ whereas `[[` calls the R level data frame method ).
+
+Faster in both cases, i.e., when there *is* a column and when there
+is none (and NULL is returned), e.g., for the first case
+
+> system.time(for(i in 1:20000) df[["a"]])
+   user  system elapsed 
+  0.064   0.000   0.065 
+> system.time(for(i in 1:20000) df$a)
+   user  system elapsed 
+  0.009   0.000   0.009 
+
+So that's probably been the reason why  `$`  has been prefered?
+
+
+Martin
+
+    > cheers
+    > Ben Bolker
+
+
+From tim@t@yior m@iii@g oii hidde@eieph@@ts@co@uk  Thu Feb  3 12:30:17 2022
+From: tim@t@yior m@iii@g oii hidde@eieph@@ts@co@uk (tim@t@yior m@iii@g oii hidde@eieph@@ts@co@uk)
+Date: Thu, 3 Feb 2022 11:30:17 +0000 (GMT)
+Subject: [Rd] model.weights and model.offset: request for adjustment
+In-Reply-To: <25083.47358.617639.35342@stat.math.ethz.ch>
+References: <1e70261f-3379-092a-2c11-f835d3d8ff70@gmail.com>
+ <25083.47358.617639.35342@stat.math.ethz.ch>
+Message-ID: <1406749407.8755.1643887817729@office.mailbox.org>
+
+
+> On 03/02/2022 11:14 Martin Maechler <maechler at stat.math.ethz.ch> wrote:
+> 
+>  
+> >>>>> Ben Bolker 
+> >>>>>     on Tue, 1 Feb 2022 21:21:46 -0500 writes:
+> 
+>     > The model.weights() and model.offset() functions from the 'stats' 
+>     > package index possibly-missing elements of a data frame via $, e.g.
+> 
+>     > x$"(offset)"
+>     > x$"(weights)"
+> 
+>     > This returns NULL without comment when x is a data frame:
+> 
+>     > x <- data.frame(a=1)
+>     > x$"(offset)"  ## NULL
+>     > x$"(weights)"  ## NULL
+> 
+>     > However, when x is a tibble we get a warning as well:
+> 
+>     > x <- tibble::as_tibble(x)
+>     > x$"(offset)"
+>     > ## NULL
+>     > ## Warning message:
+>     > ## Unknown or uninitialised column: `(offset)`.
+> 
+>     > I know it's not R-core's responsibility to manage forward 
+>     > compatibility with tibbles, but in this case [[-indexing would seem to 
+>     > be better practice in any case.
+> 
+> Yes, I would agree:  we should use  [[ instead of $ here
+> in order to force exact matching just as principle
+> 
+> Importantly, because  also  mf[["(weights)"]]
+> will return  NULL without a warning for a model/data frame, and
+> it seems it does so also for tibbles.
+> 
+>     > Might a patch be accepted ... ?
+> 
+> That would not be necessary.
+> 
+> There's one remaining problem however:
+> `$` access is clearly faster than `[[` for small data frames
+> (because `$` is a primitive function doing everything in C, 
+>  whereas `[[` calls the R level data frame method ).
+> 
+> Faster in both cases, i.e., when there *is* a column and when there
+> is none (and NULL is returned), e.g., for the first case
+> 
+> > system.time(for(i in 1:20000) df[["a"]])
+>    user  system elapsed 
+>   0.064   0.000   0.065 
+> > system.time(for(i in 1:20000) df$a)
+>    user  system elapsed 
+>   0.009   0.000   0.009 
+> 
+> So that's probably been the reason why  `$`  has been prefered?
+
+Would .subset2(df, "a) be preferable?
+R> df <- mtcars
+R> system.time(for(i in 1:20000) df[["hp"]])
+   user  system elapsed 
+  0.078   0.000   0.078 
+R> system.time(for(i in 1:20000) df$hp)
+   user  system elapsed 
+  0.011   0.000   0.010 
+R> system.time(for(i in 1:20000) .subset2(df,"hp"))
+   user  system elapsed 
+  0.004   0.000   0.004 
+Tim
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Feb  3 15:15:03 2022
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 3 Feb 2022 15:15:03 +0100
+Subject: [Rd] inconsistency between as.list(df) and as.list(mat) with
+ mode(mat) == "list"
+In-Reply-To: <35724075-cbcf-b5cb-3001-fe186273ab9b@gmail.com>
+References: <CAD4oTHFotrgFG6m4oL7EsxdFjf=_4b485kgLzVNifwLZgGiOOA@mail.gmail.com>
+ <25081.29918.780598.770679@stat.math.ethz.ch>
+ <35724075-cbcf-b5cb-3001-fe186273ab9b@gmail.com>
+Message-ID: <25083.58215.309289.155180@stat.math.ethz.ch>
+
+>>>>> Duncan Murdoch 
+>>>>>     on Tue, 1 Feb 2022 15:17:08 -0500 writes:
+
+    > The definitions of is.vector() etc. are now so old, it's probably 
+    > hopeless to change them.  But there are already some definitions in the 
+    > rlang package that look more consistent and rational.  For example, 
+    > is_atomic() and is_vector() fix the issues you were complaining about.
+
+    > The rlang package doesn't have many hard dependencies (just utils), so 
+    > you could easily use it instead of the base test functions.  On the 
+    > other hand:  It does have a long list of packages in Suggests,
+    > and it doesn't really fix Gabe's issue:  as_list is more consistent than 
+    > as.list, but it gives a deprecation warning:
+
+    > Warning message:
+    > `as_list()` is deprecated as of rlang 0.4.0
+    > Please use `vctrs::vec_cast()` instead.
+    > This warning is displayed once per session.
+
+    > My conclusion is that it would make more sense to import a subset of the 
+    > definitions and names from rlang into base R.
+
+    > Duncan Murdoch
+
+Regarding is.atomic() and is_atomic() : Within R Core, we have
+talked about it and for now created a branch of R-devel in svn,
+called 'R-is' (*),  in which  is.atomic(NULL) is false {as in is_atomic()}.
+
+Hopefully, most CRAN (& Bioc) packages would continue to work unaffected,
+and we could ask maintainers of the few others to adapt ...
+... so possibly, hopefully, ...,
+we would change is.atomic()  in spite of all history.
+
+*) If you are interested, get and install that branch by
+
+   svn co -q https://svn.r-project.org/R/branches/R-is R
+   ( cd R ; tools/rsync-recommended )
+
+  and then build R the same as you would build another one from
+  source.
+
+-------------
+
+One more thing  I forgot to mention in reply to Gabe's original
+post -- even though *also* only partly related:
+
+In R-devel, for any data frame  df,
+all three of
+
+  as.list  (df)
+  as.vector(df)  
+  as.vector(df, mode="list")  
+
+are identical.
+This has *not* been the case in previous versions
+of R, i.e. notably all released ones  where   as.vector(df)
+was a no-op for data frames.
+
+Martin
+
+
+    > On 01/02/2022 12:58 p.m., Martin Maechler wrote:
+    >>>>>>> Gabriel Becker
+    >>>>>>> on Mon, 31 Jan 2022 12:11:10 -0800 writes:
+    >> 
+    >> (using an HTMLifying mail client .... so I've manually pretty edited a bit)
+    >> 
+    >> > Hi All,
+    >> 
+    >> > I ran into the following the other day:
+    >> 
+    >> >> mat <- matrix(1:6, nrow = 2)
+    >> >> as.list(mat)
+    >> > [[1]]
+    >> > [1] 1
+    >> 
+    >> > *<snip>*
+    >> 
+    >> > [[6]]
+    >> > [1] 6
+    >> 
+    >> >> mat2 <- mat
+    >> >> mode(mat2) <- "list"
+    >> >> as.list(mat2)
+    >> >   [,1] [,2] [,3]
+    >> > [1,] 1    3    5
+    >> > [2,] 2    4    6
+    >> 
+    >> 
+    >> > I realize this is not guaranteed by the documentation, and the behavior is
+    >> > technically (if I would argue fairly subtly) as documented. Generally,
+    >> > however, as.list returns something without dimensions (other than length),
+    >> > regardless of the dimensions of the input.
+    >> 
+    >> > Furthermore, this behavior agrees with neither the data.frame (which are
+    >> > lists) method nor the non-list-mode matrix behavior which comes from the
+    >> > default behavior. Both result in a non-dimensioned object (the data.frame
+    >> > method explicitly and intentionally so).
+    >> 
+    >> > Matrices of mode "list" are fairly rare, in practice, I would think, but I
+    >> > wonder if the as.list behavior for them should agree with that of similar
+    >> > dimensioned objects (data.frames and non-list-mode matrices). As a user, I
+    >> > certainly expected it to, and had to read the docs with a careful eye
+    >> > before I realized what was happening and why.
+    >> 
+    >> > For the record, as.vector  does not drop dimension (or anything else) from
+    >> > data.frames nor list-matrices, so there the behaviors agree, although we do
+    >> > get:
+    >> 
+    >> >> is.vector(mat)
+    >> > [1] FALSE
+    >> 
+    >> >> is.vector(mat2)
+    >> > [1] FALSE
+    >> 
+    >> >> is.vector(mtcars)
+    >> > [1] FALSE
+    >> 
+    >> 
+    >> > Which does make the fact that for the latter two as.vector returns the
+    >> > objects unmodified somewhat puzzling.
+    >> 
+    >> > I wonder if as.list and as.vector could get a strict argument - it could
+    >> > default to FALSE for a deprecation period, or forever if preferred by
+    >> > R-core -  where attributes are always stripped for 'strict' conversions.
+    >> 
+    >> > Also, as a final aside, the documentation at ?as.list says:
+    >> 
+    >> > Attributes may be
+    >> > dropped unless the argument already is a list or expression.
+    >> 
+    >> > (This is inconsistent with functions such as ?as.character? which
+    >> > always drop attributes, *and is for efficiency since lists can be*
+    >> > *     expensive to copy.*)
+    >> 
+    >> > (emphasis mine). Is this still the case with shallow duplication? I was
+    >> > under the impression that it was not.
+    >> 
+    >> Well, you are entering the topic Kurt Hornik and I  tried to
+    >> improve on, 2  months ago  and then had to give up (for the time
+    >> being) with only a small step of progress;  at the time
+    >> producing extra work for CRAN team members who saw many dozens
+    >> of CRAN package failing just because we tried to change
+    >> is.vector() / as.vector()  to become slightly less inconsistent.
+    >> 
+    >> There were many misuse problems in these CRAN packages,
+    >> which basically used  is.vector(obj) to check if `obj` was not
+    >> a matrix.
+    >> 
+    >> During ca. one week in early December 2021, we (mostly me) tried
+    >> several things and had to conditionalize (via a
+    >> environment variable you must set *before* starting R) in the
+    >> end most of the change, because we saw too much R code out
+    >> there, being based on wrong assumptions ...
+    >> ------------------------------------------------------------------------
+    >> r81299 | maechler | 2021-12-06 13:21:26 +0100 (Mon, 06. Dec 2021) | 1 Zeile
+    >> Ge?nderte Pfade:
+    >> M /trunk/doc/NEWS.Rd
+    >> M /trunk/src/library/base/man/vector.Rd
+    >> M /trunk/src/main/coerce.c
+    >> M /trunk/tests/demos.Rout.save
+    >> M /trunk/tests/reg-tests-1d.R
+    >> 
+    >> conditionalize most as.vector/is.vector changes from 81252,81270,81274,81285-6
+    >> ------------------------------------------------------------------------
+    >> 
+    >> I mentioned above that one problem that useRs use is.vector() when they
+    >> shouldn't -- because they are not aware that list() and
+    >> expression()s  also fulfill `is.vector()`.
+    >> I would have recommended to use (is.atomic() && !is.array())
+    >> instead conceptually called is.simplevector() in my mind.
+    >> 
+    >> But there's another fact which dirties the water further:
+    >> is.atomic() actually does *not* check for atomic vectors,
+    >> but for  "atomic vector _OR_ NULL"  which I've found unfortunate.
+    >> 
+    >> Since then, I've contemplated introducing a new primitive
+    >> is.atomicV()  which really is true only if its argument is an
+    >> atomic vector.
+    >> One thing not so nice is its name. To make that even longer is
+    >> strongly against my taste ("testing for 'atom' should be short
+    >> and succinct ")  so maybe people would agree with   is.atom()
+    >> 
+    >> ... yes, I've somewhat hijacked your thread to talk about part
+    >> of the underlying problem(s) that I would like to address first.
+    >> 
+    >> 
+    >> Martin
+    >> 
+    >> ______________________________________________
+    >> R-devel at r-project.org mailing list
+    >> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Feb  3 15:21:45 2022
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 3 Feb 2022 15:21:45 +0100
+Subject: [Rd] model.weights and model.offset: request for adjustment
+In-Reply-To: <1406749407.8755.1643887817729@office.mailbox.org>
+References: <1e70261f-3379-092a-2c11-f835d3d8ff70@gmail.com>
+ <25083.47358.617639.35342@stat.math.ethz.ch>
+ <1406749407.8755.1643887817729@office.mailbox.org>
+Message-ID: <25083.58617.36940.759063@stat.math.ethz.ch>
+
+>>>>> tim taylor 
+>>>>>     on Thu, 3 Feb 2022 11:30:17 +0000 (GMT) writes:
+
+    >> On 03/02/2022 11:14 Martin Maechler <maechler at stat.math.ethz.ch> wrote:
+    >> 
+    >> 
+    >> >>>>> Ben Bolker 
+    >> >>>>>     on Tue, 1 Feb 2022 21:21:46 -0500 writes:
+    >> 
+    >> > The model.weights() and model.offset() functions from the 'stats' 
+    >> > package index possibly-missing elements of a data frame via $, e.g.
+    >> 
+    >> > x$"(offset)"
+    >> > x$"(weights)"
+    >> 
+    >> > This returns NULL without comment when x is a data frame:
+    >> 
+    >> > x <- data.frame(a=1)
+    >> > x$"(offset)"  ## NULL
+    >> > x$"(weights)"  ## NULL
+    >> 
+    >> > However, when x is a tibble we get a warning as well:
+    >> 
+    >> > x <- tibble::as_tibble(x)
+    >> > x$"(offset)"
+    >> > ## NULL
+    >> > ## Warning message:
+    >> > ## Unknown or uninitialised column: `(offset)`.
+    >> 
+    >> > I know it's not R-core's responsibility to manage forward 
+    >> > compatibility with tibbles, but in this case [[-indexing would seem to 
+    >> > be better practice in any case.
+    >> 
+    >> Yes, I would agree:  we should use  [[ instead of $ here
+    >> in order to force exact matching just as principle
+    >> 
+    >> Importantly, because  also  mf[["(weights)"]]
+    >> will return  NULL without a warning for a model/data frame, and
+    >> it seems it does so also for tibbles.
+    >> 
+    >> > Might a patch be accepted ... ?
+    >> 
+    >> That would not be necessary.
+    >> 
+    >> There's one remaining problem however:
+    >> `$` access is clearly faster than `[[` for small data frames
+    >> (because `$` is a primitive function doing everything in C, 
+    >> whereas `[[` calls the R level data frame method ).
+    >> 
+    >> Faster in both cases, i.e., when there *is* a column and when there
+    >> is none (and NULL is returned), e.g., for the first case
+    >> 
+    >> > system.time(for(i in 1:20000) df[["a"]])
+    >> user  system elapsed 
+    >> 0.064   0.000   0.065 
+    >> > system.time(for(i in 1:20000) df$a)
+    >> user  system elapsed 
+    >> 0.009   0.000   0.009 
+    >> 
+    >> So that's probably been the reason why  `$`  has been prefered?
+
+    > Would .subset2(df, "a) be preferable?
+
+    R> df <- mtcars
+    R> system.time(for(i in 1:20000) df[["hp"]])
+    > user  system elapsed 
+    > 0.078   0.000   0.078 
+    R> system.time(for(i in 1:20000) df$hp)
+    > user  system elapsed 
+    > 0.011   0.000   0.010 
+    R> system.time(for(i in 1:20000) .subset2(df,"hp"))
+    > user  system elapsed 
+    > 0.004   0.000   0.004 
+
+    > Tim
+
+Yes, I think that's a very good idea --
+
+notably, as interestingly it seems to work with tibble's very
+well, too.
+
+Martin
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Feb  3 18:09:29 2022
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 3 Feb 2022 18:09:29 +0100
+Subject: [Rd] model.weights and model.offset: request for adjustment
+In-Reply-To: <25083.58617.36940.759063@stat.math.ethz.ch>
+References: <1e70261f-3379-092a-2c11-f835d3d8ff70@gmail.com>
+ <25083.47358.617639.35342@stat.math.ethz.ch>
+ <1406749407.8755.1643887817729@office.mailbox.org>
+ <25083.58617.36940.759063@stat.math.ethz.ch>
+Message-ID: <25084.3145.108729.52160@stat.math.ethz.ch>
+
+>>>>> Martin Maechler 
+>>>>>     on Thu, 3 Feb 2022 15:21:45 +0100 writes:
+
+>>>>> tim taylor 
+>>>>>     on Thu, 3 Feb 2022 11:30:17 +0000 (GMT) writes:
+
+    >>> On 03/02/2022 11:14 Martin Maechler <maechler at stat.math.ethz.ch> wrote:
+    >>> 
+    >>> 
+    >>> >>>>> Ben Bolker 
+    >>> >>>>>     on Tue, 1 Feb 2022 21:21:46 -0500 writes:
+    >>> 
+    >>> > The model.weights() and model.offset() functions from the 'stats' 
+    >>> > package index possibly-missing elements of a data frame via $, e.g.
+    >>> 
+    >>> > x$"(offset)"
+    >>> > x$"(weights)"
+    >>> 
+    >>> > This returns NULL without comment when x is a data frame:
+    >>> 
+    >>> > x <- data.frame(a=1)
+    >>> > x$"(offset)"  ## NULL
+    >>> > x$"(weights)"  ## NULL
+    >>> 
+    >>> > However, when x is a tibble we get a warning as well:
+    >>> 
+    >>> > x <- tibble::as_tibble(x)
+    >>> > x$"(offset)"
+    >>> > ## NULL
+    >>> > ## Warning message:
+    >>> > ## Unknown or uninitialised column: `(offset)`.
+    >>> 
+    >>> > I know it's not R-core's responsibility to manage forward 
+    >>> > compatibility with tibbles, but in this case [[-indexing would seem to 
+    >>> > be better practice in any case.
+    >>> 
+    >>> Yes, I would agree:  we should use  [[ instead of $ here
+    >>> in order to force exact matching just as principle
+    >>> 
+    >>> Importantly, because  also  mf[["(weights)"]]
+    >>> will return  NULL without a warning for a model/data frame, and
+    >>> it seems it does so also for tibbles.
+    >>> 
+    >>> > Might a patch be accepted ... ?
+    >>> 
+    >>> That would not be necessary.
+    >>> 
+    >>> There's one remaining problem however:
+    >>> `$` access is clearly faster than `[[` for small data frames
+    >>> (because `$` is a primitive function doing everything in C, 
+    >>> whereas `[[` calls the R level data frame method ).
+    >>> 
+    >>> Faster in both cases, i.e., when there *is* a column and when there
+    >>> is none (and NULL is returned), e.g., for the first case
+    >>> 
+    >>> > system.time(for(i in 1:20000) df[["a"]])
+    >>> user  system elapsed 
+    >>> 0.064   0.000   0.065 
+    >>> > system.time(for(i in 1:20000) df$a)
+    >>> user  system elapsed 
+    >>> 0.009   0.000   0.009 
+    >>> 
+    >>> So that's probably been the reason why  `$`  has been prefered?
+
+    >> Would .subset2(df, "a) be preferable?
+
+    R> df <- mtcars
+    R> system.time(for(i in 1:20000) df[["hp"]])
+    >> user  system elapsed 
+    >> 0.078   0.000   0.078 
+    R> system.time(for(i in 1:20000) df$hp)
+    >> user  system elapsed 
+    >> 0.011   0.000   0.010 
+    R> system.time(for(i in 1:20000) .subset2(df,"hp"))
+    >> user  system elapsed 
+    >> 0.004   0.000   0.004 
+
+    >> Tim
+
+    > Yes, I think that's a very good idea --
+
+    > notably, as interestingly it seems to work with tibble's very
+    > well, too.
+
+Interestingly (or not), changing this also fixes a real (rare!) bug:
+When digging for a regression test, I've stumbled over an lm() example,
+which when modified to use the not so common  "(weight)_2" as
+*predictor* variable name it started to use that both as
+predictor and also as weight (of some kind) such that the fit
+changed.
+
+This problem went away after apply the change,
+[replacing `a$b` with `.subset2(a,b)]
+
+Now committed to R-devel, svn rev 81650.
+
+If there are no negative effects, this may also be backported to
+R-patched.
+
+Thank you both, once more!
+Martin
+
+
