@@ -1005,3 +1005,236 @@ Thank you both, once more!
 Martin
 
 
+From murdoch@dunc@n @end|ng |rom gm@||@com  Fri Feb  4 18:33:41 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Fri, 4 Feb 2022 12:33:41 -0500
+Subject: [Rd] Parser oddity with <- and =
+Message-ID: <8ee66596-5531-2fc4-252f-a2a0946a1d1c@gmail.com>
+
+Here's an odd parse:
+
+    a <- b = 1
+
+This appears to be parsed as
+
+    `<-<-`(a, b, 1)
+
+instead of being equivalent to
+
+    a <- b <- 1
+
+I wonder if that's intentional?
+
+(This showed up at https://stackoverflow.com/q/70989067/2554330, where 
+it caused a lot of confusion.  I think the original intent was that `a` 
+would be a macro holding `b = 1`, but I'm not sure of that.)
+
+Duncan Murdoch
+
+
+From ht @end|ng |rom he@therturner@net  Fri Feb  4 21:02:13 2022
+From: ht @end|ng |rom he@therturner@net (Heather Turner)
+Date: Fri, 04 Feb 2022 20:02:13 +0000
+Subject: [Rd] Google Season of Docs 2022
+Message-ID: <a9526ce4-0cea-46fc-b1e9-4bfced56aadf@www.fastmail.com>
+
+Dear All,
+
+Yesterday Google announced Season of Docs 2022: https://opensource.googleblog.com/2022/02/Announcing%20Season%20of%20Docs%202022.html.
+
+You may know that the R project participated for the first time last year with a project related to useR! and there is interest in us offering a project again this year.
+
+Organization applications open at the end of February, so now is the time for us to explore ideas for projects and line up potential mentors. 
+
+Organization of GSoD is done on GitHub: https://github.com/rstats-gsod/gsod2022 and I have added a number of issues with ideas drawn from discussions on the R Contribution Working Group, R-Devel Slack, Forwards taskforce, and R Consortium Repositories Working Group. Feel free to comment on these issues or add your own suggestions.
+
+For more general discussion of GSoD, you can reply here, on the R-Devel Slack or at the next R Contribution Working Group (see the R Contribution Site for details of the Slack/working group: https://contributor.r-project.org/).
+
+Best wishes,
+Heather
+
+
+From w||||@mwdun|@p @end|ng |rom gm@||@com  Fri Feb  4 21:28:12 2022
+From: w||||@mwdun|@p @end|ng |rom gm@||@com (Bill Dunlap)
+Date: Fri, 4 Feb 2022 12:28:12 -0800
+Subject: [Rd] Parser oddity with <- and =
+In-Reply-To: <8ee66596-5531-2fc4-252f-a2a0946a1d1c@gmail.com>
+References: <8ee66596-5531-2fc4-252f-a2a0946a1d1c@gmail.com>
+Message-ID: <CAHqSRuQvhB-rDeHNhLVRffahkpSyu=hjOdRNs0LUXvUrAopeKA@mail.gmail.com>
+
+In R-4.1.2 and R-devel from two weeks ago I do not get the `<-<-`:
+
+> str.language(parse(text = "a <- b = c"))
+expression: structure(expression(a <- b = c), sr ...
+  language: a <- b = c
+    symbol: =
+    language: a <- b
+      symbol: <-
+      symbol: a
+      symbol: b
+    symbol: c
+> identical(parse(text = "a <- b = c")[[1]], parse(text = "`=`( `<-`(a, b),
+c)")[[1]])
+[1] TRUE
+
+str.language() is a rudimentary parse tree displayer:
+
+str.language <- function(expr, name = "", indent = 0)
+{
+    trim... <- function(string, width.cutoff) {
+        if (nchar(string) > width.cutoff) {
+            string <- sprintf("%.*s ...", width.cutoff-4, string)
+        }
+        string
+    }
+    cat(sep="", rep("  ", indent), typeof(expr), ": ",
+        if(length(name)==1 && nzchar(name)) { paste0(name, " = ") },
+        trim...(deparse1(expr, width.cutoff=40), width.cutoff=40),
+        "\n")
+    if (is.function(expr)) {
+        str.language(formals(expr), name="[formals]", indent = indent + 1)
+        str.language(body(expr), name="[body]", indent = indent + 1)
+    } else if (is.recursive(expr)) {
+        expr <- as.list(expr)
+        nms <- names(expr)
+        for (i in seq_along(expr)) {
+            str.language(expr[[i]], name=nms[[i]], indent = indent + 1)
+        }
+    }
+    invisible(expr)
+}
+
+
+-Bill
+
+On Fri, Feb 4, 2022 at 9:34 AM Duncan Murdoch <murdoch.duncan at gmail.com>
+wrote:
+
+> Here's an odd parse:
+>
+>     a <- b = 1
+>
+> This appears to be parsed as
+>
+>     `<-<-`(a, b, 1)
+>
+> instead of being equivalent to
+>
+>     a <- b <- 1
+>
+> I wonder if that's intentional?
+>
+> (This showed up at https://stackoverflow.com/q/70989067/2554330, where
+> it caused a lot of confusion.  I think the original intent was that `a`
+> would be a macro holding `b = 1`, but I'm not sure of that.)
+>
+> Duncan Murdoch
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Fri Feb  4 21:38:45 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Fri, 4 Feb 2022 15:38:45 -0500
+Subject: [Rd] Parser oddity with <- and =
+In-Reply-To: <CAHqSRuQvhB-rDeHNhLVRffahkpSyu=hjOdRNs0LUXvUrAopeKA@mail.gmail.com>
+References: <8ee66596-5531-2fc4-252f-a2a0946a1d1c@gmail.com>
+ <CAHqSRuQvhB-rDeHNhLVRffahkpSyu=hjOdRNs0LUXvUrAopeKA@mail.gmail.com>
+Message-ID: <9cf21284-79f5-1e04-b489-4d283dffabe7@gmail.com>
+
+Sorry, I wrote in a sloppy way.  The parsing I see is just what you saw. 
+  It's the evaluation of that expression that tries to call `<-<-`:
+
+ > a <- 1
+ > a <- b = c
+Error in a <- b = c : could not find function "<-<-"
+
+This happens because R is trying to make an assignment using = with a 
+LHS that is the function call a <- b.
+
+Duncan Murdoch
+
+
+On 04/02/2022 3:28 p.m., Bill Dunlap wrote:
+> In R-4.1.2 and R-devel from two weeks ago I do not get the `<-<-`:
+> 
+>      > str.language(parse(text = "a <- b = c"))
+>     expression: structure(expression(a <- b = c), sr ...
+>      ? language: a <- b = c
+>      ? ? symbol: =
+>      ? ? language: a <- b
+>      ? ? ? symbol: <-
+>      ? ? ? symbol: a
+>      ? ? ? symbol: b
+>      ? ? symbol: c
+>      > identical(parse(text = "a <- b = c")[[1]], parse(text = "`=`(
+>     `<-`(a, b), c)")[[1]])
+>     [1] TRUE
+> 
+> str.language() is a rudimentary parse tree displayer:
+> 
+>     str.language <- function(expr, name = "", indent = 0)
+>     {
+>      ? ? trim... <- function(string, width.cutoff) {
+>      ? ? ? ? if (nchar(string) > width.cutoff) {
+>      ? ? ? ? ? ? string <- sprintf("%.*s ...", width.cutoff-4, string)
+>      ? ? ? ? }
+>      ? ? ? ? string
+>      ? ? }
+>      ? ? cat(sep="", rep(" ?", indent), typeof(expr), ": ",
+>      ? ? ? ? if(length(name)==1 && nzchar(name)) { paste0(name, " = ") },
+>      ? ? ? ? trim...(deparse1(expr, width.cutoff=40), width.cutoff=40),
+>      ? ? ? ? "\n")
+>      ? ? if (is.function(expr)) {
+>      ? ? ? ? str.language(formals(expr), name="[formals]", indent =
+>     indent + 1)
+>      ? ? ? ? str.language(body(expr), name="[body]", indent = indent + 1)
+>      ? ? } else if (is.recursive(expr)) {
+>      ? ? ? ? expr <- as.list(expr)
+>      ? ? ? ? nms <- names(expr)
+>      ? ? ? ? for (i in seq_along(expr)) {
+>      ? ? ? ? ? ? str.language(expr[[i]], name=nms[[i]], indent = indent + 1)
+>      ? ? ? ? }
+>      ? ? }
+>      ? ? invisible(expr)
+>     }
+> 
+> 
+> -Bill
+> 
+> On Fri, Feb 4, 2022 at 9:34 AM Duncan Murdoch <murdoch.duncan at gmail.com 
+> <mailto:murdoch.duncan at gmail.com>> wrote:
+> 
+>     Here's an odd parse:
+> 
+>      ? ? a <- b = 1
+> 
+>     This appears to be parsed as
+> 
+>      ? ? `<-<-`(a, b, 1)
+> 
+>     instead of being equivalent to
+> 
+>      ? ? a <- b <- 1
+> 
+>     I wonder if that's intentional?
+> 
+>     (This showed up at https://stackoverflow.com/q/70989067/2554330
+>     <https://stackoverflow.com/q/70989067/2554330>, where
+>     it caused a lot of confusion.? I think the original intent was that `a`
+>     would be a macro holding `b = 1`, but I'm not sure of that.)
+> 
+>     Duncan Murdoch
+> 
+>     ______________________________________________
+>     R-devel at r-project.org <mailto:R-devel at r-project.org> mailing list
+>     https://stat.ethz.ch/mailman/listinfo/r-devel
+>     <https://stat.ethz.ch/mailman/listinfo/r-devel>
+>
+
+
