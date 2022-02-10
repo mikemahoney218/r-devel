@@ -1238,3 +1238,397 @@ On 04/02/2022 3:28 p.m., Bill Dunlap wrote:
 >
 
 
+From ggrothend|eck @end|ng |rom gm@||@com  Tue Feb  8 12:49:05 2022
+From: ggrothend|eck @end|ng |rom gm@||@com (Gabor Grothendieck)
+Date: Tue, 8 Feb 2022 06:49:05 -0500
+Subject: [Rd] aggregate.formula and pipes
+In-Reply-To: <CAP01uRnONpc=WnQATrcdU0xLv_Ce=RJ-TTyCfKBN+pnV0NMYbw@mail.gmail.com>
+References: <CAP01uRnONpc=WnQATrcdU0xLv_Ce=RJ-TTyCfKBN+pnV0NMYbw@mail.gmail.com>
+Message-ID: <CAP01uR=Ph+hmeo=mJ3-+mnBpZux237dvsjZHMfE0FxfUrQ9Njg@mail.gmail.com>
+
+I noticed that the aggregate issue which I raised
+has been fixed in the latest development version of R.  Just
+wanted to comment on key points that were missed in this discussion on
+bugs.r-project.org.
+
+1. Given that it has been known for years that
+generics and methods should have consistent arguments yet
+until now has remained unaddressed in the core of R I figured it would
+stand a better chance of being adopted  if the suggested change involved no
+code changes, just an export.
+
+I would have suggested that the formula method and generic of aggregate
+be made compatible if I had thought anyone would be willing to implement that
+but It looks like someone has been willing after all.
+
+2. This is really part of a larger issue that pipes and lapply can expose and
+perhaps if aggregate is fixed an effort could be made to find whether
+other instances
+of conflicting methods and generics in the core exist and make those
+consistent too.
+
+3. There is also a discussion there of the use of function(x)... or
+\(x)... to avoid
+limitations of pipes but this gives rise to a large number of parentheses
+e.g. 0 |> (\(x) sin(x) + cos(x))()
+I find this too ugly and unreadable to be a reasonable solution.  In
+such cases I would
+either not use base pipes or if I did then define a function prior to the pipe:
+e.g. this seems more readable
+       sincos <- function(x) sin(x) + cos(x)
+       0 |> sincos()
+
+
+On Wed, Jan 26, 2022 at 9:48 AM Gabor Grothendieck
+<ggrothendieck at gmail.com> wrote:
+>
+> Because aggregate.formula has a formula argument but the generic
+> has an x argument neither of these work:
+>
+>   mtcars |> aggregate(x = mpg ~ cyl, FUN = mean)
+>   mtcars |> aggregate(formula = mpg ~ cyl, FUN = mean)
+>
+> This does work:
+>
+>   mtcars |> stats:::aggregate.formula(formula = mpg ~ cyl, FUN = mean)
+>
+> Suggest that aggregate.formula be exported.
+>
+> --
+> Statistics & Software Consulting
+> GKX Group, GKX Associates Inc.
+> tel: 1-877-GKX-GROUP
+> email: ggrothendieck at gmail.com
+
+
+
+-- 
+Statistics & Software Consulting
+GKX Group, GKX Associates Inc.
+tel: 1-877-GKX-GROUP
+email: ggrothendieck at gmail.com
+
+
+From c@@rd|@g@bor @end|ng |rom gm@||@com  Tue Feb  8 15:15:05 2022
+From: c@@rd|@g@bor @end|ng |rom gm@||@com (=?UTF-8?B?R8OhYm9yIENzw6FyZGk=?=)
+Date: Tue, 8 Feb 2022 15:15:05 +0100
+Subject: [Rd] S4 class name conflicts
+Message-ID: <CABtg=KmbgbS7rxQyTn++ytLD8S+apAv3zCC1rz3eYtqPPo-thw@mail.gmail.com>
+
+The RNeXML CRAN package currently has some check warnings, originating
+from an S4 class name conflict.
+
+RNeXML sets the S4 class "tree". A dependency of the package now
+depends on the cli package, which calls setOldClass() on an S3 "tree"
+class.
+
+This causes two potential issues. One is that RNeXML maybe ends up
+using cli's class internally, because this is what we see at install
+time:
+
+** byte-compile and prepare package for lazy loading
+Found more than one class "tree" in cache; using the first, from namespace 'cli'
+Also defined by ?RNeXML?
+
+The second issue is an error when RNeXML is unloaded:
+
+? unloadNamespace("RNeXML")
+Error in .mergeMethodsTable(generic, mtable, tt, attach) :
+  trying to get slot "defined" from an object of a basic class
+("environment") with no slots
+
+This makes R CMD check fail as well.
+
+Is cli doing something wrong here? Or is this a bug in base R? Or is
+it a known limitation? If the latter, would it make sense for the
+RNeXML installation to fail instead of creating a broken package. (If
+it is a broken package at all.)
+
+Gabor
+
+
+From c@@rd|@g@bor @end|ng |rom gm@||@com  Tue Feb  8 18:07:31 2022
+From: c@@rd|@g@bor @end|ng |rom gm@||@com (=?UTF-8?B?R8OhYm9yIENzw6FyZGk=?=)
+Date: Tue, 8 Feb 2022 18:07:31 +0100
+Subject: [Rd] S4 class name conflicts
+In-Reply-To: <CAOQ5Nyd5mJFo6yYHVh8X1OTQNh2u3GHQtTVaUuOxbwBTc3XcGA@mail.gmail.com>
+References: <CABtg=KmbgbS7rxQyTn++ytLD8S+apAv3zCC1rz3eYtqPPo-thw@mail.gmail.com>
+ <CAOQ5Nyd5mJFo6yYHVh8X1OTQNh2u3GHQtTVaUuOxbwBTc3XcGA@mail.gmail.com>
+Message-ID: <CABtg=K=0-j86zTErM08uS1j9v6BfjESygvEVEQCfauEGDKsQew@mail.gmail.com>
+
+Hi Michael,
+
+you only need the CRAN versions. You probably need a recent version of
+pillar, to
+create the name conflict with its dependency:
+
+install.packages("pillar")
+install.packages("cli")
+install.packages("RNeXML", type = "source")
+
+This will already give you:
+** byte-compile and prepare package for lazy loading
+Found more than one class "tree" in cache; using the first, from namespace 'cli'
+Also defined by ?RNeXML?
+
+and then:
+
+library(RNeXML)
+unloadNamespace("RNeXML")
+
+Error in .mergeMethodsTable(generic, mtable, tt, attach) :
+  trying to get slot "defined" from an object of a basic class
+("environment") with no slots
+
+This is macOS arm64, but looking at the CRAN check page, that should not matter.
+
+Let me know if this does not work, and the I'll create a Docker
+container or something more reproducible.
+
+Thanks,
+Gabor
+
+On Tue, Feb 8, 2022 at 5:53 PM Michael Lawrence
+<lawrence.michael at gene.com> wrote:
+>
+> Hi Gabor,
+>
+> Thanks for reporting this issue. Would you be able to help me
+> reproduce it? I'm guessing this depends on some combination of git
+> checkouts, so it would be helpful to know which.
+>
+> Michael
+>
+> On Tue, Feb 8, 2022 at 6:32 AM G?bor Cs?rdi <csardi.gabor at gmail.com> wrote:
+> >
+> > The RNeXML CRAN package currently has some check warnings, originating
+> > from an S4 class name conflict.
+> >
+> > RNeXML sets the S4 class "tree". A dependency of the package now
+> > depends on the cli package, which calls setOldClass() on an S3 "tree"
+> > class.
+> >
+> > This causes two potential issues. One is that RNeXML maybe ends up
+> > using cli's class internally, because this is what we see at install
+> > time:
+> >
+> > ** byte-compile and prepare package for lazy loading
+> > Found more than one class "tree" in cache; using the first, from namespace 'cli'
+> > Also defined by ?RNeXML?
+> >
+> > The second issue is an error when RNeXML is unloaded:
+> >
+> > ? unloadNamespace("RNeXML")
+> > Error in .mergeMethodsTable(generic, mtable, tt, attach) :
+> >   trying to get slot "defined" from an object of a basic class
+> > ("environment") with no slots
+> >
+> > This makes R CMD check fail as well.
+> >
+> > Is cli doing something wrong here? Or is this a bug in base R? Or is
+> > it a known limitation? If the latter, would it make sense for the
+> > RNeXML installation to fail instead of creating a broken package. (If
+> > it is a broken package at all.)
+> >
+> > Gabor
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+>
+>
+> --
+> Michael Lawrence
+> Principal Scientist, Director of Data Science and Statistical Computing
+> Genentech, A Member of the Roche Group
+> Office +1 (650) 225-7760
+> michafla at gene.com
+>
+> Join Genentech on LinkedIn | Twitter | Facebook | Instagram | YouTube
+
+
+From |@wrence@m|ch@e| @end|ng |rom gene@com  Tue Feb  8 17:52:56 2022
+From: |@wrence@m|ch@e| @end|ng |rom gene@com (Michael Lawrence)
+Date: Tue, 8 Feb 2022 08:52:56 -0800
+Subject: [Rd] S4 class name conflicts
+In-Reply-To: <CABtg=KmbgbS7rxQyTn++ytLD8S+apAv3zCC1rz3eYtqPPo-thw@mail.gmail.com>
+References: <CABtg=KmbgbS7rxQyTn++ytLD8S+apAv3zCC1rz3eYtqPPo-thw@mail.gmail.com>
+Message-ID: <CAOQ5Nyd5mJFo6yYHVh8X1OTQNh2u3GHQtTVaUuOxbwBTc3XcGA@mail.gmail.com>
+
+Hi Gabor,
+
+Thanks for reporting this issue. Would you be able to help me
+reproduce it? I'm guessing this depends on some combination of git
+checkouts, so it would be helpful to know which.
+
+Michael
+
+On Tue, Feb 8, 2022 at 6:32 AM G?bor Cs?rdi <csardi.gabor at gmail.com> wrote:
+>
+> The RNeXML CRAN package currently has some check warnings, originating
+> from an S4 class name conflict.
+>
+> RNeXML sets the S4 class "tree". A dependency of the package now
+> depends on the cli package, which calls setOldClass() on an S3 "tree"
+> class.
+>
+> This causes two potential issues. One is that RNeXML maybe ends up
+> using cli's class internally, because this is what we see at install
+> time:
+>
+> ** byte-compile and prepare package for lazy loading
+> Found more than one class "tree" in cache; using the first, from namespace 'cli'
+> Also defined by ?RNeXML?
+>
+> The second issue is an error when RNeXML is unloaded:
+>
+> ? unloadNamespace("RNeXML")
+> Error in .mergeMethodsTable(generic, mtable, tt, attach) :
+>   trying to get slot "defined" from an object of a basic class
+> ("environment") with no slots
+>
+> This makes R CMD check fail as well.
+>
+> Is cli doing something wrong here? Or is this a bug in base R? Or is
+> it a known limitation? If the latter, would it make sense for the
+> RNeXML installation to fail instead of creating a broken package. (If
+> it is a broken package at all.)
+>
+> Gabor
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+
+-- 
+Michael Lawrence
+Principal Scientist, Director of Data Science and Statistical Computing
+Genentech, A Member of the Roche Group
+Office +1 (650) 225-7760
+michafla at gene.com
+
+Join Genentech on LinkedIn | Twitter | Facebook | Instagram | YouTube
+
+
+From |@wrence@m|ch@e| @end|ng |rom gene@com  Wed Feb  9 00:53:15 2022
+From: |@wrence@m|ch@e| @end|ng |rom gene@com (Michael Lawrence)
+Date: Tue, 8 Feb 2022 15:53:15 -0800
+Subject: [Rd] S4 class name conflicts
+In-Reply-To: <CABtg=K=0-j86zTErM08uS1j9v6BfjESygvEVEQCfauEGDKsQew@mail.gmail.com>
+References: <CABtg=KmbgbS7rxQyTn++ytLD8S+apAv3zCC1rz3eYtqPPo-thw@mail.gmail.com>
+ <CAOQ5Nyd5mJFo6yYHVh8X1OTQNh2u3GHQtTVaUuOxbwBTc3XcGA@mail.gmail.com>
+ <CABtg=K=0-j86zTErM08uS1j9v6BfjESygvEVEQCfauEGDKsQew@mail.gmail.com>
+Message-ID: <CAOQ5NycrYt8_mLWfz6XMwHjhjogjcm-upQ_hQM3kXCt3myG88g@mail.gmail.com>
+
+Great, thanks. I have fixed both issues and will commit after more testing.
+
+Michael
+
+On Tue, Feb 8, 2022 at 9:07 AM G?bor Cs?rdi <csardi.gabor at gmail.com> wrote:
+>
+> Hi Michael,
+>
+> you only need the CRAN versions. You probably need a recent version of
+> pillar, to
+> create the name conflict with its dependency:
+>
+> install.packages("pillar")
+> install.packages("cli")
+> install.packages("RNeXML", type = "source")
+>
+> This will already give you:
+> ** byte-compile and prepare package for lazy loading
+> Found more than one class "tree" in cache; using the first, from namespace 'cli'
+> Also defined by ?RNeXML?
+>
+> and then:
+>
+> library(RNeXML)
+> unloadNamespace("RNeXML")
+>
+> Error in .mergeMethodsTable(generic, mtable, tt, attach) :
+>   trying to get slot "defined" from an object of a basic class
+> ("environment") with no slots
+>
+> This is macOS arm64, but looking at the CRAN check page, that should not matter.
+>
+> Let me know if this does not work, and the I'll create a Docker
+> container or something more reproducible.
+>
+> Thanks,
+> Gabor
+>
+> On Tue, Feb 8, 2022 at 5:53 PM Michael Lawrence
+> <lawrence.michael at gene.com> wrote:
+> >
+> > Hi Gabor,
+> >
+> > Thanks for reporting this issue. Would you be able to help me
+> > reproduce it? I'm guessing this depends on some combination of git
+> > checkouts, so it would be helpful to know which.
+> >
+> > Michael
+> >
+> > On Tue, Feb 8, 2022 at 6:32 AM G?bor Cs?rdi <csardi.gabor at gmail.com> wrote:
+> > >
+> > > The RNeXML CRAN package currently has some check warnings, originating
+> > > from an S4 class name conflict.
+> > >
+> > > RNeXML sets the S4 class "tree". A dependency of the package now
+> > > depends on the cli package, which calls setOldClass() on an S3 "tree"
+> > > class.
+> > >
+> > > This causes two potential issues. One is that RNeXML maybe ends up
+> > > using cli's class internally, because this is what we see at install
+> > > time:
+> > >
+> > > ** byte-compile and prepare package for lazy loading
+> > > Found more than one class "tree" in cache; using the first, from namespace 'cli'
+> > > Also defined by ?RNeXML?
+> > >
+> > > The second issue is an error when RNeXML is unloaded:
+> > >
+> > > ? unloadNamespace("RNeXML")
+> > > Error in .mergeMethodsTable(generic, mtable, tt, attach) :
+> > >   trying to get slot "defined" from an object of a basic class
+> > > ("environment") with no slots
+> > >
+> > > This makes R CMD check fail as well.
+> > >
+> > > Is cli doing something wrong here? Or is this a bug in base R? Or is
+> > > it a known limitation? If the latter, would it make sense for the
+> > > RNeXML installation to fail instead of creating a broken package. (If
+> > > it is a broken package at all.)
+> > >
+> > > Gabor
+> > >
+> > > ______________________________________________
+> > > R-devel at r-project.org mailing list
+> > > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+> >
+> >
+> > --
+> > Michael Lawrence
+> > Principal Scientist, Director of Data Science and Statistical Computing
+> > Genentech, A Member of the Roche Group
+> > Office +1 (650) 225-7760
+> > michafla at gene.com
+> >
+> > Join Genentech on LinkedIn | Twitter | Facebook | Instagram | YouTube
+
+
+
+-- 
+Michael Lawrence
+Principal Scientist, Director of Data Science and Statistical Computing
+Genentech, A Member of the Roche Group
+Office +1 (650) 225-7760
+michafla at gene.com
+
+Join Genentech on LinkedIn | Twitter | Facebook | Instagram | YouTube
+
+
