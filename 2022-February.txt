@@ -1713,3 +1713,341 @@ the matrix case.
 Martin
 
 
+From net|kj@ @end|ng |rom gm@||@com  Thu Feb 10 16:53:04 2022
+From: net|kj@ @end|ng |rom gm@||@com (=?UTF-8?Q?Jan_Net=C3=ADk?=)
+Date: Thu, 10 Feb 2022 16:53:04 +0100
+Subject: [Rd] rtools40 curl cannot handle -w variables
+Message-ID: <CA+6hu7dGcmGHAGf4LwTb0M3ssgMXyEiph1DAUGLn1UcVNcC0KA@mail.gmail.com>
+
+Hi,
+
+I get different results when using Windows curl and curl shipped with
+rtools40.
+
+curl -Ls -o nul -w %{url_effective} --connect-timeout 30 --max-time 30
+> https://mirror.ctan.org
+
+
+returns %url_effective when in fact it shoud return the actual URL. With
+Windows curl, it works just fine.
+
+It could be due to old curl shipped with rtools40: curl 7.64.1
+(x86_64-pc-msys) libcurl/7.64.1 OpenSSL/1.1.1k zlib/1.2.11, Windows
+uses curl 7.79.1 (Windows) libcurl/7.79.1 Schannel.
+
+It seems that system2() uses rtools40 curl and this renders many things
+erroneous. Any thoughts on this?
+
+Best regards
+Jan
+
+	[[alternative HTML version deleted]]
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Thu Feb 10 17:54:25 2022
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Thu, 10 Feb 2022 17:54:25 +0100
+Subject: [Rd] localeToCharset()
+In-Reply-To: <143B435C-3E84-4B29-A06E-FDBFC487962C@uni-due.de>
+References: <68F1ECBC-E65A-443B-928B-94889F183D03@uni-due.de>
+ <20220131143201.10e183dc@Tarkus>
+ <E5C802F0-1943-4CF4-AE64-9545207B285C@uni-due.de>
+ <7d32a02d-e03f-11e6-0f92-9826bd4e96b6@gmail.com>
+ <143B435C-3E84-4B29-A06E-FDBFC487962C@uni-due.de>
+Message-ID: <c2dfedc7-325f-f2aa-1cef-ce7eeeb1a0ae@gmail.com>
+
+Thanks to Ivan for the patch to support C.UTF-8 in localeToCharset, I've 
+added it to R-devel.
+
+On 1/31/22 14:08, Bl?tte, Andreas wrote:
+> Dear Tomas,
+>
+> thanks a lot. I do understand the explanation of Simon - I was not aware of the standardization issue. My conclusion is that I should rely on another approach to detect the session charset, and your suggestions are my first option.
+>
+> My final thought: For users who do not know the POSIX standards and recent aberrations , a warning might be helpful, something such as:
+> If (startsWith(locale, "C.")) warning (sprintf("%s is a non-standard locale", locale))
+
+Dear Andreas, "C" and "POSIX" (and "") are the only two locales with 
+standard names (defined by POSIX), so people necessarily have to rely on 
+the non-standard ones and when new ones are introduced, such as in this 
+case, we need to update localeToCharset() to support them. Thanks for 
+your report.
+
+Best
+Tomas
+
+
+>
+> As far as I am concerned, I take away a lot from this discussion! Thank you!
+>
+> Kind regards
+> Andreas
+>   
+>
+> ?Am 31.01.22, 13:32 schrieb "Tomas Kalibera" <tomas.kalibera at gmail.com>:
+>
+>      Hi Andreas,
+>
+>      is there still any higher-level problem left you need to solve? Ideally
+>      one wouldn't need to query what is the native encoding, but directly use
+>      iconv() or indirectly other R functions to convert the data from/to the
+>      native encoding. iconv() will find out internally what is the native
+>      encoding (via data that is available also by l10n_info(), but with care
+>      for differences between OSes).
+>
+>      Best
+>      Tomas
+>
+>      On 1/31/22 12:38, Bl?tte, Andreas wrote:
+>      > Dear Ivan,
+>      >
+>      > this is a very helpful explanation!  I think it is important to make output of localeToCharset() more predictable. My problem is essentially not to set the locale such that things will work after all. I think the problem is that you see unexpected results.  I guess I owe a suggestion how to improve the code, but your suggestion looks like a very good starting point.
+>      >
+>      > Andreas
+>      >
+>      > Am 31.01.22, 12:32 schrieb "Ivan Krylov" <krylov.r00t at gmail.com>:
+>      >
+>      >      On Mon, 31 Jan 2022 09:56:27 +0000
+>      >      "Bl?tte, Andreas" <andreas.blaette at uni-due.de> wrote:
+>      >
+>      >      > After starting R with a re-defined locale (`env LC_CTYPE=en_US.UTF-8
+>      >      > R`,  the output of `localeToCharset()` is:
+>      >      > [1] "UTF-8"     "ISO8859-1"
+>      >
+>      >      > why ISO8859-1 might be a fallback option here?
+>      >
+>      >      ISO8859-1 seems to be offered because it covers the alphabet of
+>      >      American English. Obviously, this doesn't guarantee that the guess is
+>      >      correct. For example, I could symlink the ru_RU.KOI8-R locale on my
+>      >      system to name it "ru_RU", and localeToCharset() would return
+>      >      "ISO8859-5", not knowing the correct answer. ??????, anyone?
+>      >
+>      >      > Part of my analysis of the code of `localeToCharset()` is that it
+>      >      > targets special scenarios on Windows and macOS, but not on Linux.
+>      >
+>      >      Well, it almost does the right thing. GNU/Linux locales are typically
+>      >      named like <language>_<country>.<encoding>, and localeToCharset()
+>      >      respects the <encoding> part, but only if the language and the country
+>      >      are specified. A quick fix for that would be to add one final case:
+>      >
+>      >      Index: src/library/utils/R/iconv.R
+>      >      ===================================================================
+>      >      --- src/library/utils/R/iconv.R (revision 81596)
+>      >      +++ src/library/utils/R/iconv.R (working copy)
+>      >      @@ -135,6 +135,7 @@
+>      >                   if(enc == "utf8") return(c("UTF-8", guess(ll)))
+>      >                   else return(guess(ll))
+>      >               }
+>      >      +        if (enc == "utf8") return("UTF-8") # fallback for ???.UTF-8
+>      >               return(NA_character_)
+>      >           }
+>      >       }
+>      >
+>      >      (Non-UTF-8 encodings on POSIX are handled above, in the if(nzchar(enc)
+>      >      && enc != "utf8") branch.)
+>      >
+>      >      Maybe a better fix would be to restructure the code a bit, to always
+>      >      take the encoding hint and then also try to guess if the locale looks
+>      >      like it provides a language code.
+>      >
+>      >      --
+>      >      Best regards,
+>      >      Ivan
+>      >
+>      > ______________________________________________
+>      > R-devel at r-project.org mailing list
+>      > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From w||||@mwdun|@p @end|ng |rom gm@||@com  Thu Feb 10 17:59:43 2022
+From: w||||@mwdun|@p @end|ng |rom gm@||@com (Bill Dunlap)
+Date: Thu, 10 Feb 2022 08:59:43 -0800
+Subject: [Rd] rtools40 curl cannot handle -w variables
+In-Reply-To: <CA+6hu7dGcmGHAGf4LwTb0M3ssgMXyEiph1DAUGLn1UcVNcC0KA@mail.gmail.com>
+References: <CA+6hu7dGcmGHAGf4LwTb0M3ssgMXyEiph1DAUGLn1UcVNcC0KA@mail.gmail.com>
+Message-ID: <CAHqSRuQWKJx0s9FCuE=As5U81RUXFk6CNV4qHh2tD2adTPsjpg@mail.gmail.com>
+
+If you wrap -w's argument in double quotes then it works in both versions
+of curl.
+
+C:\Users\willi>C:\WINDOWS\system32\curl.exe -w %{url_effective}
+https://mirror.ctan.org | tail -1
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time
+ Current
+                                 Dload  Upload   Total   Spent    Left
+ Speed
+100   298  100   298    0     0    393      0 --:--:-- --:--:-- --:--:--
+394
+https://mirror.ctan.org/
+C:\Users\willi>C:\WINDOWS\system32\curl.exe -w "%{url_effective}"
+https://mirror.ctan.org | tail -1
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time
+ Current
+                                 Dload  Upload   Total   Spent    Left
+ Speed
+100   295  100   295    0     0    396      0 --:--:-- --:--:-- --:--:--
+397
+https://mirror.ctan.org/
+C:\Users\willi>
+C:\Users\willi>C:\rtools40\usr\bin\curl.exe -w %{url_effective}
+https://mirror.ctan.org | tail -1
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time
+ Current
+                                 Dload  Upload   Total   Spent    Left
+ Speed
+100   309  100   309    0     0    390      0 --:--:-- --:--:-- --:--:--
+389
+%url_effective
+C:\Users\willi>C:\rtools40\usr\bin\curl.exe -w "%{url_effective}"
+https://mirror.ctan.org | tail -1
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time
+ Current
+                                 Dload  Upload   Total   Spent    Left
+ Speed
+100   310  100   310    0     0    405      0 --:--:-- --:--:-- --:--:--
+405
+https://mirror.ctan.org
+
+-Bill
+
+
+On Thu, Feb 10, 2022 at 7:53 AM Jan Net?k <netikja at gmail.com> wrote:
+
+> Hi,
+>
+> I get different results when using Windows curl and curl shipped with
+> rtools40.
+>
+> curl -Ls -o nul -w %{url_effective} --connect-timeout 30 --max-time 30
+> > https://mirror.ctan.org
+>
+>
+> returns %url_effective when in fact it shoud return the actual URL. With
+> Windows curl, it works just fine.
+>
+> It could be due to old curl shipped with rtools40: curl 7.64.1
+> (x86_64-pc-msys) libcurl/7.64.1 OpenSSL/1.1.1k zlib/1.2.11, Windows
+> uses curl 7.79.1 (Windows) libcurl/7.79.1 Schannel.
+>
+> It seems that system2() uses rtools40 curl and this renders many things
+> erroneous. Any thoughts on this?
+>
+> Best regards
+> Jan
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Thu Feb 10 18:21:11 2022
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Thu, 10 Feb 2022 18:21:11 +0100
+Subject: [Rd] license.db Bug Report (FSF field for CC 4.0 licenses)
+In-Reply-To: <CAMigB8EVR0nSafhmTOhr+AdNNqYu8pTrT19xUcfULDhqg6BDFw@mail.gmail.com>
+References: <CAMigB8EVR0nSafhmTOhr+AdNNqYu8pTrT19xUcfULDhqg6BDFw@mail.gmail.com>
+Message-ID: <25093.18823.749178.299497@hornik.net>
+
+>>>>> Trevor Davis writes:
+
+Thanks: now updated in R-devel.
+
+We dropped the obsolete and unused CC 2.0 and 3.0 entries, and
+simplified the OSI and FSF tags to what is needed for the FOSS tag.
+
+Best
+-k
+
+> Hi,
+> I noticed some errors in the `FSF` fields in `share/licenses/license.db`
+> for some Creative Commons licenses:
+
+> `license.db` should be corrected to:
+
+> ```
+> Name: Creative Commons Attribution-ShareAlike 2.0 Generic License
+> Abbrev: CC BY-SA 2.0
+> FSF: free_and_GPLv3_incompatible
+
+> Name: Creative Commons Attribution 4.0 International License
+> Abbrev: CC BY 4.0
+> FSF: free_and_GPLv3_compatible (
+> https://www.gnu.org/licenses/license-list.html#ccby)
+
+> Name: Creative Commons Attribution-ShareAlike 4.0 International License
+> Abbrev: CC BY-SA 4.0
+> FSF: free_and_GPLv3_compatible (
+> https://www.gnu.org/licenses/license-list.html#ccbysa)
+> ```
+
+> * According to the current version of
+> https://www.gnu.org/licenses/license-list.html the FSF considers the CC BY
+> 4.0 license "compatible with all versions of the GNU GPL" and the CC BY-SA
+> 4.0 license "one-way compatible with the GNU GPL version 3: this means you
+> may license your modified versions of CC BY-SA 4.0 materials under GNU GPL
+> version 3".
+> * Note Creative Commons explicitly declared GPL-3 a "BY-SA Compatible
+> License" for version 4.0 on October 8th, 2015:
+> https://creativecommons.org/share-your-work/licensing-considerations/compatible-licenses
+> * In a previous version of the FSF license website available on web
+> archives (e.g.
+> http://web.archive.org/web/20150124042152/https://www.gnu.org/licenses/license-list.html#OtherLicenses)
+> the FSF explicitly considered the earlier CC BY 2.0 and CC BY-SA 2.0
+> licenses incompatible with the GNU GPL licenses.
+
+>   I'm unsure whether the URL for the `FSF` field for the CC BY-SA 2.0
+> license should point to such a Web Archived link or simply be stripped as I
+> suggested above.  However the current version of
+> https://www.gnu.org/licenses/license-list.html#ccbysa no longer mentions
+> the CC BY-SA 2.0 license nor its incompatibility with the GPL license and
+> hence it should be updated in some fashion.
+
+> Best,
+
+> Trevor
+
+> 	[[alternative HTML version deleted]]
+
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From tim@t@yior m@iii@g oii hidde@eieph@@ts@co@uk  Thu Feb 10 23:51:28 2022
+From: tim@t@yior m@iii@g oii hidde@eieph@@ts@co@uk (tim@t@yior m@iii@g oii hidde@eieph@@ts@co@uk)
+Date: Thu, 10 Feb 2022 22:51:28 +0000 (GMT)
+Subject: [Rd] Recent list2DF changes
+Message-ID: <1376574877.27168.1644533488936@office.mailbox.org>
+
+I noticed list2DF has recently been altered in R-devel to no longer replicate elements to the same length (instead giving an error). If useful, I *think* the following alternative would give the same performance improvements but maintain the current (4.1.2) recycling behaviour.
+
+list2DF2 <- function (x = list(), nrow = NULL)
+{
+    stopifnot(is.list(x), is.null(nrow) || nrow >= 0L)
+    if (n <- length(x)) {
+        nn <- lengths(x)
+        if (is.null(nrow))
+            nrow <- max(nn, 0L)
+        if (!all(nn==nrow))
+            x <- lapply(x, rep_len, nrow)
+    }
+    else {
+        if (is.null(nrow))
+            nrow <- 0L
+    }
+    if (is.null(names(x)))
+        names(x) <- character(n)
+    class(x) <- "data.frame"
+    attr(x, "row.names") <- .set_row_names(nrow)
+    x
+}
+
+Tim
+
+
