@@ -2244,3 +2244,136 @@ Best
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From pd@|gd @end|ng |rom gm@||@com  Fri Feb 18 11:33:11 2022
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Fri, 18 Feb 2022 11:33:11 +0100
+Subject: [Rd] R 4.1.3 scheduled for March 10
+In-Reply-To: <7BC92570-396C-47AD-A035-6558E1FEEAC0@gmail.com>
+References: <7BC92570-396C-47AD-A035-6558E1FEEAC0@gmail.com>
+Message-ID: <A66F6B8E-DDFD-4220-B281-571B8FE0B705@gmail.com>
+
+Schedule will appear on developer.r-project.org when it gets updated from SVN.
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From j@g@nmn2 @end|ng |rom gm@||@com  Fri Feb 18 20:49:33 2022
+From: j@g@nmn2 @end|ng |rom gm@||@com (Mikael Jagan)
+Date: Fri, 18 Feb 2022 14:49:33 -0500
+Subject: [Rd] Parser oddity with <- and =
+In-Reply-To: <mailman.52344.3.1644058802.8346.r-devel@r-project.org>
+References: <mailman.52344.3.1644058802.8346.r-devel@r-project.org>
+Message-ID: <2231e177-c172-8828-00d1-46e910bedc07@gmail.com>
+
+The `<-` operator has higher precedence than the `=` operator,
+so it makes sense to me that `a <- b = c` would be parsed as
+
+call("=", call("<-", quote(a), quote(b)), quote(c))
+
+For `a <- b = c` to be parsed instead as
+
+call("<-", quote(a), call("=", quote(b), quote(c)))
+
+R would need to assign equal precedence to `<-` and `=`, but
+I'm guessing that `=` _needs_ to have lower precedence than `<-`
+for calls with named arguments to be parsed in a sensible way.
+
+Mikael
+
+> Sorry, I wrote in a sloppy way.  The parsing I see is just what you saw.
+>    It's the evaluation of that expression that tries to call `<-<-`:
+> 
+>   > a <- 1
+>   > a <- b = c
+> Error in a <- b = c : could not find function "<-<-"
+> 
+> This happens because R is trying to make an assignment using = with a
+> LHS that is the function call a <- b.
+> 
+> Duncan Murdoch
+> 
+> 
+> On 04/02/2022 3:28 p.m., Bill Dunlap wrote:
+>> In R-4.1.2 and R-devel from two weeks ago I do not get the `<-<-`:
+>>
+>>       > str.language(parse(text = "a <- b = c"))
+>>      expression: structure(expression(a <- b = c), sr ...
+>>       ? language: a <- b = c
+>>       ? ? symbol: =
+>>       ? ? language: a <- b
+>>       ? ? ? symbol: <-
+>>       ? ? ? symbol: a
+>>       ? ? ? symbol: b
+>>       ? ? symbol: c
+>>       > identical(parse(text = "a <- b = c")[[1]], parse(text = "`=`(
+>>      `<-`(a, b), c)")[[1]])
+>>      [1] TRUE
+>>
+>> str.language() is a rudimentary parse tree displayer:
+>>
+>>      str.language <- function(expr, name = "", indent = 0)
+>>      {
+>>       ? ? trim... <- function(string, width.cutoff) {
+>>       ? ? ? ? if (nchar(string) > width.cutoff) {
+>>       ? ? ? ? ? ? string <- sprintf("%.*s ...", width.cutoff-4, string)
+>>       ? ? ? ? }
+>>       ? ? ? ? string
+>>       ? ? }
+>>       ? ? cat(sep="", rep(" ?", indent), typeof(expr), ": ",
+>>       ? ? ? ? if(length(name)==1 && nzchar(name)) { paste0(name, " = ") },
+>>       ? ? ? ? trim...(deparse1(expr, width.cutoff=40), width.cutoff=40),
+>>       ? ? ? ? "\n")
+>>       ? ? if (is.function(expr)) {
+>>       ? ? ? ? str.language(formals(expr), name="[formals]", indent =
+>>      indent + 1)
+>>       ? ? ? ? str.language(body(expr), name="[body]", indent = indent + 1)
+>>       ? ? } else if (is.recursive(expr)) {
+>>       ? ? ? ? expr <- as.list(expr)
+>>       ? ? ? ? nms <- names(expr)
+>>       ? ? ? ? for (i in seq_along(expr)) {
+>>       ? ? ? ? ? ? str.language(expr[[i]], name=nms[[i]], indent = indent + 1)
+>>       ? ? ? ? }
+>>       ? ? }
+>>       ? ? invisible(expr)
+>>      }
+>>
+>>
+>> -Bill
+>>
+>> On Fri, Feb 4, 2022 at 9:34 AM Duncan Murdoch <murdoch.duncan at gmail.com
+>> <mailto:murdoch.duncan at gmail.com>> wrote:
+>>
+>>      Here's an odd parse:
+>>
+>>       ? ? a <- b = 1
+>>
+>>      This appears to be parsed as
+>>
+>>       ? ? `<-<-`(a, b, 1)
+>>
+>>      instead of being equivalent to
+>>
+>>       ? ? a <- b <- 1
+>>
+>>      I wonder if that's intentional?
+>>
+>>      (This showed up at https://stackoverflow.com/q/70989067/2554330
+>>      <https://stackoverflow.com/q/70989067/2554330>, where
+>>      it caused a lot of confusion.? I think the original intent was that `a`
+>>      would be a macro holding `b = 1`, but I'm not sure of that.)
+>>
+>>      Duncan Murdoch
+>>
+>>      ______________________________________________
+>>      R-devel at r-project.org <mailto:R-devel at r-project.org> mailing list
+>>      https://stat.ethz.ch/mailman/listinfo/r-devel
+>>      <https://stat.ethz.ch/mailman/listinfo/r-devel>
+>>
+
+
