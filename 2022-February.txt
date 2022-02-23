@@ -2377,3 +2377,103 @@ Mikael
 >>
 
 
+From c@@rd|@g@bor @end|ng |rom gm@||@com  Mon Feb 21 11:33:30 2022
+From: c@@rd|@g@bor @end|ng |rom gm@||@com (=?UTF-8?B?R8OhYm9yIENzw6FyZGk=?=)
+Date: Mon, 21 Feb 2022 11:33:30 +0100
+Subject: [Rd] deparse() and UTF-8 strings
+Message-ID: <CABtg=K=_w9rqqua5V-dqB7w7wiQpXaMub7MknNpzbU+rP_8fPQ@mail.gmail.com>
+
+I am wondering if it would make sense to produce \u escaped strings in
+deparse() for UTF-8 input. Currently we have (in R-devel):
+
+x <- "G\u00e1bor"
+Sys.setlocale("LC_ALL", "C")
+#> [1] "C/C/C/C/C/en_US.UTF-8"
+
+deparse(x)
+#> [1] "\"G<U+00E1>bor\""
+
+charToRaw(deparse(x))
+#> [1] 22 47 3c 55 2b 30 30 45 31 3e 62 6f 72 22
+
+Is there a reason why this is preferable instead of returning
+
+"\"G\\u00e1bor\""
+
+i.e.
+
+charToRaw("\"G\\u00e1bor\"")
+#>  [1] 22 47 5c 75 30 30 65 31 62 6f 72 22
+
+Returning the \u escaped form would make deparse() the inverse of
+parse(), at least in this respect.
+
+Thank you,
+Gabor
+
+
+From brod|e@g@@|@m @end|ng |rom y@hoo@com  Mon Feb 21 14:17:49 2022
+From: brod|e@g@@|@m @end|ng |rom y@hoo@com (Brodie Gaslam)
+Date: Mon, 21 Feb 2022 08:17:49 -0500
+Subject: [Rd] deparse() and UTF-8 strings
+In-Reply-To: <CABtg=K=_w9rqqua5V-dqB7w7wiQpXaMub7MknNpzbU+rP_8fPQ@mail.gmail.com>
+References: <CABtg=K=_w9rqqua5V-dqB7w7wiQpXaMub7MknNpzbU+rP_8fPQ@mail.gmail.com>
+Message-ID: <09bb1994-832e-df11-168f-158fbfec073a@yahoo.com>
+
+I'm not R-core, but happen to have run into this issue.
+
+I think this makes sense conceptually, and have had the same thought 
+myself.  One implementation challenge is that the parser has a special 
+branch for Unicode escape strings (e.g. "G\u00e1bor") that limits such 
+input to 10K wide characters, so the parser would need to be modified in 
+order to make this a general solution:
+
+ > parse(text=sprintf('"%s"', strrep("G\\u00e1bor", 2000)))
+Error in parse(text = sprintf("\"%s\"", strrep("G\\u00e1bor", 2000))) :
+   string at line 1 containing Unicode escapes not in this locale
+is too long (max 10000 chars)
+
+Such strings are rare so maybe an interim solution is just to allow it 
+for deparsing of shorter strings.  The parser modification itself would 
+also have the benefit of speeding up parsing of strings without Unicode 
+escapes.
+
+Best,
+
+B.
+
+
+On 2/21/22 5:33 AM, G?bor Cs?rdi wrote:
+> I am wondering if it would make sense to produce \u escaped strings in
+> deparse() for UTF-8 input. Currently we have (in R-devel):
+> 
+> x <- "G\u00e1bor"
+> Sys.setlocale("LC_ALL", "C")
+> #> [1] "C/C/C/C/C/en_US.UTF-8"
+> 
+> deparse(x)
+> #> [1] "\"G<U+00E1>bor\""
+> 
+> charToRaw(deparse(x))
+> #> [1] 22 47 3c 55 2b 30 30 45 31 3e 62 6f 72 22
+> 
+> Is there a reason why this is preferable instead of returning
+> 
+> "\"G\\u00e1bor\""
+> 
+> i.e.
+> 
+> charToRaw("\"G\\u00e1bor\"")
+> #>  [1] 22 47 5c 75 30 30 65 31 62 6f 72 22
+> 
+> Returning the \u escaped form would make deparse() the inverse of
+> parse(), at least in this respect.
+> 
+> Thank you,
+> Gabor
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
