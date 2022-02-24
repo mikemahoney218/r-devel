@@ -2477,3 +2477,532 @@ On 2/21/22 5:33 AM, G?bor Cs?rdi wrote:
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From c@@rd|@g@bor @end|ng |rom gm@||@com  Tue Feb 22 10:53:33 2022
+From: c@@rd|@g@bor @end|ng |rom gm@||@com (=?UTF-8?B?R8OhYm9yIENzw6FyZGk=?=)
+Date: Tue, 22 Feb 2022 10:53:33 +0100
+Subject: [Rd] deparse() and UTF-8 strings
+In-Reply-To: <09bb1994-832e-df11-168f-158fbfec073a@yahoo.com>
+References: <CABtg=K=_w9rqqua5V-dqB7w7wiQpXaMub7MknNpzbU+rP_8fPQ@mail.gmail.com>
+ <09bb1994-832e-df11-168f-158fbfec073a@yahoo.com>
+Message-ID: <CABtg=K=dg8mGzaCfABsWk00V=+uBhBfwYiZQoiVWZPQTm8eqRQ@mail.gmail.com>
+
+I just saw a commit accidentally that adds iconv() support for the c99
+\u escapes, which might or might not be accidental:
+https://github.com/wch/r-source/commit/f19b4ae7715eea1b18ef8368b4c2849a578ade07
+
+In any case, this is great, and very useful to have cross-platform for
+it. Thank you!
+
+Would it make sense to generate braced 4-digit \uxxxx sequences, to
+make sure that they don't mix with the surrounding text?
+I.e. \u{xxxx}? (Plus update the 6 to 8 twice.)
+https://github.com/wch/r-source/commit/f19b4ae7715eea1b18ef8368b4c2849a578ade07#diff-9a906ea3803721bf2aa8b802e98786c3b096727d87f1c423826e3bba4c112d76R746-R747
+
+Also, it seems that we need a capital \U for the 8-digit sequences here:
+https://github.com/wch/r-source/commit/f19b4ae7715eea1b18ef8368b4c2849a578ade07#diff-9a906ea3803721bf2aa8b802e98786c3b096727d87f1c423826e3bba4c112d76R753
+
+Thank you again,
+Gabor
+
+On Mon, Feb 21, 2022 at 2:17 PM Brodie Gaslam <brodie.gaslam at yahoo.com> wrote:
+>
+> I'm not R-core, but happen to have run into this issue.
+>
+> I think this makes sense conceptually, and have had the same thought
+> myself.  One implementation challenge is that the parser has a special
+> branch for Unicode escape strings (e.g. "G\u00e1bor") that limits such
+> input to 10K wide characters, so the parser would need to be modified in
+> order to make this a general solution:
+>
+>  > parse(text=sprintf('"%s"', strrep("G\\u00e1bor", 2000)))
+> Error in parse(text = sprintf("\"%s\"", strrep("G\\u00e1bor", 2000))) :
+>    string at line 1 containing Unicode escapes not in this locale
+> is too long (max 10000 chars)
+>
+> Such strings are rare so maybe an interim solution is just to allow it
+> for deparsing of shorter strings.  The parser modification itself would
+> also have the benefit of speeding up parsing of strings without Unicode
+> escapes.
+>
+> Best,
+>
+> B.
+>
+>
+> On 2/21/22 5:33 AM, G?bor Cs?rdi wrote:
+> > I am wondering if it would make sense to produce \u escaped strings in
+> > deparse() for UTF-8 input. Currently we have (in R-devel):
+> >
+> > x <- "G\u00e1bor"
+> > Sys.setlocale("LC_ALL", "C")
+> > #> [1] "C/C/C/C/C/en_US.UTF-8"
+> >
+> > deparse(x)
+> > #> [1] "\"G<U+00E1>bor\""
+> >
+> > charToRaw(deparse(x))
+> > #> [1] 22 47 3c 55 2b 30 30 45 31 3e 62 6f 72 22
+> >
+> > Is there a reason why this is preferable instead of returning
+> >
+> > "\"G\\u00e1bor\""
+> >
+> > i.e.
+> >
+> > charToRaw("\"G\\u00e1bor\"")
+> > #>  [1] 22 47 5c 75 30 30 65 31 62 6f 72 22
+> >
+> > Returning the \u escaped form would make deparse() the inverse of
+> > parse(), at least in this respect.
+> >
+> > Thank you,
+> > Gabor
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From pro|jcn@@h @end|ng |rom gm@||@com  Tue Feb 22 19:29:15 2022
+From: pro|jcn@@h @end|ng |rom gm@||@com (J C Nash)
+Date: Tue, 22 Feb 2022 13:29:15 -0500
+Subject: [Rd] Attributes of a vector element?
+Message-ID: <c2ac4edc-fd53-bcea-89d6-09d4fc874ef8@gmail.com>
+
+I'm sending this to r-devel rather than r-help as I suspect I'm pushing the boundaries
+of the R language. In that I get no errors but things don't "work", I may have revealed
+a gap in the attributes structure.
+
+In displaying results of some optimization calculations (in the optimx package I maintain),
+I'd like to add indicators F(ree), L(ower) and U(pper) to indicate if parameters returned are
+on bounds. I've got my optimr() routine to put the character indicators in the list() structure of
+the answer to each individual solver result. However, when I collect these into a data frame
+for the results of several solvers (run by the opm() function), it seems that attributes
+can't be carried through.
+
+Here is a small example.
+
+pp<-c(1,2)
+attr(pp[1], "trial")<-"first"
+attributes(pp)
+attributes(pp[1])
+attr(pp[1],"trial")
+pp[1]
+pp[2]
+attr(pp, "name")<-"rubbish"
+attributes(pp)
+str(pp)
+
+The output is:
+
+ > pp<-c(1,2)
+
+ > attr(pp[1], "trial")<-"first"  ## APPEARS TO ACCEPT ATTRIBUTE
+
+ > attributes(pp)
+NULL
+
+ > attributes(pp[1])
+NULL
+
+ > attr(pp[1],"trial")            ## FAILS TO FIND ATTRIBUTE
+NULL
+
+ > pp[1]
+[1] 1
+
+ > pp[2]
+[1] 2
+
+ > attr(pp, "name")<-"rubbish"
+
+ > attributes(pp)
+$name
+[1] "rubbish"
+
+
+ > str(pp)
+  num [1:2] 1 2
+  - attr(*, "name")= chr "rubbish"
+
+Similarly,
+
+pl<-list(one=1, two=2)
+attr(pl[1],"trial")<- "lfirst"
+attr(pl[1], "trial")
+attributes(pl)
+attributes(pl[1])
+attributes(pl$one)
+str(pl)
+
+This also fails.
+
+Am I doing something silly?
+
+Thanks in advance for any pointers.
+
+JN
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Tue Feb 22 19:45:21 2022
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Tue, 22 Feb 2022 21:45:21 +0300
+Subject: [Rd] Attributes of a vector element?
+In-Reply-To: <c2ac4edc-fd53-bcea-89d6-09d4fc874ef8@gmail.com>
+References: <c2ac4edc-fd53-bcea-89d6-09d4fc874ef8@gmail.com>
+Message-ID: <20220222214521.16141146@Tarkus>
+
+On Tue, 22 Feb 2022 13:29:15 -0500
+J C Nash <profjcnash at gmail.com> wrote:
+
+> pp<-c(1,2)
+> attr(pp[1], "trial")<-"first"
+
+I don't have a solid proof for this with a link to the R Language
+Definition, but my understanding of the attributes is that they belong
+to the whole vector (and that elements of a vector don't usually exist
+as separate entities in R). Maybe this explains why the attribute of a
+temporary value is lost in this assignment.
+
+> pl<-list(one=1, two=2)
+> attr(pl[1],"trial")<- "lfirst"
+
+However, this could be made to work, if attributes were assigned on the
+list element instead of the list slice:
+
+attr(pl[[1]],"trial")<- "lfirst"
+attr(pl[[1]],"trial")
+# [1] "lfirst"
+
+Same goes for data.frame columns:
+
+str(data.frame(x = 1:10, y = structure(1:10, attr = 'val')))
+# 'data.frame':   10 obs. of  2 variables:
+#  $ x: int  1 2 3 4 5 6 7 8 9 10
+#  $ y: atomic  1 2 3 4 5 6 7 8 9 10
+#   ..- attr(*, "attr")= chr "val"   # <-- attribute preserved
+
+If you need to tag rows of a data frame, your best bet would likely be
+to assign a vector as an attribute of the data frame itself.
+
+-- 
+Best regards,
+Ivan
+
+
+From |uc@r @end|ng |rom |edor@project@org  Tue Feb 22 19:46:44 2022
+From: |uc@r @end|ng |rom |edor@project@org (=?UTF-8?Q?I=C3=B1aki_Ucar?=)
+Date: Tue, 22 Feb 2022 19:46:44 +0100
+Subject: [Rd] Attributes of a vector element?
+In-Reply-To: <c2ac4edc-fd53-bcea-89d6-09d4fc874ef8@gmail.com>
+References: <c2ac4edc-fd53-bcea-89d6-09d4fc874ef8@gmail.com>
+Message-ID: <CALEXWq2xxxPMM2u3yWyxf=HrXA5zZ7owrzfMaYZ-qwLuHXKvvw@mail.gmail.com>
+
+On Tue, 22 Feb 2022 at 19:29, J C Nash <profjcnash at gmail.com> wrote:
+>
+> I'm sending this to r-devel rather than r-help as I suspect I'm pushing the boundaries
+> of the R language. In that I get no errors but things don't "work", I may have revealed
+> a gap in the attributes structure.
+>
+> In displaying results of some optimization calculations (in the optimx package I maintain),
+> I'd like to add indicators F(ree), L(ower) and U(pper) to indicate if parameters returned are
+> on bounds. I've got my optimr() routine to put the character indicators in the list() structure of
+> the answer to each individual solver result. However, when I collect these into a data frame
+> for the results of several solvers (run by the opm() function), it seems that attributes
+> can't be carried through.
+>
+> Here is a small example.
+>
+> pp<-c(1,2)
+> attr(pp[1], "trial")<-"first"
+> attributes(pp)
+> attributes(pp[1])
+> attr(pp[1],"trial")
+> pp[1]
+> pp[2]
+> attr(pp, "name")<-"rubbish"
+> attributes(pp)
+> str(pp)
+>
+> The output is:
+>
+>  > pp<-c(1,2)
+>
+>  > attr(pp[1], "trial")<-"first"  ## APPEARS TO ACCEPT ATTRIBUTE
+>
+>  > attributes(pp)
+> NULL
+>
+>  > attributes(pp[1])
+> NULL
+>
+>  > attr(pp[1],"trial")            ## FAILS TO FIND ATTRIBUTE
+> NULL
+>
+>  > pp[1]
+> [1] 1
+>
+>  > pp[2]
+> [1] 2
+>
+>  > attr(pp, "name")<-"rubbish"
+>
+>  > attributes(pp)
+> $name
+> [1] "rubbish"
+>
+>
+>  > str(pp)
+>   num [1:2] 1 2
+>   - attr(*, "name")= chr "rubbish"
+>
+> Similarly,
+>
+> pl<-list(one=1, two=2)
+> attr(pl[1],"trial")<- "lfirst"
+> attr(pl[1], "trial")
+> attributes(pl)
+> attributes(pl[1])
+> attributes(pl$one)
+> str(pl)
+>
+> This also fails.
+>
+> Am I doing something silly?
+>
+> Thanks in advance for any pointers.
+
+In short, this is not how it works. In both cases, you are assigning
+an attribute to a temporary subset that is immediately destroyed,
+because it's not assigned to anything. So you are doing this:
+
+pp<-c(1,2)
+tmp <- pp[1]
+attr(tmp, "trial")<-"first"
+rm(tmp)
+
+The assignment of course succeeds, but that's not what you want. What
+you can do is to add a data.frame of size length(pp) as an attribute
+to pp, with as many columns as you need (lower, upper...).
+
+-- 
+I?aki ?car
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Tue Feb 22 19:52:18 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 22 Feb 2022 13:52:18 -0500
+Subject: [Rd] Attributes of a vector element?
+In-Reply-To: <20220222214521.16141146@Tarkus>
+References: <c2ac4edc-fd53-bcea-89d6-09d4fc874ef8@gmail.com>
+ <20220222214521.16141146@Tarkus>
+Message-ID: <04f7c8ca-2df2-9749-9959-52bf2f01d764@gmail.com>
+
+On 22/02/2022 1:45 p.m., Ivan Krylov wrote:
+> On Tue, 22 Feb 2022 13:29:15 -0500
+> J C Nash <profjcnash at gmail.com> wrote:
+> 
+>> pp<-c(1,2)
+>> attr(pp[1], "trial")<-"first"
+> 
+> I don't have a solid proof for this with a link to the R Language
+> Definition, but my understanding of the attributes is that they belong
+> to the whole vector (and that elements of a vector don't usually exist
+> as separate entities in R). Maybe this explains why the attribute of a
+> temporary value is lost in this assignment.
+
+That's true for atomic vectors.  lists are also vectors, and they can 
+accept attributes on the list as a whole or on the individual elements, 
+but it would be done using
+
+    attr(pp[[1]], "trial")<-"first"
+
+(as I just noticed you found below).
+
+I suspect it's an oversight that attr(pp[1], "trial") <- "first" didn't 
+trigger an error.  It says to assign the attribute on the subvector 
+containing just the first element, but in general such things wouldn't 
+be inherited by the full vector.
+
+> 
+>> pl<-list(one=1, two=2)
+>> attr(pl[1],"trial")<- "lfirst"
+> 
+> However, this could be made to work, if attributes were assigned on the
+> list element instead of the list slice:
+> 
+> attr(pl[[1]],"trial")<- "lfirst"
+> attr(pl[[1]],"trial")
+> # [1] "lfirst"
+> 
+> Same goes for data.frame columns:
+> 
+> str(data.frame(x = 1:10, y = structure(1:10, attr = 'val')))
+> # 'data.frame':   10 obs. of  2 variables:
+> #  $ x: int  1 2 3 4 5 6 7 8 9 10
+> #  $ y: atomic  1 2 3 4 5 6 7 8 9 10
+> #   ..- attr(*, "attr")= chr "val"   # <-- attribute preserved
+> 
+> If you need to tag rows of a data frame, your best bet would likely be
+> to assign a vector as an attribute of the data frame itself.
+> 
+
+Yes, you could do
+
+   attr(pp, "trials")[1] <- "someval"
+
+if you already had a "trials" attribute on pp.
+
+Duncan Murdoch
+
+
+From pro|jcn@@h @end|ng |rom gm@||@com  Tue Feb 22 20:00:35 2022
+From: pro|jcn@@h @end|ng |rom gm@||@com (J C Nash)
+Date: Tue, 22 Feb 2022 14:00:35 -0500
+Subject: [Rd] Attributes of a vector element?
+In-Reply-To: <04f7c8ca-2df2-9749-9959-52bf2f01d764@gmail.com>
+References: <c2ac4edc-fd53-bcea-89d6-09d4fc874ef8@gmail.com>
+ <20220222214521.16141146@Tarkus>
+ <04f7c8ca-2df2-9749-9959-52bf2f01d764@gmail.com>
+Message-ID: <5b202145-9013-e757-d3ee-aee47e2c6e73@gmail.com>
+
+Thanks for the responses. Looks like I can make something work if I pay appropriate
+attention to detail.
+
+Duncan: Should I try to submit a bug report for the missed error message? If so, do you
+have suggestions for keywords?
+
+Best, JN
+
+
+On 2022-02-22 13:52, Duncan Murdoch wrote:
+> On 22/02/2022 1:45 p.m., Ivan Krylov wrote:
+>> On Tue, 22 Feb 2022 13:29:15 -0500
+>> J C Nash <profjcnash at gmail.com> wrote:
+>>
+>>> pp<-c(1,2)
+>>> attr(pp[1], "trial")<-"first"
+>>
+>> I don't have a solid proof for this with a link to the R Language
+>> Definition, but my understanding of the attributes is that they belong
+>> to the whole vector (and that elements of a vector don't usually exist
+>> as separate entities in R). Maybe this explains why the attribute of a
+>> temporary value is lost in this assignment.
+> 
+> That's true for atomic vectors.? lists are also vectors, and they can accept attributes on the list as a whole or on the 
+> individual elements, but it would be done using
+> 
+>  ?? attr(pp[[1]], "trial")<-"first"
+> 
+> (as I just noticed you found below).
+> 
+> I suspect it's an oversight that attr(pp[1], "trial") <- "first" didn't trigger an error.? It says to assign the 
+> attribute on the subvector containing just the first element, but in general such things wouldn't be inherited by the 
+> full vector.
+> 
+>>
+>>> pl<-list(one=1, two=2)
+>>> attr(pl[1],"trial")<- "lfirst"
+>>
+>> However, this could be made to work, if attributes were assigned on the
+>> list element instead of the list slice:
+>>
+>> attr(pl[[1]],"trial")<- "lfirst"
+>> attr(pl[[1]],"trial")
+>> # [1] "lfirst"
+>>
+>> Same goes for data.frame columns:
+>>
+>> str(data.frame(x = 1:10, y = structure(1:10, attr = 'val')))
+>> # 'data.frame':?? 10 obs. of? 2 variables:
+>> #? $ x: int? 1 2 3 4 5 6 7 8 9 10
+>> #? $ y: atomic? 1 2 3 4 5 6 7 8 9 10
+>> #?? ..- attr(*, "attr")= chr "val"?? # <-- attribute preserved
+>>
+>> If you need to tag rows of a data frame, your best bet would likely be
+>> to assign a vector as an attribute of the data frame itself.
+>>
+> 
+> Yes, you could do
+> 
+>  ? attr(pp, "trials")[1] <- "someval"
+> 
+> if you already had a "trials" attribute on pp.
+> 
+> Duncan Murdoch
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Tue Feb 22 20:54:53 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 22 Feb 2022 14:54:53 -0500
+Subject: [Rd] Attributes of a vector element?
+In-Reply-To: <5b202145-9013-e757-d3ee-aee47e2c6e73@gmail.com>
+References: <c2ac4edc-fd53-bcea-89d6-09d4fc874ef8@gmail.com>
+ <20220222214521.16141146@Tarkus>
+ <04f7c8ca-2df2-9749-9959-52bf2f01d764@gmail.com>
+ <5b202145-9013-e757-d3ee-aee47e2c6e73@gmail.com>
+Message-ID: <309c2429-0d43-ae09-21bd-18a102b64844@gmail.com>
+
+On 22/02/2022 2:00 p.m., J C Nash wrote:
+> Thanks for the responses. Looks like I can make something work if I pay appropriate
+> attention to detail.
+> 
+> Duncan: Should I try to submit a bug report for the missed error message? If so, do you
+> have suggestions for keywords?
+
+Actually I think it's not an R bug.  Maybe someone else can express an 
+opinion.
+
+A simpler example is:
+
+   x <- 1:2
+   names(x[1]) <- "a"
+
+This is quite similar to the example in the Language Def,
+
+   names(x)[3] <- "Three"
+
+but with the order of calling `names<-` and `[<-` reversed, so I think
+
+   names(x[1]) <- "a"
+
+should be equivalent to
+
+   `*tmp*` <- x
+   x <- "[<-"(`*tmp*`, 1, value="names<-"(`*tmp*`[1], value="a"))
+   rm(`*tmp*`)
+
+Now the default "[<-" method doesn't copy names, but there's no reason 
+why it couldn't for some special class, e.g.
+
+
+   # This is what you saw:
+   x <- 1:2
+   names(x[1]) <- "a"
+   x
+   # [1] 1 2
+
+   # This could work:
+   class(x) <- "foo"
+
+   `[<-.foo` <- function(x, i, value) {
+     x <- unclass(x)
+     x[i] <- value
+     names(x)[i] <- names(value)
+     class(x) <- "foo"
+     x
+   }
+
+   names(x[1]) <- "a"
+   x
+   #   a <NA>
+   #   1    2
+   # attr(,"class")
+   # [1] "foo"
+
+So instead of an R bug, this is just a bug in your code, because you 
+tried to do something on a class that didn't handle it the way you wanted.
+
+Duncan
+
+
