@@ -3006,3 +3006,68 @@ tried to do something on a class that didn't handle it the way you wanted.
 Duncan
 
 
+From no@h@gre||er @end|ng |rom gm@||@com  Wed Feb 23 17:21:18 2022
+From: no@h@gre||er @end|ng |rom gm@||@com (Noah Greifer)
+Date: Wed, 23 Feb 2022 11:21:18 -0500
+Subject: [Rd] Inconsistent behavior of stats::bw.nrd() and stats::bw.nrd0()
+Message-ID: <CAPhhD8nx4tFcWdgZysGXr=FnV1pxF7zKoUzqBn9LN3+ukxVXDA@mail.gmail.com>
+
+Hello R-devel,
+
+I noticed an inconsistency in stats::bw.nrd() and stats::bw.nrd0, two
+functions used to compute the bandwidth for densities. According to the
+documentation,
+
+"bw.nrd0 implements a rule-of-thumb for choosing the bandwidth of a
+Gaussian kernel density estimator. It defaults to 0.9 times the minimum of
+the standard deviation and the interquartile range divided by 1.34 times
+the sample size to the negative one-fifth power (= Silverman's ?rule of
+thumb?, Silverman (1986, page 48, eqn (3.31))) unless the quartiles
+coincide when a positive result will be guaranteed.
+
+bw.nrd is the more common variation given by Scott (1992), using factor
+1.06."
+
+This implies the result of bw.nrd() should simply be 1.06/.9 times the
+result of bw.nrd0(). However, these functions are coded quite differently
+and, in particular, respond to situations where the data has an IQR of 0
+differently. The source of bw.nrd0 is
+
+function (x)
+{
+    if (length(x) < 2L)
+        stop("need at least 2 data points")
+    hi <- sd(x)
+    if (!(lo <- min(hi, IQR(x)/1.34)))
+        (lo <- hi) || (lo <- abs(x[1L])) || (lo <- 1)
+    0.9 * lo * length(x)^(-0.2)
+}
+
+and the source of bw.nrd is
+
+function (x)
+{
+    if (length(x) < 2L)
+        stop("need at least 2 data points")
+    r <- quantile(x, c(0.25, 0.75))
+    h <- (r[2L] - r[1L])/1.34
+    1.06 * min(sqrt(var(x)), h) * length(x)^(-1/5)
+}
+
+Importantly, when the IQR of the input is 0, bw.nrd0() falls back onto the
+standard deviation, guaranteeing the positive result described in the
+documentation. Whereas, bw.nrd() produces a result of 0. I am not sure
+which result is more desirable, but it would seem to me that they should at
+least be consistent. See examples below:
+
+> x <- c(1,1,1,1,1000)
+> stats::bw.nrd(x)
+[1] 0
+> stats::bw.nrd0(x)
+[1] 291.4265
+
+- Noah Greifer
+
+	[[alternative HTML version deleted]]
+
+
