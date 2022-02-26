@@ -3071,3 +3071,532 @@ least be consistent. See examples below:
 	[[alternative HTML version deleted]]
 
 
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Thu Feb 24 03:58:00 2022
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Wed, 23 Feb 2022 18:58:00 -0800
+Subject: [Rd] DOCS/BUG?: opts <- base::.Options is *not* a copy
+Message-ID: <CAFDcVCTGvrJQ0rp5fMvBAuvqrznpgGAJNrY1M8q5HkmhZ5V7Jg@mail.gmail.com>
+
+Hi, is the following a non-documented feature or a bug:
+
+$ R --quiet --vanilla
+opts <- base::.Options
+opts[["abc"]]
+#> NULL
+options(abc = 42)
+opts[["abc"]]
+#> [1] 42
+
+I would have expected that 'opts' would be a *copy* of base::.Options
+that is not affected by later changes to base::.Options.  FWIW, the
+same happens if we try with:
+
+opts <- .BaseNamespaceEnv[[".Options"]]
+
+I don't think lazy evaluation is involved, because I evaluate
+opts[["abc"]] above.
+
+The only thing help(".Options") says is:
+
+Note:
+For compatibility with S there is a visible object .Options whose
+value is a pairlist containing the current options() (in no particular
+order). Assigning to it will make a local copy and not change the
+original. (Using it however is faster than calling options()).
+
+This behavior goes back to at least R 2.15.0.
+
+/Henrik
+
+
+From r|p|ey @end|ng |rom @t@t@@ox@@c@uk  Thu Feb 24 07:12:16 2022
+From: r|p|ey @end|ng |rom @t@t@@ox@@c@uk (Prof Brian Ripley)
+Date: Thu, 24 Feb 2022 06:12:16 +0000
+Subject: [Rd] deparse() and UTF-8 strings
+In-Reply-To: <CABtg=K=dg8mGzaCfABsWk00V=+uBhBfwYiZQoiVWZPQTm8eqRQ@mail.gmail.com>
+References: <CABtg=K=_w9rqqua5V-dqB7w7wiQpXaMub7MknNpzbU+rP_8fPQ@mail.gmail.com>
+ <09bb1994-832e-df11-168f-158fbfec073a@yahoo.com>
+ <CABtg=K=dg8mGzaCfABsWk00V=+uBhBfwYiZQoiVWZPQTm8eqRQ@mail.gmail.com>
+Message-ID: <124b53a4-085c-6440-9c55-ef2735a725a8@stats.ox.ac.uk>
+
+On 22/02/2022 09:53, G?bor Cs?rdi wrote:
+> I just saw a commit accidentally that adds iconv() support for the c99
+> \u escapes, which might or might not be accidental:
+> https://github.com/wch/r-source/commit/f19b4ae7715eea1b18ef8368b4c2849a578ade07
+
+Calling my work 'accidental' felt very rude.  It is work in progress, 
+not least as the test suite is unfinished.  Part of that test is to 
+ensure it does the same thing as GNU libiconv, where the name and idea 
+came from.
+
+> In any case, this is great, and very useful to have cross-platform for
+> it. Thank you!
+> 
+> Would it make sense to generate braced 4-digit \uxxxx sequences, to
+> make sure that they don't mix with the surrounding text?
+> I.e. \u{xxxx}? (Plus update the 6 to 8 twice.)
+> https://github.com/wch/r-source/commit/f19b4ae7715eea1b18ef8368b4c2849a578ade07#diff-9a906ea3803721bf2aa8b802e98786c3b096727d87f1c423826e3bba4c112d76R746-R747
+
+But that is not what C99 defines, is it?  (In ?6.4.3.)  As \u is always 
+followed by 4 hex digits and \U by 8, there is no ambiguity.
+
+> 
+> Also, it seems that we need a capital \U for the 8-digit sequences here:
+> https://github.com/wch/r-source/commit/f19b4ae7715eea1b18ef8368b4c2849a578ade07#diff-9a906ea3803721bf2aa8b802e98786c3b096727d87f1c423826e3bba4c112d76R753
+> 
+> Thank you again,
+> Gabor
+> 
+> On Mon, Feb 21, 2022 at 2:17 PM Brodie Gaslam <brodie.gaslam at yahoo.com> wrote:
+>>
+>> I'm not R-core, but happen to have run into this issue.
+>>
+>> I think this makes sense conceptually, and have had the same thought
+>> myself.  One implementation challenge is that the parser has a special
+>> branch for Unicode escape strings (e.g. "G\u00e1bor") that limits such
+>> input to 10K wide characters, so the parser would need to be modified in
+>> order to make this a general solution:
+>>
+>>   > parse(text=sprintf('"%s"', strrep("G\\u00e1bor", 2000)))
+>> Error in parse(text = sprintf("\"%s\"", strrep("G\\u00e1bor", 2000))) :
+>>     string at line 1 containing Unicode escapes not in this locale
+>> is too long (max 10000 chars)
+>>
+>> Such strings are rare so maybe an interim solution is just to allow it
+>> for deparsing of shorter strings.  The parser modification itself would
+>> also have the benefit of speeding up parsing of strings without Unicode
+>> escapes.
+>>
+>> Best,
+>>
+>> B.
+>>
+>>
+>> On 2/21/22 5:33 AM, G?bor Cs?rdi wrote:
+>>> I am wondering if it would make sense to produce \u escaped strings in
+>>> deparse() for UTF-8 input. Currently we have (in R-devel):
+>>>
+>>> x <- "G\u00e1bor"
+>>> Sys.setlocale("LC_ALL", "C")
+>>> #> [1] "C/C/C/C/C/en_US.UTF-8"
+>>>
+>>> deparse(x)
+>>> #> [1] "\"G<U+00E1>bor\""
+>>>
+>>> charToRaw(deparse(x))
+>>> #> [1] 22 47 3c 55 2b 30 30 45 31 3e 62 6f 72 22
+>>>
+>>> Is there a reason why this is preferable instead of returning
+>>>
+>>> "\"G\\u00e1bor\""
+>>>
+>>> i.e.
+>>>
+>>> charToRaw("\"G\\u00e1bor\"")
+>>> #>  [1] 22 47 5c 75 30 30 65 31 62 6f 72 22
+>>>
+>>> Returning the \u escaped form would make deparse() the inverse of
+>>> parse(), at least in this respect.
+>>>
+>>> Thank you,
+>>> Gabor
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+-- 
+Brian D. Ripley,                  ripley at stats.ox.ac.uk
+Emeritus Professor of Applied Statistics, University of Oxford
+
+
+From ht @end|ng |rom he@therturner@net  Thu Feb 24 08:50:54 2022
+From: ht @end|ng |rom he@therturner@net (Heather Turner)
+Date: Thu, 24 Feb 2022 07:50:54 +0000
+Subject: [Rd] Google Season of Docs 2022
+In-Reply-To: <a9526ce4-0cea-46fc-b1e9-4bfced56aadf@www.fastmail.com>
+References: <a9526ce4-0cea-46fc-b1e9-4bfced56aadf@www.fastmail.com>
+Message-ID: <a6c2a79a-90a5-44d3-926b-9f1e630d9672@www.fastmail.com>
+
+Dear All,
+
+Further to this, we have had some discussion regarding supporting greater use of HTML vignettes (https://github.com/rstats-gsod/gsod2022/issues/5). The initial motivation was accessibility (PDF vignettes are not so accessible to users of screen readers or other accessibility tools e.g. browser apps that change the font or switch to dark mode). However, many users prefer HTML as it is easier to browse online and integrates with IDEs like RStudio. Search engines can work with them more effectively, helping people to find relevant packages. About a third of packages on CRAN use HTML vignettes (have "knitr" or "rmarkdown" in the VignetteBuilder field).
+
+As discussed on this issue, some work can be done at the grass-roots level, to encourage wider use of HTML vignettes. However, it would help to have a core tool for creating HTML vignettes. An issue with rmarkdown is the number of dependencies (apparently 18 non-core or recommended packages). However, Yihui Xie is highly interested in  developing a much leaner package depending only on commonmark and is willing to put this on his agenda if people are really interested in it, especially if R core can consider making it a recommended package.
+
+I realize that R core are keen to reduce rather than increase the number of recommended packages. But this does seem to be a desirable core functionality. Might R core consider integrating such a package in future?
+
+Best wishes,
+Heather
+
+On Fri, Feb 4, 2022, at 8:02 PM, Heather Turner wrote:
+> Dear All,
+>
+> Yesterday Google announced Season of Docs 2022: 
+> https://opensource.googleblog.com/2022/02/Announcing%20Season%20of%20Docs%202022.html.
+>
+> You may know that the R project participated for the first time last 
+> year with a project related to useR! and there is interest in us 
+> offering a project again this year.
+>
+> Organization applications open at the end of February, so now is the 
+> time for us to explore ideas for projects and line up potential 
+> mentors. 
+>
+> Organization of GSoD is done on GitHub: 
+> https://github.com/rstats-gsod/gsod2022 and I have added a number of 
+> issues with ideas drawn from discussions on the R Contribution Working 
+> Group, R-Devel Slack, Forwards taskforce, and R Consortium Repositories 
+> Working Group. Feel free to comment on these issues or add your own 
+> suggestions.
+>
+> For more general discussion of GSoD, you can reply here, on the R-Devel 
+> Slack or at the next R Contribution Working Group (see the R 
+> Contribution Site for details of the Slack/working group: 
+> https://contributor.r-project.org/).
+>
+> Best wishes,
+> Heather
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Feb 24 11:44:26 2022
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 24 Feb 2022 11:44:26 +0100
+Subject: [Rd] 
+ Inconsistent behavior of stats::bw.nrd() and stats::bw.nrd0()
+In-Reply-To: <CAPhhD8nx4tFcWdgZysGXr=FnV1pxF7zKoUzqBn9LN3+ukxVXDA@mail.gmail.com>
+References: <CAPhhD8nx4tFcWdgZysGXr=FnV1pxF7zKoUzqBn9LN3+ukxVXDA@mail.gmail.com>
+Message-ID: <25111.24970.438906.621299@stat.math.ethz.ch>
+
+>>>>> Noah Greifer 
+>>>>>     on Wed, 23 Feb 2022 11:21:18 -0500 writes:
+
+    > Hello R-devel,
+
+    > I noticed an inconsistency in stats::bw.nrd() and stats::bw.nrd0, two
+    > functions used to compute the bandwidth for densities. According to the
+    > documentation,
+
+    > "bw.nrd0 implements a rule-of-thumb for choosing the bandwidth of a
+    > Gaussian kernel density estimator. It defaults to 0.9 times the minimum of
+    > the standard deviation and the interquartile range divided by 1.34 times
+    > the sample size to the negative one-fifth power (= Silverman's ?rule of
+    > thumb?, Silverman (1986, page 48, eqn (3.31))) unless the quartiles
+    > coincide when a positive result will be guaranteed.
+
+    > bw.nrd is the more common variation given by Scott (1992), using factor
+    > 1.06."
+
+    > This implies the result of bw.nrd() should simply be 1.06/.9 times the
+    > result of bw.nrd0(). However, these functions are coded quite differently
+    > and, in particular, respond to situations where the data has an IQR of 0
+    > differently. The source of bw.nrd0 is
+
+    > function (x)
+    > {
+    >     if (length(x) < 2L)
+    >         stop("need at least 2 data points")
+    >     hi <- sd(x)
+    >     if (!(lo <- min(hi, IQR(x)/1.34)))
+    >         (lo <- hi) || (lo <- abs(x[1L])) || (lo <- 1)
+    >     0.9 * lo * length(x)^(-0.2)
+    > }
+    > 
+    > and the source of bw.nrd is
+    > 
+    > function (x)
+    > {
+    >     if (length(x) < 2L)
+    >         stop("need at least 2 data points")
+    >     r <- quantile(x, c(0.25, 0.75))
+    >     h <- (r[2L] - r[1L])/1.34
+    >     1.06 * min(sqrt(var(x)), h) * length(x)^(-1/5)
+    > }
+    > 
+
+> Importantly, when the IQR of the input is 0, bw.nrd0() falls back onto the
+> standard deviation, guaranteeing the positive result described in the
+> documentation. Whereas, bw.nrd() produces a result of 0. I am not sure
+> which result is more desirable, but it would seem to me that they should at
+> least be consistent. See examples below:
+
+> > x <- c(1,1,1,1,1000)
+> > stats::bw.nrd(x)
+> [1] 0
+> > stats::bw.nrd0(x)
+> [1] 291.4265
+
+> Noah Greifer
+
+This is for historical (and copyright?) reasons only/mostly:
+
+At the time  R 1.0.0 was released (on Feb. 29, 2000 -- a date not
+       	       	     	 	   existing in MS Windows 3.11)
+there were no bw.*() functions
+and density() already contained
+
+    if (missing(bw))
+      bw <-
+        if(missing(width)) {
+            hi <- sd(x)
+            if(!(lo <- min(hi, IQR(x)/1.34)))# qnorm(.75) - qnorm(.25) = 1.34898
+                (lo <- hi) || (lo <- abs(x[1])) || (lo <- 1.)
+            adjust * 0.9 * lo * N^(-0.2)
+        } else 0.25 * width
+
+whereas in Nov 1999, it still was
+
+    if (missing(bw))
+	bw <-
+	    if(missing(width))
+		adjust * 0.9 * min(sd (x), IQR(x)/1.34) * N^(-0.2)
+	    else 0.25 * width
+
+(which actually *was* Silverman's rule of thumb): He, as Scott
+ and all math-statisticians who ever published about the
+ problem, was/were never interested in the fact that a good algorithm
+ must even work in extreme cases ..)
+
+As a matter of fact, svn trunk rev 6994 (Dec 11, 1999) was a
+large "branch update" which changed the 'bw' computation to the
+more robust one (never giving 0, BTW, even when sd(x) == 0, not
+just IQR(.) == 0).
+
+So, we had already made sure that the default bandwidth 'bw' was
+really numerically robust and would always give a positive result.
+
+Then, about 2 years later, with svn r16938, 2001-11-28
+by Prof Brian Ripley with message  'add bandwidth-selectors to density()'
+he brought in all (I think) of the current bw.*() choices
+actually from the MASS book's S/R code by Venables & Ripley,
+including the most traditional  bw.nrd() one, as they were
+already described in the book;
+and kept the default bw for density() as previously,
+now modularized in the bw.nrd0() function.
+
+Also note that the documentation (the help page) is more or less
+precise here, since as I said above, Scott did neither consider
+dealing with the not so uncommon case of IQR() == 0.
+
+But you are right that the help page could be more precise here
+and make sure that the robustness applies only to the nrd0, not
+to nrd.
+I'd  think we'd accept a patch proposal for the
+src/library/stats/man/bandwidth.Rd  help file, making this more
+unambigous.
+
+Best,
+Martin
+
+
+Martin Maechler
+ETH Zurich  and  R Core team
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Thu Feb 24 14:22:54 2022
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Thu, 24 Feb 2022 07:22:54 -0600 (CST)
+Subject: [Rd] 
+ [External]  DOCS/BUG?: opts <- base::.Options is *not* a copy
+In-Reply-To: <CAFDcVCTGvrJQ0rp5fMvBAuvqrznpgGAJNrY1M8q5HkmhZ5V7Jg@mail.gmail.com>
+References: <CAFDcVCTGvrJQ0rp5fMvBAuvqrznpgGAJNrY1M8q5HkmhZ5V7Jg@mail.gmail.com>
+Message-ID: <e763ac16-22af-f620-f5af-9bcb111562ac@uiowa.edu>
+
+On Thu, 24 Feb 2022, Henrik Bengtsson wrote:
+
+> Hi, is the following a non-documented feature or a bug:
+>
+> $ R --quiet --vanilla
+> opts <- base::.Options
+> opts[["abc"]]
+> #> NULL
+> options(abc = 42)
+> opts[["abc"]]
+> #> [1] 42
+>
+> I would have expected that 'opts' would be a *copy* of base::.Options
+> that is not affected by later changes to base::.Options.  FWIW, the
+> same happens if we try with:
+>
+> opts <- .BaseNamespaceEnv[[".Options"]]
+>
+> I don't think lazy evaluation is involved, because I evaluate
+> opts[["abc"]] above.
+>
+> The only thing help(".Options") says is:
+>
+> Note:
+> For compatibility with S there is a visible object .Options whose
+> value is a pairlist containing the current options() (in no particular
+> order). Assigning to it will make a local copy and not change the
+> original. (Using it however is faster than calling options()).
+
+You are misreading what this says. As with any assignment to an object
+that has other references, the assignment will create a local copy
+before mutating. It does not say that referencing the object makes a
+copy. So there is no inconsistency.
+
+That options() modifies the value of an object with multiple
+references is not ideal, but changing that while maintaining .Object
+as a regular variable is probably more trouble than it is worth. It is
+probably time to work towards deprecating .Options (maybe turning it
+into an active binding that does make a copy). At the very least
+discouraging its use in the help file.
+
+Other that changing the docs I doubt this will ever get high enough on
+anyone's priority list to get done.
+
+Best,
+
+luke
+
+>
+> This behavior goes back to at least R 2.15.0.
+>
+> /Henrik
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+
+
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Thu Feb 24 20:21:05 2022
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Thu, 24 Feb 2022 11:21:05 -0800
+Subject: [Rd] 
+ [External]  DOCS/BUG?: opts <- base::.Options is *not* a copy
+In-Reply-To: <e763ac16-22af-f620-f5af-9bcb111562ac@uiowa.edu>
+References: <CAFDcVCTGvrJQ0rp5fMvBAuvqrznpgGAJNrY1M8q5HkmhZ5V7Jg@mail.gmail.com>
+ <e763ac16-22af-f620-f5af-9bcb111562ac@uiowa.edu>
+Message-ID: <CAFDcVCSEXpOMxmS27nOQyHQagPBpPQNQS5aNxOEMCgZrLuCoQg@mail.gmail.com>
+
+On Thu, Feb 24, 2022 at 5:23 AM <luke-tierney at uiowa.edu> wrote:
+>
+> On Thu, 24 Feb 2022, Henrik Bengtsson wrote:
+>
+> > Hi, is the following a non-documented feature or a bug:
+> >
+> > $ R --quiet --vanilla
+> > opts <- base::.Options
+> > opts[["abc"]]
+> > #> NULL
+> > options(abc = 42)
+> > opts[["abc"]]
+> > #> [1] 42
+> >
+> > I would have expected that 'opts' would be a *copy* of base::.Options
+> > that is not affected by later changes to base::.Options.  FWIW, the
+> > same happens if we try with:
+> >
+> > opts <- .BaseNamespaceEnv[[".Options"]]
+> >
+> > I don't think lazy evaluation is involved, because I evaluate
+> > opts[["abc"]] above.
+> >
+> > The only thing help(".Options") says is:
+> >
+> > Note:
+> > For compatibility with S there is a visible object .Options whose
+> > value is a pairlist containing the current options() (in no particular
+> > order). Assigning to it will make a local copy and not change the
+> > original. (Using it however is faster than calling options()).
+>
+> You are misreading what this says. As with any assignment to an object
+> that has other references, the assignment will create a local copy
+> before mutating.
+
+I don't think I misread it; that's exactly how I interpreted it, too.
+I just copied that passage to help the reader see that there's nothing
+in the docs mentioning this behavior.
+
+> It does not say that referencing the object makes a
+> copy. So there is no inconsistency.
+
+I'd argue that this behavior of .Options (because of how options() is
+implemented) is not a standard procedure in R, and that the
+expectation would be to make a copy unless otherwise documented. You
+need to dig into the code to figure out that this is not the case and
+how it works.  For example, my mental model of how this is implemented
+is something like:
+
+.Options <- pairlist()
+options <- function(...) {
+  args <- list(...)
+  old <- new <- .Options
+  for (name in names(args)) new[[name]] <- args[[name]]
+  assignInMyNamespace(".Options", new)
+  invisible(old)
+}
+
+and that does create a copy.
+
+I only discovered this because I added the following to my package tests:
+
+opts <- base::.Options
+call_random_fcn()
+stopifnot(identical(base::.Options, opts))
+
+Turns out it never failed. I use .Options, because it's faster than
+options(), which always sorts elements by their names.  FWIW, the
+workaround is to force a copy using opts <- as.list(base::.Options).
+
+> That options() modifies the value of an object with multiple
+> references is not ideal, but changing that while maintaining .Object
+> as a regular variable is probably more trouble than it is worth. It is
+> probably time to work towards deprecating .Options (maybe turning it
+> into an active binding that does make a copy). At the very least
+> discouraging its use in the help file.
+
+This sounds good to me.
+
+Thanks,
+
+Henrik
+
+>
+> Other that changing the docs I doubt this will ever get high enough on
+> anyone's priority list to get done
+>
+> Best,
+>
+> luke
+>
+> >
+> > This behavior goes back to at least R 2.15.0.
+> >
+> > /Henrik
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+>
+> --
+> Luke Tierney
+> Ralph E. Wareham Professor of Mathematical Sciences
+> University of Iowa                  Phone:             319-335-3386
+> Department of Statistics and        Fax:               319-335-3017
+>     Actuarial Science
+> 241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+> Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+
+
