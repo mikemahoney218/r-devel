@@ -3600,3 +3600,474 @@ Henrik
 > Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
 
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Fri Feb 25 09:59:54 2022
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Fri, 25 Feb 2022 09:59:54 +0100
+Subject: [Rd] 
+ [External]  DOCS/BUG?: opts <- base::.Options is *not* a copy
+In-Reply-To: <CAFDcVCSEXpOMxmS27nOQyHQagPBpPQNQS5aNxOEMCgZrLuCoQg@mail.gmail.com>
+References: <CAFDcVCTGvrJQ0rp5fMvBAuvqrznpgGAJNrY1M8q5HkmhZ5V7Jg@mail.gmail.com>
+ <e763ac16-22af-f620-f5af-9bcb111562ac@uiowa.edu>
+ <CAFDcVCSEXpOMxmS27nOQyHQagPBpPQNQS5aNxOEMCgZrLuCoQg@mail.gmail.com>
+Message-ID: <25112.39562.94963.865295@stat.math.ethz.ch>
+
+>>>>> Henrik Bengtsson 
+>>>>>     on Thu, 24 Feb 2022 11:21:05 -0800 writes:
+
+    > On Thu, Feb 24, 2022 at 5:23 AM <luke-tierney at uiowa.edu> wrote:
+    >> 
+    >> On Thu, 24 Feb 2022, Henrik Bengtsson wrote:
+    >> 
+    >> > Hi, is the following a non-documented feature or a bug:
+    >> >
+    >> > $ R --quiet --vanilla
+    >> > opts <- base::.Options
+    >> > opts[["abc"]]
+    >> > #> NULL
+    >> > options(abc = 42)
+    >> > opts[["abc"]]
+    >> > #> [1] 42
+    >> >
+    >> > I would have expected that 'opts' would be a *copy* of base::.Options
+    >> > that is not affected by later changes to base::.Options.  FWIW, the
+    >> > same happens if we try with:
+    >> >
+    >> > opts <- .BaseNamespaceEnv[[".Options"]]
+    >> >
+    >> > I don't think lazy evaluation is involved, because I evaluate
+    >> > opts[["abc"]] above.
+    >> >
+    >> > The only thing help(".Options") says is:
+    >> >
+    >> > Note:
+    >> > For compatibility with S there is a visible object .Options whose
+    >> > value is a pairlist containing the current options() (in no particular
+    >> > order). Assigning to it will make a local copy and not change the
+    >> > original. (Using it however is faster than calling options()).
+    >> 
+    >> You are misreading what this says. As with any assignment to an object
+    >> that has other references, the assignment will create a local copy
+    >> before mutating.
+
+    > I don't think I misread it; that's exactly how I interpreted it, too.
+    > I just copied that passage to help the reader see that there's nothing
+    > in the docs mentioning this behavior.
+
+    >> It does not say that referencing the object makes a
+    >> copy. So there is no inconsistency.
+
+    > I'd argue that this behavior of .Options (because of how options() is
+    > implemented) is not a standard procedure in R, and that the
+    > expectation would be to make a copy unless otherwise documented. You
+    > need to dig into the code to figure out that this is not the case and
+    > how it works.  For example, my mental model of how this is implemented
+    > is something like:
+
+    > .Options <- pairlist()
+    > options <- function(...) {
+    > args <- list(...)
+    > old <- new <- .Options
+    > for (name in names(args)) new[[name]] <- args[[name]]
+    > assignInMyNamespace(".Options", new)
+    > invisible(old)
+    > }
+
+    > and that does create a copy.
+
+    > I only discovered this because I added the following to my package tests:
+
+    > opts <- base::.Options
+    > call_random_fcn()
+    > stopifnot(identical(base::.Options, opts))
+
+    > Turns out it never failed. I use .Options, because it's faster than
+    > options(), which always sorts elements by their names.  FWIW, the
+    > workaround is to force a copy using opts <- as.list(base::.Options).
+
+Esthetics only:  I think I'd rather use
+
+   opts <- force(base::.Options)
+
+
+
+    >> That options() modifies the value of an object with multiple
+    >> references is not ideal, but changing that while maintaining .Object
+    >> as a regular variable is probably more trouble than it is worth. It is
+    >> probably time to work towards deprecating .Options (maybe turning it
+    >> into an active binding that does make a copy). At the very least
+    >> discouraging its use in the help file.
+
+    > This sounds good to me.
+
+We might consider  `options()` gaining an optional argument, say
+`sortNames = TRUE`  and  `options(sortNames=FALSE)` would still not
+sort and hence be faster than pure options()
+
+Martin
+
+
+
+    > Thanks,
+
+    > Henrik
+
+    >> 
+    >> Other that changing the docs I doubt this will ever get high enough on
+    >> anyone's priority list to get done
+    >> 
+    >> Best,
+    >> 
+    >> luke
+    >> 
+    >> >
+    >> > This behavior goes back to at least R 2.15.0.
+    >> >
+    >> > /Henrik
+    >> >
+    >> > ______________________________________________
+    >> > R-devel at r-project.org mailing list
+    >> > https://stat.ethz.ch/mailman/listinfo/r-devel
+    >> >
+    >> 
+    >> --
+    >> Luke Tierney
+    >> Ralph E. Wareham Professor of Mathematical Sciences
+    >> University of Iowa                  Phone:             319-335-3386
+    >> Department of Statistics and        Fax:               319-335-3017
+    >> Actuarial Science
+    >> 241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+    >> Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+
+    > ______________________________________________
+    > R-devel at r-project.org mailing list
+    > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Fri Feb 25 14:13:03 2022
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Fri, 25 Feb 2022 07:13:03 -0600 (CST)
+Subject: [Rd] 
+ [External]  DOCS/BUG?: opts <- base::.Options is *not* a copy
+In-Reply-To: <25112.39562.94963.865295@stat.math.ethz.ch>
+References: <CAFDcVCTGvrJQ0rp5fMvBAuvqrznpgGAJNrY1M8q5HkmhZ5V7Jg@mail.gmail.com>
+ <e763ac16-22af-f620-f5af-9bcb111562ac@uiowa.edu>
+ <CAFDcVCSEXpOMxmS27nOQyHQagPBpPQNQS5aNxOEMCgZrLuCoQg@mail.gmail.com>
+ <25112.39562.94963.865295@stat.math.ethz.ch>
+Message-ID: <a3896c9a-e2ff-a9f4-ec67-bf5b1277491@uiowa.edu>
+
+On Fri, 25 Feb 2022, Martin Maechler wrote:
+
+>>>>>> Henrik Bengtsson
+>>>>>>     on Thu, 24 Feb 2022 11:21:05 -0800 writes:
+>
+>    > On Thu, Feb 24, 2022 at 5:23 AM <luke-tierney at uiowa.edu> wrote:
+>    >>
+>    >> On Thu, 24 Feb 2022, Henrik Bengtsson wrote:
+>    >>
+>    >> > Hi, is the following a non-documented feature or a bug:
+>    >> >
+>    >> > $ R --quiet --vanilla
+>    >> > opts <- base::.Options
+>    >> > opts[["abc"]]
+>    >> > #> NULL
+>    >> > options(abc = 42)
+>    >> > opts[["abc"]]
+>    >> > #> [1] 42
+>    >> >
+>    >> > I would have expected that 'opts' would be a *copy* of base::.Options
+>    >> > that is not affected by later changes to base::.Options.  FWIW, the
+>    >> > same happens if we try with:
+>    >> >
+>    >> > opts <- .BaseNamespaceEnv[[".Options"]]
+>    >> >
+>    >> > I don't think lazy evaluation is involved, because I evaluate
+>    >> > opts[["abc"]] above.
+>    >> >
+>    >> > The only thing help(".Options") says is:
+>    >> >
+>    >> > Note:
+>    >> > For compatibility with S there is a visible object .Options whose
+>    >> > value is a pairlist containing the current options() (in no particular
+>    >> > order). Assigning to it will make a local copy and not change the
+>    >> > original. (Using it however is faster than calling options()).
+>    >>
+>    >> You are misreading what this says. As with any assignment to an object
+>    >> that has other references, the assignment will create a local copy
+>    >> before mutating.
+>
+>    > I don't think I misread it; that's exactly how I interpreted it, too.
+>    > I just copied that passage to help the reader see that there's nothing
+>    > in the docs mentioning this behavior.
+>
+>    >> It does not say that referencing the object makes a
+>    >> copy. So there is no inconsistency.
+>
+>    > I'd argue that this behavior of .Options (because of how options() is
+>    > implemented) is not a standard procedure in R, and that the
+>    > expectation would be to make a copy unless otherwise documented. You
+>    > need to dig into the code to figure out that this is not the case and
+>    > how it works.  For example, my mental model of how this is implemented
+>    > is something like:
+>
+>    > .Options <- pairlist()
+>    > options <- function(...) {
+>    > args <- list(...)
+>    > old <- new <- .Options
+>    > for (name in names(args)) new[[name]] <- args[[name]]
+>    > assignInMyNamespace(".Options", new)
+>    > invisible(old)
+>    > }
+>
+>    > and that does create a copy.
+>
+>    > I only discovered this because I added the following to my package tests:
+>
+>    > opts <- base::.Options
+>    > call_random_fcn()
+>    > stopifnot(identical(base::.Options, opts))
+>
+>    > Turns out it never failed. I use .Options, because it's faster than
+>    > options(), which always sorts elements by their names.  FWIW, the
+>    > workaround is to force a copy using opts <- as.list(base::.Options).
+>
+> Esthetics only:  I think I'd rather use
+>
+>   opts <- force(base::.Options)
+
+This doesn't create a copy (you cha check with .Internal(inspect()).
+
+Using as.list creates a VECSXP, which is better anyway as we are
+trying to reduce the use of pairlists at R revel.
+
+>
+>
+>    >> That options() modifies the value of an object with multiple
+>    >> references is not ideal, but changing that while maintaining .Object
+>    >> as a regular variable is probably more trouble than it is worth. It is
+>    >> probably time to work towards deprecating .Options (maybe turning it
+>    >> into an active binding that does make a copy). At the very least
+>    >> discouraging its use in the help file.
+>
+>    > This sounds good to me.
+>
+> We might consider  `options()` gaining an optional argument, say
+> `sortNames = TRUE`  and  `options(sortNames=FALSE)` would still not
+> sort and hence be faster than pure options()
+
+Please don't. Whether or not there is some sorting going on somewhere
+is not something a user should have to worry about. I certainly would
+not want to have to think about it. If there really is a performance
+issue, and that case has not been made, then that can be looked into.
+
+Deprecating .Options is worth considering in principle; converting to
+an active binding that converts the internal pairlist to vector list
+is also worth considering in principle, but again I don't see this as
+having high priority.
+
+Best,
+
+luke
+
+>
+> Martin
+>
+>
+>
+>    > Thanks,
+>
+>    > Henrik
+>
+>    >>
+>    >> Other that changing the docs I doubt this will ever get high enough on
+>    >> anyone's priority list to get done
+>    >>
+>    >> Best,
+>    >>
+>    >> luke
+>    >>
+>    >> >
+>    >> > This behavior goes back to at least R 2.15.0.
+>    >> >
+>    >> > /Henrik
+>    >> >
+>    >> > ______________________________________________
+>    >> > R-devel at r-project.org mailing list
+>    >> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>    >> >
+>    >>
+>    >> --
+>    >> Luke Tierney
+>    >> Ralph E. Wareham Professor of Mathematical Sciences
+>    >> University of Iowa                  Phone:             319-335-3386
+>    >> Department of Statistics and        Fax:               319-335-3017
+>    >> Actuarial Science
+>    >> 241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+>    >> Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+>
+>    > ______________________________________________
+>    > R-devel at r-project.org mailing list
+>    > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+
+
+From m|ch@|2992 @end|ng |rom gm@||@com  Fri Feb 25 17:31:18 2022
+From: m|ch@|2992 @end|ng |rom gm@||@com (=?UTF-8?Q?Micha=C5=82_Bojanowski?=)
+Date: Fri, 25 Feb 2022 17:31:18 +0100
+Subject: [Rd] Making CRAN memory access checks more accessible?
+Message-ID: <CAByPayEp5sVw1S6mC5Juec9vayGvAsE4V318vRzLLG9d72G0sg@mail.gmail.com>
+
+Dear colleagues,
+
+Two days after successfully submitting a package to CRAN I received a
+message about "additional issues" with the package's C++ code
+(clang-UBSAN to be precise) with a two-week deadline to resolve. While
+attempting to somewhat blind-foldedly fix the problem I was wondering
+whether it is sensible and feasible for base R to:
+
+1. Implement/expose all these memory-related tests (c.f.
+https://cran.r-project.org/doc/manuals/r-release/R-exts.html#Checking-memory-access)
+to package developers e.g. via options to R CMD check, much like
+--use-gct or --use-valgrind are already? Or via a script etc.?
+
+or
+
+2. Expand the chapter
+https://cran.r-project.org/doc/manuals/r-release/R-exts.html#Checking-memory-access
+with unequivocal and straightforward instructions how to setup and run
+these tests locally on different platforms? I believe that the current
+version of the manual is inaccessible to anybody but hardcore C/C++
+developers while there is a broader spectrum of ppl able to write some
+C without the deep understanding of the internals.
+
+While I noticed that a similar problem has triggered some heat on
+Twitter recently I independently decided to write to you all here to
+ask the question above. I believe it might be rather difficult for
+package contributors to adhere to tests which they are unable to
+execute locally (or by a CI service). Alas, in the end it will end-up
+with a developer playing package ping-pong with CRAN maintainers whose
+time is a valuable resource.
+
+Best wishes,
+Michal
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Fri Feb 25 18:27:21 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Fri, 25 Feb 2022 12:27:21 -0500
+Subject: [Rd] Making CRAN memory access checks more accessible?
+In-Reply-To: <CAByPayEp5sVw1S6mC5Juec9vayGvAsE4V318vRzLLG9d72G0sg@mail.gmail.com>
+References: <CAByPayEp5sVw1S6mC5Juec9vayGvAsE4V318vRzLLG9d72G0sg@mail.gmail.com>
+Message-ID: <bdd4a70d-e39e-d2a6-47da-63d43b316817@gmail.com>
+
+On 25/02/2022 11:31 a.m., Micha? Bojanowski wrote:
+> Dear colleagues,
+> 
+> Two days after successfully submitting a package to CRAN I received a
+> message about "additional issues" with the package's C++ code
+> (clang-UBSAN to be precise) with a two-week deadline to resolve. While
+> attempting to somewhat blind-foldedly fix the problem I was wondering
+> whether it is sensible and feasible for base R to:
+> 
+> 1. Implement/expose all these memory-related tests (c.f.
+> https://cran.r-project.org/doc/manuals/r-release/R-exts.html#Checking-memory-access)
+> to package developers e.g. via options to R CMD check, much like
+> --use-gct or --use-valgrind are already? Or via a script etc.?
+
+Many users won't be able to run them.
+> 
+> or
+> 
+> 2. Expand the chapter
+> https://cran.r-project.org/doc/manuals/r-release/R-exts.html#Checking-memory-access
+> with unequivocal and straightforward instructions how to setup and run
+> these tests locally on different platforms? I believe that the current
+> version of the manual is inaccessible to anybody but hardcore C/C++
+> developers while there is a broader spectrum of ppl able to write some
+> C without the deep understanding of the internals.
+
+I doubt if the instructions in WRE could be simplified and still work.
+
+
+> 
+> While I noticed that a similar problem has triggered some heat on
+> Twitter recently I independently decided to write to you all here to
+> ask the question above. I believe it might be rather difficult for
+> package contributors to adhere to tests which they are unable to
+> execute locally (or by a CI service). Alas, in the end it will end-up
+> with a developer playing package ping-pong with CRAN maintainers whose
+> time is a valuable resource.
+
+I think R-hub offers UBSAN services.  Have you tried those?
+
+Duncan Murdoch
+
+
+From m|ch@|2992 @end|ng |rom gm@||@com  Sat Feb 26 00:49:10 2022
+From: m|ch@|2992 @end|ng |rom gm@||@com (=?UTF-8?Q?Micha=C5=82_Bojanowski?=)
+Date: Sat, 26 Feb 2022 00:49:10 +0100
+Subject: [Rd] Making CRAN memory access checks more accessible?
+In-Reply-To: <bdd4a70d-e39e-d2a6-47da-63d43b316817@gmail.com>
+References: <CAByPayEp5sVw1S6mC5Juec9vayGvAsE4V318vRzLLG9d72G0sg@mail.gmail.com>
+ <bdd4a70d-e39e-d2a6-47da-63d43b316817@gmail.com>
+Message-ID: <CAByPayEfxi73tSA8MBYs1V5BX_XHb-N9PCEj+ksbPq9jWfi2xg@mail.gmail.com>
+
+Ha! I was not aware of R-hub having this. Thank you!
+
+On Fri, Feb 25, 2022 at 6:27 PM Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+>
+> On 25/02/2022 11:31 a.m., Micha? Bojanowski wrote:
+> > Dear colleagues,
+> >
+> > Two days after successfully submitting a package to CRAN I received a
+> > message about "additional issues" with the package's C++ code
+> > (clang-UBSAN to be precise) with a two-week deadline to resolve. While
+> > attempting to somewhat blind-foldedly fix the problem I was wondering
+> > whether it is sensible and feasible for base R to:
+> >
+> > 1. Implement/expose all these memory-related tests (c.f.
+> > https://cran.r-project.org/doc/manuals/r-release/R-exts.html#Checking-memory-access)
+> > to package developers e.g. via options to R CMD check, much like
+> > --use-gct or --use-valgrind are already? Or via a script etc.?
+>
+> Many users won't be able to run them.
+> >
+> > or
+> >
+> > 2. Expand the chapter
+> > https://cran.r-project.org/doc/manuals/r-release/R-exts.html#Checking-memory-access
+> > with unequivocal and straightforward instructions how to setup and run
+> > these tests locally on different platforms? I believe that the current
+> > version of the manual is inaccessible to anybody but hardcore C/C++
+> > developers while there is a broader spectrum of ppl able to write some
+> > C without the deep understanding of the internals.
+>
+> I doubt if the instructions in WRE could be simplified and still work.
+>
+>
+> >
+> > While I noticed that a similar problem has triggered some heat on
+> > Twitter recently I independently decided to write to you all here to
+> > ask the question above. I believe it might be rather difficult for
+> > package contributors to adhere to tests which they are unable to
+> > execute locally (or by a CI service). Alas, in the end it will end-up
+> > with a developer playing package ping-pong with CRAN maintainers whose
+> > time is a valuable resource.
+>
+> I think R-hub offers UBSAN services.  Have you tried those?
+>
+> Duncan Murdoch
+
+
