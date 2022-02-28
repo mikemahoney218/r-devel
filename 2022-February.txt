@@ -4071,3 +4071,117 @@ On Fri, Feb 25, 2022 at 6:27 PM Duncan Murdoch <murdoch.duncan at gmail.com> wro
 > Duncan Murdoch
 
 
+From d@b@tr@kou @end|ng |rom gm@||@com  Sat Feb 26 15:36:04 2022
+From: d@b@tr@kou @end|ng |rom gm@||@com (Dzmitry Batrakou)
+Date: Sat, 26 Feb 2022 14:36:04 +0000
+Subject: [Rd] strsplit() and final empty values
+Message-ID: <CAC0O-5f1U2m8ji=4UMWNBFwW7DFU72L1eNyo6nJN0sBpbcCPdw@mail.gmail.com>
+
+Hello,
+
+I would like to suggest changing the behaviour of the strsplit() function
+with multiple trailing empty values. Currently, `strsplit(x = 'value::',
+split = ':')` produces a list of length 2 ('value',''). This behaviour is
+documented in the manual (penultimate example), however, I would argue, is
+illogical and can lead to unexpected parsing results. One example is
+splitting delimited value strings into a table.
+
+Regards,
+Dzmitry
+
+	[[alternative HTML version deleted]]
+
+
+From @eb@@t|@n@kr@ntz @end|ng |rom gr@du@te|n@t|tute@ch  Sat Feb 26 23:12:10 2022
+From: @eb@@t|@n@kr@ntz @end|ng |rom gr@du@te|n@t|tute@ch (Sebastian Martin Krantz)
+Date: Sat, 26 Feb 2022 23:12:10 +0100
+Subject: [Rd] Enhancements in base R: Some Suggestions from the {collapse}
+ and {kit} Packages
+Message-ID: <CAOsNuxD7TaE1ieCU3rxC8RNTd0pJjJLx0V17_f-i5etO=dTCnw@mail.gmail.com>
+
+Dear R Core and Developers,
+
+I have been asked by a user to contribute to base R, which I was hesitant
+about because I think you have better things to do than adding/optimizing C
+code, and also because the objective of my package {collapse} - to
+vectorize grouped statistical operations in R - is for the most part beyond
+the scope of base R. There are however some functions and algorithms
+utilized in {collapse} and also in the {kit} package by Morgan Jacob (with
+variants in {data.table} as well) that could benefit base R, so I'll just
+give you here my 5 cents about those, in the hope that they could be useful
+at some point.
+
+1. Factor Generation in R could be faster, utilizing order(.., method =
+"radix") (for numeric data) and kit::charToFact.
+
+The basic idea for numeric data is to use the fast radix based ordering
+already present in base R, and then do a run-length-type grouping of the
+vector:
+
+fast_num_fact <- function(x) {
+ names(x) <- NULL
+ radixord_core <- function(...) .Internal(radixsort(TRUE, FALSE, TRUE,
+TRUE, ...))
+ o <- radixord_core(x)
+ ends <- attr(o, "ends")
+ f <- collapse::groupid(x, o, na.skip = TRUE, check.o = FALSE)
+ attributes(f) <- NULL
+ attr(f, "levels") <- if(is.character(x)) x[o[ends]] else
+as.character(x[o[ends]])
+ class(f) <- "factor"
+ f
+}
+
+This function will also be faster than a hash table for character data that
+is approximately sorted. The new hash table based implementation
+kit::charToFact is however faster than either match() or radix ordering for
+character data, and could easily be ported into base R. Code:
+https://github.com/2005m/kit/blob/6ee20af14228df3a69cbf594cb6e116a838b5407/src/psort.c
+
+2. Unique values in R could be significantly faster using
+collapse::group(), which utilizes a hash function first developed in {kit}
+in a clever way to achieve very fast first-appearance-order grouping for
+vectors or lists of vectors / data frames. Code examples see
+collapse::funique() for data frames or collapse::qF(..., sort = FALSE)
+which generates factors in first-appearance order of levels. Code:
+https://github.com/SebKrantz/collapse/blob/master/src/kit_dup.c
+
+3. split() could become significantly faster, using collapse::gsplit().
+gsplit() is {collapse}'s version of split() utilizing grouping objects
+(created with collapse::GRP, which utilizes in a more direct way the
+algorithms just outlined), but it also works with factors. Rudimentary
+benchmarks show that lapply(gsplit(x, f), FUN, ...) is comparable to the
+speed that {data.table} applies basic R functions across groups (without
+internal vectorization / GeForce), and could benefit a lot of base R. Code:
+https://github.com/SebKrantz/collapse/blob/master/src/small_helper.c (might
+go to a separate file in the future)
+
+4. Data frame subsetting could become a lot faster: Various faster
+implementations are available in {data.table}, {collapse} (same as
+{data.table} but without parallelism and no overallocation of columns) and
+{kit}.
+
+5. There are many smaller functions in both packages that are useful and
+could be more or less ported directly to base R. These include mathematical
+operations by reference for vectors / matrices / data frames
+(collapse::setop and %+=%, %-=%, %*=%, %/=%), multiple assignment
+(collapse::massign, %=%), or additional parallel statistics functions
+(kit::pmean, psum, pprod, pany, pall), fast ifelse (kit::iif) etc. See
+https://sebkrantz.github.io/collapse/reference/index.html#-memory-efficient-programming
+And code:
+https://github.com/SebKrantz/collapse/blob/master/src/small_helper.c and
+https://github.com/2005m/kit/blob/master/src/psum.c and
+https://github.com/2005m/kit/blob/master/src/iif.c
+
+Those were my 5 cents based on what I have seen and done so far, if they
+are useful for base R development as well I am glad. Otherwise keep up the
+great work you are doing, and we (and many others) will continue to develop
+the {fastverse}.
+
+Best regards,
+
+Sebastian Krantz
+
+	[[alternative HTML version deleted]]
+
+
