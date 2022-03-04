@@ -407,3 +407,231 @@ Department of Statistics and        Fax:               319-335-3017
 Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
 
 
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Wed Mar  2 03:54:33 2022
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Tue, 1 Mar 2022 18:54:33 -0800
+Subject: [Rd] 
+ [External] Re: message(<cond>) and warning(<cond>) circumvent
+ calling handlers and signal the original class, e.g. an error
+In-Reply-To: <973da75e-79ed-aee-19a0-8a4fe1c5ad8@uiowa.edu>
+References: <E1nP7oN-0003Tr-FD@rmmprod07.runbox>
+ <973da75e-79ed-aee-19a0-8a4fe1c5ad8@uiowa.edu>
+Message-ID: <CAFDcVCRpKxShKar1+orJ9TBEM=ruvVCK9Jq0SFOzuO_sfQuyeg@mail.gmail.com>
+
+Thank you, Luke.  I discovered this problem last year, where a user
+reported that their use of message(<error>) in futures would not work
+the same way as without futures. The issue is that the future
+framework captures the error condition and relays it, rather than
+outputting the message string, which happens if you don't capture the
+error condition. Today there was another similar report from another
+package using futures. They both had in common that they use
+
+res <- tryCatch({
+  some_fcn(x)
+}, error = function(e) {
+  message(e)
+  NA
+})
+
+to return a missing value on errors, while outputting the error
+message string to inform the user on the error.  I've been informing
+them to instead use
+
+  message(conditionMessage(e))
+
+in this case. Your reply confirms this, and I can now confidently say
+that using message(e) is incorrect here.
+
+I think the help pages on message, warning, and stop could be more
+explicit on this behavior.
+
+My preference would be that it is an error if calling message(cond)
+with !inherits(cond, "message"), calling warning(cond) with
+!inherits(cond, "warning"), and stop(cond) with !inherits(cond,
+"error").  But, maybe there are valid arguments for allowing such use
+cases.
+
+Thanks,
+
+Henrik
+
+On Tue, Mar 1, 2022 at 3:12 PM <luke-tierney at uiowa.edu> wrote:
+>
+> This is behaving as documented and as intended. If you want to
+> call stop() with a condition argument and you want to have that
+> condition handled as an error then you need to make sure that your
+> condition inherits from "error". One way to do this would be to define
+> something like
+>
+> warningToError <- function(w)
+>     errorCondition(conditionMessage(w),
+>                    warning = w,
+>                   class = "warningToError")
+>
+> and use stop(warningToError(w)).
+>
+> If you call stop() with a condition argument then that is the
+> condition stop() will signal, regardless of its class. I can't at the
+> moment think of a good reason why I would want to call stop() with a
+> warning condition argument, and I suspect most cases where that
+> happens would be mistakes. So checking in stop() that a condition
+> argument inherits from "error" and signaling a warning, or maybe an
+> error, if it does not might be worth considering (with analogous
+> changes for warning() and message()).
+>
+> The condition system separates the signaling protocol from the process
+> of determining handlers. Signaling itself is done by
+> signalCondition().  message() and warning() signal a condition with a
+> muffle restart available, and return if the condition is not handled.
+> stop() is guaranteed not to return; if the condition is not handled,
+> then it invokes the default error handler, which will not return. None
+> of these currently look at the class of the condition.
+> signalCondition() looks at the condition's class to find out what
+> handlers are available. It will invoke error handlers for error
+> conditions and warning handlers for warning conditions.  It does not
+> know or care about whether it was called from stop(), warning(),
+> message(), or some other way.
+>
+> The most common high-level usage of stop(), warning(), or message() is
+> to call them with a string and possibly some additional arguments used
+> to create a message. In these cases a condition object of class
+> "error" for stop(), "warning" for warning(), and "message" for message
+> is created implicitly and signaled.
+>
+> Calling these functions with a condition argument is using lower level
+> functionality, which gives more power but also means users need to
+> understand what they are doing. In particular, users who want to call
+> stop() with a condition argument _and_ want handlers for error
+> conditions to be used need to make sure that the class of the
+> condition they signal inherits from "error".
+>
+> Best,
+>
+> luke
+>
+> On Tue, 1 Mar 2022, Andreas Kersting wrote:
+>
+> > Hi,
+> >
+> > There is the same issue with stop():
+> >
+> >> w <- simpleWarning("careful")
+> >> tryCatch(stop(w), condition = identity)
+> > <simpleWarning: careful>
+> >
+> > I very recently stumbled upon this, when a warning was re-raised as an error, which was then not caught by an outer try():
+> >
+> >> try(
+> > +   tryCatch(warning("careful"), warning = function(w) stop(w)),
+> > +   silent = TRUE
+> > + )
+> > Error in doTryCatch(return(expr), name, parentenv, handler) : careful
+> >
+> > I would also like to see this behavior changed. I think that stop() should always signal an error, warning() a warning and message() a message.
+> >
+> > Best,
+> > Andreas
+> >
+> > 2022-03-01 19:38 GMT+01:00 "Henrik Bengtsson" <henrik.bengtsson at gmail.com>:
+> >> Hi, in help("message", package = "base"), we can read:
+> >>
+> >> Description: 'message' is used for generating 'simple' diagnostic
+> >> messages which are neither warnings nor errors, but nevertheless
+> >> represented as conditions.
+> >>
+> >> From this, I conclude that message() should generate a condition that
+> >> are neither warning nor errors.
+> >>
+> >> However, the following signals a condition of class 'error':
+> >>
+> >>> e <- simpleError("boom!\n")
+> >>> message(e)
+> >> boom!
+> >>
+> >> This can be seen if we do:
+> >>
+> >>> res <- tryCatch(message(e), condition = identity)
+> >>> res
+> >> <simpleError: boom!
+> >>
+> >> This stems from message(e) using signalCondition(e) internally.
+> >>
+> >> Another problem with this behavior is that message(e) cannot be suppressed:
+> >>
+> >>> suppressMessages(message(e))
+> >> boom!
+> >>
+> >> or captured with calling handlers, e.g.
+> >>
+> >>> res <- withCallingHandlers(message(e), condition = identity)
+> >> boom!
+> >>> res
+> >> NULL
+> >>
+> >> If we replace e <- simpleError("boom") with e <-
+> >> simpleWarning("careful"), we see a similar behavior.  These problems
+> >> exist also with warning(e).  The current behaviors prevent functions
+> >> from capturing and relaying message(<error>), message(<warning>), and
+> >> warning(<error>).
+> >>
+> >> I'm happy to post a bug report to <https://bugs.r-project.org/>.
+> >>
+> >> /Henrik
+> >>
+> >> PS. BTW, it looks like some recent "..." tweaks to the warning() and
+> >> stop() code could be applied also to message().
+> >>
+> >> ______________________________________________
+> >> R-devel at r-project.org mailing list
+> >> https://stat.ethz.ch/mailman/listinfo/r-devel
+> >>
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+>
+> --
+> Luke Tierney
+> Ralph E. Wareham Professor of Mathematical Sciences
+> University of Iowa                  Phone:             319-335-3386
+> Department of Statistics and        Fax:               319-335-3017
+>     Actuarial Science
+> 241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+> Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+
+
+From r|p|ey @end|ng |rom @t@t@@ox@@c@uk  Wed Mar  2 11:57:07 2022
+From: r|p|ey @end|ng |rom @t@t@@ox@@c@uk (Prof Brian Ripley)
+Date: Wed, 2 Mar 2022 10:57:07 +0000
+Subject: [Rd] Making CRAN memory access checks more accessible?
+In-Reply-To: <CAHqSRuTwOWmcqDXxy-JgFUFuoRg1PUP2BO=KQ37PPngPCqgZaw@mail.gmail.com>
+References: <CAByPayEp5sVw1S6mC5Juec9vayGvAsE4V318vRzLLG9d72G0sg@mail.gmail.com>
+ <CAHqSRuTwOWmcqDXxy-JgFUFuoRg1PUP2BO=KQ37PPngPCqgZaw@mail.gmail.com>
+Message-ID: <f3d235c0-01a9-f920-2b2e-d85096369e7a@stats.ox.ac.uk>
+
+On 28/02/2022 19:15, Bill Dunlap wrote:
+> valgrind will detect some of the memory issues that UBSAN does.  
+
+Only very few.  None of the current 43 CRAN packages with UBSAN issues 
+have them detected by valgrind ... the valgrind overlap is more with 
+ASAN issues (see 
+https://github.com/google/sanitizers/wiki/AddressSanitizerComparisonOfMemoryTools).
+
+The UB sanitizer is heavily tied to the compiler.  This has meant that 
+new versions of gcc have found more and more issues and (most 
+pertinently here) recent versions of clang find about twice as many 
+issues as gcc 10/11.
+
+UBSAN in theory runs on quite a range of platforms --- 
+https://clang.llvm.org/docs/UndefinedBehaviorSanitizer.html#supported-platforms 
+-- which unfortunately does not say for which CPUs on those OS.  (Also, 
+that is about LLVM clang and not Apple clang as normally used on macOS. 
+  And gcc seems only to point to LLVM documentation for supported 
+platforms, but its implementation clearly differs.)
+
+
+-- 
+Brian D. Ripley,                  ripley at stats.ox.ac.uk
+Emeritus Professor of Applied Statistics, University of Oxford
+
+
