@@ -635,3 +635,1089 @@ Brian D. Ripley,                  ripley at stats.ox.ac.uk
 Emeritus Professor of Applied Statistics, University of Oxford
 
 
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Thu Mar  3 05:13:00 2022
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Wed, 2 Mar 2022 20:13:00 -0800
+Subject: [Rd] strsplit() and final empty values
+In-Reply-To: <CAC0O-5f1U2m8ji=4UMWNBFwW7DFU72L1eNyo6nJN0sBpbcCPdw@mail.gmail.com>
+References: <CAC0O-5f1U2m8ji=4UMWNBFwW7DFU72L1eNyo6nJN0sBpbcCPdw@mail.gmail.com>
+Message-ID: <CAFDcVCTPUqygyNHsKJYp=UAGhFcjOigrtsjno-=J+9T7=dLN8w@mail.gmail.com>
+
+Here's an example clarifying the issue:
+
+> strsplit("a:b:c:d", split = ":", fixed = TRUE)
+[[1]]
+[1] "a" "b" "c" "d"
+
+> strsplit("a:b:c:", split = ":", fixed = TRUE)
+[[1]]
+[1] "a" "b" "c"
+
+I also ran into this a few times, and I agree that this complicated
+things when you need to preserve that last empty element.  Instead of
+changing the default behavior, which would probably break lots of
+existing code relying on it, one could introduce a new,
+backward-compatible argument `drop = TRUE`, e.g.
+
+> strsplit("a:b:c:", split = ":", fixed = TRUE, drop = FALSE)
+[[1]]
+[1] "a" "b" "c" ""
+
+My $.02
+
+/Henrik
+
+
+
+On Sat, Feb 26, 2022 at 6:39 AM Dzmitry Batrakou <d.batrakou at gmail.com> wrote:
+>
+> Hello,
+>
+> I would like to suggest changing the behaviour of the strsplit() function
+> with multiple trailing empty values. Currently, `strsplit(x = 'value::',
+> split = ':')` produces a list of length 2 ('value',''). This behaviour is
+> documented in the manual (penultimate example), however, I would argue, is
+> illogical and can lead to unexpected parsing results. One example is
+> splitting delimited value strings into a table.
+>
+> Regards,
+> Dzmitry
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From d@b@tr@kou @end|ng |rom gm@||@com  Thu Mar  3 09:57:54 2022
+From: d@b@tr@kou @end|ng |rom gm@||@com (Dzmitry Batrakou)
+Date: Thu, 3 Mar 2022 08:57:54 +0000
+Subject: [Rd] strsplit() and final empty values
+In-Reply-To: <CAFDcVCTPUqygyNHsKJYp=UAGhFcjOigrtsjno-=J+9T7=dLN8w@mail.gmail.com>
+References: <CAC0O-5f1U2m8ji=4UMWNBFwW7DFU72L1eNyo6nJN0sBpbcCPdw@mail.gmail.com>
+ <CAFDcVCTPUqygyNHsKJYp=UAGhFcjOigrtsjno-=J+9T7=dLN8w@mail.gmail.com>
+Message-ID: <CAC0O-5dYgPxHmaBsbyiW9-aXjjAqQ7Wn16FF2N+LsHiyw0efhA@mail.gmail.com>
+
+Alternatively, the man page for the strsplit() could include the following
+(or a better phrased version):
+
+"
+Note that the trailing empty values will be trimmed (see penultimate
+example). A way around this is to use
+> read.table(text = paste(strings.to.split, collapse = "\n"), sep = split)
+"
+
+Dzmitry
+
+On Thu, 3 Mar 2022 at 04:13, Henrik Bengtsson <henrik.bengtsson at gmail.com>
+wrote:
+
+> Here's an example clarifying the issue:
+>
+> > strsplit("a:b:c:d", split = ":", fixed = TRUE)
+> [[1]]
+> [1] "a" "b" "c" "d"
+>
+> > strsplit("a:b:c:", split = ":", fixed = TRUE)
+> [[1]]
+> [1] "a" "b" "c"
+>
+> I also ran into this a few times, and I agree that this complicated
+> things when you need to preserve that last empty element.  Instead of
+> changing the default behavior, which would probably break lots of
+> existing code relying on it, one could introduce a new,
+> backward-compatible argument `drop = TRUE`, e.g.
+>
+> > strsplit("a:b:c:", split = ":", fixed = TRUE, drop = FALSE)
+> [[1]]
+> [1] "a" "b" "c" ""
+>
+> My $.02
+>
+> /Henrik
+>
+>
+>
+> On Sat, Feb 26, 2022 at 6:39 AM Dzmitry Batrakou <d.batrakou at gmail.com>
+> wrote:
+> >
+> > Hello,
+> >
+> > I would like to suggest changing the behaviour of the strsplit() function
+> > with multiple trailing empty values. Currently, `strsplit(x = 'value::',
+> > split = ':')` produces a list of length 2 ('value',''). This behaviour is
+> > documented in the manual (penultimate example), however, I would argue,
+> is
+> > illogical and can lead to unexpected parsing results. One example is
+> > splitting delimited value strings into a table.
+> >
+> > Regards,
+> > Dzmitry
+> >
+> >         [[alternative HTML version deleted]]
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From mu@che|||j2 @end|ng |rom gm@||@com  Thu Mar  3 17:04:05 2022
+From: mu@che|||j2 @end|ng |rom gm@||@com (John Muschelli)
+Date: Thu, 3 Mar 2022 11:04:05 -0500
+Subject: [Rd] Floating Point with POSIXct
+Message-ID: <CAFsq6G_cp=6pyh7CEe=rLUK47i+9LqtTyyK5zwjsdcNKnVigVg@mail.gmail.com>
+
+I see in ?POSIXct and I'm trying to understand the note:
+> Classes "POSIXct" and "POSIXlt" are able to express fractions of a second. (Conversion of fractions between the two forms may not be exact, but will have better than microsecond accuracy.)
+
+Mainly, I'm trying to understand printing of POSIXct with fractional
+seconds.  I see print.POSIXct calls format.POSIXct and eventually
+calls format.POSIXlt, which then takes into account `digits.secs` for
+printing. The format uses %OS3, which strptime indicates (* added):
+
+> Specific to R is %OSn, which for output gives the seconds *truncated* to 0 <= n <= 6 decimal places (and if %OS is not followed by a digit, it uses the setting of getOption("digits.secs"), or if that is unset, n = 0).
+
+So I'm seeing it truncates the seconds to 3 digits, so I think that is
+why the below is printing 0.024.
+
+I think this is especially relevant even if you set
+`options(digits.secs = 6)`, then the code in
+format.POSIXlt would still return np=3 as the following condition
+would break at i = 3
+
+            for (i in seq_len(np) - 1L) if (all(abs(secs - round(secs,
+                i)) < 1e-06)) {
+                np <- i
+                break
+            }
+
+as sub_seconds - round(sub_seconds,3) < 1e-06.   This seems to be
+expected behavior given the docs, but would any consider this a bug?
+
+
+Example:
+
+options(digits.secs = 4)
+x = structure(947016000.025, class = c("POSIXct", "POSIXt"), tzone = "UTC")
+summary(x, digits = 20)
+#>                      Min.                   1st Qu.                    Median
+#> "2000-01-04 20:00:00.024" "2000-01-04 20:00:00.024" "2000-01-04 20:00:00.024"
+#>                      Mean                   3rd Qu.                      Max.
+#> "2000-01-04 20:00:00.024" "2000-01-04 20:00:00.024" "2000-01-04 20:00:00.024"
+x
+#> [1] "2000-01-04 20:00:00.024 UTC"
+format.POSIXct(x, format = "%Y-%m-%d %H:%M:%OS3")
+#> [1] "2000-01-04 20:00:00.024"
+format.POSIXct(x, format = "%Y-%m-%d %H:%M:%OS4")
+#> [1] "2000-01-04 20:00:00.0249"
+sub_seconds = as.numeric(x) %% 1
+sub_seconds
+#> [1] 0.02499998
+round(sub_seconds, 3)
+#> [1] 0.025
+
+rounded = as.POSIXct(
+  floor(as.numeric(x)) +
+    round(as.numeric(x) %% 1, 3),
+  origin = "1970-01-01")
+rounded
+#> [1] "2000-01-04 20:00:00.024 UTC"
+as.numeric(rounded) %% 1
+#> [1] 0.02499998
+
+R.version
+               _
+platform       x86_64-pc-linux-gnu
+arch           x86_64
+os             linux-gnu
+system         x86_64, linux-gnu
+status
+major          4
+minor          1.2
+year           2021
+month          11
+day            01
+svn rev        81115
+language       R
+version.string R version 4.1.2 (2021-11-01)
+nickname       Bird Hippie
+
+
+
+Best,
+John
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Mar  3 17:52:40 2022
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 3 Mar 2022 17:52:40 +0100
+Subject: [Rd] Floating Point with POSIXct
+In-Reply-To: <CAFsq6G_cp=6pyh7CEe=rLUK47i+9LqtTyyK5zwjsdcNKnVigVg@mail.gmail.com>
+References: <CAFsq6G_cp=6pyh7CEe=rLUK47i+9LqtTyyK5zwjsdcNKnVigVg@mail.gmail.com>
+Message-ID: <25120.62040.753761.512280@stat.math.ethz.ch>
+
+>>>>> John Muschelli 
+>>>>>     on Thu, 3 Mar 2022 11:04:05 -0500 writes:
+>>>>> John Muschelli 
+>>>>>     on Thu, 3 Mar 2022 11:04:05 -0500 writes:
+
+    > I see in ?POSIXct and I'm trying to understand the note:
+    >> Classes "POSIXct" and "POSIXlt" are able to express fractions of a second. (Conversion of fractions between the two forms may not be exact, but will have better than microsecond accuracy.)
+
+    > Mainly, I'm trying to understand printing of POSIXct with fractional
+    > seconds.  I see print.POSIXct calls format.POSIXct and eventually
+    > calls format.POSIXlt, which then takes into account `digits.secs` for
+    > printing. The format uses %OS3, which strptime indicates (* added):
+
+    >> Specific to R is %OSn, which for output gives the seconds *truncated* to 0 <= n <= 6 decimal places (and if %OS is not followed by a digit, it uses the setting of getOption("digits.secs"), or if that is unset, n = 0).
+
+    > So I'm seeing it truncates the seconds to 3 digits, so I think that is
+    > why the below is printing 0.024.
+
+    > I think this is especially relevant even if you set
+    > `options(digits.secs = 6)`, then the code in
+    > format.POSIXlt would still return np=3 as the following condition
+    > would break at i = 3
+
+    > for (i in seq_len(np) - 1L) 
+    >   if (all(abs(secs - round(secs, > i)) < 1e-06)) {
+    >     np <- i
+    >     break
+    > }
+
+    > as sub_seconds - round(sub_seconds,3) < 1e-06.   This seems to be
+    > expected behavior given the docs, but would any consider this a bug?
+
+
+    > Example:
+
+    > options(digits.secs = 4)
+    > x = structure(947016000.025, class = c("POSIXct", "POSIXt"), tzone = "UTC")
+
+I think you've fallen into the R FAQ 7.31 trap :
+
+> ct <- 947016000.025
+> ct %% 1
+[1] 0.02499998
+>
+
+Of course, the issue may still be somewhat interesting, ...
+
+Yes, POSIXct is of limited precision and I think the help page
+you mentioned did document that that's one reason for using
+POSIXlt instead, as there, sub second accuracy can be much better.
+
+But FAQ 7.31 and the fact that all numbers are base 2 and in
+base 2,  no decimal   <n>.025   can be represented in full accuracy.
+
+Also, as you've noticed the R POSIX[cl]t  code just truncates,
+i.e. rounds towards 0 unconditionally, and I tend to agree that it
+should rather round than truncate.
+
+But we should carefully separate the issues here, from the
+underlying inherent FAQ 7.31 truth that most decimal numbers in
+a computer are not quite what they look like ...
+
+Martin Maechler
+ETH Zurich and  R Core Team (also author of the CRAN package 'round')
+
+
+    > summary(x, digits = 20)
+    > #>                      Min.                   1st Qu.                    Median
+    > #> "2000-01-04 20:00:00.024" "2000-01-04 20:00:00.024" "2000-01-04 20:00:00.024"
+    > #>                      Mean                   3rd Qu.                      Max.
+    > #> "2000-01-04 20:00:00.024" "2000-01-04 20:00:00.024" "2000-01-04 20:00:00.024"
+    > x
+    > #> [1] "2000-01-04 20:00:00.024 UTC"
+    > format.POSIXct(x, format = "%Y-%m-%d %H:%M:%OS3")
+    > #> [1] "2000-01-04 20:00:00.024"
+    > format.POSIXct(x, format = "%Y-%m-%d %H:%M:%OS4")
+    > #> [1] "2000-01-04 20:00:00.0249"
+    > sub_seconds = as.numeric(x) %% 1
+    > sub_seconds
+    > #> [1] 0.02499998
+    > round(sub_seconds, 3)
+    > #> [1] 0.025
+
+    > rounded = as.POSIXct(
+    > floor(as.numeric(x)) +
+    > round(as.numeric(x) %% 1, 3),
+    > origin = "1970-01-01")
+    > rounded
+    > #> [1] "2000-01-04 20:00:00.024 UTC"
+    > as.numeric(rounded) %% 1
+    > #> [1] 0.02499998
+
+    > R.version
+    > _
+    > platform       x86_64-pc-linux-gnu
+    > arch           x86_64
+    > os             linux-gnu
+    > system         x86_64, linux-gnu
+    > status
+    > major          4
+    > minor          1.2
+    > year           2021
+    > month          11
+    > day            01
+    > svn rev        81115
+    > language       R
+    > version.string R version 4.1.2 (2021-11-01)
+    > nickname       Bird Hippie
+
+
+
+    > Best,
+    > John
+
+    > ______________________________________________
+    > R-devel at r-project.org mailing list
+    > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From mu@che|||j2 @end|ng |rom gm@||@com  Thu Mar  3 18:22:32 2022
+From: mu@che|||j2 @end|ng |rom gm@||@com (John Muschelli)
+Date: Thu, 3 Mar 2022 12:22:32 -0500
+Subject: [Rd] Floating Point with POSIXct
+In-Reply-To: <25120.62040.753761.512280@stat.math.ethz.ch>
+References: <CAFsq6G_cp=6pyh7CEe=rLUK47i+9LqtTyyK5zwjsdcNKnVigVg@mail.gmail.com>
+ <25120.62040.753761.512280@stat.math.ethz.ch>
+Message-ID: <CAFsq6G_va8iJSgY4pmp=xESMmxg4WX8+6fSabqUEDVTVObvphQ@mail.gmail.com>
+
+Martin - I agree that the floating point representation of 0.025 is a
+piece of the puzzle, but yes the heart was whether format/%OS3 should
+potentially round vs. truncate.  As it's spelled out in ?strptime that
+it will truncate, there is no bug per se, but simply unexpected
+behavior and I wanted to know if that was the intent in this case.
+Best,
+John
+
+On Thu, Mar 3, 2022 at 11:52 AM Martin Maechler
+<maechler at stat.math.ethz.ch> wrote:
+>
+> >>>>> John Muschelli
+> >>>>>     on Thu, 3 Mar 2022 11:04:05 -0500 writes:
+> >>>>> John Muschelli
+> >>>>>     on Thu, 3 Mar 2022 11:04:05 -0500 writes:
+>
+>     > I see in ?POSIXct and I'm trying to understand the note:
+>     >> Classes "POSIXct" and "POSIXlt" are able to express fractions of a second. (Conversion of fractions between the two forms may not be exact, but will have better than microsecond accuracy.)
+>
+>     > Mainly, I'm trying to understand printing of POSIXct with fractional
+>     > seconds.  I see print.POSIXct calls format.POSIXct and eventually
+>     > calls format.POSIXlt, which then takes into account `digits.secs` for
+>     > printing. The format uses %OS3, which strptime indicates (* added):
+>
+>     >> Specific to R is %OSn, which for output gives the seconds *truncated* to 0 <= n <= 6 decimal places (and if %OS is not followed by a digit, it uses the setting of getOption("digits.secs"), or if that is unset, n = 0).
+>
+>     > So I'm seeing it truncates the seconds to 3 digits, so I think that is
+>     > why the below is printing 0.024.
+>
+>     > I think this is especially relevant even if you set
+>     > `options(digits.secs = 6)`, then the code in
+>     > format.POSIXlt would still return np=3 as the following condition
+>     > would break at i = 3
+>
+>     > for (i in seq_len(np) - 1L)
+>     >   if (all(abs(secs - round(secs, > i)) < 1e-06)) {
+>     >     np <- i
+>     >     break
+>     > }
+>
+>     > as sub_seconds - round(sub_seconds,3) < 1e-06.   This seems to be
+>     > expected behavior given the docs, but would any consider this a bug?
+>
+>
+>     > Example:
+>
+>     > options(digits.secs = 4)
+>     > x = structure(947016000.025, class = c("POSIXct", "POSIXt"), tzone = "UTC")
+>
+> I think you've fallen into the R FAQ 7.31 trap :
+>
+> > ct <- 947016000.025
+> > ct %% 1
+> [1] 0.02499998
+> >
+>
+> Of course, the issue may still be somewhat interesting, ...
+>
+> Yes, POSIXct is of limited precision and I think the help page
+> you mentioned did document that that's one reason for using
+> POSIXlt instead, as there, sub second accuracy can be much better.
+>
+> But FAQ 7.31 and the fact that all numbers are base 2 and in
+> base 2,  no decimal   <n>.025   can be represented in full accuracy.
+>
+> Also, as you've noticed the R POSIX[cl]t  code just truncates,
+> i.e. rounds towards 0 unconditionally, and I tend to agree that it
+> should rather round than truncate.
+>
+> But we should carefully separate the issues here, from the
+> underlying inherent FAQ 7.31 truth that most decimal numbers in
+> a computer are not quite what they look like ...
+>
+> Martin Maechler
+> ETH Zurich and  R Core Team (also author of the CRAN package 'round')
+>
+>
+>     > summary(x, digits = 20)
+>     > #>                      Min.                   1st Qu.                    Median
+>     > #> "2000-01-04 20:00:00.024" "2000-01-04 20:00:00.024" "2000-01-04 20:00:00.024"
+>     > #>                      Mean                   3rd Qu.                      Max.
+>     > #> "2000-01-04 20:00:00.024" "2000-01-04 20:00:00.024" "2000-01-04 20:00:00.024"
+>     > x
+>     > #> [1] "2000-01-04 20:00:00.024 UTC"
+>     > format.POSIXct(x, format = "%Y-%m-%d %H:%M:%OS3")
+>     > #> [1] "2000-01-04 20:00:00.024"
+>     > format.POSIXct(x, format = "%Y-%m-%d %H:%M:%OS4")
+>     > #> [1] "2000-01-04 20:00:00.0249"
+>     > sub_seconds = as.numeric(x) %% 1
+>     > sub_seconds
+>     > #> [1] 0.02499998
+>     > round(sub_seconds, 3)
+>     > #> [1] 0.025
+>
+>     > rounded = as.POSIXct(
+>     > floor(as.numeric(x)) +
+>     > round(as.numeric(x) %% 1, 3),
+>     > origin = "1970-01-01")
+>     > rounded
+>     > #> [1] "2000-01-04 20:00:00.024 UTC"
+>     > as.numeric(rounded) %% 1
+>     > #> [1] 0.02499998
+>
+>     > R.version
+>     > _
+>     > platform       x86_64-pc-linux-gnu
+>     > arch           x86_64
+>     > os             linux-gnu
+>     > system         x86_64, linux-gnu
+>     > status
+>     > major          4
+>     > minor          1.2
+>     > year           2021
+>     > month          11
+>     > day            01
+>     > svn rev        81115
+>     > language       R
+>     > version.string R version 4.1.2 (2021-11-01)
+>     > nickname       Bird Hippie
+>
+>
+>
+>     > Best,
+>     > John
+>
+>     > ______________________________________________
+>     > R-devel at r-project.org mailing list
+>     > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Thu Mar  3 20:27:11 2022
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Thu, 3 Mar 2022 11:27:11 -0800
+Subject: [Rd] strsplit() and final empty values
+In-Reply-To: <CAC0O-5dYgPxHmaBsbyiW9-aXjjAqQ7Wn16FF2N+LsHiyw0efhA@mail.gmail.com>
+References: <CAC0O-5f1U2m8ji=4UMWNBFwW7DFU72L1eNyo6nJN0sBpbcCPdw@mail.gmail.com>
+ <CAFDcVCTPUqygyNHsKJYp=UAGhFcjOigrtsjno-=J+9T7=dLN8w@mail.gmail.com>
+ <CAC0O-5dYgPxHmaBsbyiW9-aXjjAqQ7Wn16FF2N+LsHiyw0efhA@mail.gmail.com>
+Message-ID: <CAFDcVCSj-i012Fhtkpmk2bNfCu7+4C-JnvJxvD=upsmHJQM7sA@mail.gmail.com>
+
+On Thu, Mar 3, 2022 at 12:58 AM Dzmitry Batrakou <d.batrakou at gmail.com> wrote:
+>
+> Alternatively, the man page for the strsplit() could include the following (or a better phrased version):
+>
+> "
+> Note that the trailing empty values will be trimmed (see penultimate example). A way around this is to use
+> > read.table(text = paste(strings.to.split, collapse = "\n"), sep = split)
+
+Another workaround is to append another split symbol (or string) to
+the end of the string you're splitting, e.g.
+
+> strsplit(paste0("a:b:c:", split <- ":"), split = split, fixed = TRUE)
+[[1]]
+[1] "a" "b" "c" ""
+
+/Henrik
+
+> "
+>
+> Dzmitry
+>
+> On Thu, 3 Mar 2022 at 04:13, Henrik Bengtsson <henrik.bengtsson at gmail.com> wrote:
+>>
+>> Here's an example clarifying the issue:
+>>
+>> > strsplit("a:b:c:d", split = ":", fixed = TRUE)
+>> [[1]]
+>> [1] "a" "b" "c" "d"
+>>
+>> > strsplit("a:b:c:", split = ":", fixed = TRUE)
+>> [[1]]
+>> [1] "a" "b" "c"
+>>
+>> I also ran into this a few times, and I agree that this complicated
+>> things when you need to preserve that last empty element.  Instead of
+>> changing the default behavior, which would probably break lots of
+>> existing code relying on it, one could introduce a new,
+>> backward-compatible argument `drop = TRUE`, e.g.
+>>
+>> > strsplit("a:b:c:", split = ":", fixed = TRUE, drop = FALSE)
+>> [[1]]
+>> [1] "a" "b" "c" ""
+>>
+>> My $.02
+>>
+>> /Henrik
+>>
+>>
+>>
+>> On Sat, Feb 26, 2022 at 6:39 AM Dzmitry Batrakou <d.batrakou at gmail.com> wrote:
+>> >
+>> > Hello,
+>> >
+>> > I would like to suggest changing the behaviour of the strsplit() function
+>> > with multiple trailing empty values. Currently, `strsplit(x = 'value::',
+>> > split = ':')` produces a list of length 2 ('value',''). This behaviour is
+>> > documented in the manual (penultimate example), however, I would argue, is
+>> > illogical and can lead to unexpected parsing results. One example is
+>> > splitting delimited value strings into a table.
+>> >
+>> > Regards,
+>> > Dzmitry
+>> >
+>> >         [[alternative HTML version deleted]]
+>> >
+>> > ______________________________________________
+>> > R-devel at r-project.org mailing list
+>> > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Thu Mar  3 20:38:28 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Thu, 3 Mar 2022 14:38:28 -0500
+Subject: [Rd] Floating Point with POSIXct
+In-Reply-To: <25120.62040.753761.512280@stat.math.ethz.ch>
+References: <CAFsq6G_cp=6pyh7CEe=rLUK47i+9LqtTyyK5zwjsdcNKnVigVg@mail.gmail.com>
+ <25120.62040.753761.512280@stat.math.ethz.ch>
+Message-ID: <139a95ec-5f5a-59e0-9791-9b6dd4541d96@gmail.com>
+
+On 03/03/2022 11:52 a.m., Martin Maechler wrote:
+>>>>>> John Muschelli
+>>>>>>      on Thu, 3 Mar 2022 11:04:05 -0500 writes:
+>>>>>> John Muschelli
+>>>>>>      on Thu, 3 Mar 2022 11:04:05 -0500 writes:
+> 
+>      > I see in ?POSIXct and I'm trying to understand the note:
+>      >> Classes "POSIXct" and "POSIXlt" are able to express fractions of a second. (Conversion of fractions between the two forms may not be exact, but will have better than microsecond accuracy.)
+> 
+>      > Mainly, I'm trying to understand printing of POSIXct with fractional
+>      > seconds.  I see print.POSIXct calls format.POSIXct and eventually
+>      > calls format.POSIXlt, which then takes into account `digits.secs` for
+>      > printing. The format uses %OS3, which strptime indicates (* added):
+> 
+>      >> Specific to R is %OSn, which for output gives the seconds *truncated* to 0 <= n <= 6 decimal places (and if %OS is not followed by a digit, it uses the setting of getOption("digits.secs"), or if that is unset, n = 0).
+> 
+>      > So I'm seeing it truncates the seconds to 3 digits, so I think that is
+>      > why the below is printing 0.024.
+> 
+>      > I think this is especially relevant even if you set
+>      > `options(digits.secs = 6)`, then the code in
+>      > format.POSIXlt would still return np=3 as the following condition
+>      > would break at i = 3
+> 
+>      > for (i in seq_len(np) - 1L)
+>      >   if (all(abs(secs - round(secs, > i)) < 1e-06)) {
+>      >     np <- i
+>      >     break
+>      > }
+> 
+>      > as sub_seconds - round(sub_seconds,3) < 1e-06.   This seems to be
+>      > expected behavior given the docs, but would any consider this a bug?
+> 
+> 
+>      > Example:
+> 
+>      > options(digits.secs = 4)
+>      > x = structure(947016000.025, class = c("POSIXct", "POSIXt"), tzone = "UTC")
+> 
+> I think you've fallen into the R FAQ 7.31 trap :
+> 
+>> ct <- 947016000.025
+>> ct %% 1
+> [1] 0.02499998
+>>
+> 
+> Of course, the issue may still be somewhat interesting, ...
+> 
+> Yes, POSIXct is of limited precision and I think the help page
+> you mentioned did document that that's one reason for using
+> POSIXlt instead, as there, sub second accuracy can be much better.
+> 
+> But FAQ 7.31 and the fact that all numbers are base 2 and in
+> base 2,  no decimal   <n>.025   can be represented in full accuracy.
+> 
+> Also, as you've noticed the R POSIX[cl]t  code just truncates,
+> i.e. rounds towards 0 unconditionally, and I tend to agree that it
+> should rather round than truncate.
+
+If you print the hour and minute at 01:59:59, you get 1 and 59, not 2 
+and 0.  That may be the motivation for doing the same for fractional 
+seconds.  Should 1:59:59.9 really print as 2:00:00?
+
+Duncan Murdoch
+> 
+> But we should carefully separate the issues here, from the
+> underlying inherent FAQ 7.31 truth that most decimal numbers in
+> a computer are not quite what they look like ...
+> 
+> Martin Maechler
+> ETH Zurich and  R Core Team (also author of the CRAN package 'round')
+> 
+> 
+>      > summary(x, digits = 20)
+>      > #>                      Min.                   1st Qu.                    Median
+>      > #> "2000-01-04 20:00:00.024" "2000-01-04 20:00:00.024" "2000-01-04 20:00:00.024"
+>      > #>                      Mean                   3rd Qu.                      Max.
+>      > #> "2000-01-04 20:00:00.024" "2000-01-04 20:00:00.024" "2000-01-04 20:00:00.024"
+>      > x
+>      > #> [1] "2000-01-04 20:00:00.024 UTC"
+>      > format.POSIXct(x, format = "%Y-%m-%d %H:%M:%OS3")
+>      > #> [1] "2000-01-04 20:00:00.024"
+>      > format.POSIXct(x, format = "%Y-%m-%d %H:%M:%OS4")
+>      > #> [1] "2000-01-04 20:00:00.0249"
+>      > sub_seconds = as.numeric(x) %% 1
+>      > sub_seconds
+>      > #> [1] 0.02499998
+>      > round(sub_seconds, 3)
+>      > #> [1] 0.025
+> 
+>      > rounded = as.POSIXct(
+>      > floor(as.numeric(x)) +
+>      > round(as.numeric(x) %% 1, 3),
+>      > origin = "1970-01-01")
+>      > rounded
+>      > #> [1] "2000-01-04 20:00:00.024 UTC"
+>      > as.numeric(rounded) %% 1
+>      > #> [1] 0.02499998
+> 
+>      > R.version
+>      > _
+>      > platform       x86_64-pc-linux-gnu
+>      > arch           x86_64
+>      > os             linux-gnu
+>      > system         x86_64, linux-gnu
+>      > status
+>      > major          4
+>      > minor          1.2
+>      > year           2021
+>      > month          11
+>      > day            01
+>      > svn rev        81115
+>      > language       R
+>      > version.string R version 4.1.2 (2021-11-01)
+>      > nickname       Bird Hippie
+> 
+> 
+> 
+>      > Best,
+>      > John
+> 
+>      > ______________________________________________
+>      > R-devel at r-project.org mailing list
+>      > https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From mu@che|||j2 @end|ng |rom gm@||@com  Thu Mar  3 21:07:35 2022
+From: mu@che|||j2 @end|ng |rom gm@||@com (John Muschelli)
+Date: Thu, 3 Mar 2022 15:07:35 -0500
+Subject: [Rd] Floating Point with POSIXct
+In-Reply-To: <139a95ec-5f5a-59e0-9791-9b6dd4541d96@gmail.com>
+References: <CAFsq6G_cp=6pyh7CEe=rLUK47i+9LqtTyyK5zwjsdcNKnVigVg@mail.gmail.com>
+ <25120.62040.753761.512280@stat.math.ethz.ch>
+ <139a95ec-5f5a-59e0-9791-9b6dd4541d96@gmail.com>
+Message-ID: <CAFsq6G_OQZDkBXMqS5o18wyy2hutmnu2LtDD-hvpcSHC365ZdA@mail.gmail.com>
+
+That?s a good point. I think that?s fair and why rounding may not be the
+appropriate default.  Oddly enough, I think 1:59:60 may be more appropriate
+though wrong.  The way the seconds are separated in POSIXlt however, I
+don?t think that would ever happen, but the big downside would be if that
+would round to 1:59:59.00
+
+On Thu, Mar 3, 2022 at 2:38 PM Duncan Murdoch <murdoch.duncan at gmail.com>
+wrote:
+
+> On 03/03/2022 11:52 a.m., Martin Maechler wrote:
+> >>>>>> John Muschelli
+> >>>>>>      on Thu, 3 Mar 2022 11:04:05 -0500 writes:
+> >>>>>> John Muschelli
+> >>>>>>      on Thu, 3 Mar 2022 11:04:05 -0500 writes:
+> >
+> >      > I see in ?POSIXct and I'm trying to understand the note:
+> >      >> Classes "POSIXct" and "POSIXlt" are able to express fractions of
+> a second. (Conversion of fractions between the two forms may not be exact,
+> but will have better than microsecond accuracy.)
+> >
+> >      > Mainly, I'm trying to understand printing of POSIXct with
+> fractional
+> >      > seconds.  I see print.POSIXct calls format.POSIXct and eventually
+> >      > calls format.POSIXlt, which then takes into account `digits.secs`
+> for
+> >      > printing. The format uses %OS3, which strptime indicates (*
+> added):
+> >
+> >      >> Specific to R is %OSn, which for output gives the seconds
+> *truncated* to 0 <= n <= 6 decimal places (and if %OS is not followed by a
+> digit, it uses the setting of getOption("digits.secs"), or if that is
+> unset, n = 0).
+> >
+> >      > So I'm seeing it truncates the seconds to 3 digits, so I think
+> that is
+> >      > why the below is printing 0.024.
+> >
+> >      > I think this is especially relevant even if you set
+> >      > `options(digits.secs = 6)`, then the code in
+> >      > format.POSIXlt would still return np=3 as the following condition
+> >      > would break at i = 3
+> >
+> >      > for (i in seq_len(np) - 1L)
+> >      >   if (all(abs(secs - round(secs, > i)) < 1e-06)) {
+> >      >     np <- i
+> >      >     break
+> >      > }
+> >
+> >      > as sub_seconds - round(sub_seconds,3) < 1e-06.   This seems to be
+> >      > expected behavior given the docs, but would any consider this a
+> bug?
+> >
+> >
+> >      > Example:
+> >
+> >      > options(digits.secs = 4)
+> >      > x = structure(947016000.025, class = c("POSIXct", "POSIXt"),
+> tzone = "UTC")
+> >
+> > I think you've fallen into the R FAQ 7.31 trap :
+> >
+> >> ct <- 947016000.025
+> >> ct %% 1
+> > [1] 0.02499998
+> >>
+> >
+> > Of course, the issue may still be somewhat interesting, ...
+> >
+> > Yes, POSIXct is of limited precision and I think the help page
+> > you mentioned did document that that's one reason for using
+> > POSIXlt instead, as there, sub second accuracy can be much better.
+> >
+> > But FAQ 7.31 and the fact that all numbers are base 2 and in
+> > base 2,  no decimal   <n>.025   can be represented in full accuracy.
+> >
+> > Also, as you've noticed the R POSIX[cl]t  code just truncates,
+> > i.e. rounds towards 0 unconditionally, and I tend to agree that it
+> > should rather round than truncate.
+>
+> If you print the hour and minute at 01:59:59, you get 1 and 59, not 2
+> and 0.  That may be the motivation for doing the same for fractional
+> seconds.  Should 1:59:59.9 really print as 2:00:00?
+>
+> Duncan Murdoch
+> >
+> > But we should carefully separate the issues here, from the
+> > underlying inherent FAQ 7.31 truth that most decimal numbers in
+> > a computer are not quite what they look like ...
+> >
+> > Martin Maechler
+> > ETH Zurich and  R Core Team (also author of the CRAN package 'round')
+> >
+> >
+> >      > summary(x, digits = 20)
+> >      > #>                      Min.                   1st Qu.
+>         Median
+> >      > #> "2000-01-04 20:00:00.024" "2000-01-04 20:00:00.024"
+> "2000-01-04 20:00:00.024"
+> >      > #>                      Mean                   3rd Qu.
+>           Max.
+> >      > #> "2000-01-04 20:00:00.024" "2000-01-04 20:00:00.024"
+> "2000-01-04 20:00:00.024"
+> >      > x
+> >      > #> [1] "2000-01-04 20:00:00.024 UTC"
+> >      > format.POSIXct(x, format = "%Y-%m-%d %H:%M:%OS3")
+> >      > #> [1] "2000-01-04 20:00:00.024"
+> >      > format.POSIXct(x, format = "%Y-%m-%d %H:%M:%OS4")
+> >      > #> [1] "2000-01-04 20:00:00.0249"
+> >      > sub_seconds = as.numeric(x) %% 1
+> >      > sub_seconds
+> >      > #> [1] 0.02499998
+> >      > round(sub_seconds, 3)
+> >      > #> [1] 0.025
+> >
+> >      > rounded = as.POSIXct(
+> >      > floor(as.numeric(x)) +
+> >      > round(as.numeric(x) %% 1, 3),
+> >      > origin = "1970-01-01")
+> >      > rounded
+> >      > #> [1] "2000-01-04 20:00:00.024 UTC"
+> >      > as.numeric(rounded) %% 1
+> >      > #> [1] 0.02499998
+> >
+> >      > R.version
+> >      > _
+> >      > platform       x86_64-pc-linux-gnu
+> >      > arch           x86_64
+> >      > os             linux-gnu
+> >      > system         x86_64, linux-gnu
+> >      > status
+> >      > major          4
+> >      > minor          1.2
+> >      > year           2021
+> >      > month          11
+> >      > day            01
+> >      > svn rev        81115
+> >      > language       R
+> >      > version.string R version 4.1.2 (2021-11-01)
+> >      > nickname       Bird Hippie
+> >
+> >
+> >
+> >      > Best,
+> >      > John
+> >
+> >      > ______________________________________________
+> >      > R-devel at r-project.org mailing list
+> >      > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> --
+Best,
+John
+
+	[[alternative HTML version deleted]]
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Thu Mar  3 21:10:08 2022
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Thu, 3 Mar 2022 14:10:08 -0600 (CST)
+Subject: [Rd] 
+ [External] Re: message(<cond>) and warning(<cond>) circumvent
+ calling handlers and signal the original class, e.g. an error
+In-Reply-To: <CAFDcVCRpKxShKar1+orJ9TBEM=ruvVCK9Jq0SFOzuO_sfQuyeg@mail.gmail.com>
+References: <E1nP7oN-0003Tr-FD@rmmprod07.runbox>
+ <973da75e-79ed-aee-19a0-8a4fe1c5ad8@uiowa.edu>
+ <CAFDcVCRpKxShKar1+orJ9TBEM=ruvVCK9Jq0SFOzuO_sfQuyeg@mail.gmail.com>
+Message-ID: <2abb1c47-1269-83f5-61f-5cd456ba2d13@uiowa.edu>
+
+I'll look into what effect adding stopifnot(inherits(cond, "error"))
+and similar to the others has on CRAN/BIOC packages. Probably won't
+get there for a while though.
+
+Best,
+
+luke
+
+On Wed, 2 Mar 2022, Henrik Bengtsson wrote:
+
+> Thank you, Luke.  I discovered this problem last year, where a user
+> reported that their use of message(<error>) in futures would not work
+> the same way as without futures. The issue is that the future
+> framework captures the error condition and relays it, rather than
+> outputting the message string, which happens if you don't capture the
+> error condition. Today there was another similar report from another
+> package using futures. They both had in common that they use
+>
+> res <- tryCatch({
+>  some_fcn(x)
+> }, error = function(e) {
+>  message(e)
+>  NA
+> })
+>
+> to return a missing value on errors, while outputting the error
+> message string to inform the user on the error.  I've been informing
+> them to instead use
+>
+>  message(conditionMessage(e))
+>
+> in this case. Your reply confirms this, and I can now confidently say
+> that using message(e) is incorrect here.
+>
+> I think the help pages on message, warning, and stop could be more
+> explicit on this behavior.
+>
+> My preference would be that it is an error if calling message(cond)
+> with !inherits(cond, "message"), calling warning(cond) with
+> !inherits(cond, "warning"), and stop(cond) with !inherits(cond,
+> "error").  But, maybe there are valid arguments for allowing such use
+> cases.
+>
+> Thanks,
+>
+> Henrik
+>
+> On Tue, Mar 1, 2022 at 3:12 PM <luke-tierney at uiowa.edu> wrote:
+>>
+>> This is behaving as documented and as intended. If you want to
+>> call stop() with a condition argument and you want to have that
+>> condition handled as an error then you need to make sure that your
+>> condition inherits from "error". One way to do this would be to define
+>> something like
+>>
+>> warningToError <- function(w)
+>>     errorCondition(conditionMessage(w),
+>>                    warning = w,
+>>                   class = "warningToError")
+>>
+>> and use stop(warningToError(w)).
+>>
+>> If you call stop() with a condition argument then that is the
+>> condition stop() will signal, regardless of its class. I can't at the
+>> moment think of a good reason why I would want to call stop() with a
+>> warning condition argument, and I suspect most cases where that
+>> happens would be mistakes. So checking in stop() that a condition
+>> argument inherits from "error" and signaling a warning, or maybe an
+>> error, if it does not might be worth considering (with analogous
+>> changes for warning() and message()).
+>>
+>> The condition system separates the signaling protocol from the process
+>> of determining handlers. Signaling itself is done by
+>> signalCondition().  message() and warning() signal a condition with a
+>> muffle restart available, and return if the condition is not handled.
+>> stop() is guaranteed not to return; if the condition is not handled,
+>> then it invokes the default error handler, which will not return. None
+>> of these currently look at the class of the condition.
+>> signalCondition() looks at the condition's class to find out what
+>> handlers are available. It will invoke error handlers for error
+>> conditions and warning handlers for warning conditions.  It does not
+>> know or care about whether it was called from stop(), warning(),
+>> message(), or some other way.
+>>
+>> The most common high-level usage of stop(), warning(), or message() is
+>> to call them with a string and possibly some additional arguments used
+>> to create a message. In these cases a condition object of class
+>> "error" for stop(), "warning" for warning(), and "message" for message
+>> is created implicitly and signaled.
+>>
+>> Calling these functions with a condition argument is using lower level
+>> functionality, which gives more power but also means users need to
+>> understand what they are doing. In particular, users who want to call
+>> stop() with a condition argument _and_ want handlers for error
+>> conditions to be used need to make sure that the class of the
+>> condition they signal inherits from "error".
+>>
+>> Best,
+>>
+>> luke
+>>
+>> On Tue, 1 Mar 2022, Andreas Kersting wrote:
+>>
+>>> Hi,
+>>>
+>>> There is the same issue with stop():
+>>>
+>>>> w <- simpleWarning("careful")
+>>>> tryCatch(stop(w), condition = identity)
+>>> <simpleWarning: careful>
+>>>
+>>> I very recently stumbled upon this, when a warning was re-raised as an error, which was then not caught by an outer try():
+>>>
+>>>> try(
+>>> +   tryCatch(warning("careful"), warning = function(w) stop(w)),
+>>> +   silent = TRUE
+>>> + )
+>>> Error in doTryCatch(return(expr), name, parentenv, handler) : careful
+>>>
+>>> I would also like to see this behavior changed. I think that stop() should always signal an error, warning() a warning and message() a message.
+>>>
+>>> Best,
+>>> Andreas
+>>>
+>>> 2022-03-01 19:38 GMT+01:00 "Henrik Bengtsson" <henrik.bengtsson at gmail.com>:
+>>>> Hi, in help("message", package = "base"), we can read:
+>>>>
+>>>> Description: 'message' is used for generating 'simple' diagnostic
+>>>> messages which are neither warnings nor errors, but nevertheless
+>>>> represented as conditions.
+>>>>
+>>>> From this, I conclude that message() should generate a condition that
+>>>> are neither warning nor errors.
+>>>>
+>>>> However, the following signals a condition of class 'error':
+>>>>
+>>>>> e <- simpleError("boom!\n")
+>>>>> message(e)
+>>>> boom!
+>>>>
+>>>> This can be seen if we do:
+>>>>
+>>>>> res <- tryCatch(message(e), condition = identity)
+>>>>> res
+>>>> <simpleError: boom!
+>>>>
+>>>> This stems from message(e) using signalCondition(e) internally.
+>>>>
+>>>> Another problem with this behavior is that message(e) cannot be suppressed:
+>>>>
+>>>>> suppressMessages(message(e))
+>>>> boom!
+>>>>
+>>>> or captured with calling handlers, e.g.
+>>>>
+>>>>> res <- withCallingHandlers(message(e), condition = identity)
+>>>> boom!
+>>>>> res
+>>>> NULL
+>>>>
+>>>> If we replace e <- simpleError("boom") with e <-
+>>>> simpleWarning("careful"), we see a similar behavior.  These problems
+>>>> exist also with warning(e).  The current behaviors prevent functions
+>>>> from capturing and relaying message(<error>), message(<warning>), and
+>>>> warning(<error>).
+>>>>
+>>>> I'm happy to post a bug report to <https://bugs.r-project.org/>.
+>>>>
+>>>> /Henrik
+>>>>
+>>>> PS. BTW, it looks like some recent "..." tweaks to the warning() and
+>>>> stop() code could be applied also to message().
+>>>>
+>>>> ______________________________________________
+>>>> R-devel at r-project.org mailing list
+>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>
+>>
+>> --
+>> Luke Tierney
+>> Ralph E. Wareham Professor of Mathematical Sciences
+>> University of Iowa                  Phone:             319-335-3386
+>> Department of Statistics and        Fax:               319-335-3017
+>>     Actuarial Science
+>> 241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+>> Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+>
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+
+
