@@ -1740,3 +1740,156 @@ Heather
 	[[alternative HTML version deleted]]
 
 
+From th|@|@@rn| @end|ng |rom gm@||@com  Tue Mar  8 17:24:47 2022
+From: th|@|@@rn| @end|ng |rom gm@||@com (Arni Magnusson)
+Date: Wed, 9 Mar 2022 03:24:47 +1100
+Subject: [Rd] Proposed diff.character() method
+Message-ID: <CANrWemgW5nWHfHi7NJzwe9V2Tj+Y5tWAeK9duCYyNYytDdVYnQ-4636@mail.gmail.com>
+
+Dear R developers,
+
+Recently, I was busy comparing different versions of several packages.
+Tired of going back and forth between R and diff, I created a simple
+file comparison function in R that I found quite useful. For an
+efficient and familiar interface I called it diff.character() and ran
+things like:
+
+  diff("old/R/foo.R", "new/R/foo.R")
+
+Before long, I found the need for a directory-wide comparison and
+added support for:
+
+  diff("old/R", "new/R")
+
+I have now revisited and fine-polished this function to a point where
+I'd like to humbly suggest that diff.character() could be incorporated
+into the base package. See attached files and patch based on the
+current SVN trunk. It can be tested quickly by sourcing diff.R, or by
+building R.
+
+The examples in diff.character.html are somewhat contrived, in the
+absence of good example files to compare. You will probably have
+better example files to compare from your own work.
+
+Clearly, the functionality differs considerably from the default
+diff() method that operates on a single x vector, but in the broad
+sense, they're both about showing differences. For most programmers,
+calling diff() on two files or directories is already a part of muscle
+memory, both intuitive and efficient.
+
+There are a couple of CRAN packages (diffobj, diffR) that can compare
+files but not directories. They have package dependencies and return
+objects that are more complex (S4, HTML) than the plain list returned
+by diff.character().
+
+This basic utility does by no means compete with Meld, Kompare, Emacs
+ediff, or other feature-rich diff applications, and using setdiff() as
+a basis for file comparison can be a somewhat simplistic approach.
+Nevertheless, I think many users may find this a handy tool to quickly
+compare scripts and data files. The method could be implemented
+differently, with fewer or more features, and I'm happy to amend
+according to the R Core Team decision.
+
+In the past, I have proposed additions to core R, some rejected and
+others accepted. This proposal fits a useful tool in a currently
+vacant diff.character() method at a low cost, using relatively few
+lines of base function calls and no compiled code. Its acceptance will
+probably depend on whether members of the R Core Team and/or CRAN Team
+might see it as a useful addition to their toolkit for interactive and
+scripted workflows, including R and CRAN maintenance.
+
+All the best,
+Arni
+
+-------------- next part --------------
+An embedded and charset-unspecified text was scrubbed...
+Name: diff.character.txt
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20220309/e5cc04f3/attachment.txt>
+
+-------------- next part --------------
+A non-text attachment was scrubbed...
+Name: diff.character.patch
+Type: text/x-patch
+Size: 9305 bytes
+Desc: not available
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20220309/e5cc04f3/attachment.bin>
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Wed Mar  9 02:50:18 2022
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Wed, 9 Mar 2022 14:50:18 +1300
+Subject: [Rd] Proposed diff.character() method
+In-Reply-To: <CANrWemgW5nWHfHi7NJzwe9V2Tj+Y5tWAeK9duCYyNYytDdVYnQ-4636@mail.gmail.com>
+References: <CANrWemgW5nWHfHi7NJzwe9V2Tj+Y5tWAeK9duCYyNYytDdVYnQ-4636@mail.gmail.com>
+Message-ID: <F5E097BB-0CDF-4565-BEFD-5977B76C0F3D@R-project.org>
+
+Arni,
+
+I appreciate your idea, but I would argue that you are really writing a new function that has nothing to do with the diff() function in R. diff() computes (variably lagged) differences between elements of a vector, so if you were to even contemplate diff.character, it would certainly have nothing to do with files (since character vectors are not files in the first place).
+
+Therefore I think it's a great idea, but you probably want to start with a function that compares character vectors element by element compare(x, y) and returns something suitable and the write something like file.compare <- function(a, b) compare(readLines(a), readLines(b)). This has nothing to do with the diff() function R, but could be a nice package. Or, you can have a look at diffobj::diffFile().
+
+Cheers,
+Simon
+
+
+> On Mar 9, 2022, at 5:24 AM, Arni Magnusson <thisisarni at gmail.com> wrote:
+> 
+> Dear R developers,
+> 
+> Recently, I was busy comparing different versions of several packages.
+> Tired of going back and forth between R and diff, I created a simple
+> file comparison function in R that I found quite useful. For an
+> efficient and familiar interface I called it diff.character() and ran
+> things like:
+> 
+>  diff("old/R/foo.R", "new/R/foo.R")
+> 
+> Before long, I found the need for a directory-wide comparison and
+> added support for:
+> 
+>  diff("old/R", "new/R")
+> 
+> I have now revisited and fine-polished this function to a point where
+> I'd like to humbly suggest that diff.character() could be incorporated
+> into the base package. See attached files and patch based on the
+> current SVN trunk. It can be tested quickly by sourcing diff.R, or by
+> building R.
+> 
+> The examples in diff.character.html are somewhat contrived, in the
+> absence of good example files to compare. You will probably have
+> better example files to compare from your own work.
+> 
+> Clearly, the functionality differs considerably from the default
+> diff() method that operates on a single x vector, but in the broad
+> sense, they're both about showing differences. For most programmers,
+> calling diff() on two files or directories is already a part of muscle
+> memory, both intuitive and efficient.
+> 
+> There are a couple of CRAN packages (diffobj, diffR) that can compare
+> files but not directories. They have package dependencies and return
+> objects that are more complex (S4, HTML) than the plain list returned
+> by diff.character().
+> 
+> This basic utility does by no means compete with Meld, Kompare, Emacs
+> ediff, or other feature-rich diff applications, and using setdiff() as
+> a basis for file comparison can be a somewhat simplistic approach.
+> Nevertheless, I think many users may find this a handy tool to quickly
+> compare scripts and data files. The method could be implemented
+> differently, with fewer or more features, and I'm happy to amend
+> according to the R Core Team decision.
+> 
+> In the past, I have proposed additions to core R, some rejected and
+> others accepted. This proposal fits a useful tool in a currently
+> vacant diff.character() method at a low cost, using relatively few
+> lines of base function calls and no compiled code. Its acceptance will
+> probably depend on whether members of the R Core Team and/or CRAN Team
+> might see it as a useful addition to their toolkit for interactive and
+> scripted workflows, including R and CRAN maintenance.
+> 
+> All the best,
+> Arni
+> <diff.character.txt><diff.character.patch>______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
