@@ -2421,3 +2421,312 @@ Thank you,
 Frederick
 
 
+From kry|ov@r00t @end|ng |rom gm@||@com  Sun Mar 13 13:47:36 2022
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Sun, 13 Mar 2022 15:47:36 +0300
+Subject: [Rd] Bundling MathJax
+Message-ID: <20220313154736.7301b31f@Tarkus>
+
+Hello R-devel,
+
+I appreciate the efforts devoted towards improving equation typography
+in HTML manuals. Since MathML lost its status as the way to express
+mathematics on the web after its removal from Google Chrome in 2013,
+MathJax and KaTeX are probably the best options left: both TtH [1] and
+HeVeA [2] don't render math quite as well and likely don't do anything
+about accessibility of the resulting equations (which seems to be the
+reason to focus on the HTML documentation in the first place).
+
+Having seen r81881 [3], I would like to suggest bundling MathJax
+together with R instead of loading it from the Internet. Every now and
+then, I work from places with spotty Internet connection (e.g. mobile
+network on a train). If R defaults to downloading a file every time
+Rd2HTML is called, that would be very inconvenient to me, especially
+since the requests for external JavaScript could intermittently fail
+or take a long time to load, resulting in partially failed renders.
+
+For now, R documentation can be viewed without access to external
+resources (admittedly, not counting the use of external \figure{} and
+other Rd macros by packages, which is rare). I think that's a major
+strength of R and I would like to help preserve it.
+
+-- 
+Best regards,
+Ivan
+
+[1] http://hutchinson.belmont.ma.us/tth/in_action.html
+
+[2] http://hevea.inria.fr/examples/test/suite.html
+
+[3]
+https://github.com/r-devel/r-svn/commit/55e013251cbaf8942d34820f1854c9cfc38e097b
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sun Mar 13 15:05:18 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sun, 13 Mar 2022 10:05:18 -0400
+Subject: [Rd] Bundling MathJax
+In-Reply-To: <20220313154736.7301b31f@Tarkus>
+References: <20220313154736.7301b31f@Tarkus>
+Message-ID: <88e9a902-d25e-315f-7034-1b0fb0aaa4ab@gmail.com>
+
+On 13/03/2022 8:47 a.m., Ivan Krylov wrote:
+> Hello R-devel,
+> 
+> I appreciate the efforts devoted towards improving equation typography
+> in HTML manuals. Since MathML lost its status as the way to express
+> mathematics on the web after its removal from Google Chrome in 2013,
+> MathJax and KaTeX are probably the best options left: both TtH [1] and
+> HeVeA [2] don't render math quite as well and likely don't do anything
+> about accessibility of the resulting equations (which seems to be the
+> reason to focus on the HTML documentation in the first place).
+> 
+> Having seen r81881 [3], I would like to suggest bundling MathJax
+> together with R instead of loading it from the Internet. Every now and
+> then, I work from places with spotty Internet connection (e.g. mobile
+> network on a train). If R defaults to downloading a file every time
+> Rd2HTML is called, that would be very inconvenient to me, especially
+> since the requests for external JavaScript could intermittently fail
+> or take a long time to load, resulting in partially failed renders.
+> 
+> For now, R documentation can be viewed without access to external
+> resources (admittedly, not counting the use of external \figure{} and
+> other Rd macros by packages, which is rare). I think that's a major
+> strength of R and I would like to help preserve it.
+> 
+
+An issue related to this was faced by the mathjaxr package:  The file 
+used for display is usually a minified version of the MathJax source, 
+and Debian didn't consider it close enough to source code to want to 
+distribute it as FOSS.  So if the minified file is included with R, the 
+original source should also be included.
+
+An alternative to this would be to provide a utility to download the 
+minified file.  Users with poor connectivity could do that once and 
+access the local copy thereafter.
+
+Duncan Murdoch
+
+
+From jeroenoom@ @end|ng |rom gm@||@com  Sun Mar 13 15:25:37 2022
+From: jeroenoom@ @end|ng |rom gm@||@com (Jeroen Ooms)
+Date: Sun, 13 Mar 2022 15:25:37 +0100
+Subject: [Rd] Bundling MathJax
+In-Reply-To: <20220313154736.7301b31f@Tarkus>
+References: <20220313154736.7301b31f@Tarkus>
+Message-ID: <CABFfbXsEUSZ5hdV-SdomQNKx1BTCHGFaU4EdgTckHmpyFZn+GQ@mail.gmail.com>
+
+On Sun, Mar 13, 2022 at 1:48 PM Ivan Krylov <krylov.r00t at gmail.com> wrote:
+>
+> Hello R-devel,
+>
+> I appreciate the efforts devoted towards improving equation typography
+> in HTML manuals. Since MathML lost its status as the way to express
+> mathematics on the web after its removal from Google Chrome in 2013,
+> MathJax and KaTeX are probably the best options left: both TtH [1] and
+> HeVeA [2] don't render math quite as well and likely don't do anything
+> about accessibility of the resulting equations (which seems to be the
+> reason to focus on the HTML documentation in the first place).
+>
+> Having seen r81881 [3], I would like to suggest bundling MathJax
+> together with R instead of loading it from the Internet. Every now and
+> then, I work from places with spotty Internet connection (e.g. mobile
+> network on a train). If R defaults to downloading a file every time
+> Rd2HTML is called, that would be very inconvenient to me, especially
+> since the requests for external JavaScript could intermittently fail
+> or take a long time to load, resulting in partially failed renders.
+
+An alternative, more robust method is to render the math-to-html in R
+using the katex R package. This way no JavaScript library needs to be
+included in the html manual pages, merely a small katex css file with
+some styling, which is much lighter and safer to load in manual pages
+(and probably more feasible to bundle with R).
+
+For an example, see: https://docs.ropensci.org/katex/reference/math_to_rd.html
+
+
+From deep@y@n@@@rk@r @end|ng |rom gm@||@com  Sun Mar 13 16:22:26 2022
+From: deep@y@n@@@rk@r @end|ng |rom gm@||@com (Deepayan Sarkar)
+Date: Sun, 13 Mar 2022 20:52:26 +0530
+Subject: [Rd] Bundling MathJax
+In-Reply-To: <20220313154736.7301b31f@Tarkus>
+References: <20220313154736.7301b31f@Tarkus>
+Message-ID: <CADfFDC4Dn5E_JkebhdpzbtH0J8qaf9mgQu_BKpXDqLNd0VXA_A@mail.gmail.com>
+
+On Sun, Mar 13, 2022 at 6:18 PM Ivan Krylov <krylov.r00t at gmail.com> wrote:
+>
+> Hello R-devel,
+>
+> I appreciate the efforts devoted towards improving equation typography
+> in HTML manuals. Since MathML lost its status as the way to express
+> mathematics on the web after its removal from Google Chrome in 2013,
+> MathJax and KaTeX are probably the best options left: both TtH [1] and
+> HeVeA [2] don't render math quite as well and likely don't do anything
+> about accessibility of the resulting equations (which seems to be the
+> reason to focus on the HTML documentation in the first place).
+>
+> Having seen r81881 [3], I would like to suggest bundling MathJax
+> together with R instead of loading it from the Internet. Every now and
+> then, I work from places with spotty Internet connection (e.g. mobile
+> network on a train). If R defaults to downloading a file every time
+> Rd2HTML is called, that would be very inconvenient to me, especially
+> since the requests for external JavaScript could intermittently fail
+> or take a long time to load, resulting in partially failed renders.
+
+Usually browser caching should avoid multiple downloads, shouldn't it?
+
+> For now, R documentation can be viewed without access to external
+> resources (admittedly, not counting the use of external \figure{} and
+> other Rd macros by packages, which is rare). I think that's a major
+> strength of R and I would like to help preserve it.
+
+Bundling is something we considered (and is still a possibility), but
+ended up not doing mainly because it's more than just a single file.
+E.g., these are the files bundled by mathjaxr:
+
+https://github.com/wviechtb/mathjaxr/tree/master/src/mathjax/es5
+
+Would it be reasonable to use the installation provided by mathjaxr
+instead, if it is available?
+
+Best,
+-Deepayan
+
+> --
+> Best regards,
+> Ivan
+>
+> [1] http://hutchinson.belmont.ma.us/tth/in_action.html
+>
+> [2] http://hevea.inria.fr/examples/test/suite.html
+>
+> [3]
+> https://github.com/r-devel/r-svn/commit/55e013251cbaf8942d34820f1854c9cfc38e097b
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From deep@y@n@@@rk@r @end|ng |rom gm@||@com  Sun Mar 13 16:29:22 2022
+From: deep@y@n@@@rk@r @end|ng |rom gm@||@com (Deepayan Sarkar)
+Date: Sun, 13 Mar 2022 20:59:22 +0530
+Subject: [Rd] Bundling MathJax
+In-Reply-To: <88e9a902-d25e-315f-7034-1b0fb0aaa4ab@gmail.com>
+References: <20220313154736.7301b31f@Tarkus>
+ <88e9a902-d25e-315f-7034-1b0fb0aaa4ab@gmail.com>
+Message-ID: <CADfFDC4sN+QeHc1T5kqKRuJn30Jjw5aNiqS8_XTf=e-ctPUnOw@mail.gmail.com>
+
+On Sun, Mar 13, 2022 at 7:35 PM Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+>
+> On 13/03/2022 8:47 a.m., Ivan Krylov wrote:
+> > Hello R-devel,
+> >
+> > I appreciate the efforts devoted towards improving equation typography
+> > in HTML manuals. Since MathML lost its status as the way to express
+> > mathematics on the web after its removal from Google Chrome in 2013,
+> > MathJax and KaTeX are probably the best options left: both TtH [1] and
+> > HeVeA [2] don't render math quite as well and likely don't do anything
+> > about accessibility of the resulting equations (which seems to be the
+> > reason to focus on the HTML documentation in the first place).
+> >
+> > Having seen r81881 [3], I would like to suggest bundling MathJax
+> > together with R instead of loading it from the Internet. Every now and
+> > then, I work from places with spotty Internet connection (e.g. mobile
+> > network on a train). If R defaults to downloading a file every time
+> > Rd2HTML is called, that would be very inconvenient to me, especially
+> > since the requests for external JavaScript could intermittently fail
+> > or take a long time to load, resulting in partially failed renders.
+> >
+> > For now, R documentation can be viewed without access to external
+> > resources (admittedly, not counting the use of external \figure{} and
+> > other Rd macros by packages, which is rare). I think that's a major
+> > strength of R and I would like to help preserve it.
+> >
+>
+> An issue related to this was faced by the mathjaxr package:  The file
+> used for display is usually a minified version of the MathJax source,
+> and Debian didn't consider it close enough to source code to want to
+> distribute it as FOSS.  So if the minified file is included with R, the
+> original source should also be included.
+>
+> An alternative to this would be to provide a utility to download the
+> minified file.  Users with poor connectivity could do that once and
+> access the local copy thereafter.
+
+Would this really work? Wouldn't you also need the supplementary files
+such as fonts (relative to the main js file)?
+
+-Deepayan
+
+> Duncan Murdoch
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sun Mar 13 17:02:25 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sun, 13 Mar 2022 12:02:25 -0400
+Subject: [Rd] Bundling MathJax
+In-Reply-To: <CADfFDC4sN+QeHc1T5kqKRuJn30Jjw5aNiqS8_XTf=e-ctPUnOw@mail.gmail.com>
+References: <20220313154736.7301b31f@Tarkus>
+ <88e9a902-d25e-315f-7034-1b0fb0aaa4ab@gmail.com>
+ <CADfFDC4sN+QeHc1T5kqKRuJn30Jjw5aNiqS8_XTf=e-ctPUnOw@mail.gmail.com>
+Message-ID: <669c539a-998e-68e7-9929-cedf41ba128a@gmail.com>
+
+On 13/03/2022 11:29 a.m., Deepayan Sarkar wrote:
+> On Sun, Mar 13, 2022 at 7:35 PM Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+>>
+>> On 13/03/2022 8:47 a.m., Ivan Krylov wrote:
+>>> Hello R-devel,
+>>>
+>>> I appreciate the efforts devoted towards improving equation typography
+>>> in HTML manuals. Since MathML lost its status as the way to express
+>>> mathematics on the web after its removal from Google Chrome in 2013,
+>>> MathJax and KaTeX are probably the best options left: both TtH [1] and
+>>> HeVeA [2] don't render math quite as well and likely don't do anything
+>>> about accessibility of the resulting equations (which seems to be the
+>>> reason to focus on the HTML documentation in the first place).
+>>>
+>>> Having seen r81881 [3], I would like to suggest bundling MathJax
+>>> together with R instead of loading it from the Internet. Every now and
+>>> then, I work from places with spotty Internet connection (e.g. mobile
+>>> network on a train). If R defaults to downloading a file every time
+>>> Rd2HTML is called, that would be very inconvenient to me, especially
+>>> since the requests for external JavaScript could intermittently fail
+>>> or take a long time to load, resulting in partially failed renders.
+>>>
+>>> For now, R documentation can be viewed without access to external
+>>> resources (admittedly, not counting the use of external \figure{} and
+>>> other Rd macros by packages, which is rare). I think that's a major
+>>> strength of R and I would like to help preserve it.
+>>>
+>>
+>> An issue related to this was faced by the mathjaxr package:  The file
+>> used for display is usually a minified version of the MathJax source,
+>> and Debian didn't consider it close enough to source code to want to
+>> distribute it as FOSS.  So if the minified file is included with R, the
+>> original source should also be included.
+>>
+>> An alternative to this would be to provide a utility to download the
+>> minified file.  Users with poor connectivity could do that once and
+>> access the local copy thereafter.
+> 
+> Would this really work? Wouldn't you also need the supplementary files
+> such as fonts (relative to the main js file)?
+
+Sorry, my memory was bad.  It wasn't just one minified file, it was 
+multiple minified files.  You can see what was included before the 
+Debian complaint here:
+
+ 
+https://github.com/wviechtb/mathjaxr/tree/81201dc1d5851928b208f2575d6d992229bd9eaf
+
+Your suggestion of optionally using an installed copy of the mathjaxr 
+package seems ideal.
+
+Duncan Murdoch
+
+
