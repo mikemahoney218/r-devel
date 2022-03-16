@@ -2730,3 +2730,328 @@ package seems ideal.
 Duncan Murdoch
 
 
+From b@row||ng@on @end|ng |rom |@nc@@ter@@c@uk  Mon Mar 14 16:48:31 2022
+From: b@row||ng@on @end|ng |rom |@nc@@ter@@c@uk (Barry Rowlingson)
+Date: Mon, 14 Mar 2022 15:48:31 +0000
+Subject: [Rd] [External]  security holes in system2
+In-Reply-To: <4290ba4ba31d413282dfac82a0b6ef9b@CWXP265MB0646.GBRP265.PROD.OUTLOOK.COM>
+References: <4290ba4ba31d413282dfac82a0b6ef9b@CWXP265MB0646.GBRP265.PROD.OUTLOOK.COM>
+Message-ID: <CANVKczNw+G26m4avG6udj5kHxBhNma9gwPRWE1nxqktvyFB6qA@mail.gmail.com>
+
+>
+>      command <- paste(c(env, shQuote(command), args), collapse = " ")
+>
+> What horror! Please fix or document the fact that system2 executes its
+> ARGUMENTS and not just the command.
+>
+> Aside from being relevant to data scientists, it's a big security hole. It
+> means that, in some cases, something that looks like plain text in my R
+> code will end up being executed as a command on my system, which seems
+> dangerous to me.
+>
+
+
+If this is affecting you now and you need a solution then the `sys` package
+has `exec_wait`:
+
+The hacker tries and succeeds in running `rm` with `system2`:
+
+ > system2("echo", args="hello world ; rm /etc/systemfile")
+hello world
+rm: cannot remove '/etc/systemfile': No such file or directory
+
+because the semicolon starts a new command, but fails with `sys::exec_wait`:
+
+> sys::exec_wait("echo", args="hello world ; rm /etc/systemfile")
+hello world ; rm /etc/systemfile
+
+where it echoes all the args.
+
+For simple applications it should be a drop-in replacement.
+
+best,
+ Bobby Tables
+
+	[[alternative HTML version deleted]]
+
+
+From w||||@mwdun|@p @end|ng |rom gm@||@com  Mon Mar 14 17:30:57 2022
+From: w||||@mwdun|@p @end|ng |rom gm@||@com (Bill Dunlap)
+Date: Mon, 14 Mar 2022 09:30:57 -0700
+Subject: [Rd] [External] security holes in system2
+In-Reply-To: <CANVKczNw+G26m4avG6udj5kHxBhNma9gwPRWE1nxqktvyFB6qA@mail.gmail.com>
+References: <4290ba4ba31d413282dfac82a0b6ef9b@CWXP265MB0646.GBRP265.PROD.OUTLOOK.COM>
+ <CANVKczNw+G26m4avG6udj5kHxBhNma9gwPRWE1nxqktvyFB6qA@mail.gmail.com>
+Message-ID: <CAHqSRuRDVL4QJ0zj3bEhUF7wyEAK605fN4FBA4upJFNVPaOGRQ@mail.gmail.com>
+
+I think that any code that uses system() (or system2() or shell()) has a
+big security hole.
+
+-Bill
+
+On Mon, Mar 14, 2022 at 8:49 AM Barry Rowlingson <
+b.rowlingson at lancaster.ac.uk> wrote:
+
+> >
+> >      command <- paste(c(env, shQuote(command), args), collapse = " ")
+> >
+> > What horror! Please fix or document the fact that system2 executes its
+> > ARGUMENTS and not just the command.
+> >
+> > Aside from being relevant to data scientists, it's a big security hole.
+> It
+> > means that, in some cases, something that looks like plain text in my R
+> > code will end up being executed as a command on my system, which seems
+> > dangerous to me.
+> >
+>
+>
+> If this is affecting you now and you need a solution then the `sys` package
+> has `exec_wait`:
+>
+> The hacker tries and succeeds in running `rm` with `system2`:
+>
+>  > system2("echo", args="hello world ; rm /etc/systemfile")
+> hello world
+> rm: cannot remove '/etc/systemfile': No such file or directory
+>
+> because the semicolon starts a new command, but fails with
+> `sys::exec_wait`:
+>
+> > sys::exec_wait("echo", args="hello world ; rm /etc/systemfile")
+> hello world ; rm /etc/systemfile
+>
+> where it echoes all the args.
+>
+> For simple applications it should be a drop-in replacement.
+>
+> best,
+>  Bobby Tables
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From ggrothend|eck @end|ng |rom gm@||@com  Mon Mar 14 18:16:59 2022
+From: ggrothend|eck @end|ng |rom gm@||@com (Gabor Grothendieck)
+Date: Mon, 14 Mar 2022 13:16:59 -0400
+Subject: [Rd] transform help file
+Message-ID: <CAP01uRmHySA11HvSDSEpRUcaD06TfPdGRB_8FyX0f8yq+p=NjA@mail.gmail.com>
+
+It seems transform can modify column names and accepts data.frame
+arguments such as chek.names= but neither of these is mentioned in the
+help file.  For example this is how the ... argument is described.
+
+...: Further arguments of the form ?tag=value?
+
+The Details section does not provide any information from which one
+could deduce this either.
+
+  transform(BOD[1, ], "x y" = 1)
+  ##   Time demand x.y
+  ## 1    1    8.3   1
+
+  transform(BOD[1, ], "x y" = 1, check.names = FALSE)
+  ##   Time demand x y
+  ## 1    1    8.3   1
+
+-- 
+Statistics & Software Consulting
+GKX Group, GKX Associates Inc.
+tel: 1-877-GKX-GROUP
+email: ggrothendieck at gmail.com
+
+
+From w||||@mwdun|@p @end|ng |rom gm@||@com  Mon Mar 14 18:30:25 2022
+From: w||||@mwdun|@p @end|ng |rom gm@||@com (Bill Dunlap)
+Date: Mon, 14 Mar 2022 10:30:25 -0700
+Subject: [Rd] transform help file
+In-Reply-To: <CAP01uRmHySA11HvSDSEpRUcaD06TfPdGRB_8FyX0f8yq+p=NjA@mail.gmail.com>
+References: <CAP01uRmHySA11HvSDSEpRUcaD06TfPdGRB_8FyX0f8yq+p=NjA@mail.gmail.com>
+Message-ID: <CAHqSRuQOW3DkDn9zcXOMF7+g3UTHm8kUSjtCfQD7ep_eXMiNtA@mail.gmail.com>
+
+See Bugzilla issue #17890 for some discussion on this.
+  https://bugs.r-project.org/show_bug.cgi?id=17890
+
+-Bill
+
+On Mon, Mar 14, 2022 at 10:17 AM Gabor Grothendieck <ggrothendieck at gmail.com>
+wrote:
+
+> It seems transform can modify column names and accepts data.frame
+> arguments such as chek.names= but neither of these is mentioned in the
+> help file.  For example this is how the ... argument is described.
+>
+> ...: Further arguments of the form ?tag=value?
+>
+> The Details section does not provide any information from which one
+> could deduce this either.
+>
+>   transform(BOD[1, ], "x y" = 1)
+>   ##   Time demand x.y
+>   ## 1    1    8.3   1
+>
+>   transform(BOD[1, ], "x y" = 1, check.names = FALSE)
+>   ##   Time demand x y
+>   ## 1    1    8.3   1
+>
+> --
+> Statistics & Software Consulting
+> GKX Group, GKX Associates Inc.
+> tel: 1-877-GKX-GROUP
+> email: ggrothendieck at gmail.com
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From MEC @end|ng |rom @tower@@org  Mon Mar 14 19:23:44 2022
+From: MEC @end|ng |rom @tower@@org (Cook, Malcolm)
+Date: Mon, 14 Mar 2022 18:23:44 +0000
+Subject: [Rd] linux manpage for `Rscript` ought to indicate date/version as
+ does that of `R`
+Message-ID: <CH0PR20MB3947355A6D7C27DCEA55CC8BBE0F9@CH0PR20MB3947.namprd20.prod.outlook.com>
+
+Hello R developers,
+
+I have noticed that the footer for the R's manpage nicely reports the version and date:
+
+R 4.0.0                                                                  September 2020                                                                     R(1)
+
+Whereas that of Rscript does not include version, and is incorrect as per date:
+	
+R scripting                                                                April 2007                                                                 Rscript(1)
+
+It could profitably read:
+
+Rscript 4.0.0                                                                September 2020                                                    Rscript(1)
+
+Thoughts?
+
+Malcolm Cook
+Database Applications Manager
+Stowers Institute for Medical Research
+Kansas City, MO  USA
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Mon Mar 14 21:42:35 2022
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Mon, 14 Mar 2022 23:42:35 +0300
+Subject: [Rd] Bundling MathJax
+In-Reply-To: <CABFfbXsEUSZ5hdV-SdomQNKx1BTCHGFaU4EdgTckHmpyFZn+GQ@mail.gmail.com>
+References: <20220313154736.7301b31f@Tarkus>
+ <CABFfbXsEUSZ5hdV-SdomQNKx1BTCHGFaU4EdgTckHmpyFZn+GQ@mail.gmail.com>
+Message-ID: <20220314234235.66de646e@Tarkus>
+
+On Sun, 13 Mar 2022 15:25:37 +0100
+Jeroen Ooms <jeroenooms at gmail.com> wrote:
+
+> An alternative, more robust method is to render the math-to-html in R
+> using the katex R package. This way no JavaScript library needs to be
+> included in the html manual pages, merely a small katex css file with
+> some styling, which is much lighter and safer to load in manual pages
+> (and probably more feasible to bundle with R).
+
+I do like the build-time rendering approach (I had started writing a
+plotmath-style equation renderer for documentation in my R packages
+with HTML and TeX support, but quickly abandoned it), but I see two
+problems with adopting KaTeX in tools::Rd2HTML:
+
+1. As far as I understand, these changes are supposed to improve
+accessibility of the documentation. (PDF is beautifully typeset, but
+can't be understood by screen readers as well as web pages.) MathJax
+seems to have better accessibility than KaTeX. While there is a hidden
+MathML block for screen readers in KaTeX output, some of them don't
+pick it up: https://github.com/KaTeX/KaTeX/issues/820
+
+2. If R-core were to adopt KaTeX, that would add a hard dependency from
+Rd2HTML to the V8 JavaScript engine. I think that's unlikely to happen.
+
+</seriously> Maybe in 20 years, when browser is the operating system
+and everyone runs R compiled to JavaScript with emscripten...
+
+-- 
+Best regards,
+Ivan
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Mon Mar 14 21:59:53 2022
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Mon, 14 Mar 2022 23:59:53 +0300
+Subject: [Rd] Bundling MathJax
+In-Reply-To: <CADfFDC4Dn5E_JkebhdpzbtH0J8qaf9mgQu_BKpXDqLNd0VXA_A@mail.gmail.com>
+References: <20220313154736.7301b31f@Tarkus>
+ <CADfFDC4Dn5E_JkebhdpzbtH0J8qaf9mgQu_BKpXDqLNd0VXA_A@mail.gmail.com>
+Message-ID: <20220314235953.609416cb@Tarkus>
+
+On Sun, 13 Mar 2022 20:52:26 +0530
+Deepayan Sarkar <deepayan.sarkar at gmail.com> wrote:
+
+> Usually browser caching should avoid multiple downloads, shouldn't it?
+
+True, but there's also the issue of download.file() called from Rd2HTML
+spending time (or timing out) on round-trips to the server. The
+cacheOK= option only controls the server-side caching, as far as my
+understanding of src/modules/internet/libcurl.c goes, so the file is
+always downloaded from the CDN.
+
+If that's the way you would like to go, the TOCTOU problem can be
+avoided by sending the HTML page to the client with plain text math
+visible and LaTeX math invisible, a script performing
+createElement()/appendChild() to actually download MathJax, and handling
+the "load" event of the newly created <script> element to replace the
+plain text math with its LaTeX rendering, when (if) the script actually
+loads.
+
+> Would it be reasonable to use the installation provided by mathjaxr
+> instead, if it is available?
+
+That's very reasonable. If this becomes a function used by Rd2HTML by
+default, it could be a good idea to give Priority: recommended to
+mathjax to ensure that most users don't have to hit the network when
+browsing documentation. Although this may be harder to combine with my
+previous idea; too many moving parts.
+
+-- 
+Best regards,
+Ivan
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Mon Mar 14 22:02:30 2022
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Tue, 15 Mar 2022 00:02:30 +0300
+Subject: [Rd] Bundling MathJax
+In-Reply-To: <88e9a902-d25e-315f-7034-1b0fb0aaa4ab@gmail.com>
+References: <20220313154736.7301b31f@Tarkus>
+ <88e9a902-d25e-315f-7034-1b0fb0aaa4ab@gmail.com>
+Message-ID: <20220315000230.718a3bfa@Tarkus>
+
+On Sun, 13 Mar 2022 10:05:18 -0400
+Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+
+> The file used for display is usually a minified version of the
+> MathJax source, and Debian didn't consider it close enough to source
+> code to want to distribute it as FOSS.  So if the minified file is
+> included with R, the original source should also be included.
+
+Pardon my ignorance, but how much does it matter whether the file is
+minified when the documentation is served over a local network? Does
+JavaScript minification speed up parsing or involve other
+transformations without which it would be hard or impossible to run the
+code in the browser?
+
+-- 
+Best regards,
+Ivan
+
+
