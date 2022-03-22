@@ -3805,3 +3805,148 @@ R-devel at r-project.org mailing list
 https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From @eb@meyer @end|ng |rom |@u@de  Sun Mar 20 22:45:43 2022
+From: @eb@meyer @end|ng |rom |@u@de (Sebastian Meyer)
+Date: Sun, 20 Mar 2022 22:45:43 +0100
+Subject: [Rd] 
+ . Re: stage=install in \doi definition could lead to problems
+In-Reply-To: <LO2P265MB58867AA2BA8442B9535B9214AE149@LO2P265MB5886.GBRP265.PROD.OUTLOOK.COM>
+References: <LO2P265MB58867AA2BA8442B9535B9214AE149@LO2P265MB5886.GBRP265.PROD.OUTLOOK.COM>
+Message-ID: <9d08611d-db04-95f6-64eb-b4641b9a7b33@fau.de>
+
+Am 19.03.22 um 01:20 schrieb Georgi Boshnakov:
+>> ... you could set \RdOpts{stage=build} before the Rd section containing that "scary"
+> \doi (and if needed revert to \RdOpts{stage=install} afterwards).
+> 
+> This works but R-devel CMD check then gives the warning that "Found the following URL's which should use doi ...".
+
+Thanks. Should be fixed now (r81946).
+
+	Sebastian Meyer
+
+> For a reprex, see the package at https://github.com/GeoBosh/reprexes/tree/master/redundantDots (man/fun_3.Rd contains the \doi's).
+> Building that package with R-devel throws one warning, building it with non-R-devel throws two (my R-devel is from yesterday, r81914). The latter seems logical since with older R's \doi is expanded and therefore contains the expanded URL about which R-devel complains. The warnings do seem somewhat unpredictable in that I tried different examples and sometimes got warnings sometimes didn't.
+> 
+> I may be missing something but would it be reasonable not to apply this check to packages submitted to CRAN until this is made stable?
+> 
+> Georgi Boshnakov
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> 
+> ------------------------------
+> 
+> Message: 4
+> Date: Wed, 16 Mar 2022 01:07:54 +0100
+> From: Sebastian Meyer <seb.meyer at fau.de>
+> To: Ivan Krylov <krylov.r00t at gmail.com>
+> Cc: <r-devel at r-project.org>
+> Subject: Re: [Rd] stage=install in \doi definition could lead to
+> 	problems
+> Message-ID: <3ca49400-0f53-708b-72b2-017d2f173aed at fau.de>
+> Content-Type: text/plain; charset="utf-8"; Format="flowed"
+> 
+> Am 15.03.22 um 21:38 schrieb Ivan Krylov:
+>> Good Sys.time() everyone,
+>>
+>> If this is not the right place for such questions, please let me know.
+> 
+> Thank you for your feedback! I think this is the right place (but note
+> that such very recent changes *could* still be work in progress and may
+> sometimes need a bit more time to be worth discussing here).
+> 
+>>
+>> I was wondering why \doi has been changed to stage=install instead of
+>> stage=build in r81891 [1]. I think it might lead to problems, but in
+>> the spirit of Chesterton's fence, I'd like to learn the reasons. Is it
+>> to make R CMD build more performant, avoiding the need for the
+>> "installing the package to process man pages" step for the common case
+>> of the \doi macro?
+> 
+> Yes, that certainly is one of the advantages of the change, affecting
+> more than 1000 packages on CRAN that currently ship a partial Rd db just
+> because they use the \doi macro. Besides considerably speeding up R CMD
+> build for these packages, the change also slightly reduces the size of
+> the tarballs.
+> 
+> I think the most probable reason for the previous use of stage=build for
+> that Sexpr was to avoid shipping the PDF package manual with the
+> package, as generally triggered by install or render time Sexprs. This
+> has now been addressed.
+> 
+>>
+>> Some DOIs look a bit scary. One example that comes to mind is as
+>> follows:
+>>
+>> 10.1002/(SICI)1099-128X(199801/02)12:1<55::AID-CEM501>3.0.CO;2-#
+>>
+>> Until the recent fix in r81817 [2], it used to require special
+>> treatment in order to display correctly in a man page, but now it just
+>> works if I copy and paste it into \doi{}. With the macro definition
+>> using [stage=build], I could build a package with a recent build of
+>> R-devel, get the correct \doi expansion inlined, install the package on
+>> an older version of R, and it would still work, thanks to R keeping the
+>> parse tree in build/partial.rdb.
+>>
+>> With the macro defined using [stage=install], any version of R older
+>> than 2022-02-25 (r81817), which doesn't have this fix, would fail to
+>> link to the DOI correctly, not having the correct expansion of \doi
+>> to rely upon any more:
+>>
+>> Rd2HTML(parse_Rd(textConnection('\\name{foo}\n\\title{bar}\\description{\\doi{10.1002/(SICI)1099-128X(199801/02)12:1<55::AID-CEM501>3.0.CO;2-#}}'),
+>> fragment = FALSE), stages = c('build'))
+>>
+>> <a
+>> href="http://doi.org/10.1002/(SICI)1099-128X(199801/02)12:1%3C55::AID-CEM501%3E3.0.CO;2-#">doi:
+>> 10.1002/(SICI)1099-128X(199801/02)12:1&lt;55::AID-CEM501&gt;3.0.CO;2-#</a>
+>>
+>> (The hash sign doesn't get URL-encoded, and the link gets broken.)
+>>
+>> Sorry for giving you yet another case of <https://xkcd.com/1172/>. If I
+>> have to, I might be able to "unroll" the macro myself for the few cases
+>> where it matters.
+>>
+> 
+> Thank you for the example. I think there is another solution: you could
+> set \RdOpts{stage=build} before the Rd section containing that "scary"
+> \doi (and if needed revert to \RdOpts{stage=install} afterwards). Then
+> the corresponding Sexpr would get evaluated during the build stage as
+> before and the correctly escaped hyperlink from building with
+> R-devel/4.2.0 would be available also in older R versions.
+> 
+> 	Sebastian
+> 
+> 
+> 
+> 
+> ------------------------------
+> 
+> Message: 5
+> Date: Wed, 16 Mar 2022 13:14:32 +0300
+> From: Ivan Krylov <krylov.r00t at gmail.com>
+> To: Sebastian Meyer <seb.meyer at fau.de>
+> Cc: <r-devel at r-project.org>
+> Subject: Re: [Rd] stage=install in \doi definition could lead to
+> 	problems
+> Message-ID: <20220316131432.5fe64185 at arachnoid>
+> Content-Type: text/plain; charset="us-ascii"
+> 
+> On Wed, 16 Mar 2022 01:07:54 +0100
+> Sebastian Meyer <seb.meyer at fau.de> wrote:
+> 
+>> I think there is another solution: you could set \RdOpts{stage=build}
+>> before the Rd section containing that "scary" \doi (and if needed
+>> revert to \RdOpts{stage=install} afterwards).
+> 
+> Thanks for the solution! I didn't realise that \RdOpts could be used
+> here. I can confirm that it works for me.
+>
+
+
