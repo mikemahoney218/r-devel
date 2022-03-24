@@ -4033,3 +4033,176 @@ therneau at mayo.edu
 	[[alternative HTML version deleted]]
 
 
+From pd@|gd @end|ng |rom gm@||@com  Tue Mar 22 15:04:54 2022
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Tue, 22 Mar 2022 15:04:54 +0100
+Subject: [Rd] model.matrix and subset
+In-Reply-To: <f03410$hkgtmc@ironport10.mayo.edu>
+References: <f03410$hkgtmc@ironport10.mayo.edu>
+Message-ID: <7D38EC3B-9339-482B-A9EC-EBE3CDC8AD60@gmail.com>
+
+Hmm...
+
+AFAICT, predict.lm does effectively this:
+
+Terms <- delete.response(terms(fit))
+m <- model.frame(Terms, data2)
+model.matrix(Terms, m)
+
+except for some embellishments that I can't quite grasp at this point.
+
+I expect that this is to circumvent similar issues.
+
+- pd
+
+> On 21 Mar 2022, at 17:43 , Therneau, Terry M., Ph.D. via R-devel <r-devel at r-project.org> wrote:
+> 
+> I've found the following unexpected behaviour from the model.matrix function, namely that 
+> the "subset" argument carries forward when I would not expect it to.
+> Here is an example using lm:
+> 
+> --------------------
+> 
+> # Data set modified from the lm help file
+> test <- data.frame(weight= c(4.17,5.58,5.18,6.11,4.50,4.61,5.17,4.53,5.33,5.14,
+> 4.81,4.17,4.41,3.59,5.87,3.83,6.03,4.89,4.32,4.69),
+>                    group = gl(2, 10, 20, labels = c("Ctl","Trt")),
+>                    zed = rep (1:2, 10))
+> 
+> fit <- lm( weight ~ group, test, subset= (zed==1))
+> 
+> data2 <- data.frame( weight= 1:6,  group= rep(c("Ctl", "Trt"), 3))
+> model.matrix (fit, data=data2)
+> 
+>  Error in eval(substitute(subset), data, env) : object 'zed' not found
+> --------------------
+> 
+> This arises out a user's bug report for survival::concordance; which has methods for 
+> formula, lm, glm, and coxph.  I have been using  model.frame and model.matrix to create 
+> the new response and linear predictor when a 'newdata' argument is used.    The above 
+> issue makes it fail for all of lm, glm, and coxph when the initial model includes a subset.
+> 
+> I think that the user is correct:  if someone asks for model.matrix(fit, data=new) they 
+> almost certainly want the model matrix for exactly that data.  But it leaves me in a bit 
+> of a quandry.   I don't want to write private model.matrix methods for glm and lm, and if 
+> I fix the coxph methods then they will disagree with the standard ones.
+> 
+> Thoughts?
+> 
+> Terry
+> 
+> -- 
+> Terry M Therneau, PhD
+> Department of Quantitative Health Sciences
+> Mayo Clinic
+> therneau at mayo.edu
+> 
+> "TERR-ree THUR-noh"
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From therne@u @end|ng |rom m@yo@edu  Tue Mar 22 15:47:39 2022
+From: therne@u @end|ng |rom m@yo@edu (Therneau, Terry M., Ph.D.)
+Date: Tue, 22 Mar 2022 09:47:39 -0500
+Subject: [Rd] model.matrix and subset
+In-Reply-To: <7D38EC3B-9339-482B-A9EC-EBE3CDC8AD60@gmail.com>
+References: <f03410$hkgtmc@ironport10.mayo.edu>
+ <7D38EC3B-9339-482B-A9EC-EBE3CDC8AD60@gmail.com>
+Message-ID: <f03410$hkmv5t@ironport10.mayo.edu>
+
+Yes, the predict functions do not use model.frame(fit), rather they extract the terms, as 
+you say.?? I do the same in predict.coxph.
+
+One way to address my question would be for the documentation of model.frame and 
+model.matrix to explicitly state what they currently do when data= is specified, i.e., 
+that any subset or na.action clauses in the original call will be applied to the new data 
+as well.? It still won't be what a user might expect, but it might keep future users out 
+of danger.
+
+Of course, when there is no data= clause, a user will expect the original data set; which 
+impllies retaining any subset= arguments in that instance.
+
+Terry
+
+
+On 3/22/22 09:04, peter dalgaard wrote:
+> Hmm...
+>
+> AFAICT, predict.lm does effectively this:
+>
+> Terms <- delete.response(terms(fit))
+> m <- model.frame(Terms, data2)
+> model.matrix(Terms, m)
+>
+> except for some embellishments that I can't quite grasp at this point.
+>
+> I expect that this is to circumvent similar issues.
+>
+> - pd
+>
+>> On 21 Mar 2022, at 17:43 , Therneau, Terry M., Ph.D. via R-devel<r-devel at r-project.org>  wrote:
+>>
+>> I've found the following unexpected behaviour from the model.matrix function, namely that
+>> the "subset" argument carries forward when I would not expect it to.
+>> Here is an example using lm:
+>>
+>> --------------------
+>>
+>> # Data set modified from the lm help file
+>> test <- data.frame(weight= c(4.17,5.58,5.18,6.11,4.50,4.61,5.17,4.53,5.33,5.14,
+>> 4.81,4.17,4.41,3.59,5.87,3.83,6.03,4.89,4.32,4.69),
+>>                     group = gl(2, 10, 20, labels = c("Ctl","Trt")),
+>>                     zed = rep (1:2, 10))
+>>
+>> fit <- lm( weight ~ group, test, subset= (zed==1))
+>>
+>> data2 <- data.frame( weight= 1:6,  group= rep(c("Ctl", "Trt"), 3))
+>> model.matrix (fit, data=data2)
+>>
+>>   Error in eval(substitute(subset), data, env) : object 'zed' not found
+>> --------------------
+>>
+>> This arises out a user's bug report for survival::concordance; which has methods for
+>> formula, lm, glm, and coxph.  I have been using  model.frame and model.matrix to create
+>> the new response and linear predictor when a 'newdata' argument is used.    The above
+>> issue makes it fail for all of lm, glm, and coxph when the initial model includes a subset.
+>>
+>> I think that the user is correct:  if someone asks for model.matrix(fit, data=new) they
+>> almost certainly want the model matrix for exactly that data.  But it leaves me in a bit
+>> of a quandry.   I don't want to write private model.matrix methods for glm and lm, and if
+>> I fix the coxph methods then they will disagree with the standard ones.
+>>
+>> Thoughts?
+>>
+>> Terry
+>>
+>> -- 
+>> Terry M Therneau, PhD
+>> Department of Quantitative Health Sciences
+>> Mayo Clinic
+>> therneau at mayo.edu
+>>
+>> "TERR-ree THUR-noh"
+>>
+>> 	[[alternative HTML version deleted]]
+>>
+>> ______________________________________________
+>> R-devel at r-project.org  mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+	[[alternative HTML version deleted]]
+
+
