@@ -4696,3 +4696,219 @@ Ivan
 https://github.com/r-devel/r-svn/commit/7ccd166735e6b978023b85fc9aa4845af8c0c241
 
 
+From georg|@bo@hn@kov @end|ng |rom m@nche@ter@@c@uk  Wed Mar 30 19:45:15 2022
+From: georg|@bo@hn@kov @end|ng |rom m@nche@ter@@c@uk (Georgi Boshnakov)
+Date: Wed, 30 Mar 2022 17:45:15 +0000
+Subject: [Rd] R-devel Digest, Vol 229, Issue 21
+In-Reply-To: <mailman.52460.5.1648548061.4478.r-devel@r-project.org>
+References: <mailman.52460.5.1648548061.4478.r-devel@r-project.org>
+Message-ID: <CWLP265MB35059C906DD499FAF643A3E1AE1F9@CWLP265MB3505.GBRP265.PROD.OUTLOOK.COM>
+
+> Should I have relied upon \Sexpr{#1} working inside user-defined macros? Georgi N. Boshnakov's Rdpack does similar things (and has been an inspiration for my tricks).
+
+Glad to be inspiration:).  There are no tricks in Rdpack and
+using \Sexpr{#1} in user Rd macros is ok but care is needed. In your example:
+
+\newcommand{\bib}{\Sexpr[stage=build,results=rd]{bibentry(#1)}}
+\bib{'Misc',
+  author = person('J.', 'Doe'), year = 2022,
+  title = paste0(
+    'A ', rawToChar(as.raw(0x5c)),
+    'enc{m??se}{moose} bit my sister once'
+#       ^-----^^-----^--- in these four places
+  )
+}
+
+I am surprised that the above macro ever worked as intended. 'bibentry' returns a 'bibentry' object and \Sexpr converts it with 'as.character'. There is no as.character method for bibentry, so the result would be something like list(list(given = "J.", family = ...)). That is what I get on Ubuntu with R-devel (r82022 2022-03-29) and non-R-devel. I put the above in a package. If you are running a command on the console the bibentry object will be printed ok since the default print method for bibentry uses the text style. In fact, if the body of your macro is replaced by
+
+capture.output(print(bibentry))
+
+I get the desired result in the built documentation:
+
+Doe J (2022). ?A m??se bit my sister once.?
+
+One thing to be aware of is that the argument of \Sexpr is R-like but that of user defined macros is not. When the parser escapes the argument to your macro, it doesn't know that in your case it is R code (in the invocation of '\bib' above), since it would need to 'understand' the body of your macro and notice that you are using #1 in R code, not in LaTeX-like text. This would explain the error message you get. 
+
+I don't know if something was fixed between the R-devel you used and probably the most recent one I did but reproducible example and system information would be helpful. I have some simple packages used in bug reports at https://github.com/GeoBosh/reprexes 
+
+Georgi Boshnakov
+
+
+-----Original Message-----
+From: R-devel <r-devel-bounces at r-project.org> On Behalf Of r-devel-request at r-project.org
+Sent: 29 March 2022 11:01
+To: r-devel at r-project.org
+Subject: R-devel Digest, Vol 229, Issue 21
+
+Send R-devel mailing list submissions to
+	r-devel at r-project.org
+
+To subscribe or unsubscribe via the World Wide Web, visit
+	https://stat.ethz.ch/mailman/listinfo/r-devel
+or, via email, send a message with subject or body 'help' to
+	r-devel-request at r-project.org
+
+You can reach the person managing the list at
+	r-devel-owner at r-project.org
+
+When replying, please edit your Subject line so it is more specific than "Re: Contents of R-devel digest..."
+
+
+Today's Topics:
+
+   1. Backslashes, braces, \Sexpr and user macros (Ivan Krylov)
+
+----------------------------------------------------------------------
+
+Message: 1
+Date: Fri, 25 Mar 2022 18:32:23 +0300
+From: Ivan Krylov <krylov.r00t at gmail.com>
+To: r-devel at r-project.org
+Subject: [Rd] Backslashes, braces, \Sexpr and user macros
+Message-ID: <20220325183223.3ab20393-2358 at arachnoid>
+Content-Type: text/plain; charset="utf-8"
+
+
+Hello R-devel,
+
+I had been using an Rd trick that runs afoul of the changes in r81965[*]. After the change, there seems to be a problem with any user-defined macro that takes R code, forwards it to \Sexpr and gets passed a string literal containing '{':
+
+\newcommand{\RRd}{\Sexpr[stage=build,results=rd]{#1}}
+\RRd{x <- 'a string with { inside it'; 'okay'}
+
+R-4.1.3: okay
+R-devel: Error: x.Rd: '\{' is an unrecognized escape in character string starting "'a string with \{"
+Execution halted
+
+My actual use case is a macro that forwards its argument to \Sexpr{tools::toRd(bibentry(...))}. I've been trying to pass \enc{}{} as an argument to bibentry; previously, I had to use a workaround to create the backslash, but now any braces (in addition to backslashes) inside string literals also result in errors:
+
+\newcommand{\bib}{\Sexpr[stage=build,results=rd]{bibentry(#1)}}
+\bib{'Misc',
+  author = person('J.', 'Doe'), year = 2022,
+  title = paste0(
+    'A ', rawToChar(as.raw(0x5c)),
+    'enc{m??se}{moose} bit my sister once'
+#       ^-----^^-----^--- in these four places
+  )
+}
+
+R-4.1.3: Doe J (2022). ?A m??se bit my sister once.?
+
+R-devel: Error: x.Rd: '\{' is an unrecognized escape in character string starting "'enc\{"
+Execution halted
+
+Should I have relied upon \Sexpr{#1} working inside user-defined macros? Georgi N. Boshnakov's Rdpack does similar things (and has been an inspiration for my tricks). I'll be glad to re-write some of my Rd to achieve the same result using less crazy tricks, assuming there is a right way to do that.
+
+--
+Best regards,
+Ivan
+
+[*]
+https://github.com/r-devel/r-svn/commit/7ccd166735e6b978023b85fc9aa4845af8c0c241
+
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Wed Mar 30 20:17:44 2022
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Wed, 30 Mar 2022 21:17:44 +0300
+Subject: [Rd] R-devel Digest, Vol 229, Issue 21
+In-Reply-To: <CWLP265MB35059C906DD499FAF643A3E1AE1F9@CWLP265MB3505.GBRP265.PROD.OUTLOOK.COM>
+References: <mailman.52460.5.1648548061.4478.r-devel@r-project.org>
+ <CWLP265MB35059C906DD499FAF643A3E1AE1F9@CWLP265MB3505.GBRP265.PROD.OUTLOOK.COM>
+Message-ID: <20220330211744.78f0021b@Tarkus>
+
+On Wed, 30 Mar 2022 17:45:15 +0000
+Georgi Boshnakov <georgi.boshnakov at manchester.ac.uk> wrote:
+
+> I am surprised that the above macro ever worked as intended.
+
+I'm sorry, somehow I didn't pay enough attention when preparing that
+part of the e-mail. The actual macro uses tools::toRd(bibentry(...)).
+
+> I don't know if something was fixed between the R-devel you used and
+> probably the most recent one I did but reproducible example and
+> system information would be helpful.
+
+I'll remember to provide more reproducible examples next time.
+
+c81965 was reverted, and "take two" of the improvement in c82029
+doesn't crash my macros (thanks, Kurt Hornik!), but I'm still willing
+to rewrite my macros to give R maintainers more freedom to evolve Rd in
+the future. Maybe it's better to use a per-package database of
+bibentries and reference them with much simpler macro arguments, but
+that would be better fit for R-pkg-devel :)
+
+-- 
+Best regards,
+Ivan
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Wed Mar 30 21:23:20 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Wed, 30 Mar 2022 15:23:20 -0400
+Subject: [Rd] R-devel Digest, Vol 229, Issue 21
+In-Reply-To: <20220330211744.78f0021b@Tarkus>
+References: <mailman.52460.5.1648548061.4478.r-devel@r-project.org>
+ <CWLP265MB35059C906DD499FAF643A3E1AE1F9@CWLP265MB3505.GBRP265.PROD.OUTLOOK.COM>
+ <20220330211744.78f0021b@Tarkus>
+Message-ID: <507f559b-70b0-9d14-6572-36e2f6613cc4@gmail.com>
+
+On 30/03/2022 2:17 p.m., Ivan Krylov wrote:
+> On Wed, 30 Mar 2022 17:45:15 +0000
+> Georgi Boshnakov <georgi.boshnakov at manchester.ac.uk> wrote:
+> 
+>> I am surprised that the above macro ever worked as intended.
+> 
+> I'm sorry, somehow I didn't pay enough attention when preparing that
+> part of the e-mail. The actual macro uses tools::toRd(bibentry(...)).
+> 
+>> I don't know if something was fixed between the R-devel you used and
+>> probably the most recent one I did but reproducible example and
+>> system information would be helpful.
+> 
+> I'll remember to provide more reproducible examples next time.
+> 
+> c81965 was reverted, and "take two" of the improvement in c82029
+> doesn't crash my macros (thanks, Kurt Hornik!), but I'm still willing
+> to rewrite my macros to give R maintainers more freedom to evolve Rd in
+> the future. Maybe it's better to use a per-package database of
+> bibentries and reference them with much simpler macro arguments, but
+> that would be better fit for R-pkg-devel :)
+
+The problem here is the Rd format, and the way user macros are handled.
+
+The Rd format is unreasonably complicated, with several different modes 
+of parsing (LaTeX-like, R-like and verbatim), and context dependent 
+rules on what needs escaping.
+
+The user macros, on the other hand, are very simple.  After expanding a 
+macro, the parser just pushes the characters onto the input stream. 
+This makes it pretty much impossible for automatic escaping to work, 
+since the context can change in the middle of the new characters, but 
+they haven't been parsed yet.
+
+The motivation for r81965 was that some DOIs contain characters that 
+need escaping in the context where the  \doi{} macro is being used. 
+Kurt and I attempted to fix this automatically, rather than burdening 
+the user with doing the escaping by hand.  That's hard for users to do, 
+and if they get it wrong, the parser is likely to get confused and not 
+give a helpful error message.
+
+Unfortunately, our first attempt was a little too eager, and it caused 
+the problems some of you saw.
+
+It might be possible to do things differently, but really the only real 
+solution would be to change the help file markup definition to something 
+a little less insane.  When I wrote the Rd parser I was partly hoping 
+that it would eventually be used to convert legacy help pages to a 
+better format.  Roxygen allowing the use of Markdown instead of Rd 
+markup is a step in the right direction, but (as I've said before) I 
+believe forcing help text to be embedded in code is harmful to the goal 
+of writing good documentation.  It addresses a real problem (writing .Rd 
+documentation is hard), but I think it creates new problems, making both 
+the code and the documentation harder to read and to edit than if they 
+were separate.
+
+Duncan Murdoch
+
+
