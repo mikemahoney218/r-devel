@@ -1,0 +1,461 @@
+From trevor@|@d@v|@ @end|ng |rom gm@||@com  Fri Apr  1 23:55:46 2022
+From: trevor@|@d@v|@ @end|ng |rom gm@||@com (Trevor Davis)
+Date: Fri, 1 Apr 2022 14:55:46 -0700
+Subject: [Rd] png() defaults to `type = "X11"` on R compiled with support
+ for cairo (but no pango)
+Message-ID: <CAMigB8HHFgFqWBWqjwA1ffc62bJOxtPrq54JcUhu2PgQ7ALYiA@mail.gmail.com>
+
+Dear R Team,
+
+* I'm observing `png()` defaulting to `type = "X11"` in R compiled
+   with support for "cairo" (but not compiled with pango) run
+   in "vanilla" mode
+* According to `help("png", package="grDevices")` :
+
+  > The default is set by
+  > ?getOption("bitmapType")? - the ?out of the box? default is
+  > ?"quartz"? or ?"cairo"? where available, otherwise ?"Xlib"?.
+
+* "cairo" is indeed available so according to the documentation
+   it should be the "out-of-the-box" default but instead
+  "Xlib" is the "out-of-the-box" default.
+* `X11()` also defaults to "Xlib" but `?X11` says the default is "cairo"
+  only when R was built using "pangocairo" so this seems to match
+  the documentation since `./configure` says there was no pango.
+* Perhaps R should instead default to
+ `type = "cairo"` for `X11()` and the bitmap devices
+  when "cairo" is supported even if there is no "pango"?
+  With `type="cairo"` I observe support for the new
+  R 4.1 and R 4.2 `{grid}` graphic features
+  and I avoid certain font ERRORs that hit me
+  when I use `type = "X11"`.  Seems like "cairo"
+  would be the better default than "X11"?
+
+Thanks!
+
+Trevor
+
+p.s. Possibly relevant information:
+
+```
+> grSoftVersion()
+                   cairo                  cairoFT                    pango
+                "1.16.0"          "2.10.1/2.13.1"                       ""
+                  libpng                     jpeg                  libtiff
+                "1.6.37"                    "8.0" "LIBTIFF, Version 4.1.0"
+```
+
+Snippets from `./configure`:
+
+```
+checking whether pkg-config knows about cairo and pango... no
+checking whether pkg-config knows about cairo... yes
+checking whether cairo is >= 1.2 and works... yes
+```
+```
+  Interfaces supported:        X11
+  External libraries:          pcre2, readline, curl
+  Additional capabilities:     PNG, JPEG, TIFF, NLS, cairo, ICU
+  Options enabled:             shared BLAS, R profiling
+
+  Capabilities skipped:
+  Options not enabled:         memory profiling
+
+  Recommended packages:        yes
+```
+
+	[[alternative HTML version deleted]]
+
+
+From @zwj|08 @end|ng |rom gm@||@com  Sun Apr  3 05:32:13 2022
+From: @zwj|08 @end|ng |rom gm@||@com (Jiefei Wang)
+Date: Sat, 2 Apr 2022 23:32:13 -0400
+Subject: [Rd] The enclosed environment does not work as expected
+Message-ID: <CAGiFhPMgMZq6VeoZcxjTG0z=W4eE8HPW=X_y5Cb00pqd9LRakw@mail.gmail.com>
+
+Hi,
+
+It seems like the enclosed environment does not work well with the
+loop. Here is a simple example
+```
+FuncGenerator <- function(value){
+    function() message(value)
+}
+
+funcSets <- list()
+for(i in 1:2)
+    funcSets[[i]] <- FuncGenerator(i)
+
+environment(funcSets[[1]])$value
+# [1] 2
+environment(funcSets[[2]])$value
+# [1] 2
+```
+The output from the last two lines is simply 2. I expect the first
+should be 1 and the second is 2. However, if I ask R to execute the
+message function before accessing its environment, the result is
+correct again.
+
+```
+FuncGenerator <- function(value){
+    function() message(value)
+}
+
+funcSets <- list()
+for(i in 1:2)
+    funcSets[[i]] <- FuncGenerator(i)
+
+## Ask to evaluate the function
+for(i in 1:2){
+    funcSets[[i]]()
+}
+# 1
+# 2
+environment(funcSets[[1]])$value
+# [1] 1
+environment(funcSets[[2]])$value
+# [1] 2
+```
+This does not make any sense to me since the function simply prints
+out its variable `value`. It should not change the value of the
+variable, so I think this might be a bug in the code optimizer. This
+issue can only be corrected by the loop(like the second example),
+manually evaluating the function without the loop will give you the
+same result as the first example.
+
+Here is my session information
+> sessionInfo()
+R version 4.1.2 (2021-11-01)
+Platform: x86_64-w64-mingw32/x64 (64-bit)
+Running under: Windows 10 x64 (build 19044)
+
+
+Best,
+Jiefei
+
+
+From @zwj|08 @end|ng |rom gm@||@com  Sun Apr  3 06:52:35 2022
+From: @zwj|08 @end|ng |rom gm@||@com (Jiefei Wang)
+Date: Sun, 3 Apr 2022 00:52:35 -0400
+Subject: [Rd] The enclosed environment does not work as expected
+In-Reply-To: <CAGgJW776Q1e6NWFXf31Ad1-LUYuR0sMUCnWQ+4uW+POXmG83Yw@mail.gmail.com>
+References: <CAGiFhPMgMZq6VeoZcxjTG0z=W4eE8HPW=X_y5Cb00pqd9LRakw@mail.gmail.com>
+ <CAGgJW776Q1e6NWFXf31Ad1-LUYuR0sMUCnWQ+4uW+POXmG83Yw@mail.gmail.com>
+Message-ID: <CAGiFhPMpogeQFzRMEyPMOdg3_sdu45RRShiGCQK3+y7G=QNuRQ@mail.gmail.com>
+
+Hi Eric,
+
+Wow, Thanks for the explanation. Even though I know the lazy
+evaluation, I never thought it can have this surprising effect. Good
+to know it now.
+
+Best,
+Jiefei
+
+On Sun, Apr 3, 2022 at 12:20 AM Eric Berger <ericjberger at gmail.com> wrote:
+>
+> Hi Jiefei,
+> This is related to "lazy evaluation". Alternatives for dealing with it are discussed here:
+>
+> https://stackoverflow.com/questions/29084193/how-to-not-fall-into-rs-lazy-evaluation-trap
+>
+> HTH,
+> Eric
+>
+>
+> On Sun, Apr 3, 2022 at 6:32 AM Jiefei Wang <szwjf08 at gmail.com> wrote:
+>>
+>> Hi,
+>>
+>> It seems like the enclosed environment does not work well with the
+>> loop. Here is a simple example
+>> ```
+>> FuncGenerator <- function(value){
+>>     function() message(value)
+>> }
+>>
+>> funcSets <- list()
+>> for(i in 1:2)
+>>     funcSets[[i]] <- FuncGenerator(i)
+>>
+>> environment(funcSets[[1]])$value
+>> # [1] 2
+>> environment(funcSets[[2]])$value
+>> # [1] 2
+>> ```
+>> The output from the last two lines is simply 2. I expect the first
+>> should be 1 and the second is 2. However, if I ask R to execute the
+>> message function before accessing its environment, the result is
+>> correct again.
+>>
+>> ```
+>> FuncGenerator <- function(value){
+>>     function() message(value)
+>> }
+>>
+>> funcSets <- list()
+>> for(i in 1:2)
+>>     funcSets[[i]] <- FuncGenerator(i)
+>>
+>> ## Ask to evaluate the function
+>> for(i in 1:2){
+>>     funcSets[[i]]()
+>> }
+>> # 1
+>> # 2
+>> environment(funcSets[[1]])$value
+>> # [1] 1
+>> environment(funcSets[[2]])$value
+>> # [1] 2
+>> ```
+>> This does not make any sense to me since the function simply prints
+>> out its variable `value`. It should not change the value of the
+>> variable, so I think this might be a bug in the code optimizer. This
+>> issue can only be corrected by the loop(like the second example),
+>> manually evaluating the function without the loop will give you the
+>> same result as the first example.
+>>
+>> Here is my session information
+>> > sessionInfo()
+>> R version 4.1.2 (2021-11-01)
+>> Platform: x86_64-w64-mingw32/x64 (64-bit)
+>> Running under: Windows 10 x64 (build 19044)
+>>
+>>
+>> Best,
+>> Jiefei
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From ru|pb@rr@d@@ @end|ng |rom @@po@pt  Sun Apr  3 08:41:47 2022
+From: ru|pb@rr@d@@ @end|ng |rom @@po@pt (Rui Barradas)
+Date: Sun, 3 Apr 2022 07:41:47 +0100
+Subject: [Rd] The enclosed environment does not work as expected
+In-Reply-To: <CAGiFhPMpogeQFzRMEyPMOdg3_sdu45RRShiGCQK3+y7G=QNuRQ@mail.gmail.com>
+References: <CAGiFhPMgMZq6VeoZcxjTG0z=W4eE8HPW=X_y5Cb00pqd9LRakw@mail.gmail.com>
+ <CAGgJW776Q1e6NWFXf31Ad1-LUYuR0sMUCnWQ+4uW+POXmG83Yw@mail.gmail.com>
+ <CAGiFhPMpogeQFzRMEyPMOdg3_sdu45RRShiGCQK3+y7G=QNuRQ@mail.gmail.com>
+Message-ID: <92cad44c-1fa3-44da-70a8-031a99d3ee7e@sapo.pt>
+
+Hello,
+
+Another way not to fall into this surprise is to ?force the variable's 
+evaluation.
+
+
+FuncGenerator <- function(value){
+   force(value)
+   function() message(value)
+}
+
+funcSets <- list()
+for(i in 1:2)
+   funcSets[[i]] <- FuncGenerator(i)
+
+environment(funcSets[[1]])$value
+environment(funcSets[[2]])$value
+
+
+Note that to force evaluation inside the returned function doesn't work. 
+The function will get a copy of value and evaluate the copy, not what 
+the function factory is getting. I too find lazy evaluation confusing 
+and the best/only way is to try it out and eventualy get it right.
+
+
+# wrong
+FuncGenerator <- function(value){
+   function(value) {
+     force(value)
+     message(value)
+   }
+}
+
+
+
+Hope this helps,
+
+Rui Barradas
+
+?s 05:52 de 03/04/2022, Jiefei Wang escreveu:
+> Hi Eric,
+> 
+> Wow, Thanks for the explanation. Even though I know the lazy
+> evaluation, I never thought it can have this surprising effect. Good
+> to know it now.
+> 
+> Best,
+> Jiefei
+> 
+> On Sun, Apr 3, 2022 at 12:20 AM Eric Berger <ericjberger at gmail.com> wrote:
+>>
+>> Hi Jiefei,
+>> This is related to "lazy evaluation". Alternatives for dealing with it are discussed here:
+>>
+>> https://stackoverflow.com/questions/29084193/how-to-not-fall-into-rs-lazy-evaluation-trap
+>>
+>> HTH,
+>> Eric
+>>
+>>
+>> On Sun, Apr 3, 2022 at 6:32 AM Jiefei Wang <szwjf08 at gmail.com> wrote:
+>>>
+>>> Hi,
+>>>
+>>> It seems like the enclosed environment does not work well with the
+>>> loop. Here is a simple example
+>>> ```
+>>> FuncGenerator <- function(value){
+>>>      function() message(value)
+>>> }
+>>>
+>>> funcSets <- list()
+>>> for(i in 1:2)
+>>>      funcSets[[i]] <- FuncGenerator(i)
+>>>
+>>> environment(funcSets[[1]])$value
+>>> # [1] 2
+>>> environment(funcSets[[2]])$value
+>>> # [1] 2
+>>> ```
+>>> The output from the last two lines is simply 2. I expect the first
+>>> should be 1 and the second is 2. However, if I ask R to execute the
+>>> message function before accessing its environment, the result is
+>>> correct again.
+>>>
+>>> ```
+>>> FuncGenerator <- function(value){
+>>>      function() message(value)
+>>> }
+>>>
+>>> funcSets <- list()
+>>> for(i in 1:2)
+>>>      funcSets[[i]] <- FuncGenerator(i)
+>>>
+>>> ## Ask to evaluate the function
+>>> for(i in 1:2){
+>>>      funcSets[[i]]()
+>>> }
+>>> # 1
+>>> # 2
+>>> environment(funcSets[[1]])$value
+>>> # [1] 1
+>>> environment(funcSets[[2]])$value
+>>> # [1] 2
+>>> ```
+>>> This does not make any sense to me since the function simply prints
+>>> out its variable `value`. It should not change the value of the
+>>> variable, so I think this might be a bug in the code optimizer. This
+>>> issue can only be corrected by the loop(like the second example),
+>>> manually evaluating the function without the loop will give you the
+>>> same result as the first example.
+>>>
+>>> Here is my session information
+>>>> sessionInfo()
+>>> R version 4.1.2 (2021-11-01)
+>>> Platform: x86_64-w64-mingw32/x64 (64-bit)
+>>> Running under: Windows 10 x64 (build 19044)
+>>>
+>>>
+>>> Best,
+>>> Jiefei
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From er|cjberger @end|ng |rom gm@||@com  Sun Apr  3 06:20:06 2022
+From: er|cjberger @end|ng |rom gm@||@com (Eric Berger)
+Date: Sun, 3 Apr 2022 07:20:06 +0300
+Subject: [Rd] The enclosed environment does not work as expected
+In-Reply-To: <CAGiFhPMgMZq6VeoZcxjTG0z=W4eE8HPW=X_y5Cb00pqd9LRakw@mail.gmail.com>
+References: <CAGiFhPMgMZq6VeoZcxjTG0z=W4eE8HPW=X_y5Cb00pqd9LRakw@mail.gmail.com>
+Message-ID: <CAGgJW776Q1e6NWFXf31Ad1-LUYuR0sMUCnWQ+4uW+POXmG83Yw@mail.gmail.com>
+
+Hi Jiefei,
+This is related to "lazy evaluation". Alternatives for dealing with it are
+discussed here:
+
+https://stackoverflow.com/questions/29084193/how-to-not-fall-into-rs-lazy-evaluation-trap
+
+HTH,
+Eric
+
+
+On Sun, Apr 3, 2022 at 6:32 AM Jiefei Wang <szwjf08 at gmail.com> wrote:
+
+> Hi,
+>
+> It seems like the enclosed environment does not work well with the
+> loop. Here is a simple example
+> ```
+> FuncGenerator <- function(value){
+>     function() message(value)
+> }
+>
+> funcSets <- list()
+> for(i in 1:2)
+>     funcSets[[i]] <- FuncGenerator(i)
+>
+> environment(funcSets[[1]])$value
+> # [1] 2
+> environment(funcSets[[2]])$value
+> # [1] 2
+> ```
+> The output from the last two lines is simply 2. I expect the first
+> should be 1 and the second is 2. However, if I ask R to execute the
+> message function before accessing its environment, the result is
+> correct again.
+>
+> ```
+> FuncGenerator <- function(value){
+>     function() message(value)
+> }
+>
+> funcSets <- list()
+> for(i in 1:2)
+>     funcSets[[i]] <- FuncGenerator(i)
+>
+> ## Ask to evaluate the function
+> for(i in 1:2){
+>     funcSets[[i]]()
+> }
+> # 1
+> # 2
+> environment(funcSets[[1]])$value
+> # [1] 1
+> environment(funcSets[[2]])$value
+> # [1] 2
+> ```
+> This does not make any sense to me since the function simply prints
+> out its variable `value`. It should not change the value of the
+> variable, so I think this might be a bug in the code optimizer. This
+> issue can only be corrected by the loop(like the second example),
+> manually evaluating the function without the loop will give you the
+> same result as the first example.
+>
+> Here is my session information
+> > sessionInfo()
+> R version 4.1.2 (2021-11-01)
+> Platform: x86_64-w64-mingw32/x64 (64-bit)
+> Running under: Windows 10 x64 (build 19044)
+>
+>
+> Best,
+> Jiefei
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
