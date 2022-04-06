@@ -459,3 +459,114 @@ On Sun, Apr 3, 2022 at 6:32 AM Jiefei Wang <szwjf08 at gmail.com> wrote:
 	[[alternative HTML version deleted]]
 
 
+From gm@t|m@ @end|ng |rom gm@||@com  Tue Apr  5 15:08:10 2022
+From: gm@t|m@ @end|ng |rom gm@||@com (Roman Savchenko)
+Date: Tue, 5 Apr 2022 15:08:10 +0200
+Subject: [Rd] symbols.rds error 1
+Message-ID: <CAGpdKUKUwQbFiKxwVkP_qfro3=fMpa45zJ50vYDnE4w2oNphkQ@mail.gmail.com>
+
+Dear R devs,
+
+I have an error that I can't understand the reason:
+
+Error in system(sprintf("%s -Pg %s", nm, shQuote(f)), intern = TRUE) :
+  '""' not found
+Calls: <Anonymous> -> lapply -> FUN -> strsplit -> system
+Execution halted
+make: *** [C:/PROGRA~1/R-40~1.5/share/make/winshlib.mk:32: symbols.rds]
+Error 1
+
+I'm using Rcpp to build cpp package for R. Compilation has few warnings and
+the library is built.
+
+Appreciate for advice on how to resolve this issue.
+
+Thanks,
+Roman.
+
+	[[alternative HTML version deleted]]
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Tue Apr  5 15:25:20 2022
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Tue, 5 Apr 2022 16:25:20 +0300
+Subject: [Rd] symbols.rds error 1
+In-Reply-To: <CAGpdKUKUwQbFiKxwVkP_qfro3=fMpa45zJ50vYDnE4w2oNphkQ@mail.gmail.com>
+References: <CAGpdKUKUwQbFiKxwVkP_qfro3=fMpa45zJ50vYDnE4w2oNphkQ@mail.gmail.com>
+Message-ID: <20220405162520.4e703d31@arachnoid>
+
+On Tue, 5 Apr 2022 15:08:10 +0200
+Roman Savchenko <gmstima at gmail.com> wrote:
+
+> Error in system(sprintf("%s -Pg %s", nm, shQuote(f)), intern = TRUE) :
+>   '""' not found
+
+This does highlight a minor bug in R (an empty string is accidentally
+quoted, so the absence of nm on the PATH isn't noted), but your setup
+is part of the problem too, I think. How did you install Rtools? (Is it
+appropriate here? Is R-pkg-devel a better fit?)
+
+Here's the patch fixing the check (but not the reason why R can't find
+nm on your machine):
+
+--- src/library/tools/R/sotools.R       (revision 82033)
++++ src/library/tools/R/sotools.R       (working copy)
+@@ -63,7 +63,7 @@
+     if(!nzchar(nm)) {
+         ## reasonable to assume nm is on the path
+         nm <- Sys.which("nm")
+-        if(!nzchar(nm)) nm <- shQuote(nm)
++        if(nzchar(nm)) nm <- shQuote(nm)
+     }
+     if(!nzchar(nm)) {
+         warning("this requires 'nm' to be on the PATH")
+
+
+-- 
+Best regards,
+Ivan
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue Apr  5 20:13:07 2022
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 5 Apr 2022 20:13:07 +0200
+Subject: [Rd] symbols.rds error 1
+In-Reply-To: <20220405162520.4e703d31@arachnoid>
+References: <CAGpdKUKUwQbFiKxwVkP_qfro3=fMpa45zJ50vYDnE4w2oNphkQ@mail.gmail.com>
+ <20220405162520.4e703d31@arachnoid>
+Message-ID: <4e8f94ce-b83d-55e0-ea3e-0675f2085ec2@gmail.com>
+
+
+On 4/5/22 15:25, Ivan Krylov wrote:
+> On Tue, 5 Apr 2022 15:08:10 +0200
+> Roman Savchenko <gmstima at gmail.com> wrote:
+>
+>> Error in system(sprintf("%s -Pg %s", nm, shQuote(f)), intern = TRUE) :
+>>    '""' not found
+> This does highlight a minor bug in R (an empty string is accidentally
+> quoted, so the absence of nm on the PATH isn't noted), but your setup
+> is part of the problem too, I think. How did you install Rtools? (Is it
+> appropriate here? Is R-pkg-devel a better fit?)
+>
+> Here's the patch fixing the check (but not the reason why R can't find
+> nm on your machine):
+>
+> --- src/library/tools/R/sotools.R       (revision 82033)
+> +++ src/library/tools/R/sotools.R       (working copy)
+> @@ -63,7 +63,7 @@
+>       if(!nzchar(nm)) {
+>           ## reasonable to assume nm is on the path
+>           nm <- Sys.which("nm")
+> -        if(!nzchar(nm)) nm <- shQuote(nm)
+> +        if(nzchar(nm)) nm <- shQuote(nm)
+>       }
+>       if(!nzchar(nm)) {
+>           warning("this requires 'nm' to be on the PATH")
+
+Thanks, fixed in R
+
+Tomas
+
+>
+
+
