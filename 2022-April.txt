@@ -570,3 +570,37 @@ Tomas
 >
 
 
+From m@rk@iee m@iii@g oii hrsdc-rhdcc@gc@c@  Wed Apr  6 18:07:18 2022
+From: m@rk@iee m@iii@g oii hrsdc-rhdcc@gc@c@ (m@rk@iee m@iii@g oii hrsdc-rhdcc@gc@c@)
+Date: Wed, 6 Apr 2022 16:07:18 +0000
+Subject: [Rd] available.packages function and UNC paths
+Message-ID: <9699bb8ee6e5404eb32fcef502a38e71@hrsdc-rhdcc.gc.ca>
+
+Hello,
+
+I'm responsible for maintaining a mirrored internal CRAN repository for my organization. We have a script that uses the miniCRAN library to add and update packages within the repository and since the repository is stored on a network drive I have to use UNC paths when calling miniCRAN functions such as this:
+
+updatePackages(path = '\\\\my-network-drive.net\\repos\\packages', ...)
+
+updatePackages function in turns call pkgAvail, another miniCRAN function, which calls available.packages and then read.dcf function. However I discovered that this line in available.packages transforms the UNC path to a form that read.dcf can't use:
+
+if (startsWith(repos, "file:///")) {tmpf <- paste0('/', substring(repos, 8L), "/PACKAGES")
+
+This line transforms my UNC path to //\\\\my-network-drive.net\\repos\\packages, which read.dcf can't use. During debugging I found that pkgAvail transformed my UNC path to 'file:///\\\\ my-network-drive.net\\repos\\packages' and that is the path being passed to available.packages. To fix my issue I re-defined my own available.packages function and changed the line to:
+
+if (startsWith(repos, "file:///")) {tmpf <- paste0('/', substring(repos, 10L), "/PACKAGES")
+
+This way the UNC path being passed to read.dcf will be '/\\my-network-drive.net\\repos\\packages', which read.dcf can use. I'm wondering if similar changes can be made in the available.packages function for the next R release to automatically detect UNC paths and modify it so that it can work with UNC paths.
+
+Thanks,
+
+Mark
+
+
+
+
+
+
+	[[alternative HTML version deleted]]
+
+
