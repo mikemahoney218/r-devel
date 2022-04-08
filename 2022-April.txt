@@ -604,3 +604,557 @@ Mark
 	[[alternative HTML version deleted]]
 
 
+From du@@@@dr|@n @end|ng |rom gm@||@com  Thu Apr  7 08:59:20 2022
+From: du@@@@dr|@n @end|ng |rom gm@||@com (=?UTF-8?B?QWRyaWFuIER1yJlh?=)
+Date: Thu, 7 Apr 2022 09:59:20 +0300
+Subject: [Rd] calloc() vs. R_Calloc()
+Message-ID: <CAJ=0CtBMDXf4R0DR40whvXS5i8=KUrPRqbZWC-TWWeU2DfzQjw@mail.gmail.com>
+
+Dear R devs,
+
+I ran into a C level problem that hopefully is a quick fix to a trained eye.
+
+Not sure if I am able to produce a minimal reproducible example, but
+suppose a (test) package passes all the local tests, passes the R CMD check
+and also passes the tests on both rhub and https://win-builder.r-project.org
+
+The test GitHub repo is here:
+https://github.com/dusadrian/QCAtest
+
+As per the latest CRAN recommendation, I need to replace calloc() and
+free() with R's Calloc() and Free(). In the above repo, the latest commit
+does not pass the tests any longer, and the absolute single difference is
+using the recommended commands in the file:
+https://github.com/dusadrian/QCAtest/blob/main/src/CCubes.c
+
+The previous initial commit of this file (which has no problems) is here:
+https://github.com/dusadrian/QCAtest/blob/5fb13f44457a2071b322ad42ab579f3547d1c551/src/CCubes.c
+
+There must be something obvious I'm doing wrong, perhaps a header missing
+or not in the right place, but it just escapes me.
+I've tried both Calloc() and R_Calloc(), both versions result in the same
+errors.
+
+Many thanks in advance for any hint,
+Adrian
+
+	[[alternative HTML version deleted]]
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Thu Apr  7 09:32:03 2022
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Thu, 7 Apr 2022 09:32:03 +0200
+Subject: [Rd] calloc() vs. R_Calloc()
+In-Reply-To: <CAJ=0CtBMDXf4R0DR40whvXS5i8=KUrPRqbZWC-TWWeU2DfzQjw@mail.gmail.com>
+References: <CAJ=0CtBMDXf4R0DR40whvXS5i8=KUrPRqbZWC-TWWeU2DfzQjw@mail.gmail.com>
+Message-ID: <f57301d8-c736-34af-29b1-c59d9458b180@gmail.com>
+
+
+On 4/7/22 08:59, Adrian Du?a wrote:
+> Dear R devs,
+>
+> I ran into a C level problem that hopefully is a quick fix to a trained eye.
+>
+> Not sure if I am able to produce a minimal reproducible example, but
+> suppose a (test) package passes all the local tests, passes the R CMD check
+> and also passes the tests on both rhub and https://win-builder.r-project.org
+>
+> The test GitHub repo is here:
+> https://github.com/dusadrian/QCAtest
+>
+> As per the latest CRAN recommendation, I need to replace calloc() and
+> free() with R's Calloc() and Free(). In the above repo, the latest commit
+> does not pass the tests any longer, and the absolute single difference is
+> using the recommended commands in the file:
+> https://github.com/dusadrian/QCAtest/blob/main/src/CCubes.c
+>
+> The previous initial commit of this file (which has no problems) is here:
+> https://github.com/dusadrian/QCAtest/blob/5fb13f44457a2071b322ad42ab579f3547d1c551/src/CCubes.c
+>
+> There must be something obvious I'm doing wrong, perhaps a header missing
+> or not in the right place, but it just escapes me.
+> I've tried both Calloc() and R_Calloc(), both versions result in the same
+> errors.
+
+And what are the errors you run into? On which platforms, under what 
+circumstances, etc? It would be much easier to give advice knowing that.
+
+In principle, one issue you may run into when switching allocators is 
+that you accidentally end up freeing by a different allocator from the 
+one used to allocate it. It is common on Windows but can in principle 
+happen elsewhere as well.
+
+Also by a slightly different heap layout or different allocator 
+implementation you may wake up bugs in the program not seen previously 
+(use after free, invalid memory accesses, etc)
+
+Tomas
+
+>
+> Many thanks in advance for any hint,
+> Adrian
+>
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From du@@@@dr|@n @end|ng |rom gm@||@com  Thu Apr  7 10:32:37 2022
+From: du@@@@dr|@n @end|ng |rom gm@||@com (=?UTF-8?B?QWRyaWFuIER1yJlh?=)
+Date: Thu, 7 Apr 2022 11:32:37 +0300
+Subject: [Rd] calloc() vs. R_Calloc()
+In-Reply-To: <f57301d8-c736-34af-29b1-c59d9458b180@gmail.com>
+References: <CAJ=0CtBMDXf4R0DR40whvXS5i8=KUrPRqbZWC-TWWeU2DfzQjw@mail.gmail.com>
+ <f57301d8-c736-34af-29b1-c59d9458b180@gmail.com>
+Message-ID: <CAJ=0CtAnkUtOqhVVzx7wZUYvRjWZig6HrC700hQUZaRqPE7a_A@mail.gmail.com>
+
+On Thu, 7 Apr 2022 at 10:32, Tomas Kalibera <tomas.kalibera at gmail.com>
+wrote:
+
+>
+> [...]
+>
+> And what are the errors you run into? On which platforms, under what
+> circumstances, etc? It would be much easier to give advice knowing that.
+>
+> In principle, one issue you may run into when switching allocators is
+> that you accidentally end up freeing by a different allocator from the
+> one used to allocate it. It is common on Windows but can in principle
+> happen elsewhere as well.
+>
+> Also by a slightly different heap layout or different allocator
+> implementation you may wake up bugs in the program not seen previously
+> (use after free, invalid memory accesses, etc)
+>
+
+That is something I do not know yet, since the only information the server
+gives is this:
+https://builder.r-hub.io/status/original/QCA_3.16.tar.gz-a03b4462b41df37c6284be1d5519e8b3
+
+I'll probably end up debugging the C code, but since the only difference is
+using Free() vs free() on exactly the same objects, I suspected a mis-usage
+of the R commands.
+
+The same setup passes with no problems on my local MacOS, but the errors
+still seem to occur on the Windows setup from r-hub.
+
+Best wishes,
+Adrian
+
+	[[alternative HTML version deleted]]
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Thu Apr  7 10:59:49 2022
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Thu, 7 Apr 2022 10:59:49 +0200
+Subject: [Rd] calloc() vs. R_Calloc()
+In-Reply-To: <CAJ=0CtAnkUtOqhVVzx7wZUYvRjWZig6HrC700hQUZaRqPE7a_A@mail.gmail.com>
+References: <CAJ=0CtBMDXf4R0DR40whvXS5i8=KUrPRqbZWC-TWWeU2DfzQjw@mail.gmail.com>
+ <f57301d8-c736-34af-29b1-c59d9458b180@gmail.com>
+ <CAJ=0CtAnkUtOqhVVzx7wZUYvRjWZig6HrC700hQUZaRqPE7a_A@mail.gmail.com>
+Message-ID: <edf0b33b-2f4a-6e2a-02d5-55f548326ea2@gmail.com>
+
+
+On 4/7/22 10:32, Adrian Du?a wrote:
+> On Thu, 7 Apr 2022 at 10:32, Tomas Kalibera <tomas.kalibera at gmail.com> 
+> wrote:
+>
+>
+>     [...]
+>
+>     And what are the errors you run into? On which platforms, under what
+>     circumstances, etc? It would be much easier to give advice knowing
+>     that.
+>
+>     In principle, one issue you may run into when switching allocators is
+>     that you accidentally end up freeing by a different allocator from
+>     the
+>     one used to allocate it. It is common on Windows but can in principle
+>     happen elsewhere as well.
+>
+>     Also by a slightly different heap layout or different allocator
+>     implementation you may wake up bugs in the program not seen
+>     previously
+>     (use after free, invalid memory accesses, etc)
+>
+>
+> That is something I do not know yet, since the only information the 
+> server gives is this:
+> https://builder.r-hub.io/status/original/QCA_3.16.tar.gz-a03b4462b41df37c6284be1d5519e8b3
+>
+> I'll probably end up debugging the C code, but since the only 
+> difference is using Free() vs free() on exactly the same objects, I 
+> suspected a mis-usage of the R commands.
+>
+> The same setup passes with no problems on my local MacOS, but the 
+> errors still seem to occur on the Windows setup from r-hub.
+
+This is very likely because you are freeing memory allocated by calloc() 
+(or something else but not R_Calloc() in your program) using R_Free() or 
+memory allocated using R_Calloc() by using free() in your program.
+I would recommend checking the source code manually for that.
+
+It is not surprising that the problem doesn't appear on other platforms 
+where the allocators happen to be the same.
+
+Best
+Tomas
+
+
+>
+> Best wishes,
+> Adrian
+	[[alternative HTML version deleted]]
+
+
+From ru|pb@rr@d@@ @end|ng |rom @@po@pt  Thu Apr  7 17:49:22 2022
+From: ru|pb@rr@d@@ @end|ng |rom @@po@pt (Rui Barradas)
+Date: Thu, 7 Apr 2022 16:49:22 +0100
+Subject: [Rd] calloc() vs. R_Calloc()
+In-Reply-To: <edf0b33b-2f4a-6e2a-02d5-55f548326ea2@gmail.com>
+References: <CAJ=0CtBMDXf4R0DR40whvXS5i8=KUrPRqbZWC-TWWeU2DfzQjw@mail.gmail.com>
+ <f57301d8-c736-34af-29b1-c59d9458b180@gmail.com>
+ <CAJ=0CtAnkUtOqhVVzx7wZUYvRjWZig6HrC700hQUZaRqPE7a_A@mail.gmail.com>
+ <edf0b33b-2f4a-6e2a-02d5-55f548326ea2@gmail.com>
+Message-ID: <30b8bdc2-4897-1971-dbe9-712825e27d1f@sapo.pt>
+
+Hello,
+
+Tomas is right, there are many memory operations allocating with malloc 
+and freeing with R_Free:
+
+line: variables - operation
+
+  55: p_pichart - malloc
+336: p_pichart - R_Free
+
+236: copy_implicants - malloc
+260: copy_implicants - R_Free
+
+240: p_tempic - malloc
+262: p_tempic - R_Free
+
+
+And there are more cases like these. For what I've seen, the frequent 
+(unique?) case is malloc/R_Free.
+
+Hope this helps,
+
+Rui Barradas
+
+?s 09:59 de 07/04/2022, Tomas Kalibera escreveu:
+> 
+> On 4/7/22 10:32, Adrian Du?a wrote:
+>> On Thu, 7 Apr 2022 at 10:32, Tomas Kalibera <tomas.kalibera at gmail.com>
+>> wrote:
+>>
+>>
+>>      [...]
+>>
+>>      And what are the errors you run into? On which platforms, under what
+>>      circumstances, etc? It would be much easier to give advice knowing
+>>      that.
+>>
+>>      In principle, one issue you may run into when switching allocators is
+>>      that you accidentally end up freeing by a different allocator from
+>>      the
+>>      one used to allocate it. It is common on Windows but can in principle
+>>      happen elsewhere as well.
+>>
+>>      Also by a slightly different heap layout or different allocator
+>>      implementation you may wake up bugs in the program not seen
+>>      previously
+>>      (use after free, invalid memory accesses, etc)
+>>
+>>
+>> That is something I do not know yet, since the only information the
+>> server gives is this:
+>> https://builder.r-hub.io/status/original/QCA_3.16.tar.gz-a03b4462b41df37c6284be1d5519e8b3
+>>
+>> I'll probably end up debugging the C code, but since the only
+>> difference is using Free() vs free() on exactly the same objects, I
+>> suspected a mis-usage of the R commands.
+>>
+>> The same setup passes with no problems on my local MacOS, but the
+>> errors still seem to occur on the Windows setup from r-hub.
+> 
+> This is very likely because you are freeing memory allocated by calloc()
+> (or something else but not R_Calloc() in your program) using R_Free() or
+> memory allocated using R_Calloc() by using free() in your program.
+> I would recommend checking the source code manually for that.
+> 
+> It is not surprising that the problem doesn't appear on other platforms
+> where the allocators happen to be the same.
+> 
+> Best
+> Tomas
+> 
+> 
+>>
+>> Best wishes,
+>> Adrian
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From du@@@@dr|@n @end|ng |rom gm@||@com  Thu Apr  7 20:45:43 2022
+From: du@@@@dr|@n @end|ng |rom gm@||@com (=?UTF-8?B?QWRyaWFuIER1yJlh?=)
+Date: Thu, 7 Apr 2022 21:45:43 +0300
+Subject: [Rd] calloc() vs. R_Calloc()
+In-Reply-To: <30b8bdc2-4897-1971-dbe9-712825e27d1f@sapo.pt>
+References: <CAJ=0CtBMDXf4R0DR40whvXS5i8=KUrPRqbZWC-TWWeU2DfzQjw@mail.gmail.com>
+ <f57301d8-c736-34af-29b1-c59d9458b180@gmail.com>
+ <CAJ=0CtAnkUtOqhVVzx7wZUYvRjWZig6HrC700hQUZaRqPE7a_A@mail.gmail.com>
+ <edf0b33b-2f4a-6e2a-02d5-55f548326ea2@gmail.com>
+ <30b8bdc2-4897-1971-dbe9-712825e27d1f@sapo.pt>
+Message-ID: <CAJ=0CtB4Q2+y5=+V_et8bNZfD5dt=2G0N5mL1eGsKvDY5NuRTg@mail.gmail.com>
+
+Dear Rui,
+
+Thank you so much for the response, that's a very good observation but I've
+just tested and results in the same errors, unfortunately.
+
+I have now changed all malloc()s to R_Calloc(), in the latest commit:
+https://github.com/dusadrian/QCAtest/blob/main/src/CCubes.c
+
+And yet:
+https://builder.r-hub.io/status/QCA_3.16.tar.gz-e652c850de7e51c4cc1311fafe44f986
+
+There must be something obvious I am missing, but my C knowledge is limited
+and already stretched out...
+
+Best wishes,
+Adrian
+
+On Thu, 7 Apr 2022 at 18:49, Rui Barradas <ruipbarradas at sapo.pt> wrote:
+
+> Hello,
+>
+> Tomas is right, there are many memory operations allocating with malloc
+> and freeing with R_Free:
+>
+> line: variables - operation
+>
+>   55: p_pichart - malloc
+> 336: p_pichart - R_Free
+>
+> 236: copy_implicants - malloc
+> 260: copy_implicants - R_Free
+>
+> 240: p_tempic - malloc
+> 262: p_tempic - R_Free
+>
+>
+> And there are more cases like these. For what I've seen, the frequent
+> (unique?) case is malloc/R_Free.
+>
+> Hope this helps,
+>
+> Rui Barradas
+>
+> ?s 09:59 de 07/04/2022, Tomas Kalibera escreveu:
+> >
+> > On 4/7/22 10:32, Adrian Du?a wrote:
+> >> On Thu, 7 Apr 2022 at 10:32, Tomas Kalibera <tomas.kalibera at gmail.com>
+> >> wrote:
+> >>
+> >>
+> >>      [...]
+> >>
+> >>      And what are the errors you run into? On which platforms, under
+> what
+> >>      circumstances, etc? It would be much easier to give advice knowing
+> >>      that.
+> >>
+> >>      In principle, one issue you may run into when switching allocators
+> is
+> >>      that you accidentally end up freeing by a different allocator from
+> >>      the
+> >>      one used to allocate it. It is common on Windows but can in
+> principle
+> >>      happen elsewhere as well.
+> >>
+> >>      Also by a slightly different heap layout or different allocator
+> >>      implementation you may wake up bugs in the program not seen
+> >>      previously
+> >>      (use after free, invalid memory accesses, etc)
+> >>
+> >>
+> >> That is something I do not know yet, since the only information the
+> >> server gives is this:
+> >>
+> https://builder.r-hub.io/status/original/QCA_3.16.tar.gz-a03b4462b41df37c6284be1d5519e8b3
+> >>
+> >> I'll probably end up debugging the C code, but since the only
+> >> difference is using Free() vs free() on exactly the same objects, I
+> >> suspected a mis-usage of the R commands.
+> >>
+> >> The same setup passes with no problems on my local MacOS, but the
+> >> errors still seem to occur on the Windows setup from r-hub.
+> >
+> > This is very likely because you are freeing memory allocated by calloc()
+> > (or something else but not R_Calloc() in your program) using R_Free() or
+> > memory allocated using R_Calloc() by using free() in your program.
+> > I would recommend checking the source code manually for that.
+> >
+> > It is not surprising that the problem doesn't appear on other platforms
+> > where the allocators happen to be the same.
+> >
+> > Best
+> > Tomas
+> >
+> >
+> >>
+> >> Best wishes,
+> >> Adrian
+> >       [[alternative HTML version deleted]]
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Thu Apr  7 23:29:24 2022
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Fri, 8 Apr 2022 09:29:24 +1200
+Subject: [Rd] calloc() vs. R_Calloc()
+In-Reply-To: <CAJ=0CtB4Q2+y5=+V_et8bNZfD5dt=2G0N5mL1eGsKvDY5NuRTg@mail.gmail.com>
+References: <CAJ=0CtBMDXf4R0DR40whvXS5i8=KUrPRqbZWC-TWWeU2DfzQjw@mail.gmail.com>
+ <f57301d8-c736-34af-29b1-c59d9458b180@gmail.com>
+ <CAJ=0CtAnkUtOqhVVzx7wZUYvRjWZig6HrC700hQUZaRqPE7a_A@mail.gmail.com>
+ <edf0b33b-2f4a-6e2a-02d5-55f548326ea2@gmail.com>
+ <30b8bdc2-4897-1971-dbe9-712825e27d1f@sapo.pt>
+ <CAJ=0CtB4Q2+y5=+V_et8bNZfD5dt=2G0N5mL1eGsKvDY5NuRTg@mail.gmail.com>
+Message-ID: <A38ACFF2-46BF-4D8E-9692-4E2A47C55B99@R-project.org>
+
+Adrian,
+
+there are many more allocations in your code - for example, you're using resize() from utils.c which uses malloc/free so it will break since it's using the wrong allocator. You may need to replace *all* allocations in your project, not just some.
+
+Cheers,
+Simon
+
+
+> On 8/04/2022, at 6:45 AM, Adrian Du?a <dusa.adrian at gmail.com> wrote:
+> 
+> Dear Rui,
+> 
+> Thank you so much for the response, that's a very good observation but I've
+> just tested and results in the same errors, unfortunately.
+> 
+> I have now changed all malloc()s to R_Calloc(), in the latest commit:
+> https://github.com/dusadrian/QCAtest/blob/main/src/CCubes.c
+> 
+> And yet:
+> https://builder.r-hub.io/status/QCA_3.16.tar.gz-e652c850de7e51c4cc1311fafe44f986
+> 
+> There must be something obvious I am missing, but my C knowledge is limited
+> and already stretched out...
+> 
+> Best wishes,
+> Adrian
+> 
+> On Thu, 7 Apr 2022 at 18:49, Rui Barradas <ruipbarradas at sapo.pt> wrote:
+> 
+>> Hello,
+>> 
+>> Tomas is right, there are many memory operations allocating with malloc
+>> and freeing with R_Free:
+>> 
+>> line: variables - operation
+>> 
+>>  55: p_pichart - malloc
+>> 336: p_pichart - R_Free
+>> 
+>> 236: copy_implicants - malloc
+>> 260: copy_implicants - R_Free
+>> 
+>> 240: p_tempic - malloc
+>> 262: p_tempic - R_Free
+>> 
+>> 
+>> And there are more cases like these. For what I've seen, the frequent
+>> (unique?) case is malloc/R_Free.
+>> 
+>> Hope this helps,
+>> 
+>> Rui Barradas
+>> 
+>> ?s 09:59 de 07/04/2022, Tomas Kalibera escreveu:
+>>> 
+>>> On 4/7/22 10:32, Adrian Du?a wrote:
+>>>> On Thu, 7 Apr 2022 at 10:32, Tomas Kalibera <tomas.kalibera at gmail.com>
+>>>> wrote:
+>>>> 
+>>>> 
+>>>>     [...]
+>>>> 
+>>>>     And what are the errors you run into? On which platforms, under
+>> what
+>>>>     circumstances, etc? It would be much easier to give advice knowing
+>>>>     that.
+>>>> 
+>>>>     In principle, one issue you may run into when switching allocators
+>> is
+>>>>     that you accidentally end up freeing by a different allocator from
+>>>>     the
+>>>>     one used to allocate it. It is common on Windows but can in
+>> principle
+>>>>     happen elsewhere as well.
+>>>> 
+>>>>     Also by a slightly different heap layout or different allocator
+>>>>     implementation you may wake up bugs in the program not seen
+>>>>     previously
+>>>>     (use after free, invalid memory accesses, etc)
+>>>> 
+>>>> 
+>>>> That is something I do not know yet, since the only information the
+>>>> server gives is this:
+>>>> 
+>> https://builder.r-hub.io/status/original/QCA_3.16.tar.gz-a03b4462b41df37c6284be1d5519e8b3
+>>>> 
+>>>> I'll probably end up debugging the C code, but since the only
+>>>> difference is using Free() vs free() on exactly the same objects, I
+>>>> suspected a mis-usage of the R commands.
+>>>> 
+>>>> The same setup passes with no problems on my local MacOS, but the
+>>>> errors still seem to occur on the Windows setup from r-hub.
+>>> 
+>>> This is very likely because you are freeing memory allocated by calloc()
+>>> (or something else but not R_Calloc() in your program) using R_Free() or
+>>> memory allocated using R_Calloc() by using free() in your program.
+>>> I would recommend checking the source code manually for that.
+>>> 
+>>> It is not surprising that the problem doesn't appear on other platforms
+>>> where the allocators happen to be the same.
+>>> 
+>>> Best
+>>> Tomas
+>>> 
+>>> 
+>>>> 
+>>>> Best wishes,
+>>>> Adrian
+>>>      [[alternative HTML version deleted]]
+>>> 
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>> 
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
