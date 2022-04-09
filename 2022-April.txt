@@ -1158,3 +1158,203 @@ Simon
 > 
 
 
+From du@@@@dr|@n @end|ng |rom gm@||@com  Fri Apr  8 11:02:55 2022
+From: du@@@@dr|@n @end|ng |rom gm@||@com (=?UTF-8?B?QWRyaWFuIER1yJlh?=)
+Date: Fri, 8 Apr 2022 12:02:55 +0300
+Subject: [Rd] calloc() vs. R_Calloc()
+In-Reply-To: <A38ACFF2-46BF-4D8E-9692-4E2A47C55B99@R-project.org>
+References: <CAJ=0CtBMDXf4R0DR40whvXS5i8=KUrPRqbZWC-TWWeU2DfzQjw@mail.gmail.com>
+ <f57301d8-c736-34af-29b1-c59d9458b180@gmail.com>
+ <CAJ=0CtAnkUtOqhVVzx7wZUYvRjWZig6HrC700hQUZaRqPE7a_A@mail.gmail.com>
+ <edf0b33b-2f4a-6e2a-02d5-55f548326ea2@gmail.com>
+ <30b8bdc2-4897-1971-dbe9-712825e27d1f@sapo.pt>
+ <CAJ=0CtB4Q2+y5=+V_et8bNZfD5dt=2G0N5mL1eGsKvDY5NuRTg@mail.gmail.com>
+ <A38ACFF2-46BF-4D8E-9692-4E2A47C55B99@R-project.org>
+Message-ID: <CAJ=0CtCsHZPu0H1cBziU82Me70umU9oeieRwy5kS+SCCXc4V=A@mail.gmail.com>
+
+Yes indeed, thank you so much Simon.
+And thanks everyone for all the help, things are back on track now.
+All the best,
+Adrian
+
+On Fri, 8 Apr 2022 at 00:29, Simon Urbanek <simon.urbanek at r-project.org>
+wrote:
+
+> Adrian,
+>
+> there are many more allocations in your code - for example, you're using
+> resize() from utils.c which uses malloc/free so it will break since it's
+> using the wrong allocator. You may need to replace *all* allocations in
+> your project, not just some.
+>
+> Cheers,
+> Simon
+>
+>
+> > On 8/04/2022, at 6:45 AM, Adrian Du?a <dusa.adrian at gmail.com> wrote:
+> >
+> > Dear Rui,
+> >
+> > Thank you so much for the response, that's a very good observation but
+> I've
+> > just tested and results in the same errors, unfortunately.
+> >
+> > I have now changed all malloc()s to R_Calloc(), in the latest commit:
+> > https://github.com/dusadrian/QCAtest/blob/main/src/CCubes.c
+> >
+> > And yet:
+> >
+> https://builder.r-hub.io/status/QCA_3.16.tar.gz-e652c850de7e51c4cc1311fafe44f986
+> >
+> > There must be something obvious I am missing, but my C knowledge is
+> limited
+> > and already stretched out...
+> >
+> > Best wishes,
+> > Adrian
+> >
+> > On Thu, 7 Apr 2022 at 18:49, Rui Barradas <ruipbarradas at sapo.pt> wrote:
+> >
+> >> Hello,
+> >>
+> >> Tomas is right, there are many memory operations allocating with malloc
+> >> and freeing with R_Free:
+> >>
+> >> line: variables - operation
+> >>
+> >>  55: p_pichart - malloc
+> >> 336: p_pichart - R_Free
+> >>
+> >> 236: copy_implicants - malloc
+> >> 260: copy_implicants - R_Free
+> >>
+> >> 240: p_tempic - malloc
+> >> 262: p_tempic - R_Free
+> >>
+> >>
+> >> And there are more cases like these. For what I've seen, the frequent
+> >> (unique?) case is malloc/R_Free.
+> >>
+> >> Hope this helps,
+> >>
+> >> Rui Barradas
+> >>
+> >> ?s 09:59 de 07/04/2022, Tomas Kalibera escreveu:
+> >>>
+> >>> On 4/7/22 10:32, Adrian Du?a wrote:
+> >>>> On Thu, 7 Apr 2022 at 10:32, Tomas Kalibera <tomas.kalibera at gmail.com
+> >
+> >>>> wrote:
+> >>>>
+> >>>>
+> >>>>     [...]
+> >>>>
+> >>>>     And what are the errors you run into? On which platforms, under
+> >> what
+> >>>>     circumstances, etc? It would be much easier to give advice knowing
+> >>>>     that.
+> >>>>
+> >>>>     In principle, one issue you may run into when switching allocators
+> >> is
+> >>>>     that you accidentally end up freeing by a different allocator from
+> >>>>     the
+> >>>>     one used to allocate it. It is common on Windows but can in
+> >> principle
+> >>>>     happen elsewhere as well.
+> >>>>
+> >>>>     Also by a slightly different heap layout or different allocator
+> >>>>     implementation you may wake up bugs in the program not seen
+> >>>>     previously
+> >>>>     (use after free, invalid memory accesses, etc)
+> >>>>
+> >>>>
+> >>>> That is something I do not know yet, since the only information the
+> >>>> server gives is this:
+> >>>>
+> >>
+> https://builder.r-hub.io/status/original/QCA_3.16.tar.gz-a03b4462b41df37c6284be1d5519e8b3
+> >>>>
+> >>>> I'll probably end up debugging the C code, but since the only
+> >>>> difference is using Free() vs free() on exactly the same objects, I
+> >>>> suspected a mis-usage of the R commands.
+> >>>>
+> >>>> The same setup passes with no problems on my local MacOS, but the
+> >>>> errors still seem to occur on the Windows setup from r-hub.
+> >>>
+> >>> This is very likely because you are freeing memory allocated by
+> calloc()
+> >>> (or something else but not R_Calloc() in your program) using R_Free()
+> or
+> >>> memory allocated using R_Calloc() by using free() in your program.
+> >>> I would recommend checking the source code manually for that.
+> >>>
+> >>> It is not surprising that the problem doesn't appear on other platforms
+> >>> where the allocators happen to be the same.
+> >>>
+> >>> Best
+> >>> Tomas
+> >>>
+> >>>
+> >>>>
+> >>>> Best wishes,
+> >>>> Adrian
+> >>>      [[alternative HTML version deleted]]
+> >>>
+> >>> ______________________________________________
+> >>> R-devel at r-project.org mailing list
+> >>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> >>
+> >
+> >       [[alternative HTML version deleted]]
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+>
+>
+
+	[[alternative HTML version deleted]]
+
+
+From georg|@bo@hn@kov @end|ng |rom m@nche@ter@@c@uk  Fri Apr  8 22:58:57 2022
+From: georg|@bo@hn@kov @end|ng |rom m@nche@ter@@c@uk (Georgi Boshnakov)
+Date: Fri, 8 Apr 2022 20:58:57 +0000
+Subject: [Rd] tools:::cleanupLaTex fails to drop braces in names containing
+ consecutive accented characters
+Message-ID: <CWLP265MB3505DA6D823D935FEC2E9846AEE99@CWLP265MB3505.GBRP265.PROD.OUTLOOK.COM>
+
+tools:::cleanupLaTex() fails to drop braces in names containing consecutive accented characters. 
+For example, Ib??ez ends up rendered as Ib?{?}ez. This is a problem for high level functions, e.g. cite(). For example, after importing the following into a bibentry object, say `tmp`:
+
+@article{DiaLop2020ejor,
+  author =       { Juan Esteban Diaz and Manuel L{\'o}pez-Ib{\'a}{\~n}ez },
+  title =        {Incorporating Decision-Maker's Preferences into the Automatic
+                  Configuration of Bi-Objective Optimisation Algorithms},
+  journal =      {European Journal of Operational Research},
+  year =         2021,
+  volume =       289,
+  number =       3,
+  pages =        {1209--1222},
+  doi =          {10.1016/j.ejor.2020.07.059},
+}
+
+> cite("DiaLop2020ejor", tmp, textual = TRUE)
+## Diaz and L?pez-Ib?{?}ez (2021)
+
+Here is an example showing that it is not related to a specific accented character:
+
+> e1 <- "Manuel L{\\'o}pez-Ib{\\'a}{\\~n}ez"
+> e2 <- "Manuel L{\\'o}pez-Ib{\\~n}{\\'a}ez"
+> tools:::cleanupLatex(e1)
+## [1] "Manuel L?pez-Ib?{?}ez"
+> tools:::cleanupLatex(e2)
+[1] "Manuel L?pez-Ib?{?}ez"
+
+This may be a problem in certain circumstances. I narrowed this down to `deparseLatex()` but it is not clear to me if a change may be need there or in parseLatex() which creates the object processed by deparseLatex. I have given more specific details of mu understanding of the problem in my comment at
+https://github.com/GeoBosh/Rdpack/issues/25#issuecomment-1093336599 regarding a bug report for Rdpack.
+
+
+Georgi Boshnakov
+
+
