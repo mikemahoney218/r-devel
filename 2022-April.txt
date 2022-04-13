@@ -1882,3 +1882,1118 @@ Duncan Garmonsway
 	[[alternative HTML version deleted]]
 
 
+From k|er@n@@hort @end|ng |rom gm@||@com  Tue Apr 12 02:36:06 2022
+From: k|er@n@@hort @end|ng |rom gm@||@com (Kieran Short)
+Date: Tue, 12 Apr 2022 10:36:06 +1000
+Subject: [Rd] Matrix issues when building R with znver3 architecture under
+ GCC 11
+Message-ID: <CANkVCd7HGyvejpEkweiEBKtNq28Fpr_ggZ30Tadf=tgD7Z_vpQ@mail.gmail.com>
+
+Hello,
+
+I'm new to this list, and have subscribed particularly because I've come
+across an issue with building R from source with an AMD-based Zen
+architecture under GCC11. Please don't attack me for my linux operating
+system choice, but it is Ubuntu 20.04 with Linux Kernel 5.10.102.1 -
+microsoft-standard-WSL2. I've built GCC11 using GCC8 (the standard GCC
+under Ubuntu20.04 WSL release), under Windows11 with wslg. WSL2/g runs as a
+hypervisor with ports to all system resources including display, GPU (cuda,
+etc).
+
+The reason why I am posting this email is that I am trying to compile R
+using the AMD Zen3 platform architecture rather than x86/64, because it has
+processor-specific optimizations that improve performance over the standard
+x86/64 in benchmarks. The Zen3 architecture optimizations are not available
+in earlier versions of GCC (actually, they have possibly been backported to
+GCC10 now). Since Ubuntu 20.04 doesn't have GCC11, I compiled the GCC11
+compiler using the native GCC8.
+
+The GCC11 I have built can build R 4.1.3 with a standard x86-64
+architecture and pass all tests with "make check-all".
+I configured that with:
+> ~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2 FC=gfortran-11.2
+CXXFLAGS="-O3 -march=x86-64" CFLAGS="-O3 -march=x86-64" FFLAGS="-O3
+-march=x86-64" --enable-memory-profiling --enable-R-shlib
+and built with
+> make -j 32 -O
+> make check-all
+## PASS.
+
+So I can build R in my environment with GCC11.
+In configure, I am using references to "gcc-11.2" "gfortran-11.2" and
+"g++-11.2" because I compiled GCC11 compilers with these suffixes.
+
+Now, I'm using a 32 thread (16 core) AMD Zen3 CPU (a 5950x), and want to
+use it to its full potential. Zen3 optimizations are available as a
+-march=znver3 option n GCC11. The znver3 optimizations improve performance
+in Phoronix Test Suite benchmarks (I'm not aware of anyone that has
+compiled R with them). See:
+https://www.phoronix.com/scan.php?page=article&item=amd-5950x-gcc11
+
+However, the R 4.1.3 build (made with "make -j 32 -O"), configured with
+-march=znver3, produces an R that fails "make check-all".
+
+> ~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2 FC=gfortran-11.2
+CXXFLAGS="-O2 -march=znver3" CFLAGS="-O2 -march=znver3" FFLAGS="-O2
+-march=znver3" --enable-memory-profiling --enable-R-shlib
+or
+> ~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2 FC=gfortran-11.2
+CXXFLAGS="-O3 -march=znver3" CFLAGS="-O3 -march=znver3" FFLAGS="-O3
+-march=znver3" --enable-memory-profiling --enable-R-shlib
+
+The fail is always in the factorizing.R Matrix.R tests, and in particular,
+there are a number of errors and a fatal error.
+I have attached the output because I cannot really understand what is going
+wrong. But results returned from matrix calculations are obviously odd with
+-march=znver3 in GCC 11. There is another backwards-compatible architecture
+option "znver2" and this has EXACTLY the same result.
+
+While there are other warrnings and errors (many in assert.EQ() ), the
+factorizing.R script continues. The fatal error (at line 2662 in the
+attached factorizing.Rout.fail text file) is:
+
+> ## problematic rank deficient rankMatrix() case -- only seen in large
+cases ??
+> Z. <- readRDS(system.file("external", "Z_NA_rnk.rds", package="Matrix"))
+> tools::assertWarning(rnkZ. <- rankMatrix(Z., method = "qr")) # gave errors
+Error in assertCondition(expr, classes, .exprString = d.expr) :
+  Failed to get warning in evaluating rnkZ. <- rankMatrix(Z., method  ...
+Calls: <Anonymous> -> assertCondition
+Execution halted
+
+Can anybody shed light on what might be going on here? 'make check-all'
+passes all the other checks. It is just factorizing.R in Matrix that fails
+(other matrix tests run ok).
+Sorry this is a bit long-winded, but I thought details might be important.
+
+best regards,
+Kieran
+
+From ||u|@@rev|||@ @end|ng |rom gm@||@com  Tue Apr 12 09:16:36 2022
+From: ||u|@@rev|||@ @end|ng |rom gm@||@com (=?UTF-8?Q?Llu=C3=ADs_Revilla?=)
+Date: Tue, 12 Apr 2022 09:16:36 +0200
+Subject: [Rd] intersect() change of behavior in 4.2
+In-Reply-To: <CABtg=K=tRMdLJ7p2JHdFyOYVyjmLNszQguKn569gx+FswChtyw@mail.gmail.com>
+References: <CABtg=K=tRMdLJ7p2JHdFyOYVyjmLNszQguKn569gx+FswChtyw@mail.gmail.com>
+Message-ID: <CAN+W6_tM=+E6nCqDq9JiJ=1Gp3E=R4QFcPc06mbFyCZzWjhASQ@mail.gmail.com>
+
+Hi all,
+
+This change is documented on the man page so I think it is intentional.
+>From https://search.r-project.org/R/refmans/base/html/sets.html:
+
+    For union, a vector of a common mode.
+    For intersect, a vector of a common mode, or NULL if x or y is NULL.
+    For setdiff, a vector of the same mode as x.
+
+Now the results are symmetrical to intersect( "foo", list())
+Probably it is worth mentioning in the NEWS as it was found to cause
+some test to fail on a Bioconductor package some months ago.
+This could affect other packages and analysis too.
+
+Best,
+
+Llu?s
+
+
+On Tue, 12 Apr 2022 at 01:22, G?bor Cs?rdi <csardi.gabor at gmail.com> wrote:
+>
+> I wonder if this change is intentional, and if it is, whether it is
+> worth mentioning in the NEWS.
+>
+> ? R-4.1 -q -e 'intersect(list(), "foo")'
+> > intersect(list(), "foo")
+> character(0)
+>
+> ? R-4.2 -q -e 'intersect(list(), "foo")'
+> > intersect(list(), "foo")
+> list()
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From |@go@g|ne @end|ng |rom @jd@e@  Tue Apr 12 12:17:56 2022
+From: |@go@g|ne @end|ng |rom @jd@e@ (=?Windows-1252?Q?IAGO_GIN=C9_V=C1ZQUEZ?=)
+Date: Tue, 12 Apr 2022 10:17:56 +0000
+Subject: [Rd] merge by = "row.names" forgetting row.names (and typo in
+ documentation)
+Message-ID: <AM6PR02MB4423938A7457A32972CBF02594ED9@AM6PR02MB4423.eurprd02.prod.outlook.com>
+
+Dear all,
+
+Would it be possible to change this behaviour or having the option to change this default to keep the row.names in the output and no adding a new column?, so it would make simpler to merge multiple data frames with comon row names. I know it is documented, but it does not seem the most obvious behaviour. Why is it kept like this?
+
+ If the matching involved row names, an extra character column called Row.names is added at the left, and in all cases the result has ?automatic? row names.
+Thanks,
+
+PD - typo in the documentation (I am not sure if it should be reported as a bug) of `base::addNA`. In the **Value** section the `addNA` starting the line which explains its behaviour is not formatted as code.
+
+
+
+Iago
+
+	[[alternative HTML version deleted]]
+
+
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Tue Apr 12 15:13:26 2022
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Tue, 12 Apr 2022 06:13:26 -0700
+Subject: [Rd] 
+ Matrix issues when building R with znver3 architecture under GCC 11
+In-Reply-To: <CANkVCd7HGyvejpEkweiEBKtNq28Fpr_ggZ30Tadf=tgD7Z_vpQ@mail.gmail.com>
+References: <CANkVCd7HGyvejpEkweiEBKtNq28Fpr_ggZ30Tadf=tgD7Z_vpQ@mail.gmail.com>
+Message-ID: <CAFDcVCRuChE2a-uKYawL+fQfmxjhKLJpv3bYmWaULvydR=JhTA@mail.gmail.com>
+
+Shooting from the hip: What happens if you compile with -O2 instead of -O3?
+
+Henrik
+
+On Mon, Apr 11, 2022, 18:27 Kieran Short <kieran.short at gmail.com> wrote:
+
+> Hello,
+>
+> I'm new to this list, and have subscribed particularly because I've come
+> across an issue with building R from source with an AMD-based Zen
+> architecture under GCC11. Please don't attack me for my linux operating
+> system choice, but it is Ubuntu 20.04 with Linux Kernel 5.10.102.1 -
+> microsoft-standard-WSL2. I've built GCC11 using GCC8 (the standard GCC
+> under Ubuntu20.04 WSL release), under Windows11 with wslg. WSL2/g runs as a
+> hypervisor with ports to all system resources including display, GPU (cuda,
+> etc).
+>
+> The reason why I am posting this email is that I am trying to compile R
+> using the AMD Zen3 platform architecture rather than x86/64, because it has
+> processor-specific optimizations that improve performance over the standard
+> x86/64 in benchmarks. The Zen3 architecture optimizations are not available
+> in earlier versions of GCC (actually, they have possibly been backported to
+> GCC10 now). Since Ubuntu 20.04 doesn't have GCC11, I compiled the GCC11
+> compiler using the native GCC8.
+>
+> The GCC11 I have built can build R 4.1.3 with a standard x86-64
+> architecture and pass all tests with "make check-all".
+> I configured that with:
+> > ~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2 FC=gfortran-11.2
+> CXXFLAGS="-O3 -march=x86-64" CFLAGS="-O3 -march=x86-64" FFLAGS="-O3
+> -march=x86-64" --enable-memory-profiling --enable-R-shlib
+> and built with
+> > make -j 32 -O
+> > make check-all
+> ## PASS.
+>
+> So I can build R in my environment with GCC11.
+> In configure, I am using references to "gcc-11.2" "gfortran-11.2" and
+> "g++-11.2" because I compiled GCC11 compilers with these suffixes.
+>
+> Now, I'm using a 32 thread (16 core) AMD Zen3 CPU (a 5950x), and want to
+> use it to its full potential. Zen3 optimizations are available as a
+> -march=znver3 option n GCC11. The znver3 optimizations improve performance
+> in Phoronix Test Suite benchmarks (I'm not aware of anyone that has
+> compiled R with them). See:
+> https://www.phoronix.com/scan.php?page=article&item=amd-5950x-gcc11
+>
+> However, the R 4.1.3 build (made with "make -j 32 -O"), configured with
+> -march=znver3, produces an R that fails "make check-all".
+>
+> > ~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2 FC=gfortran-11.2
+> CXXFLAGS="-O2 -march=znver3" CFLAGS="-O2 -march=znver3" FFLAGS="-O2
+> -march=znver3" --enable-memory-profiling --enable-R-shlib
+> or
+> > ~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2 FC=gfortran-11.2
+> CXXFLAGS="-O3 -march=znver3" CFLAGS="-O3 -march=znver3" FFLAGS="-O3
+> -march=znver3" --enable-memory-profiling --enable-R-shlib
+>
+> The fail is always in the factorizing.R Matrix.R tests, and in particular,
+> there are a number of errors and a fatal error.
+> I have attached the output because I cannot really understand what is going
+> wrong. But results returned from matrix calculations are obviously odd with
+> -march=znver3 in GCC 11. There is another backwards-compatible architecture
+> option "znver2" and this has EXACTLY the same result.
+>
+> While there are other warrnings and errors (many in assert.EQ() ), the
+> factorizing.R script continues. The fatal error (at line 2662 in the
+> attached factorizing.Rout.fail text file) is:
+>
+> > ## problematic rank deficient rankMatrix() case -- only seen in large
+> cases ??
+> > Z. <- readRDS(system.file("external", "Z_NA_rnk.rds", package="Matrix"))
+> > tools::assertWarning(rnkZ. <- rankMatrix(Z., method = "qr")) # gave
+> errors
+> Error in assertCondition(expr, classes, .exprString = d.expr) :
+>   Failed to get warning in evaluating rnkZ. <- rankMatrix(Z., method  ...
+> Calls: <Anonymous> -> assertCondition
+> Execution halted
+>
+> Can anybody shed light on what might be going on here? 'make check-all'
+> passes all the other checks. It is just factorizing.R in Matrix that fails
+> (other matrix tests run ok).
+> Sorry this is a bit long-winded, but I thought details might be important.
+>
+> best regards,
+> Kieran
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From pro|jcn@@h @end|ng |rom gm@||@com  Tue Apr 12 16:17:38 2022
+From: pro|jcn@@h @end|ng |rom gm@||@com (J C Nash)
+Date: Tue, 12 Apr 2022 10:17:38 -0400
+Subject: [Rd] I've written a big review of R. Can I get some feedback?
+In-Reply-To: <LO2P123MB5357AC82AA110F052EF0D8208AE89@LO2P123MB5357.GBRP123.PROD.OUTLOOK.COM>
+References: <LO2P123MB5357AC82AA110F052EF0D8208AE89@LO2P123MB5357.GBRP123.PROD.OUTLOOK.COM>
+Message-ID: <efb01f94-96cf-5281-8656-fd1c28b0e89a@gmail.com>
+
+Any large community-based project is going to be driven by the willing volunteers. Duncan Murdoch
+has pointed this out a long time ago for R. Those who do are those who define what is done.
+
+That said, I've felt for quite a long time that the multiplicity of ways in which R can do the same
+tasks lead to confusion and errors. Arguably, a much stricter language definition that could execute
+95% of the existing user R scripts and programs would be welcome and provide a tool that is easier
+to maintain and, with a great deal of luck, lead to better maintainability of user codes.
+
+And, as others have pointed out, backward compatibility is a millstone.
+
+Whether anything will happen depends on who steps up to participate in R.
+
+In the meantime, I believe it is important for all R users to report and try to fix those things
+that are egregious faults, and documentation fixes are a very good starting point.
+
+John Nash
+
+
+On 2022-04-09 15:52, Reece Goding wrote:
+> Hello,
+> 
+> For a while, I've been working on writing a very big review of R. I've finally finished my final proofread of it. Can I get some feedback? This seems the most appropriate place to ask. It's linked below.
+> 
+> https://github.com/ReeceGoding/Frustration-One-Year-With-R
+> 
+> If you think you've seen it before, that will be because it found some popularity on Hacker News before I was done proofreading it. The reception seems largely positive so far.
+> 
+> Thanks,
+> Reece Goding
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @v|gro@@ @end|ng |rom ver|zon@net  Tue Apr 12 17:29:08 2022
+From: @v|gro@@ @end|ng |rom ver|zon@net (Avi Gross)
+Date: Tue, 12 Apr 2022 15:29:08 +0000 (UTC)
+Subject: [Rd] I've written a big review of R. Can I get some feedback?
+In-Reply-To: <efb01f94-96cf-5281-8656-fd1c28b0e89a@gmail.com>
+References: <LO2P123MB5357AC82AA110F052EF0D8208AE89@LO2P123MB5357.GBRP123.PROD.OUTLOOK.COM>
+ <efb01f94-96cf-5281-8656-fd1c28b0e89a@gmail.com>
+Message-ID: <77245999.104149.1649777348970@mail.yahoo.com>
+
+JC,
+Are you going to call this new abbreviated language by the name "Q" or keep calling itby the name "R" as "S" is taken?
+As a goal, yes, it is easier to maintain a language that is sparse. It may sort of force programmers?to go in particular ways to do things and those ways could be very reliable.
+But it will drive many programmers away from the language as it will often not match their way?of thinking about problems.
+You can presumably build a brand new language with design goals. As you note, existing?languages come with a millstone around their necks or an albatross.
+R is an extendable language. You can look at many of the packages or even packages of packages?such as the tidyverse as examples of adding on functionality to do things other ways that have?caught on. Some even partially supplant use of perfectly usable base R methods. Many end up?being largely rewritten as libraries in another language such as a version of C to speed them?up.?
+So I suspect limiting R from doing things multiple ways would encourage making more other?ways and ignoring the base language.
+But different ways of doing things is not just based on command names but on techniques?within programming. Anyone who wants to can do a matrix multiplication using a direct?primitive but also by a nested loop and other ways. There is nothing wrong with allowing?more ways.
+Yes, there is a huge problem with teaching too much and with reading code others wrote.?
+But I suggest that there have been languages that tried to make you use relatively?pure functional programming methods to solve everything. Others try to make you use?object-oriented techniques. Obviously some older ones only allow procedural?methods and some remain in the GOTO stage.?
+Modern languages often seem to feel obligated to support multiple modes but then?sometimes skimp on other things. R had a focus and it left out some things while a?language like Python had another focus and included many things R left out while totallyignoring many it has. BOTH languages have later been extended through packages and?modules because someone WANTED the darn features. People like having concepts?they can use like sets and dictionaries, not just lists and vectors. They like having?the ability to delay evaluation but also to force evaluation and so on. If you do not?include some things in the language for purist reasons, you may find it used anyway?and probably less reliably as various volunteers supply the need.
+Python just added versions of a PIPE. That opens up all kinds of new ways to do?almost anything. In the process, they already mucked with a new way to create?an anonymous function, and are now planning to add a new use for a single?underscore as a placeholder. But a significant number of R users already steadily use?the various kinds of pipes written before using various methods and that can break in?many cases. Is it wiser to let a large user body rebel, or consider a built-in and?efficient way to give them that feature?
+What I wonder is that now that we have a pipe in R, will any of the other ways?wither away and use it internally or is it already too late and we are stuck now?with even more incompatible ways to do about the same thing?
+
+
+
+-----Original Message-----
+From: J C Nash <profjcnash at gmail.com>
+To: Reece Goding <Reece.Goding at outlook.com>; r-devel at r-project.org <r-devel at r-project.org>
+Sent: Tue, Apr 12, 2022 10:17 am
+Subject: Re: [Rd] I've written a big review of R. Can I get some feedback?
+
+Any large community-based project is going to be driven by the willing volunteers. Duncan Murdoch
+has pointed this out a long time ago for R. Those who do are those who define what is done.
+
+That said, I've felt for quite a long time that the multiplicity of ways in which R can do the same
+tasks lead to confusion and errors. Arguably, a much stricter language definition that could execute
+95% of the existing user R scripts and programs would be welcome and provide a tool that is easier
+to maintain and, with a great deal of luck, lead to better maintainability of user codes.
+
+And, as others have pointed out, backward compatibility is a millstone.
+
+Whether anything will happen depends on who steps up to participate in R.
+
+In the meantime, I believe it is important for all R users to report and try to fix those things
+that are egregious faults, and documentation fixes are a very good starting point.
+
+John Nash
+
+
+On 2022-04-09 15:52, Reece Goding wrote:
+> Hello,
+> 
+> For a while, I've been working on writing a very big review of R. I've finally finished my final proofread of it. Can I get some feedback? This seems the most appropriate place to ask. It's linked below.
+> 
+> https://github.com/ReeceGoding/Frustration-One-Year-With-R
+> 
+> If you think you've seen it before, that will be because it found some popularity on Hacker News before I was done proofreading it. The reception seems largely positive so far.
+> 
+> Thanks,
+> Reece Goding
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+	[[alternative HTML version deleted]]
+
+
+From pro|jcn@@h @end|ng |rom gm@||@com  Tue Apr 12 17:38:37 2022
+From: pro|jcn@@h @end|ng |rom gm@||@com (J C Nash)
+Date: Tue, 12 Apr 2022 11:38:37 -0400
+Subject: [Rd] I've written a big review of R. Can I get some feedback?
+In-Reply-To: <77245999.104149.1649777348970@mail.yahoo.com>
+References: <LO2P123MB5357AC82AA110F052EF0D8208AE89@LO2P123MB5357.GBRP123.PROD.OUTLOOK.COM>
+ <efb01f94-96cf-5281-8656-fd1c28b0e89a@gmail.com>
+ <77245999.104149.1649777348970@mail.yahoo.com>
+Message-ID: <658fd7d3-a949-6f30-caf0-584d421b83ac@gmail.com>
+
+I probably should have been more expansive. I'm mainly thinking the base language processor should
+be "small" or "strict". Possible alternative expressions of ideas can be defined in macros and eventually
+in replacement code that is perhaps more efficient. However, I think isolating these macro collections
+is helpful. R already does this with packages, so I'm really talking about moving the boundary between
+base language and packages downwards towards a stricter core.
+
+Possibly this could be done within the existing R framework. However, I rather doubt that will happen.
+More likely someone will propose a "new" language.
+
+Sometimes I find myself going back and running Fortran 77 codes ....
+
+JN
+
+On 2022-04-12 11:29, Avi Gross via R-devel wrote:
+> JC,
+> Are you going to call this new abbreviated language by the name "Q" or keep calling itby the name "R" as "S" is taken?
+> As a goal, yes, it is easier to maintain a language that is sparse. It may sort of force programmers?to go in particular ways to do things and those ways could be very reliable.
+> But it will drive many programmers away from the language as it will often not match their way?of thinking about problems.
+> You can presumably build a brand new language with design goals. As you note, existing?languages come with a millstone around their necks or an albatross.
+> R is an extendable language. You can look at many of the packages or even packages of packages?such as the tidyverse as examples of adding on functionality to do things other ways that have?caught on. Some even partially supplant use of perfectly usable base R methods. Many end up?being largely rewritten as libraries in another language such as a version of C to speed them?up.
+> So I suspect limiting R from doing things multiple ways would encourage making more other?ways and ignoring the base language.
+> But different ways of doing things is not just based on command names but on techniques?within programming. Anyone who wants to can do a matrix multiplication using a direct?primitive but also by a nested loop and other ways. There is nothing wrong with allowing?more ways.
+> Yes, there is a huge problem with teaching too much and with reading code others wrote.
+> But I suggest that there have been languages that tried to make you use relatively?pure functional programming methods to solve everything. Others try to make you use?object-oriented techniques. Obviously some older ones only allow procedural?methods and some remain in the GOTO stage.
+> Modern languages often seem to feel obligated to support multiple modes but then?sometimes skimp on other things. R had a focus and it left out some things while a?language like Python had another focus and included many things R left out while totallyignoring many it has. BOTH languages have later been extended through packages and?modules because someone WANTED the darn features. People like having concepts?they can use like sets and dictionaries, not just lists and vectors. They like having?the ability to delay evaluation but also to force evaluation and so on. If you do not?include some things in the language for purist reasons, you may find it used anyway?and probably less reliably as various volunteers supply the need.
+> Python just added versions of a PIPE. That opens up all kinds of new ways to do?almost anything. In the process, they already mucked with a new way to create?an anonymous function, and are now planning to add a new use for a single?underscore as a placeholder. But a significant number of R users already steadily use?the various kinds of pipes written before using various methods and that can break in?many cases. Is it wiser to let a large user body rebel, or consider a built-in and?efficient way to give them that feature?
+> What I wonder is that now that we have a pipe in R, will any of the other ways?wither away and use it internally or is it already too late and we are stuck now?with even more incompatible ways to do about the same thing?
+> 
+> 
+> 
+> -----Original Message-----
+> From: J C Nash <profjcnash at gmail.com>
+> To: Reece Goding <Reece.Goding at outlook.com>; r-devel at r-project.org <r-devel at r-project.org>
+> Sent: Tue, Apr 12, 2022 10:17 am
+> Subject: Re: [Rd] I've written a big review of R. Can I get some feedback?
+> 
+> Any large community-based project is going to be driven by the willing volunteers. Duncan Murdoch
+> has pointed this out a long time ago for R. Those who do are those who define what is done.
+> 
+> That said, I've felt for quite a long time that the multiplicity of ways in which R can do the same
+> tasks lead to confusion and errors. Arguably, a much stricter language definition that could execute
+> 95% of the existing user R scripts and programs would be welcome and provide a tool that is easier
+> to maintain and, with a great deal of luck, lead to better maintainability of user codes.
+> 
+> And, as others have pointed out, backward compatibility is a millstone.
+> 
+> Whether anything will happen depends on who steps up to participate in R.
+> 
+> In the meantime, I believe it is important for all R users to report and try to fix those things
+> that are egregious faults, and documentation fixes are a very good starting point.
+> 
+> John Nash
+> 
+> 
+> On 2022-04-09 15:52, Reece Goding wrote:
+>> Hello,
+>>
+>> For a while, I've been working on writing a very big review of R. I've finally finished my final proofread of it. Can I get some feedback? This seems the most appropriate place to ask. It's linked below.
+>>
+>> https://github.com/ReeceGoding/Frustration-One-Year-With-R
+>>
+>> If you think you've seen it before, that will be because it found some popularity on Hacker News before I was done proofreading it. The reception seems largely positive so far.
+>>
+>> Thanks,
+>> Reece Goding
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @v|gro@@ @end|ng |rom ver|zon@net  Tue Apr 12 20:03:18 2022
+From: @v|gro@@ @end|ng |rom ver|zon@net (Avi Gross)
+Date: Tue, 12 Apr 2022 18:03:18 +0000 (UTC)
+Subject: [Rd] I've written a big review of R. Can I get some feedback?
+In-Reply-To: <658fd7d3-a949-6f30-caf0-584d421b83ac@gmail.com>
+References: <LO2P123MB5357AC82AA110F052EF0D8208AE89@LO2P123MB5357.GBRP123.PROD.OUTLOOK.COM>
+ <efb01f94-96cf-5281-8656-fd1c28b0e89a@gmail.com>
+ <77245999.104149.1649777348970@mail.yahoo.com>
+ <658fd7d3-a949-6f30-caf0-584d421b83ac@gmail.com>
+Message-ID: <1178221694.139315.1649786598885@mail.yahoo.com>
+
+I hear you, JC.
+There is often tension between making what you have work well and making it?perhaps more general or flexible or add in oodles of new features.
+Experience programmers sometimes realize that they can speed up their?programs by replacing a call to a more general function like say paste()?with a call to paste0() when the other features are not being used, or use?other simpler and faster methods to just combine two strings that have no?vectorized components.
+So perhaps inevitably, you may develop ever more ways to do things?and often a wrapper is made that doe very little more than call another?function with the arguments in a different order or with defaults added.
+If you know exactly what you want, why call read.csv() rather than directly?call read.table() and have the overhead of another function call that youdon't need?
+But realistically, programmer time and energy also counts for something.
+
+
+
+-----Original Message-----
+From: J C Nash <profjcnash at gmail.com>
+To: Avi Gross <avigross at verizon.net>; r-devel at r-project.org <r-devel at r-project.org>
+Sent: Tue, Apr 12, 2022 11:38 am
+Subject: Re: [Rd] I've written a big review of R. Can I get some feedback?
+
+I probably should have been more expansive. I'm mainly thinking the base language processor should
+be "small" or "strict". Possible alternative expressions of ideas can be defined in macros and eventually
+in replacement code that is perhaps more efficient. However, I think isolating these macro collections
+is helpful. R already does this with packages, so I'm really talking about moving the boundary between
+base language and packages downwards towards a stricter core.
+
+Possibly this could be done within the existing R framework. However, I rather doubt that will happen.
+More likely someone will propose a "new" language.
+
+Sometimes I find myself going back and running Fortran 77 codes ....
+
+JN
+
+On 2022-04-12 11:29, Avi Gross via R-devel wrote:
+> JC,
+> Are you going to call this new abbreviated language by the name "Q" or keep calling itby the name "R" as "S" is taken?
+> As a goal, yes, it is easier to maintain a language that is sparse. It may sort of force programmers?to go in particular ways to do things and those ways could be very reliable.
+> But it will drive many programmers away from the language as it will often not match their way?of thinking about problems.
+> You can presumably build a brand new language with design goals. As you note, existing?languages come with a millstone around their necks or an albatross.
+> R is an extendable language. You can look at many of the packages or even packages of packages?such as the tidyverse as examples of adding on functionality to do things other ways that have?caught on. Some even partially supplant use of perfectly usable base R methods. Many end up?being largely rewritten as libraries in another language such as a version of C to speed them?up.
+> So I suspect limiting R from doing things multiple ways would encourage making more other?ways and ignoring the base language.
+> But different ways of doing things is not just based on command names but on techniques?within programming. Anyone who wants to can do a matrix multiplication using a direct?primitive but also by a nested loop and other ways. There is nothing wrong with allowing?more ways.
+> Yes, there is a huge problem with teaching too much and with reading code others wrote.
+> But I suggest that there have been languages that tried to make you use relatively?pure functional programming methods to solve everything. Others try to make you use?object-oriented techniques. Obviously some older ones only allow procedural?methods and some remain in the GOTO stage.
+> Modern languages often seem to feel obligated to support multiple modes but then?sometimes skimp on other things. R had a focus and it left out some things while a?language like Python had another focus and included many things R left out while totallyignoring many it has. BOTH languages have later been extended through packages and?modules because someone WANTED the darn features. People like having concepts?they can use like sets and dictionaries, not just lists and vectors. They like having?the ability to delay evaluation but also to force evaluation and so on. If you do not?include some things in the language for purist reasons, you may find it used anyway?and probably less reliably as various volunteers supply the need.
+> Python just added versions of a PIPE. That opens up all kinds of new ways to do?almost anything. In the process, they already mucked with a new way to create?an anonymous function, and are now planning to add a new use for a single?underscore as a placeholder. But a significant number of R users already steadily use?the various kinds of pipes written before using various methods and that can break in?many cases. Is it wiser to let a large user body rebel, or consider a built-in and?efficient way to give them that feature?
+> What I wonder is that now that we have a pipe in R, will any of the other ways?wither away and use it internally or is it already too late and we are stuck now?with even more incompatible ways to do about the same thing?
+> 
+> 
+> 
+> -----Original Message-----
+> From: J C Nash <profjcnash at gmail.com>
+> To: Reece Goding <Reece.Goding at outlook.com>; r-devel at r-project.org <r-devel at r-project.org>
+> Sent: Tue, Apr 12, 2022 10:17 am
+> Subject: Re: [Rd] I've written a big review of R. Can I get some feedback?
+> 
+> Any large community-based project is going to be driven by the willing volunteers. Duncan Murdoch
+> has pointed this out a long time ago for R. Those who do are those who define what is done.
+> 
+> That said, I've felt for quite a long time that the multiplicity of ways in which R can do the same
+> tasks lead to confusion and errors. Arguably, a much stricter language definition that could execute
+> 95% of the existing user R scripts and programs would be welcome and provide a tool that is easier
+> to maintain and, with a great deal of luck, lead to better maintainability of user codes.
+> 
+> And, as others have pointed out, backward compatibility is a millstone.
+> 
+> Whether anything will happen depends on who steps up to participate in R.
+> 
+> In the meantime, I believe it is important for all R users to report and try to fix those things
+> that are egregious faults, and documentation fixes are a very good starting point.
+> 
+> John Nash
+> 
+> 
+> On 2022-04-09 15:52, Reece Goding wrote:
+>> Hello,
+>>
+>> For a while, I've been working on writing a very big review of R. I've finally finished my final proofread of it. Can I get some feedback? This seems the most appropriate place to ask. It's linked below.
+>>
+>> https://github.com/ReeceGoding/Frustration-One-Year-With-R
+>>
+>> If you think you've seen it before, that will be because it found some popularity on Hacker News before I was done proofreading it. The reception seems largely positive so far.
+>>
+>> Thanks,
+>> Reece Goding
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ??? [[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+	[[alternative HTML version deleted]]
+
+
+From @erv|ce @end|ng |rom @hd@w@on@com  Tue Apr 12 22:17:02 2022
+From: @erv|ce @end|ng |rom @hd@w@on@com (Stephen H. Dawson, DSL)
+Date: Tue, 12 Apr 2022 16:17:02 -0400
+Subject: [Rd] I've written a big review of R. Can I get some feedback?
+In-Reply-To: <LO2P123MB5357ACA9E088C38BF1CB03268AEA9@LO2P123MB5357.GBRP123.PROD.OUTLOOK.COM>
+References: <LO2P123MB5357ACA9E088C38BF1CB03268AEA9@LO2P123MB5357.GBRP123.PROD.OUTLOOK.COM>
+Message-ID: <a80fa568-5d88-ce1d-8f87-b0896083ba8f@shdawson.com>
+
+OK, here is my take on your writing.
+
+It seems to appeal to an audience of developers in a developer-centric 
+realm.
+
+It does not follow a practiced writing style, nor does it have enough 
+structure to work as a peer-reviewed piece.
+
+Now, my recommendation.
+
+You have LOADS of good material in your article. Restructure your work 
+to another output medium. Specifically, capitalize on the theme of your 
+work...trying to get up and running with R...and develop a web-based 
+tool to help people use R by whittling down package selection.
+
+R does graphing. Great. Which packages are used for a particular type of 
+graph? R does statistics. Great. Which packages are used for a 
+particular statistic calculation?
+
+The tool is a hierarchical approach to help either a seasoned or new 
+developer FIND a package to do, well assist, with what they are hoping 
+to accomplish. If there were a tool that would provide such help, then 
+the wonderful packages that already exist could then be leveraged using 
+their existing documentation. If there were a tool that provided such 
+assistance, then I would not have to read books, web pages, forums, and 
+what not to figure out which of the thousands, perhaps closer to 
+hundreds, of packages do the graphing and statistics work I am hoping to 
+accomplish.
+
+Multiply this pain by the pain you recent R experience, then multiply 
+that product by the number of people who use R now, then add in the 
+probability of doubling or tripling it for those who may want to one day 
+use R. You would then have quite a bit of notoriety on the world 
+wiiiiiiiide web by helping people cut through the muck to get a simple 
+answer of package selection.
+
+Then, oh my....the statistical work that R could accomplish from 
+visitors using the tool to mature the tool in short order. Talk about 
+contributing significant help to R, the world at large, and those who 
+come after us.
+
+Perhaps you are not the developer who either can or should do the work 
+on this tool. Your article has helped form the value proposition for the 
+tool. Find the developer to accomplish the work on this tool and that 
+person will have a dot on their CV that will never tarnish.
+
+Ping me if you want more information on this proposed tool.
+
+
+*Stephen Dawson, DSL*
+/Executive Strategy Consultant/
+Business & Technology
++1 (865) 804-3454
+http://www.shdawson.com
+
+
+On 4/11/22 17:22, Reece Goding wrote:
+> Hi Stephen,
+>
+> I must admit, I don't have anything specific in mind. I'm happy to hear any comments that anyone has.
+>
+> Thanks,
+> Reece Goding
+
+
+From k|er@n@@hort @end|ng |rom gm@||@com  Tue Apr 12 23:22:57 2022
+From: k|er@n@@hort @end|ng |rom gm@||@com (Kieran Short)
+Date: Wed, 13 Apr 2022 07:22:57 +1000
+Subject: [Rd] 
+ Matrix issues when building R with znver3 architecture under GCC 11
+In-Reply-To: <CAFDcVCRuChE2a-uKYawL+fQfmxjhKLJpv3bYmWaULvydR=JhTA@mail.gmail.com>
+References: <CANkVCd7HGyvejpEkweiEBKtNq28Fpr_ggZ30Tadf=tgD7Z_vpQ@mail.gmail.com>
+ <CAFDcVCRuChE2a-uKYawL+fQfmxjhKLJpv3bYmWaULvydR=JhTA@mail.gmail.com>
+Message-ID: <CANkVCd4Fbbrs+1BO=cJ8kkc3zvkeF_GLbG=a=uiJh=Yup2o-Sw@mail.gmail.com>
+
+Hi Henrik,
+
+It produces the same result.
+
+Regards,
+Kieran
+
+On Tue, 12 Apr 2022, 23:13 Henrik Bengtsson, <henrik.bengtsson at gmail.com>
+wrote:
+
+> Shooting from the hip: What happens if you compile with -O2 instead of -O3?
+>
+> Henrik
+>
+> On Mon, Apr 11, 2022, 18:27 Kieran Short <kieran.short at gmail.com> wrote:
+>
+>> Hello,
+>>
+>> I'm new to this list, and have subscribed particularly because I've come
+>> across an issue with building R from source with an AMD-based Zen
+>> architecture under GCC11. Please don't attack me for my linux operating
+>> system choice, but it is Ubuntu 20.04 with Linux Kernel 5.10.102.1 -
+>> microsoft-standard-WSL2. I've built GCC11 using GCC8 (the standard GCC
+>> under Ubuntu20.04 WSL release), under Windows11 with wslg. WSL2/g runs as
+>> a
+>> hypervisor with ports to all system resources including display, GPU
+>> (cuda,
+>> etc).
+>>
+>> The reason why I am posting this email is that I am trying to compile R
+>> using the AMD Zen3 platform architecture rather than x86/64, because it
+>> has
+>> processor-specific optimizations that improve performance over the
+>> standard
+>> x86/64 in benchmarks. The Zen3 architecture optimizations are not
+>> available
+>> in earlier versions of GCC (actually, they have possibly been backported
+>> to
+>> GCC10 now). Since Ubuntu 20.04 doesn't have GCC11, I compiled the GCC11
+>> compiler using the native GCC8.
+>>
+>> The GCC11 I have built can build R 4.1.3 with a standard x86-64
+>> architecture and pass all tests with "make check-all".
+>> I configured that with:
+>> > ~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2 FC=gfortran-11.2
+>> CXXFLAGS="-O3 -march=x86-64" CFLAGS="-O3 -march=x86-64" FFLAGS="-O3
+>> -march=x86-64" --enable-memory-profiling --enable-R-shlib
+>> and built with
+>> > make -j 32 -O
+>> > make check-all
+>> ## PASS.
+>>
+>> So I can build R in my environment with GCC11.
+>> In configure, I am using references to "gcc-11.2" "gfortran-11.2" and
+>> "g++-11.2" because I compiled GCC11 compilers with these suffixes.
+>>
+>> Now, I'm using a 32 thread (16 core) AMD Zen3 CPU (a 5950x), and want to
+>> use it to its full potential. Zen3 optimizations are available as a
+>> -march=znver3 option n GCC11. The znver3 optimizations improve performance
+>> in Phoronix Test Suite benchmarks (I'm not aware of anyone that has
+>> compiled R with them). See:
+>> https://www.phoronix.com/scan.php?page=article&item=amd-5950x-gcc11
+>>
+>> However, the R 4.1.3 build (made with "make -j 32 -O"), configured with
+>> -march=znver3, produces an R that fails "make check-all".
+>>
+>> > ~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2 FC=gfortran-11.2
+>> CXXFLAGS="-O2 -march=znver3" CFLAGS="-O2 -march=znver3" FFLAGS="-O2
+>> -march=znver3" --enable-memory-profiling --enable-R-shlib
+>> or
+>> > ~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2 FC=gfortran-11.2
+>> CXXFLAGS="-O3 -march=znver3" CFLAGS="-O3 -march=znver3" FFLAGS="-O3
+>> -march=znver3" --enable-memory-profiling --enable-R-shlib
+>>
+>> The fail is always in the factorizing.R Matrix.R tests, and in particular,
+>> there are a number of errors and a fatal error.
+>> I have attached the output because I cannot really understand what is
+>> going
+>> wrong. But results returned from matrix calculations are obviously odd
+>> with
+>> -march=znver3 in GCC 11. There is another backwards-compatible
+>> architecture
+>> option "znver2" and this has EXACTLY the same result.
+>>
+>> While there are other warrnings and errors (many in assert.EQ() ), the
+>> factorizing.R script continues. The fatal error (at line 2662 in the
+>> attached factorizing.Rout.fail text file) is:
+>>
+>> > ## problematic rank deficient rankMatrix() case -- only seen in large
+>> cases ??
+>> > Z. <- readRDS(system.file("external", "Z_NA_rnk.rds", package="Matrix"))
+>> > tools::assertWarning(rnkZ. <- rankMatrix(Z., method = "qr")) # gave
+>> errors
+>> Error in assertCondition(expr, classes, .exprString = d.expr) :
+>>   Failed to get warning in evaluating rnkZ. <- rankMatrix(Z., method  ...
+>> Calls: <Anonymous> -> assertCondition
+>> Execution halted
+>>
+>> Can anybody shed light on what might be going on here? 'make check-all'
+>> passes all the other checks. It is just factorizing.R in Matrix that fails
+>> (other matrix tests run ok).
+>> Sorry this is a bit long-winded, but I thought details might be important.
+>>
+>> best regards,
+>> Kieran
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+
+	[[alternative HTML version deleted]]
+
+
+From Reece@God|ng @end|ng |rom out|ook@com  Tue Apr 12 23:31:52 2022
+From: Reece@God|ng @end|ng |rom out|ook@com (Reece Goding)
+Date: Tue, 12 Apr 2022 21:31:52 +0000
+Subject: [Rd] I've written a big review of R. Can I get some feedback?
+In-Reply-To: <CAD4oTHH0n9-oM23TXLTGyO6HHAH3AMSR+kAeJv2Q_T_iQTk6LA@mail.gmail.com>
+References: <LO2P123MB5357AC82AA110F052EF0D8208AE89@LO2P123MB5357.GBRP123.PROD.OUTLOOK.COM>
+ <0e50158e-e5ca-d8d8-4574-ea4a6382ff58@shdawson.com>
+ <CALK03d1ACBtb7fz01wqusQ6R4quzO1zOetAz10yAK_vYpksHkw@mail.gmail.com>
+ <CAD4oTHH0n9-oM23TXLTGyO6HHAH3AMSR+kAeJv2Q_T_iQTk6LA@mail.gmail.com>
+Message-ID: <LO2P123MB5357658F0C4AD90F664774D48AED9@LO2P123MB5357.GBRP123.PROD.OUTLOOK.COM>
+
+Hi Gabriel,
+
+Thanks for the feedback. Much of what you've said seems to agree with a common trend that I've seen in other feedback. Namely, you seem to agree with the many that have told me that using R as anything other than as a tool for data analysis was a grave mistake. I'm increasingly starting to suspect that you're all right. I therefore have little to no counters to your points.
+
+As for what you've said in reply to my "mapply challenge", I admit that your response is logical and may even be the best possible answer. However, I find it disturbing that the solution to my puzzle appears to rest on a having a very careful and very specific understanding of what the words "vectorize over" means in the documentation. You could well be right, but it doesn't sit well with me.
+
+I'll further consider what you've said about the rest. I'm already making some changes.
+
+Thanks again,
+Reece
+
+________________________________________
+From: Gabriel Becker <gabembecker at gmail.com>
+Sent: 12 April 2022 00:28
+To: Toby Hocking; Reece.Goding at outlook.com
+Cc: r-devel at r-project.org
+Subject: Re: [Rd] I've written a big review of R. Can I get some feedback?
+
+Hi Reece,
+
+I'm not really sure what kind of review you're looking for (and I'm not certain this is the right place for it, but hopefully its ok enough). Also, to channel Pascal, forgive me, I would have written a shorter response but I didn't have the time.
+
+Firstly, it is fairly ... partisan, I suppose, for lack of a better term.
+
+More importantly from a usefulness perspective you often notably don't present the knowledge you gained at the end of the various frustrations you had. As one example that jumped out to me, you say
+
+"One day, you?ll be tripped up by R?s hierarchy of how it likes to simplify mixed types outside of lists. "
+
+but you don't present your readers with the (well defined) coercion hierarchy so that they would, you know, not be tripped up by it as badly. This is probably my largest issue with your document overall. It can give the reader talking points about how R is bad (not all of which are even incorrect, per se, as many expert R users will be happy to tell you), but it won't really help people become better R users in many cases.
+
+Your article also, I suspect, fails to understand what a typical "Novice R Users" is and what they want to do. By and large they want to analyze data and create plots. They are analysts, NOT programmers (writing analysis scripts is not programming in the typical sense, and I'm not the only one who thinks that).
+
+So the point you make early on in your explanation why you do not strongly recommend R For Data Science (which I had no part in writing and have not read myself) that it
+
+"It deliberately avoids the fundamentals of programming ? e.g. making functions, loops, and if statements ? until the second half. I therefore suspect that any non-novice would be better off finding an introduction to the relevant packages with their favourite search engine."
+
+misses the point of R itself for what I'd claim is the "typical novice R user".
+
+Having read through your review, I'm confused why you were using R to do some of the things I'm inferring that you felt like you needed it to do. If you picked up R  wanting an applicable equally to all programming problem domains general purpose language, you're going to have a bad time. Mostly because that is not what R is.
+
+Finally, a (very) incomplete response to a few of the more specific points raised in your review:
+
+Lists:
+
+The linked stack overflow question (https://stackoverflow.com/questions/2050790/how-to-correctly-use-lists-in-r) shows a pretty fundamental misunderstanding of what lists and atomic vectors are/do in R. There is nothing wrong with this, asking questions we don't know the answer to is how we learn, but I'm not sure the question serves as well as a primer for R lists as you claim. The top answer at time of writing discusses the C level structure of R objects, which can, I suppose, inform your knowledge on how lists at the R level work, but is NOT necessary nor the most pedagogically useful way to present it.
+
+Strings:
+
+Strings are not arrays of characters idiomatically at the R level, they are atomic observed values within a (character) vector of data. Yes, deep down in the C code they are arrays of characters, but not at the R level. As such, splitting the elements of a character vector into their respective component individual characters is not (at all, in my experience) a common operation. charvec[1] within typical R usage (where charvec is a vector of data) is much more likely to be intended to select the first observation for the data vector, which it does. Given what R is for, frankly I think it'd be fairly insane for charvec[1] to do what substr does.
+
+Variable Manipulation
+
+Novice users shouldn't be calling eval. This is not to gatekeep it from them, like we have some special "eval-callers" club that they're not invited to. Rather, it is me saying that metaprogramming is not a novice-difficulty task in R (or, I would expect, anywhere else really).
+
+You also say "variable names" in this section where you mean "argument names" and that distinction is both meaningful and important. Variable names, are not partially matched:
+
+> xyz <- 5
+
+> x
+
+Error: object 'x' not found
+
+Subsetting:
+
+I'm fairly certain arrays (including 2d matrices are stored in column order rather than row order because that has been the standard for linear algebra on computers since before I knew what either of those things were...
+
+tail(x,1) is the idiomatic way of getting the last element of a vector. The people on stackoverflow that told you this was "very slow" were misguided at best. It takes ~6000 nanoseconds on my laptop, compared to the ~200 nanoseconds x[length(x)]. Yes, that is a 30x speedup; no, it doesn't matter in practice.
+
+I'm going to stop now because this is already too long, but this type of response continues to be possible throughout.
+
+Lastly, with regard to your mapply challenge. and I quote directly from the documentation (emphasis mine):
+
+
+   ...: arguments to vectorize over (vectors or lists of strictly
+
+          positive length, or all of zero length).  See also ?Details?.
+
+   MoreArgs: a list of other arguments to ?FUN?.
+
+
+
+... is the arguments you vectorize over, so FUN gets one element of each thing in ... for each call. MoreArgs, then, is the set of arguments to FUN which you don't vectorize over, ie where each call to FUN gets the whole thing. That's it, that's the whole thing.
+
+
+I don't disagree that this could be clearer (as Ben pointed out, a documentation patch would be the way to address this), but its not correct to say the information isn't in there at all.
+
+
+Best,
+
+~G
+
+On Mon, Apr 11, 2022 at 1:52 PM Toby Hocking <tdhock5 at gmail.com<mailto:tdhock5 at gmail.com>> wrote:
+You could take some of your observations and turn them into patches that
+would help improve R. (discussion of such patches is one function of this
+email list)
+
+On Sun, Apr 10, 2022 at 9:05 AM Stephen H. Dawson, DSL via R-devel <
+r-devel at r-project.org<mailto:r-devel at r-project.org>> wrote:
+
+> Hi Reece,
+>
+>
+> Thanks for the article. What specific feedback do you seek for your
+> writing?
+>
+>
+> Kindest Regards,
+> *Stephen Dawson, DSL*
+> /Executive Strategy Consultant/
+> Business & Technology
+> +1 (865) 804-3454
+> http://www.shdawson.com
+>
+>
+> On 4/9/22 15:52, Reece Goding wrote:
+> > Hello,
+> >
+> > For a while, I've been working on writing a very big review of R. I've
+> finally finished my final proofread of it. Can I get some feedback? This
+> seems the most appropriate place to ask. It's linked below.
+> >
+> > https://github.com/ReeceGoding/Frustration-One-Year-With-R
+> >
+> > If you think you've seen it before, that will be because it found some
+> popularity on Hacker News before I was done proofreading it. The reception
+> seems largely positive so far.
+> >
+> > Thanks,
+> > Reece Goding
+> > ______________________________________________
+> > R-devel at r-project.org<mailto:R-devel at r-project.org> mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+>
+> ______________________________________________
+> R-devel at r-project.org<mailto:R-devel at r-project.org> mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+        [[alternative HTML version deleted]]
+
+______________________________________________
+R-devel at r-project.org<mailto:R-devel at r-project.org> mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From pro|jcn@@h @end|ng |rom gm@||@com  Wed Apr 13 00:05:26 2022
+From: pro|jcn@@h @end|ng |rom gm@||@com (J C Nash)
+Date: Tue, 12 Apr 2022 18:05:26 -0400
+Subject: [Rd] I've written a big review of R. Can I get some feedback?
+In-Reply-To: <LO2P123MB5357658F0C4AD90F664774D48AED9@LO2P123MB5357.GBRP123.PROD.OUTLOOK.COM>
+References: <LO2P123MB5357AC82AA110F052EF0D8208AE89@LO2P123MB5357.GBRP123.PROD.OUTLOOK.COM>
+ <0e50158e-e5ca-d8d8-4574-ea4a6382ff58@shdawson.com>
+ <CALK03d1ACBtb7fz01wqusQ6R4quzO1zOetAz10yAK_vYpksHkw@mail.gmail.com>
+ <CAD4oTHH0n9-oM23TXLTGyO6HHAH3AMSR+kAeJv2Q_T_iQTk6LA@mail.gmail.com>
+ <LO2P123MB5357658F0C4AD90F664774D48AED9@LO2P123MB5357.GBRP123.PROD.OUTLOOK.COM>
+Message-ID: <7baf4be0-6b89-0002-1541-f912807f488f@gmail.com>
+
+Actually, some of us use R as a quite effective tool for testing and evaluating optimization,
+nonlinear least squares codes, and some other numerical algorithms, as well as for one-off
+or at least limited number of runs cases. R allows a lot of flexibility in trying out ideas
+for such tasks where the goal is to check that the solution is a good one. Reliability
+rather than speed.
+
+My experience is that R is at least as good a programming environment for this as any other
+I've used e.g., Matlab, Fortran, Pascal, BASIC, C, Python, and a few others now of historical
+interest only. Who's up for Modula2, APL, QNial, Algol, Algol68, forth, or that wonderful tool,
+Assembler? I've used them all, and now prefer R. I might be tempted to try Julia once it
+stabilizes. For now it seems to have a lot of similarities to a greased piglet at a fairground
+competition.
+
+I do almost no data analysis with R myself, though others do, I believe, use my software in that
+pursuit. Given that some of your complaints about R nuisances have a basis, I'll simply note that all
+programming languages have their annoyances. At least R is community-based and we can provide those
+wonderful "small reproducible examples" and quite often get improvements, and if we offer good
+patches, they do get into the distributed code. I've managed to do that in the space of a few
+months with R. A reported bug in Excel ... still there I think after over 2 decades. I gave up
+waiting.
+
+As others have written in replies to your request, it is worth focusing on what may be fixable and
+seeing what can be done, either to fix those issues or to document things to help users. And I
+think it sensible to assume ALL of us are novices in areas beyond where we toil daily. R users
+cover a huge range of interests, so experts in one aspect are beginners in another.
+
+John Nash
+
+
+On 2022-04-12 17:31, Reece Goding wrote:
+> Hi Gabriel,
+> 
+> Thanks for the feedback. Much of what you've said seems to agree with a common trend that I've seen in other feedback. Namely, you seem to agree with the many that have told me that using R as anything other than as a tool for data analysis was a grave mistake. I'm increasingly starting to suspect that you're all right. I therefore have little to no counters to your points.
+> 
+> As for what you've said in reply to my "mapply challenge", I admit that your response is logical and may even be the best possible answer. However, I find it disturbing that the solution to my puzzle appears to rest on a having a very careful and very specific understanding of what the words "vectorize over" means in the documentation. You could well be right, but it doesn't sit well with me.
+> 
+> I'll further consider what you've said about the rest. I'm already making some changes.
+> 
+> Thanks again,
+> Reece
+> 
+> ________________________________________
+> From: Gabriel Becker <gabembecker at gmail.com>
+> Sent: 12 April 2022 00:28
+> To: Toby Hocking; Reece.Goding at outlook.com
+> Cc: r-devel at r-project.org
+> Subject: Re: [Rd] I've written a big review of R. Can I get some feedback?
+> 
+> Hi Reece,
+> 
+> I'm not really sure what kind of review you're looking for (and I'm not certain this is the right place for it, but hopefully its ok enough). Also, to channel Pascal, forgive me, I would have written a shorter response but I didn't have the time.
+> 
+> Firstly, it is fairly ... partisan, I suppose, for lack of a better term.
+> 
+> More importantly from a usefulness perspective you often notably don't present the knowledge you gained at the end of the various frustrations you had. As one example that jumped out to me, you say
+> 
+> "One day, you?ll be tripped up by R?s hierarchy of how it likes to simplify mixed types outside of lists."
+> 
+> but you don't present your readers with the (well defined) coercion hierarchy so that they would, you know, not be tripped up by it as badly. This is probably my largest issue with your document overall. It can give the reader talking points about how R is bad (not all of which are even incorrect, per se, as many expert R users will be happy to tell you), but it won't really help people become better R users in many cases.
+> 
+> Your article also, I suspect, fails to understand what a typical "Novice R Users" is and what they want to do. By and large they want to analyze data and create plots. They are analysts, NOT programmers (writing analysis scripts is not programming in the typical sense, and I'm not the only one who thinks that).
+> 
+> So the point you make early on in your explanation why you do not strongly recommend R For Data Science (which I had no part in writing and have not read myself) that it
+> 
+> "It deliberately avoids the fundamentals of programming ? e.g. making functions, loops, and if statements ? until the second half. I therefore suspect that any non-novice would be better off finding an introduction to the relevant packages with their favourite search engine."
+> 
+> misses the point of R itself for what I'd claim is the "typical novice R user".
+> 
+> Having read through your review, I'm confused why you were using R to do some of the things I'm inferring that you felt like you needed it to do. If you picked up R  wanting an applicable equally to all programming problem domains general purpose language, you're going to have a bad time. Mostly because that is not what R is.
+> 
+> Finally, a (very) incomplete response to a few of the more specific points raised in your review:
+> 
+> Lists:
+> 
+> The linked stack overflow question (https://stackoverflow.com/questions/2050790/how-to-correctly-use-lists-in-r) shows a pretty fundamental misunderstanding of what lists and atomic vectors are/do in R. There is nothing wrong with this, asking questions we don't know the answer to is how we learn, but I'm not sure the question serves as well as a primer for R lists as you claim. The top answer at time of writing discusses the C level structure of R objects, which can, I suppose, inform your knowledge on how lists at the R level work, but is NOT necessary nor the most pedagogically useful way to present it.
+> 
+> Strings:
+> 
+> Strings are not arrays of characters idiomatically at the R level, they are atomic observed values within a (character) vector of data. Yes, deep down in the C code they are arrays of characters, but not at the R level. As such, splitting the elements of a character vector into their respective component individual characters is not (at all, in my experience) a common operation. charvec[1] within typical R usage (where charvec is a vector of data) is much more likely to be intended to select the first observation for the data vector, which it does. Given what R is for, frankly I think it'd be fairly insane for charvec[1] to do what substr does.
+> 
+> Variable Manipulation
+> 
+> Novice users shouldn't be calling eval. This is not to gatekeep it from them, like we have some special "eval-callers" club that they're not invited to. Rather, it is me saying that metaprogramming is not a novice-difficulty task in R (or, I would expect, anywhere else really).
+> 
+> You also say "variable names" in this section where you mean "argument names" and that distinction is both meaningful and important. Variable names, are not partially matched:
+> 
+>> xyz <- 5
+> 
+>> x
+> 
+> Error: object 'x' not found
+> 
+> Subsetting:
+> 
+> I'm fairly certain arrays (including 2d matrices are stored in column order rather than row order because that has been the standard for linear algebra on computers since before I knew what either of those things were...
+> 
+> tail(x,1) is the idiomatic way of getting the last element of a vector. The people on stackoverflow that told you this was "very slow" were misguided at best. It takes ~6000 nanoseconds on my laptop, compared to the ~200 nanoseconds x[length(x)]. Yes, that is a 30x speedup; no, it doesn't matter in practice.
+> 
+> I'm going to stop now because this is already too long, but this type of response continues to be possible throughout.
+> 
+> Lastly, with regard to your mapply challenge. and I quote directly from the documentation (emphasis mine):
+> 
+> 
+>     ...: arguments to vectorize over (vectors or lists of strictly
+> 
+>            positive length, or all of zero length).  See also ?Details?.
+> 
+>     MoreArgs: a list of other arguments to ?FUN?.
+> 
+> 
+> 
+> ... is the arguments you vectorize over, so FUN gets one element of each thing in ... for each call. MoreArgs, then, is the set of arguments to FUN which you don't vectorize over, ie where each call to FUN gets the whole thing. That's it, that's the whole thing.
+> 
+> 
+> I don't disagree that this could be clearer (as Ben pointed out, a documentation patch would be the way to address this), but its not correct to say the information isn't in there at all.
+> 
+> 
+> Best,
+> 
+> ~G
+> 
+> On Mon, Apr 11, 2022 at 1:52 PM Toby Hocking <tdhock5 at gmail.com<mailto:tdhock5 at gmail.com>> wrote:
+> You could take some of your observations and turn them into patches that
+> would help improve R. (discussion of such patches is one function of this
+> email list)
+> 
+> On Sun, Apr 10, 2022 at 9:05 AM Stephen H. Dawson, DSL via R-devel <
+> r-devel at r-project.org<mailto:r-devel at r-project.org>> wrote:
+> 
+>> Hi Reece,
+>>
+>>
+>> Thanks for the article. What specific feedback do you seek for your
+>> writing?
+>>
+>>
+>> Kindest Regards,
+>> *Stephen Dawson, DSL*
+>> /Executive Strategy Consultant/
+>> Business & Technology
+>> +1 (865) 804-3454
+>> http://www.shdawson.com
+>>
+>>
+>> On 4/9/22 15:52, Reece Goding wrote:
+>>> Hello,
+>>>
+>>> For a while, I've been working on writing a very big review of R. I've
+>> finally finished my final proofread of it. Can I get some feedback? This
+>> seems the most appropriate place to ask. It's linked below.
+>>>
+>>> https://github.com/ReeceGoding/Frustration-One-Year-With-R
+>>>
+>>> If you think you've seen it before, that will be because it found some
+>> popularity on Hacker News before I was done proofreading it. The reception
+>> seems largely positive so far.
+>>>
+>>> Thanks,
+>>> Reece Goding
+>>> ______________________________________________
+>>> R-devel at r-project.org<mailto:R-devel at r-project.org> mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>
+>>
+>> ______________________________________________
+>> R-devel at r-project.org<mailto:R-devel at r-project.org> mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+> 
+>          [[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org<mailto:R-devel at r-project.org> mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
