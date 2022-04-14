@@ -2997,3 +2997,969 @@ On 2022-04-12 17:31, Reece Goding wrote:
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Wed Apr 13 08:00:02 2022
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Wed, 13 Apr 2022 08:00:02 +0200
+Subject: [Rd] 
+ Matrix issues when building R with znver3 architecture under GCC 11
+In-Reply-To: <CANkVCd7HGyvejpEkweiEBKtNq28Fpr_ggZ30Tadf=tgD7Z_vpQ@mail.gmail.com>
+References: <CANkVCd7HGyvejpEkweiEBKtNq28Fpr_ggZ30Tadf=tgD7Z_vpQ@mail.gmail.com>
+Message-ID: <0b8d32ef-8426-6c92-0798-e28dfd4b6bba@gmail.com>
+
+Hi Kieran,
+
+On 4/12/22 02:36, Kieran Short wrote:
+> Hello,
+>
+> I'm new to this list, and have subscribed particularly because I've come
+> across an issue with building R from source with an AMD-based Zen
+> architecture under GCC11. Please don't attack me for my linux operating
+> system choice, but it is Ubuntu 20.04 with Linux Kernel 5.10.102.1 -
+> microsoft-standard-WSL2. I've built GCC11 using GCC8 (the standard GCC
+> under Ubuntu20.04 WSL release), under Windows11 with wslg. WSL2/g runs as a
+> hypervisor with ports to all system resources including display, GPU (cuda,
+> etc).
+>
+> The reason why I am posting this email is that I am trying to compile R
+> using the AMD Zen3 platform architecture rather than x86/64, because it has
+> processor-specific optimizations that improve performance over the standard
+> x86/64 in benchmarks. The Zen3 architecture optimizations are not available
+> in earlier versions of GCC (actually, they have possibly been backported to
+> GCC10 now). Since Ubuntu 20.04 doesn't have GCC11, I compiled the GCC11
+> compiler using the native GCC8.
+>
+> The GCC11 I have built can build R 4.1.3 with a standard x86-64
+> architecture and pass all tests with "make check-all".
+> I configured that with:
+>> ~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2 FC=gfortran-11.2
+> CXXFLAGS="-O3 -march=x86-64" CFLAGS="-O3 -march=x86-64" FFLAGS="-O3
+> -march=x86-64" --enable-memory-profiling --enable-R-shlib
+> and built with
+>> make -j 32 -O
+>> make check-all
+> ## PASS.
+>
+> So I can build R in my environment with GCC11.
+> In configure, I am using references to "gcc-11.2" "gfortran-11.2" and
+> "g++-11.2" because I compiled GCC11 compilers with these suffixes.
+>
+> Now, I'm using a 32 thread (16 core) AMD Zen3 CPU (a 5950x), and want to
+> use it to its full potential. Zen3 optimizations are available as a
+> -march=znver3 option n GCC11. The znver3 optimizations improve performance
+> in Phoronix Test Suite benchmarks (I'm not aware of anyone that has
+> compiled R with them). See:
+> https://www.phoronix.com/scan.php?page=article&item=amd-5950x-gcc11
+>
+> However, the R 4.1.3 build (made with "make -j 32 -O"), configured with
+> -march=znver3, produces an R that fails "make check-all".
+>
+>> ~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2 FC=gfortran-11.2
+> CXXFLAGS="-O2 -march=znver3" CFLAGS="-O2 -march=znver3" FFLAGS="-O2
+> -march=znver3" --enable-memory-profiling --enable-R-shlib
+> or
+>> ~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2 FC=gfortran-11.2
+> CXXFLAGS="-O3 -march=znver3" CFLAGS="-O3 -march=znver3" FFLAGS="-O3
+> -march=znver3" --enable-memory-profiling --enable-R-shlib
+>
+> The fail is always in the factorizing.R Matrix.R tests, and in particular,
+> there are a number of errors and a fatal error.
+> I have attached the output because I cannot really understand what is going
+> wrong. But results returned from matrix calculations are obviously odd with
+> -march=znver3 in GCC 11. There is another backwards-compatible architecture
+> option "znver2" and this has EXACTLY the same result.
+>
+> While there are other warrnings and errors (many in assert.EQ() ), the
+> factorizing.R script continues. The fatal error (at line 2662 in the
+> attached factorizing.Rout.fail text file) is:
+>
+>> ## problematic rank deficient rankMatrix() case -- only seen in large
+> cases ??
+>> Z. <- readRDS(system.file("external", "Z_NA_rnk.rds", package="Matrix"))
+>> tools::assertWarning(rnkZ. <- rankMatrix(Z., method = "qr")) # gave errors
+> Error in assertCondition(expr, classes, .exprString = d.expr) :
+>    Failed to get warning in evaluating rnkZ. <- rankMatrix(Z., method  ...
+> Calls: <Anonymous> -> assertCondition
+> Execution halted
+>
+> Can anybody shed light on what might be going on here? 'make check-all'
+> passes all the other checks. It is just factorizing.R in Matrix that fails
+> (other matrix tests run ok).
+> Sorry this is a bit long-winded, but I thought details might be important.
+
+R gets used and tested most with the default optimizations, without use 
+of model-specific instructions and with -O2 (GCC). It happens time to 
+time that some people try other optimization options and run into 
+problems. In principle, there are these cases (seen before):
+
+(1) the test in R package (or R) is wrong - it (unintentionally) expects 
+behavior which has been observed in builds with default optimizations, 
+but is not necessarily the only correct one; in case of numerical 
+tolerances set empirically, they could simply be too tight
+
+(2) the algorithm in R package or R has a bug - the result is really 
+wrong and it is because the algorithm is (unintentionally) not portable 
+enough, it (unintentionally) only works with default optimizations or 
+lower; in case of numerical results, this can be because it expects more 
+precision from the floating point computations than mandated by IEEE, or 
+assumes behavior not mandated
+
+(3) the optimization by design violates some properties the algorithm 
+knowingly depends on; with numerical computations, this can be a sort of 
+"fast" (and similarly referred to) mode which violates IEEE floating 
+point standard by design, in the aim of better performance; due to the 
+nature of the algorithm depending on IEEE, and poor luck, the results 
+end up completely wrong
+
+(4) there is a bug in the C or Fortran compiler (GCC as we use GCC) that 
+only exhibits with the unusual optimizations; the compiler produces 
+wrong code
+
+So, when you run into a problem like this and want to get that fixed, 
+the first thing is to identify which case of the above it is, in case of 
+1 and 2 also differentiate between base R and a package (and which 
+concrete package). Different people maintain these things and you would 
+ideally narrow down the problem to a very small, isolated, reproducible 
+example to support your claim where the bug is. If you do this right, 
+the problem can often get fixed very fast.
+
+Such an example for (1) could be: few lines of standalone R code using 
+Matrix that produces correct results, but the test is not happy. With 
+pointers to the real check in the tests that is wrong. And an 
+explanation why the result is wrong.
+
+For (2)-(4) it would be a minimal standalone C/Fortran example including 
+only the critical function/part of algorithm that is not correct/not 
+portable/not compiled correctly, with results obtained with 
+optimizations where it works and where it doesn't. Unless you find an 
+obvious bug in R easy to explain (2), when the example would not have to 
+be standalone. With such standalone C example, you could easily test the 
+results with different optimizations and compilers, it is easier to 
+analyze, and easier to produce a bug report for GCC. What would make it 
+harder in this case is that it needs special hardware, but you could 
+still try with the example, and worry about that later (one option is 
+running in an emulator, and again a standalone example really helps 
+here). In principle, as it needs special hardware, the chances someone 
+else would do this work is smaller. Indeed, if it turns out to be (3), 
+it is unlikely to get resolved, but at least would get isolated (you 
+would know what not to run).
+
+As a user, if you run into a problem like this and do not want to get it 
+fixed, but just work it around somehow. First, it may be dangerous, 
+possibly one would get incorrect results from computations, but say in 
+applications where they are verified externally. You could try disabling 
+individual specific optimization until the tests pass. You could try 
+with later versions of gcc-11 (even unreleased) or gcc-12. Still, a lot 
+of this is easier with a small example, too. You could ignore the 
+failing test. And it may not be worth it - it may be that you could get 
+your speedups in a different, but more reliable way.
+
+Using wsl2 on its own should not necessarily be a problem and the way 
+you built gcc from the description should be ok, but at some point it 
+would be worth checking under Linux and running natively - because even 
+if these are numerical differences, they could be in principle caused by 
+running on Windows (or in wsl2), at least in the past such differences 
+were seen (related to (2) above). I would recommend checking on Linux 
+natively once you have at least a standalone R example.
+
+Best
+Tomas
+
+
+>
+> best regards,
+> Kieran
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From t@r@@@z@kh@rko @end|ng |rom uzh@ch  Wed Apr 13 09:50:05 2022
+From: t@r@@@z@kh@rko @end|ng |rom uzh@ch (Taras Zakharko)
+Date: Wed, 13 Apr 2022 09:50:05 +0200
+Subject: [Rd] I've written a big review of R. Can I get some feedback?
+In-Reply-To: <LO2P123MB5357658F0C4AD90F664774D48AED9@LO2P123MB5357.GBRP123.PROD.OUTLOOK.COM>
+References: <LO2P123MB5357AC82AA110F052EF0D8208AE89@LO2P123MB5357.GBRP123.PROD.OUTLOOK.COM>
+ <0e50158e-e5ca-d8d8-4574-ea4a6382ff58@shdawson.com>
+ <CALK03d1ACBtb7fz01wqusQ6R4quzO1zOetAz10yAK_vYpksHkw@mail.gmail.com>
+ <CAD4oTHH0n9-oM23TXLTGyO6HHAH3AMSR+kAeJv2Q_T_iQTk6LA@mail.gmail.com>
+ <LO2P123MB5357658F0C4AD90F664774D48AED9@LO2P123MB5357.GBRP123.PROD.OUTLOOK.COM>
+Message-ID: <4FB9B79C-1430-48F9-9A4F-EEE9D3DE3B35@uzh.ch>
+
+Hi Reece, 
+
+> Thanks for the feedback. Much of what you've said seems to agree with a common trend that I've seen in other feedback. Namely, you seem to agree with the many that have told me that using R as anything other than as a tool for data analysis was a grave mistake. I'm increasingly starting to suspect that you're all right. I therefore have little to no counters to your points.
+
+We have used R to develop fairly complex data transformation pipelines (which include custom data validation, custom async task scheduling layer and other non-trivial components), and I regularly use R to prototype complex data structure algorithms before implementing them in something more low-level like C. It can be a pain sometimes of course, but R is very well suited for data-oriented design, especially when you leverage the excellent low-level work done by the tidyverse group (especially rlang, vctrs and purrr). Of course, if you are used to OOP everywhere it will be very tough, but it?s the 21st century after all, not the nineties :)
+
+Overall, I would say that there are three big issues with R that I don?t think can be fixed (the fourth smaller issue is the standard library, but thats a different discussion):
+
+1. The type system is very weak and idiosyncratic, this makes more complex applications difficult and error-prone. 
+
+2. The language itself is unsound. R?s semantics have been developed on the fly, with new features driven by the pragmatic necessity.  R is essentially LISP with C-like syntax and a very leaky runtime, all this makes it very powerful but also offers you multiple ways to shoot yourself in the foot. A very simple example: lazy evaluation in R is everywhere, but lazy expressions can contain side effects, which equals FUN. R?s philosophy here is very pragmatic: the user is responsible. And it works very well most of the time, until it doesn?t. 
+
+3. The performance is bad, very bad. This is due to the fact that R?s runtime uses linked lists (arguably the worst data structure for modern hardware) everywhere and you can?t do even the simplest operation without performing multiple memory allocations. R?s core team did some fantastic work in the recent years, like the inclusion of the byte code compiler, lazy data types (ALTREP) etc., but there is only that much one can do under the circumstances. 
+
+I do think one could make a next-gen R by giving it sound evaluation semantics, consistent (stricter) type system, first class-support for meta programming hygiene, drop the linked list implementation in favour of something modern like immutable data structures etc. ect? and it would be a very nifty and powerful little data processing language. Unfortunately, it will also break all the existing code, rendering it fairly useless. Because if one goes though all that effort one might as well just migrate to Julia. 
+
+In the end, R might be frustrating at times and its implementation is dated, but it is still very much usable. And of course, it is the language we love and cherish, and so we carry on :)
+
+Best, 
+
+Taras
+
+
+
+
+> On 12 Apr 2022, at 23:31, Reece Goding <Reece.Goding at outlook.com> wrote:
+> 
+> Hi Gabriel,
+> 
+> Thanks for the feedback. Much of what you've said seems to agree with a common trend that I've seen in other feedback. Namely, you seem to agree with the many that have told me that using R as anything other than as a tool for data analysis was a grave mistake. I'm increasingly starting to suspect that you're all right. I therefore have little to no counters to your points.
+> 
+> As for what you've said in reply to my "mapply challenge", I admit that your response is logical and may even be the best possible answer. However, I find it disturbing that the solution to my puzzle appears to rest on a having a very careful and very specific understanding of what the words "vectorize over" means in the documentation. You could well be right, but it doesn't sit well with me.
+> 
+> I'll further consider what you've said about the rest. I'm already making some changes.
+> 
+> Thanks again,
+> Reece
+> 
+> ________________________________________
+> From: Gabriel Becker <gabembecker at gmail.com <mailto:gabembecker at gmail.com>>
+> Sent: 12 April 2022 00:28
+> To: Toby Hocking; Reece.Goding at outlook.com <mailto:Reece.Goding at outlook.com>
+> Cc: r-devel at r-project.org <mailto:r-devel at r-project.org>
+> Subject: Re: [Rd] I've written a big review of R. Can I get some feedback?
+> 
+> Hi Reece,
+> 
+> I'm not really sure what kind of review you're looking for (and I'm not certain this is the right place for it, but hopefully its ok enough). Also, to channel Pascal, forgive me, I would have written a shorter response but I didn't have the time.
+> 
+> Firstly, it is fairly ... partisan, I suppose, for lack of a better term.
+> 
+> More importantly from a usefulness perspective you often notably don't present the knowledge you gained at the end of the various frustrations you had. As one example that jumped out to me, you say
+> 
+> "One day, you?ll be tripped up by R?s hierarchy of how it likes to simplify mixed types outside of lists. "
+> 
+> but you don't present your readers with the (well defined) coercion hierarchy so that they would, you know, not be tripped up by it as badly. This is probably my largest issue with your document overall. It can give the reader talking points about how R is bad (not all of which are even incorrect, per se, as many expert R users will be happy to tell you), but it won't really help people become better R users in many cases.
+> 
+> Your article also, I suspect, fails to understand what a typical "Novice R Users" is and what they want to do. By and large they want to analyze data and create plots. They are analysts, NOT programmers (writing analysis scripts is not programming in the typical sense, and I'm not the only one who thinks that).
+> 
+> So the point you make early on in your explanation why you do not strongly recommend R For Data Science (which I had no part in writing and have not read myself) that it
+> 
+> "It deliberately avoids the fundamentals of programming ? e.g. making functions, loops, and if statements ? until the second half. I therefore suspect that any non-novice would be better off finding an introduction to the relevant packages with their favourite search engine."
+> 
+> misses the point of R itself for what I'd claim is the "typical novice R user".
+> 
+> Having read through your review, I'm confused why you were using R to do some of the things I'm inferring that you felt like you needed it to do. If you picked up R wanting an applicable equally to all programming problem domains general purpose language, you're going to have a bad time. Mostly because that is not what R is.
+> 
+> Finally, a (very) incomplete response to a few of the more specific points raised in your review:
+> 
+> Lists:
+> 
+> The linked stack overflow question (https://stackoverflow.com/questions/2050790/how-to-correctly-use-lists-in-r) shows a pretty fundamental misunderstanding of what lists and atomic vectors are/do in R. There is nothing wrong with this, asking questions we don't know the answer to is how we learn, but I'm not sure the question serves as well as a primer for R lists as you claim. The top answer at time of writing discusses the C level structure of R objects, which can, I suppose, inform your knowledge on how lists at the R level work, but is NOT necessary nor the most pedagogically useful way to present it.
+> 
+> Strings:
+> 
+> Strings are not arrays of characters idiomatically at the R level, they are atomic observed values within a (character) vector of data. Yes, deep down in the C code they are arrays of characters, but not at the R level. As such, splitting the elements of a character vector into their respective component individual characters is not (at all, in my experience) a common operation. charvec[1] within typical R usage (where charvec is a vector of data) is much more likely to be intended to select the first observation for the data vector, which it does. Given what R is for, frankly I think it'd be fairly insane for charvec[1] to do what substr does.
+> 
+> Variable Manipulation
+> 
+> Novice users shouldn't be calling eval. This is not to gatekeep it from them, like we have some special "eval-callers" club that they're not invited to. Rather, it is me saying that metaprogramming is not a novice-difficulty task in R (or, I would expect, anywhere else really).
+> 
+> You also say "variable names" in this section where you mean "argument names" and that distinction is both meaningful and important. Variable names, are not partially matched:
+> 
+>> xyz <- 5
+> 
+>> x
+> 
+> Error: object 'x' not found
+> 
+> Subsetting:
+> 
+> I'm fairly certain arrays (including 2d matrices are stored in column order rather than row order because that has been the standard for linear algebra on computers since before I knew what either of those things were...
+> 
+> tail(x,1) is the idiomatic way of getting the last element of a vector. The people on stackoverflow that told you this was "very slow" were misguided at best. It takes ~6000 nanoseconds on my laptop, compared to the ~200 nanoseconds x[length(x)]. Yes, that is a 30x speedup; no, it doesn't matter in practice.
+> 
+> I'm going to stop now because this is already too long, but this type of response continues to be possible throughout.
+> 
+> Lastly, with regard to your mapply challenge. and I quote directly from the documentation (emphasis mine):
+> 
+> 
+> ...: arguments to vectorize over (vectors or lists of strictly
+> 
+> positive length, or all of zero length). See also ?Details?.
+> 
+> MoreArgs: a list of other arguments to ?FUN?.
+> 
+> 
+> 
+> ... is the arguments you vectorize over, so FUN gets one element of each thing in ... for each call. MoreArgs, then, is the set of arguments to FUN which you don't vectorize over, ie where each call to FUN gets the whole thing. That's it, that's the whole thing.
+> 
+> 
+> I don't disagree that this could be clearer (as Ben pointed out, a documentation patch would be the way to address this), but its not correct to say the information isn't in there at all.
+> 
+> 
+> Best,
+> 
+> ~G
+> 
+> On Mon, Apr 11, 2022 at 1:52 PM Toby Hocking <tdhock5 at gmail.com <mailto:tdhock5 at gmail.com><mailto:tdhock5 at gmail.com <mailto:tdhock5 at gmail.com>>> wrote:
+> You could take some of your observations and turn them into patches that
+> would help improve R. (discussion of such patches is one function of this
+> email list)
+> 
+> On Sun, Apr 10, 2022 at 9:05 AM Stephen H. Dawson, DSL via R-devel <
+> r-devel at r-project.org <mailto:r-devel at r-project.org><mailto:r-devel at r-project.org <mailto:r-devel at r-project.org>>> wrote:
+> 
+>> Hi Reece,
+>> 
+>> 
+>> Thanks for the article. What specific feedback do you seek for your
+>> writing?
+>> 
+>> 
+>> Kindest Regards,
+>> *Stephen Dawson, DSL*
+>> /Executive Strategy Consultant/
+>> Business & Technology
+>> +1 (865) 804-3454
+>> http://www.shdawson.com <http://www.shdawson.com/>
+>> 
+>> 
+>> On 4/9/22 15:52, Reece Goding wrote:
+>>> Hello,
+>>> 
+>>> For a while, I've been working on writing a very big review of R. I've
+>> finally finished my final proofread of it. Can I get some feedback? This
+>> seems the most appropriate place to ask. It's linked below.
+>>> 
+>>> https://github.com/ReeceGoding/Frustration-One-Year-With-R <https://github.com/ReeceGoding/Frustration-One-Year-With-R>
+>>> 
+>>> If you think you've seen it before, that will be because it found some
+>> popularity on Hacker News before I was done proofreading it. The reception
+>> seems largely positive so far.
+>>> 
+>>> Thanks,
+>>> Reece Goding
+>>> ______________________________________________
+>>> R-devel at r-project.org <mailto:R-devel at r-project.org><mailto:R-devel at r-project.org <mailto:R-devel at r-project.org>> mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel <https://stat.ethz.ch/mailman/listinfo/r-devel>
+>>> 
+>> 
+>> ______________________________________________
+>> R-devel at r-project.org <mailto:R-devel at r-project.org><mailto:R-devel at r-project.org <mailto:R-devel at r-project.org>> mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel <https://stat.ethz.ch/mailman/listinfo/r-devel>
+>> 
+> 
+> [[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org <mailto:R-devel at r-project.org><mailto:R-devel at r-project.org <mailto:R-devel at r-project.org>> mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel <https://stat.ethz.ch/mailman/listinfo/r-devel>
+> 
+> ______________________________________________
+> R-devel at r-project.org <mailto:R-devel at r-project.org> mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel <https://stat.ethz.ch/mailman/listinfo/r-devel>
+
+	[[alternative HTML version deleted]]
+
+
+From k|er@n@@hort @end|ng |rom gm@||@com  Wed Apr 13 11:20:40 2022
+From: k|er@n@@hort @end|ng |rom gm@||@com (Kieran Short)
+Date: Wed, 13 Apr 2022 19:20:40 +1000
+Subject: [Rd] 
+ Matrix issues when building R with znver3 architecture under GCC 11
+In-Reply-To: <0b8d32ef-8426-6c92-0798-e28dfd4b6bba@gmail.com>
+References: <CANkVCd7HGyvejpEkweiEBKtNq28Fpr_ggZ30Tadf=tgD7Z_vpQ@mail.gmail.com>
+ <0b8d32ef-8426-6c92-0798-e28dfd4b6bba@gmail.com>
+Message-ID: <CANkVCd6yfgwq4=+X85U=Cyg7KXtwZkyS1qOdu9Ti7hnQ0jmLzg@mail.gmail.com>
+
+Hi Tomas,
+
+Many thanks for your thorough response, it is very much appreciated and
+what you say makes perfect sense to me.
+
+I was relying on the in-built R compilation checks, I have been working on
+the assumption that everything on the R side is correct (including the
+matrix package).
+
+Indeed, R 4.1.3 builds and "make check-all" passes with the more
+general -march=x86-64 architecture compiled with -O3 optimizations (in my
+hands, on the Zen3 system). So I had no underlying reason not to believe R
+or its packages were the problem when -march=znver3 was trialed. I found it
+interesting that it was only the one factorizing.R script in the Matrix
+suite that failed (out of the seemingly hundreds of remaining checks
+overall which passed). So I was more wondering if there might have been
+prior knowledge within the brain's trust on this list that "oh the
+factorizing.R matrix test does ABC error when R or the package is compiled
+with GCC using XYZ flags". As you'll read ahead, you can say that now. :)
+
+I don't think I have the capability to determine the root trigger in R
+itself, the package, or the compiler (whichever one, or combination,  it
+actually is). However, assuming R isn't the issue, I have done is go
+through the GCC optimizations and I have now isolated the culprit
+optimization which crashes factorizing.R.
+
+It is "-fexpensive-optimizations".
+
+If I use "-fno-expensive-optimizations" paired with -O2 or -O3
+optimizations, all "make check-all" checks pass. So I can build a fully
+checked and passed R 4.1.3 under my environment now with:
+
+~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2 FC=gfortran-11.2
+CXXFLAGS="-O3 -march=znver3 -fno-expensive-optimizations -flto" CFLAGS="-O3
+-march=znver3 -fno-expensive-optimizations -flto" FFLAGS="-O3 -march=znver3
+-fno-expensive-optimizations -flto" --enable-memory-profiling
+--enable-R-shlib
+
+I'm yet to benchmark whether the loss of that particular optimization flag
+negates the advantages of using znver3 as a core architecture target over a
+-x86-64 target in the first place.
+So I think I've solved my own problem (at least, it appears that way based
+on the checks).
+So the remaining question is, what method or package does the development
+team use (if any) for testing the speed of various base R calculations?
+
+best regards,
+Kieran
+
+On Wed, Apr 13, 2022 at 4:00 PM Tomas Kalibera <tomas.kalibera at gmail.com>
+wrote:
+
+> Hi Kieran,
+>
+> On 4/12/22 02:36, Kieran Short wrote:
+> > Hello,
+> >
+> > I'm new to this list, and have subscribed particularly because I've come
+> > across an issue with building R from source with an AMD-based Zen
+> > architecture under GCC11. Please don't attack me for my linux operating
+> > system choice, but it is Ubuntu 20.04 with Linux Kernel 5.10.102.1 -
+> > microsoft-standard-WSL2. I've built GCC11 using GCC8 (the standard GCC
+> > under Ubuntu20.04 WSL release), under Windows11 with wslg. WSL2/g runs
+> as a
+> > hypervisor with ports to all system resources including display, GPU
+> (cuda,
+> > etc).
+> >
+> > The reason why I am posting this email is that I am trying to compile R
+> > using the AMD Zen3 platform architecture rather than x86/64, because it
+> has
+> > processor-specific optimizations that improve performance over the
+> standard
+> > x86/64 in benchmarks. The Zen3 architecture optimizations are not
+> available
+> > in earlier versions of GCC (actually, they have possibly been backported
+> to
+> > GCC10 now). Since Ubuntu 20.04 doesn't have GCC11, I compiled the GCC11
+> > compiler using the native GCC8.
+> >
+> > The GCC11 I have built can build R 4.1.3 with a standard x86-64
+> > architecture and pass all tests with "make check-all".
+> > I configured that with:
+> >> ~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2 FC=gfortran-11.2
+> > CXXFLAGS="-O3 -march=x86-64" CFLAGS="-O3 -march=x86-64" FFLAGS="-O3
+> > -march=x86-64" --enable-memory-profiling --enable-R-shlib
+> > and built with
+> >> make -j 32 -O
+> >> make check-all
+> > ## PASS.
+> >
+> > So I can build R in my environment with GCC11.
+> > In configure, I am using references to "gcc-11.2" "gfortran-11.2" and
+> > "g++-11.2" because I compiled GCC11 compilers with these suffixes.
+> >
+> > Now, I'm using a 32 thread (16 core) AMD Zen3 CPU (a 5950x), and want to
+> > use it to its full potential. Zen3 optimizations are available as a
+> > -march=znver3 option n GCC11. The znver3 optimizations improve
+> performance
+> > in Phoronix Test Suite benchmarks (I'm not aware of anyone that has
+> > compiled R with them). See:
+> > https://www.phoronix.com/scan.php?page=article&item=amd-5950x-gcc11
+> >
+> > However, the R 4.1.3 build (made with "make -j 32 -O"), configured with
+> > -march=znver3, produces an R that fails "make check-all".
+> >
+> >> ~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2 FC=gfortran-11.2
+> > CXXFLAGS="-O2 -march=znver3" CFLAGS="-O2 -march=znver3" FFLAGS="-O2
+> > -march=znver3" --enable-memory-profiling --enable-R-shlib
+> > or
+> >> ~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2 FC=gfortran-11.2
+> > CXXFLAGS="-O3 -march=znver3" CFLAGS="-O3 -march=znver3" FFLAGS="-O3
+> > -march=znver3" --enable-memory-profiling --enable-R-shlib
+> >
+> > The fail is always in the factorizing.R Matrix.R tests, and in
+> particular,
+> > there are a number of errors and a fatal error.
+> > I have attached the output because I cannot really understand what is
+> going
+> > wrong. But results returned from matrix calculations are obviously odd
+> with
+> > -march=znver3 in GCC 11. There is another backwards-compatible
+> architecture
+> > option "znver2" and this has EXACTLY the same result.
+> >
+> > While there are other warrnings and errors (many in assert.EQ() ), the
+> > factorizing.R script continues. The fatal error (at line 2662 in the
+> > attached factorizing.Rout.fail text file) is:
+> >
+> >> ## problematic rank deficient rankMatrix() case -- only seen in large
+> > cases ??
+> >> Z. <- readRDS(system.file("external", "Z_NA_rnk.rds", package="Matrix"))
+> >> tools::assertWarning(rnkZ. <- rankMatrix(Z., method = "qr")) # gave
+> errors
+> > Error in assertCondition(expr, classes, .exprString = d.expr) :
+> >    Failed to get warning in evaluating rnkZ. <- rankMatrix(Z., method
+> ...
+> > Calls: <Anonymous> -> assertCondition
+> > Execution halted
+> >
+> > Can anybody shed light on what might be going on here? 'make check-all'
+> > passes all the other checks. It is just factorizing.R in Matrix that
+> fails
+> > (other matrix tests run ok).
+> > Sorry this is a bit long-winded, but I thought details might be
+> important.
+>
+> R gets used and tested most with the default optimizations, without use
+> of model-specific instructions and with -O2 (GCC). It happens time to
+> time that some people try other optimization options and run into
+> problems. In principle, there are these cases (seen before):
+>
+> (1) the test in R package (or R) is wrong - it (unintentionally) expects
+> behavior which has been observed in builds with default optimizations,
+> but is not necessarily the only correct one; in case of numerical
+> tolerances set empirically, they could simply be too tight
+>
+> (2) the algorithm in R package or R has a bug - the result is really
+> wrong and it is because the algorithm is (unintentionally) not portable
+> enough, it (unintentionally) only works with default optimizations or
+> lower; in case of numerical results, this can be because it expects more
+> precision from the floating point computations than mandated by IEEE, or
+> assumes behavior not mandated
+>
+> (3) the optimization by design violates some properties the algorithm
+> knowingly depends on; with numerical computations, this can be a sort of
+> "fast" (and similarly referred to) mode which violates IEEE floating
+> point standard by design, in the aim of better performance; due to the
+> nature of the algorithm depending on IEEE, and poor luck, the results
+> end up completely wrong
+>
+> (4) there is a bug in the C or Fortran compiler (GCC as we use GCC) that
+> only exhibits with the unusual optimizations; the compiler produces
+> wrong code
+>
+> So, when you run into a problem like this and want to get that fixed,
+> the first thing is to identify which case of the above it is, in case of
+> 1 and 2 also differentiate between base R and a package (and which
+> concrete package). Different people maintain these things and you would
+> ideally narrow down the problem to a very small, isolated, reproducible
+> example to support your claim where the bug is. If you do this right,
+> the problem can often get fixed very fast.
+>
+> Such an example for (1) could be: few lines of standalone R code using
+> Matrix that produces correct results, but the test is not happy. With
+> pointers to the real check in the tests that is wrong. And an
+> explanation why the result is wrong.
+>
+> For (2)-(4) it would be a minimal standalone C/Fortran example including
+> only the critical function/part of algorithm that is not correct/not
+> portable/not compiled correctly, with results obtained with
+> optimizations where it works and where it doesn't. Unless you find an
+> obvious bug in R easy to explain (2), when the example would not have to
+> be standalone. With such standalone C example, you could easily test the
+> results with different optimizations and compilers, it is easier to
+> analyze, and easier to produce a bug report for GCC. What would make it
+> harder in this case is that it needs special hardware, but you could
+> still try with the example, and worry about that later (one option is
+> running in an emulator, and again a standalone example really helps
+> here). In principle, as it needs special hardware, the chances someone
+> else would do this work is smaller. Indeed, if it turns out to be (3),
+> it is unlikely to get resolved, but at least would get isolated (you
+> would know what not to run).
+>
+> As a user, if you run into a problem like this and do not want to get it
+> fixed, but just work it around somehow. First, it may be dangerous,
+> possibly one would get incorrect results from computations, but say in
+> applications where they are verified externally. You could try disabling
+> individual specific optimization until the tests pass. You could try
+> with later versions of gcc-11 (even unreleased) or gcc-12. Still, a lot
+> of this is easier with a small example, too. You could ignore the
+> failing test. And it may not be worth it - it may be that you could get
+> your speedups in a different, but more reliable way.
+>
+> Using wsl2 on its own should not necessarily be a problem and the way
+> you built gcc from the description should be ok, but at some point it
+> would be worth checking under Linux and running natively - because even
+> if these are numerical differences, they could be in principle caused by
+> running on Windows (or in wsl2), at least in the past such differences
+> were seen (related to (2) above). I would recommend checking on Linux
+> natively once you have at least a standalone R example.
+>
+> Best
+> Tomas
+>
+>
+> >
+> > best regards,
+> > Kieran
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Wed Apr 13 12:26:31 2022
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Wed, 13 Apr 2022 12:26:31 +0200
+Subject: [Rd] 
+ Matrix issues when building R with znver3 architecture under GCC 11
+In-Reply-To: <CANkVCd6yfgwq4=+X85U=Cyg7KXtwZkyS1qOdu9Ti7hnQ0jmLzg@mail.gmail.com>
+References: <CANkVCd7HGyvejpEkweiEBKtNq28Fpr_ggZ30Tadf=tgD7Z_vpQ@mail.gmail.com>
+ <0b8d32ef-8426-6c92-0798-e28dfd4b6bba@gmail.com>
+ <CANkVCd6yfgwq4=+X85U=Cyg7KXtwZkyS1qOdu9Ti7hnQ0jmLzg@mail.gmail.com>
+Message-ID: <e77b959a-ceec-79d9-0bc9-0f8638a51aac@gmail.com>
+
+
+On 4/13/22 11:20, Kieran Short wrote:
+> Hi Tomas,
+>
+> Many thanks for your thorough response, it is very much appreciated 
+> and what you say makes perfect sense to me.
+>
+> I was relying on the in-built R compilation checks, I have been 
+> working on the assumption that everything on the R side is correct 
+> (including the matrix package).
+>
+> Indeed, R 4.1.3 builds and "make check-all" passes with the more 
+> general?-march=x86-64 architecture compiled with -O3 optimizations (in 
+> my hands, on the Zen3 system). So I had no underlying reason not to 
+> believe R or its packages were the problem when -march=znver3 was 
+> trialed. I found it interesting that it was only the one 
+> factorizing.R?script in the Matrix suite that failed (out of the 
+> seemingly hundreds of remaining checks overall which passed). So I was 
+> more wondering if there might have been prior knowledge within the 
+> brain's trust on this list that "oh the factorizing.R matrix test does 
+> ABC error when R or the package is compiled with GCC using?XYZ flags". 
+> As you'll read ahead, you can say that now. :)
+Right, but something must be broken. You might get specific comments 
+from the Matrix package maintainer, but it would help at least 
+minimizing that failing example to some commands you can run in R 
+console, and showing the differences in outputs.
+>
+> I don't think I have the capability to determine the root trigger in R 
+> itself, the package, or the compiler (whichever one, or combination,? 
+> it actually?is). However, assuming R isn't the issue, I have done is 
+> go through the GCC optimizations and I have now isolated the culprit 
+> optimization which crashes factorizing.R.
+>
+> It is "-fexpensive-optimizations".
+>
+> If I use?"-fno-expensive-optimizations" paired with -O2 or -O3 
+> optimizations, all "make check-all" checks pass. So I can build a 
+> fully checked and passed R 4.1.3 under my environment now with:
+>
+> ~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2 FC=gfortran-11.2 
+> CXXFLAGS="-O3 -march=znver3 -fno-expensive-optimizations -flto" 
+> CFLAGS="-O3 -march=znver3 -fno-expensive-optimizations -flto" 
+> FFLAGS="-O3 -march=znver3 -fno-expensive-optimizations -flto" 
+> --enable-memory-profiling --enable-R-shlib
+Ok. The default optimization options used by R on selected current and 
+future versions of GCC and clang also get tested via checking all of 
+CRAN contributed packages. This testing sometimes finds errors not 
+detected by "make check-all", including bugs in GCC. You would need a 
+lot of resources to run these checks, though. In my experience it is not 
+so rare that a bug (in R or GCC) only affects a very small number of 
+packages, often even only one.
+> I'm yet to benchmark whether the loss of that particular optimization 
+> flag negates the advantages of using znver3 as a core architecture 
+> target over a -x86-64 target in the first place.
+> So I think I've solved my own problem (at least, it appears that way 
+> based on the checks).
+> So the remaining question is, what method or package does the 
+> development team use (if any) for testing the speed of various base R 
+> calculations?
+
+That depends on the developer and the calculations, and on your goals - 
+what you want to measure or show. I don't have a simple advice. If you 
+are considering this for your own work, I'd recommend measuring some of 
+your workloads. Also you can extrapolate from your workloads (from where 
+time is spent in them) what would be a relevant benchmark. For example, 
+if most time is spent in BLAS, then it is about finding a good optimized 
+implementation (and for that checking the impact of the optimizations). 
+Similarly, if it is some R package (base, recommended, or contributed), 
+it may be using a computational kernel written in C or Fortran, 
+something you could test separately or with a specific benchmark. I 
+think it would be unlikely that CPU-specific C compiler optimizations 
+would substantially speed up the R interpreter itself.
+
+For just deciding whether -fno-expensive-optimization negates the gains, 
+you might look at some general computational/other benchmarks (not R). 
+If it negated it even on benchmarks used by others to present the gains, 
+then it probably is not worth it.
+
+One of the things I did in the past was looking at timings of selected 
+CRAN packages (longer running examples, packages with most reverse 
+dependencies) and then looking into the reasons for the individual 
+bigger differences. That was when looking at the impacts of the 
+byte-code compiler. Unlikely worth the effort in this case. Also, 
+primarily, I think the bug should be traced down and fixed, wherever it 
+is. Only then the measuring would make sense.
+
+Best
+Tomas
+
+
+
+>
+> best regards,
+> Kieran
+>
+> On Wed, Apr 13, 2022 at 4:00 PM Tomas Kalibera 
+> <tomas.kalibera at gmail.com> wrote:
+>
+>     Hi Kieran,
+>
+>     On 4/12/22 02:36, Kieran Short wrote:
+>     > Hello,
+>     >
+>     > I'm new to this list, and have subscribed particularly because
+>     I've come
+>     > across an issue with building R from source with an AMD-based Zen
+>     > architecture under GCC11. Please don't attack me for my linux
+>     operating
+>     > system choice, but it is Ubuntu 20.04 with Linux Kernel 5.10.102.1 -
+>     > microsoft-standard-WSL2. I've built GCC11 using GCC8 (the
+>     standard GCC
+>     > under Ubuntu20.04 WSL release), under Windows11 with wslg.
+>     WSL2/g runs as a
+>     > hypervisor with ports to all system resources including display,
+>     GPU (cuda,
+>     > etc).
+>     >
+>     > The reason why I am posting this email is that I am trying to
+>     compile R
+>     > using the AMD Zen3 platform architecture rather than x86/64,
+>     because it has
+>     > processor-specific optimizations that improve performance over
+>     the standard
+>     > x86/64 in benchmarks. The Zen3 architecture optimizations are
+>     not available
+>     > in earlier versions of GCC (actually, they have possibly been
+>     backported to
+>     > GCC10 now). Since Ubuntu 20.04 doesn't have GCC11, I compiled
+>     the GCC11
+>     > compiler using the native GCC8.
+>     >
+>     > The GCC11 I have built can build R 4.1.3 with a standard x86-64
+>     > architecture and pass all tests with "make check-all".
+>     > I configured that with:
+>     >> ~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2 FC=gfortran-11.2
+>     > CXXFLAGS="-O3 -march=x86-64" CFLAGS="-O3 -march=x86-64" FFLAGS="-O3
+>     > -march=x86-64" --enable-memory-profiling --enable-R-shlib
+>     > and built with
+>     >> make -j 32 -O
+>     >> make check-all
+>     > ## PASS.
+>     >
+>     > So I can build R in my environment with GCC11.
+>     > In configure, I am using references to "gcc-11.2"
+>     "gfortran-11.2" and
+>     > "g++-11.2" because I compiled GCC11 compilers with these suffixes.
+>     >
+>     > Now, I'm using a 32 thread (16 core) AMD Zen3 CPU (a 5950x), and
+>     want to
+>     > use it to its full potential. Zen3 optimizations are available as a
+>     > -march=znver3 option n GCC11. The znver3 optimizations improve
+>     performance
+>     > in Phoronix Test Suite benchmarks (I'm not aware of anyone that has
+>     > compiled R with them). See:
+>     >
+>     https://www.phoronix.com/scan.php?page=article&item=amd-5950x-gcc11
+>     <https://www.phoronix.com/scan.php?page=article&item=amd-5950x-gcc11>
+>     >
+>     > However, the R 4.1.3 build (made with "make -j 32 -O"),
+>     configured with
+>     > -march=znver3, produces an R that fails "make check-all".
+>     >
+>     >> ~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2 FC=gfortran-11.2
+>     > CXXFLAGS="-O2 -march=znver3" CFLAGS="-O2 -march=znver3" FFLAGS="-O2
+>     > -march=znver3" --enable-memory-profiling --enable-R-shlib
+>     > or
+>     >> ~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2 FC=gfortran-11.2
+>     > CXXFLAGS="-O3 -march=znver3" CFLAGS="-O3 -march=znver3" FFLAGS="-O3
+>     > -march=znver3" --enable-memory-profiling --enable-R-shlib
+>     >
+>     > The fail is always in the factorizing.R Matrix.R tests, and in
+>     particular,
+>     > there are a number of errors and a fatal error.
+>     > I have attached the output because I cannot really understand
+>     what is going
+>     > wrong. But results returned from matrix calculations are
+>     obviously odd with
+>     > -march=znver3 in GCC 11. There is another backwards-compatible
+>     architecture
+>     > option "znver2" and this has EXACTLY the same result.
+>     >
+>     > While there are other warrnings and errors (many in assert.EQ()
+>     ), the
+>     > factorizing.R script continues. The fatal error (at line 2662 in the
+>     > attached factorizing.Rout.fail text file) is:
+>     >
+>     >> ## problematic rank deficient rankMatrix() case -- only seen in
+>     large
+>     > cases ??
+>     >> Z. <- readRDS(system.file("external", "Z_NA_rnk.rds",
+>     package="Matrix"))
+>     >> tools::assertWarning(rnkZ. <- rankMatrix(Z., method = "qr")) #
+>     gave errors
+>     > Error in assertCondition(expr, classes, .exprString = d.expr) :
+>     >? ? Failed to get warning in evaluating rnkZ. <- rankMatrix(Z.,
+>     method? ...
+>     > Calls: <Anonymous> -> assertCondition
+>     > Execution halted
+>     >
+>     > Can anybody shed light on what might be going on here? 'make
+>     check-all'
+>     > passes all the other checks. It is just factorizing.R in Matrix
+>     that fails
+>     > (other matrix tests run ok).
+>     > Sorry this is a bit long-winded, but I thought details might be
+>     important.
+>
+>     R gets used and tested most with the default optimizations,
+>     without use
+>     of model-specific instructions and with -O2 (GCC). It happens time to
+>     time that some people try other optimization options and run into
+>     problems. In principle, there are these cases (seen before):
+>
+>     (1) the test in R package (or R) is wrong - it (unintentionally)
+>     expects
+>     behavior which has been observed in builds with default
+>     optimizations,
+>     but is not necessarily the only correct one; in case of numerical
+>     tolerances set empirically, they could simply be too tight
+>
+>     (2) the algorithm in R package or R has a bug - the result is really
+>     wrong and it is because the algorithm is (unintentionally) not
+>     portable
+>     enough, it (unintentionally) only works with default optimizations or
+>     lower; in case of numerical results, this can be because it
+>     expects more
+>     precision from the floating point computations than mandated by
+>     IEEE, or
+>     assumes behavior not mandated
+>
+>     (3) the optimization by design violates some properties the algorithm
+>     knowingly depends on; with numerical computations, this can be a
+>     sort of
+>     "fast" (and similarly referred to) mode which violates IEEE floating
+>     point standard by design, in the aim of better performance; due to
+>     the
+>     nature of the algorithm depending on IEEE, and poor luck, the results
+>     end up completely wrong
+>
+>     (4) there is a bug in the C or Fortran compiler (GCC as we use
+>     GCC) that
+>     only exhibits with the unusual optimizations; the compiler produces
+>     wrong code
+>
+>     So, when you run into a problem like this and want to get that fixed,
+>     the first thing is to identify which case of the above it is, in
+>     case of
+>     1 and 2 also differentiate between base R and a package (and which
+>     concrete package). Different people maintain these things and you
+>     would
+>     ideally narrow down the problem to a very small, isolated,
+>     reproducible
+>     example to support your claim where the bug is. If you do this right,
+>     the problem can often get fixed very fast.
+>
+>     Such an example for (1) could be: few lines of standalone R code
+>     using
+>     Matrix that produces correct results, but the test is not happy. With
+>     pointers to the real check in the tests that is wrong. And an
+>     explanation why the result is wrong.
+>
+>     For (2)-(4) it would be a minimal standalone C/Fortran example
+>     including
+>     only the critical function/part of algorithm that is not correct/not
+>     portable/not compiled correctly, with results obtained with
+>     optimizations where it works and where it doesn't. Unless you find an
+>     obvious bug in R easy to explain (2), when the example would not
+>     have to
+>     be standalone. With such standalone C example, you could easily
+>     test the
+>     results with different optimizations and compilers, it is easier to
+>     analyze, and easier to produce a bug report for GCC. What would
+>     make it
+>     harder in this case is that it needs special hardware, but you could
+>     still try with the example, and worry about that later (one option is
+>     running in an emulator, and again a standalone example really helps
+>     here). In principle, as it needs special hardware, the chances
+>     someone
+>     else would do this work is smaller. Indeed, if it turns out to be
+>     (3),
+>     it is unlikely to get resolved, but at least would get isolated (you
+>     would know what not to run).
+>
+>     As a user, if you run into a problem like this and do not want to
+>     get it
+>     fixed, but just work it around somehow. First, it may be dangerous,
+>     possibly one would get incorrect results from computations, but
+>     say in
+>     applications where they are verified externally. You could try
+>     disabling
+>     individual specific optimization until the tests pass. You could try
+>     with later versions of gcc-11 (even unreleased) or gcc-12. Still,
+>     a lot
+>     of this is easier with a small example, too. You could ignore the
+>     failing test. And it may not be worth it - it may be that you
+>     could get
+>     your speedups in a different, but more reliable way.
+>
+>     Using wsl2 on its own should not necessarily be a problem and the way
+>     you built gcc from the description should be ok, but at some point it
+>     would be worth checking under Linux and running natively - because
+>     even
+>     if these are numerical differences, they could be in principle
+>     caused by
+>     running on Windows (or in wsl2), at least in the past such
+>     differences
+>     were seen (related to (2) above). I would recommend checking on Linux
+>     natively once you have at least a standalone R example.
+>
+>     Best
+>     Tomas
+>
+>
+>     >
+>     > best regards,
+>     > Kieran
+>     > ______________________________________________
+>     > R-devel at r-project.org mailing list
+>     > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+	[[alternative HTML version deleted]]
+
+
+From tim@t@yior m@iii@g oii hidde@eieph@@ts@co@uk  Wed Apr 13 16:56:19 2022
+From: tim@t@yior m@iii@g oii hidde@eieph@@ts@co@uk (tim@t@yior m@iii@g oii hidde@eieph@@ts@co@uk)
+Date: Wed, 13 Apr 2022 15:56:19 +0100 (BST)
+Subject: [Rd] R4.2 - news item for list2DF changes?
+Message-ID: <171889653.379759.1649861779373@office.mailbox.org>
+
+Whilst the function documentation has been updated should there also be a short news item for the changes to list2DF?
+
+In 4.13 we can do:
+list2DF(list(a=1, b=1:10))
+
+but in 4.2 this will now error. 
+
+Best
+
+Tim
+
+
