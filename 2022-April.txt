@@ -3963,3 +3963,176 @@ Best
 Tim
 
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Apr 14 08:59:30 2022
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 14 Apr 2022 08:59:30 +0200
+Subject: [Rd] Hashed environments of size <5 never grow
+In-Reply-To: <CAARqVQO6pBCYaQcuxoiWAgKeshFFw+rCCuDRQd1NnRg7RxD+iA@mail.gmail.com>
+References: <CAARqVQO6pBCYaQcuxoiWAgKeshFFw+rCCuDRQd1NnRg7RxD+iA@mail.gmail.com>
+Message-ID: <25175.50770.487777.56604@stat.math.ethz.ch>
+
+>>>>> Duncan Garmonsway 
+>>>>>     on Mon, 11 Apr 2022 22:24:52 +0100 writes:
+
+    > Hello,
+
+    > Hashed environments that begin with a (non-default) size
+    > of 4 or less, will never grow, which is very detrimental
+    > to performance.  For example,
+
+    > ```
+    > n <- 10000
+    > l <- vector("list", n)
+    > l <- setNames(l, seq_len(n))
+
+    > # Takes a second, and nchains remains 1.
+    > e1 <- list2env(l, hash = TRUE, size = 1)
+    > env.profile(e1)$nchains
+    > # [1] 1
+
+    > # Returns instantly, and nchains grows to 6950
+    > e2 <- list2env(l, hash = TRUE, size = 5)
+    > env.profile(e2)$nchains
+    > # [1] 6950
+    > ```
+
+    > The cause is that, when calling the growth function, the new size is
+    > truncated to an integer.  See src/main/envir.c line 440, or
+    > https://github.com/wch/r-source/blob/d9b9d00b6d2764839f229bf011dda8d027aae227/src/main/envir.c#L440
+
+    > Given the hard-coded growth rate of 1.2, any size of 4 or less will be
+    > truncated back to itself.
+
+    > (int) (1 * 1.2 ) = 1
+    > (int) (2 * 1.2) = 1
+    > (int) (3 * 1.2) = 1
+    > (int) (4 * 1.2) = 1
+    > (int) (5 * 1.2) = 6
+
+Yes.  I'm convinced this has been oversight and should be
+corrected.
+
+    > This is a rare case, and I couldn't find any examples in CRAN packages of
+    > the `size` argument being used at all, let alone so small.  Even so, it
+    > tripped me up, and could be fixed by using `ceil()` in src/main/envir.c
+    > line 440 as follows.
+
+    > new_table = R_NewHashTable((int)(ceil(HASHSIZE(table) *
+    > HASHTABLEGROWTHRATE)))
+
+Indeed, this bug would surface very very rarely,
+but I agree a fix such as your proposition  is appropriate.
+
+I'll do so, also adding a regression test.
+
+Martin Maechler
+ETH Zurich   and  R Core team
+
+
+    > Kind regards,
+    > Duncan Garmonsway
+
+
+From pd@|gd @end|ng |rom gm@||@com  Thu Apr 14 10:00:29 2022
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Thu, 14 Apr 2022 10:00:29 +0200
+Subject: [Rd] R4.2 - news item for list2DF changes?
+In-Reply-To: <171889653.379759.1649861779373@office.mailbox.org>
+References: <171889653.379759.1649861779373@office.mailbox.org>
+Message-ID: <D2B4D7F3-3497-47E6-B3AC-C0D6883F879C@gmail.com>
+
+Possibly yes. Maybe also a few words on the rationale for the change. Kurt?
+
+(If anyone has gotten into a habit of using list2DF(list) as a replacement for data.frame(list), then it may break break their code.)
+
+- Peter
+
+> On 13 Apr 2022, at 16:56 , tim.taylor at hiddenelephants.co.uk wrote:
+> 
+> Whilst the function documentation has been updated should there also be a short news item for the changes to list2DF?
+> 
+> In 4.13 we can do:
+> list2DF(list(a=1, b=1:10))
+> 
+> but in 4.2 this will now error. 
+> 
+> Best
+> 
+> Tim
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Apr 14 10:41:58 2022
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 14 Apr 2022 10:41:58 +0200
+Subject: [Rd] intersect() change of behavior in 4.2
+In-Reply-To: <CAN+W6_tM=+E6nCqDq9JiJ=1Gp3E=R4QFcPc06mbFyCZzWjhASQ@mail.gmail.com>
+References: <CABtg=K=tRMdLJ7p2JHdFyOYVyjmLNszQguKn569gx+FswChtyw@mail.gmail.com>
+ <CAN+W6_tM=+E6nCqDq9JiJ=1Gp3E=R4QFcPc06mbFyCZzWjhASQ@mail.gmail.com>
+Message-ID: <25175.56918.994351.975134@stat.math.ethz.ch>
+
+>>>>> Llu?s Revilla 
+>>>>>     on Tue, 12 Apr 2022 09:16:36 +0200 writes:
+
+    > Hi all,
+    > This change is documented on the man page so I think it is intentional.
+
+yes, also if you look at the (svn) log messages of the code changes
+(or its git mirrors).
+
+    >> From https://search.r-project.org/R/refmans/base/html/sets.html:
+
+    > For union, a vector of a common mode.
+    > For intersect, a vector of a common mode, or NULL if x or y is NULL.
+    > For setdiff, a vector of the same mode as x.
+
+    > Now the results are symmetrical to intersect( "foo", list())
+
+indeed, and that *is* very desirable.
+
+    > Probably it is worth mentioning in the NEWS as it was found to cause
+    > some test to fail on a Bioconductor package some months ago.
+    > This could affect other packages and analysis too.
+
+    > Best,
+    > Llu?s
+
+I agree and have added an entry there ... still to be
+back ported to R 4.2.0 beta.
+
+Martin
+
+
+    > On Tue, 12 Apr 2022 at 01:22, G?bor Cs?rdi <csardi.gabor at gmail.com> wrote:
+    >> 
+    >> I wonder if this change is intentional, and if it is, whether it is
+    >> worth mentioning in the NEWS.
+    >> 
+    >> ? R-4.1 -q -e 'intersect(list(), "foo")'
+    >> > intersect(list(), "foo")
+    >> character(0)
+    >> 
+    >> ? R-4.2 -q -e 'intersect(list(), "foo")'
+    >> > intersect(list(), "foo")
+    >> list()
+    >> 
+    >> ______________________________________________
+    >> R-devel at r-project.org mailing list
+    >> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+    > ______________________________________________
+    > R-devel at r-project.org mailing list
+    > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
