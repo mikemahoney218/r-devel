@@ -4267,3 +4267,212 @@ take care,
 -BenRI
 
 
+From ggrothend|eck @end|ng |rom gm@||@com  Sun Apr 17 14:21:56 2022
+From: ggrothend|eck @end|ng |rom gm@||@com (Gabor Grothendieck)
+Date: Sun, 17 Apr 2022 08:21:56 -0400
+Subject: [Rd] pipes and setNames
+Message-ID: <CAP01uR=Z2+Zg6T9Hwn_mw-sMijpmv8H55RhPBkk1AS-gRpfCkQ@mail.gmail.com>
+
+When trying to transform names in a pipeline one can do the following
+where for this example we are making names upper case.
+
+  BOD |> (\(x) setNames(x, toupper(names(x))))()
+
+but that seems a bit ugly and verbose.
+
+1. One possibility is to enhance setNames to allow a function as a
+second argument.  In that case one could write:
+
+  BOD |> setNames(toupper)
+
+2. One can already do the following with the existing `with` but is
+quite verbose:
+  BOD |> list() |> setNames(".") |> with(setNames(., toupper(names(.))))
+but could be made simpler with a utility function.
+
+This utility function is not as good for setNames but would still
+result in shorter code than the anonymous function in the example at
+the top of this email and is more general so it would also apply in
+other situations too.  Here R would define a function with. (note dot
+at end) which would be defined and used as follows.
+
+  with. <- function(data, expr, ...) {
+    eval(substitute(expr), list(. = data), enclos = parent.frame())
+  }
+
+  BOD |> with.(setNames(., toupper(names(.))))
+
+with. is not as efficient as straight pipes but in many cases such as
+this it does not really matter and one just wants to get it done
+without the parenthesis laden anonymous function.
+
+Having both of these two would be nice to make it easier to use R pipes.
+
+-- 
+Statistics & Software Consulting
+GKX Group, GKX Associates Inc.
+tel: 1-877-GKX-GROUP
+email: ggrothendieck at gmail.com
+
+
+From @v|gro@@ @end|ng |rom ver|zon@net  Sun Apr 17 22:49:20 2022
+From: @v|gro@@ @end|ng |rom ver|zon@net (Avi Gross)
+Date: Sun, 17 Apr 2022 20:49:20 +0000 (UTC)
+Subject: [Rd] pipes and setNames
+In-Reply-To: <CAP01uR=Z2+Zg6T9Hwn_mw-sMijpmv8H55RhPBkk1AS-gRpfCkQ@mail.gmail.com>
+References: <CAP01uR=Z2+Zg6T9Hwn_mw-sMijpmv8H55RhPBkk1AS-gRpfCkQ@mail.gmail.com>
+Message-ID: <1666355068.355430.1650228560776@mail.yahoo.com>
+
+Gabor,
+
+It is always interesting to see suggestions for how to extend R, especially what is suggested to 
+be base R. But generally extensions need to be needed not just wanted and the ramifications 
+must be studied.
+
+I am curious if you looked at existing pipe-like implementations in various packages to see how or 
+if they support such functionality.
+
+There are many things we can wish for but with some care if nonstandard evaluation is allowed.
+
+For example, should we allow multiple instances of the underscore (or dot) character to each be 
+replaced by the same input? That can be tricky. 
+
+But a trivial solution is to not use the anonymous function but write your own small accessory function. 
+I wrote this trivial one:
+
+renamer <- function(x, fun) { names(x) <- fun(names(x)); x }
+
+
+You can then do this:
+
+
+x |> renamer(toupper)
+
+
+Or use tolower or sort or lots of other functions with no arguments.
+
+It is easy to generalize this to functions that allow additional arguments:
+
+
+renamer2 <- function(x, fun, ...) { names(x) <- fun(names(x), ...); x }
+
+
+x |> renamer2(sort, decreasing=TRUE)
+
+
+Clearly this is not a general solution and a suggestion that I might like is to allow a
+compound condition in the pipeline that lets you capture the argument into a named 
+variable and then use it as you wish. BUT in a very real sense the anonymous 
+function syntax gives you something like that even if a tad ugly to you. However 
+things that look wrong to you or may make no sense to others may well 
+be avoided. 
+
+So your suggestion for an extension to existing functions to allow not repeating the 
+name twice makes sense but R supports many attributes you may want to be 
+able to manipulate in a pipeline including classes, dimensions, column names, 
+row names and much more you can add on your own arbitrarily.
+
+What method might be more generalizable to solve many such problems 
+if used along with the new or previous pipes?
+
+
+
+
+
+
+-----Original Message-----
+From: Gabor Grothendieck <ggrothendieck at gmail.com>
+To: r-devel at r-project.org <r-devel at r-project.org>
+Sent: Sun, Apr 17, 2022 8:21 am
+Subject: [Rd] pipes and setNames
+
+
+When trying to transform names in a pipeline one can do the following
+
+where for this example we are making names upper case.
+
+
+
+? BOD |> (\(x) setNames(x, toupper(names(x))))()
+
+
+
+but that seems a bit ugly and verbose.
+
+
+
+1. One possibility is to enhance setNames to allow a function as a
+
+second argument.? In that case one could write:
+
+
+
+? BOD |> setNames(toupper)
+
+
+
+2. One can already do the following with the existing `with` but is
+
+quite verbose:
+
+? BOD |> list() |> setNames(".") |> with(setNames(., toupper(names(.))))
+
+but could be made simpler with a utility function.
+
+
+
+This utility function is not as good for setNames but would still
+
+result in shorter code than the anonymous function in the example at
+
+the top of this email and is more general so it would also apply in
+
+other situations too.? Here R would define a function with. (note dot
+
+at end) which would be defined and used as follows.
+
+
+
+? with. <- function(data, expr, ...) {
+
+? ? eval(substitute(expr), list(. = data), enclos = parent.frame())
+
+? }
+
+
+
+? BOD |> with.(setNames(., toupper(names(.))))
+
+
+
+with. is not as efficient as straight pipes but in many cases such as
+
+this it does not really matter and one just wants to get it done
+
+without the parenthesis laden anonymous function.
+
+
+
+Having both of these two would be nice to make it easier to use R pipes.
+
+
+
+-- 
+
+Statistics & Software Consulting
+
+GKX Group, GKX Associates Inc.
+
+tel: 1-877-GKX-GROUP
+
+email: ggrothendieck at gmail.com
+
+
+
+______________________________________________
+
+R-devel at r-project.org mailing list
+
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
