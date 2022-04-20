@@ -4910,3 +4910,765 @@ wrote:
 	[[alternative HTML version deleted]]
 
 
+From net|kj@ @end|ng |rom gm@||@com  Tue Apr 19 08:55:35 2022
+From: net|kj@ @end|ng |rom gm@||@com (=?UTF-8?Q?Jan_Net=C3=ADk?=)
+Date: Tue, 19 Apr 2022 08:55:35 +0200
+Subject: [Rd] pipes and setNames
+In-Reply-To: <CAD4oTHE2Kh6BhL4B0By+u3CSKTDhdsdsxu2ToMPkrjPR02kjgw@mail.gmail.com>
+References: <CAP01uR=Z2+Zg6T9Hwn_mw-sMijpmv8H55RhPBkk1AS-gRpfCkQ@mail.gmail.com>
+ <1666355068.355430.1650228560776@mail.yahoo.com>
+ <CAP01uRk9=ufFUpnmRZ1=_gFuot_L3P+DVMmiEiWzn4wGKFebQg@mail.gmail.com>
+ <CAD4oTHE2Kh6BhL4B0By+u3CSKTDhdsdsxu2ToMPkrjPR02kjgw@mail.gmail.com>
+Message-ID: <CA+6hu7ceRpjSPp0tzFU8tAQg5meZdMoYRVnZKBpv2TSgJGzq2g@mail.gmail.com>
+
+I agree that would be nice, but this task is indeed manageable with
+one-line function definition as mentioned above.
+
+For reference, take a look at dplyr::rename_with which does something
+nearly identical as your proposal does. Note that even tidyverse setNames
+implementation does not allow for functions nor lambdas.
+
+Best,
+Jan
+
+
+Dne po 18. 4. 2022 21:50 u?ivatel Gabriel Becker <gabembecker at gmail.com>
+napsal:
+
+> Hi Gabor,
+>
+> Just my 2c on a few things:
+>
+> I have to say it feels weird/wrong to me to have setNames do anything
+> other than, well, set the names. Its a low level setter, in OOP parlance,
+> in my mind. That is not to say that there shouldn't or can't be another
+> function called, I don't' know, transform_names, which sets the names of an
+> object to a function of the existing ones. one could even get "weirder"
+> with it:
+>
+> names_apply <- function(X, FUN, ...) names(X) <- vapply(names(X), FUN, "",
+> ...)
+>
+> As a practical matter, I have to say one of the core benefits of pipes is
+> legibility of the code, and so I wonder, honestly, if
+>
+> ucase_names <- function(x)  setNames(x, toupper(names(x))
+>
+> BOD |> ... |> ucase_names()
+>
+> Isn't overall more desirable code anyway? I have to say I think I would
+> always write the above rather than having an anonymous function in the
+> middle of a pipeline, myself.
+>
+> The issue with with. I think, is that as I understand it the native pipe
+> *by
+> intentional design* does not involve non-standard evaluation. It is a
+> parser transformation. While restrictive compared to what magrittr users
+> are used to, there are benefits to this that Luke has thought very hard
+> about (as he does before doing anything). R providing with. as you're
+> describing, would essentially walk back that design and muddy the waters by
+> advancing  weird hybrid situation where a parser transformation is done but
+> then after that NSE is done anyway in common cases. I won't speak for Luke
+> in terms of what he might think of such an idea, but on the face of it that
+> seems like it would be pretty odd, to me.
+>
+>
+>  Also, I have to say even if i'm wrong about everything above, such a
+> function should definitely not be called with. The period is the smallest
+> displayable glyph, AFAIK, and having the names of two *related* functions
+> differ only by a trailing period is practically begging for people quickly
+> reading code to mistake which is in use.
+>
+> Best,
+> ~G
+>
+>
+> On Mon, Apr 18, 2022 at 11:00 AM Gabor Grothendieck <
+> ggrothendieck at gmail.com>
+> wrote:
+>
+> > This is a suggestion for base.  Workarounds using packages are not
+> > relevant.
+> >
+> > Setting names is something that is done a lot.
+> >
+> > On Sun, Apr 17, 2022 at 4:49 PM Avi Gross via R-devel
+> > <r-devel at r-project.org> wrote:
+> > >
+> > > Gabor,
+> > >
+> > > It is always interesting to see suggestions for how to extend R,
+> > especially what is suggested to
+> > > be base R. But generally extensions need to be needed not just wanted
+> > and the ramifications
+> > > must be studied.
+> > >
+> > > I am curious if you looked at existing pipe-like implementations in
+> > various packages to see how or
+> > > if they support such functionality.
+> > >
+> > > There are many things we can wish for but with some care if nonstandard
+> > evaluation is allowed.
+> > >
+> > > For example, should we allow multiple instances of the underscore (or
+> > dot) character to each be
+> > > replaced by the same input? That can be tricky.
+> > >
+> > > But a trivial solution is to not use the anonymous function but write
+> > your own small accessory function.
+> > > I wrote this trivial one:
+> > >
+> > > renamer <- function(x, fun) { names(x) <- fun(names(x)); x }
+> > >
+> > >
+> > > You can then do this:
+> > >
+> > >
+> > > x |> renamer(toupper)
+> > >
+> > >
+> > > Or use tolower or sort or lots of other functions with no arguments.
+> > >
+> > > It is easy to generalize this to functions that allow additional
+> > arguments:
+> > >
+> > >
+> > > renamer2 <- function(x, fun, ...) { names(x) <- fun(names(x), ...); x }
+> > >
+> > >
+> > > x |> renamer2(sort, decreasing=TRUE)
+> > >
+> > >
+> > > Clearly this is not a general solution and a suggestion that I might
+> > like is to allow a
+> > > compound condition in the pipeline that lets you capture the argument
+> > into a named
+> > > variable and then use it as you wish. BUT in a very real sense the
+> > anonymous
+> > > function syntax gives you something like that even if a tad ugly to
+> you.
+> > However
+> > > things that look wrong to you or may make no sense to others may well
+> > > be avoided.
+> > >
+> > > So your suggestion for an extension to existing functions to allow not
+> > repeating the
+> > > name twice makes sense but R supports many attributes you may want to
+> be
+> > > able to manipulate in a pipeline including classes, dimensions, column
+> > names,
+> > > row names and much more you can add on your own arbitrarily.
+> > >
+> > > What method might be more generalizable to solve many such problems
+> > > if used along with the new or previous pipes?
+> > >
+> > >
+> > >
+> > >
+> > >
+> > >
+> > > -----Original Message-----
+> > > From: Gabor Grothendieck <ggrothendieck at gmail.com>
+> > > To: r-devel at r-project.org <r-devel at r-project.org>
+> > > Sent: Sun, Apr 17, 2022 8:21 am
+> > > Subject: [Rd] pipes and setNames
+> > >
+> > >
+> > > When trying to transform names in a pipeline one can do the following
+> > >
+> > > where for this example we are making names upper case.
+> > >
+> > >
+> > >
+> > >   BOD |> (\(x) setNames(x, toupper(names(x))))()
+> > >
+> > >
+> > >
+> > > but that seems a bit ugly and verbose.
+> > >
+> > >
+> > >
+> > > 1. One possibility is to enhance setNames to allow a function as a
+> > >
+> > > second argument.  In that case one could write:
+> > >
+> > >
+> > >
+> > >   BOD |> setNames(toupper)
+> > >
+> > >
+> > >
+> > > 2. One can already do the following with the existing `with` but is
+> > >
+> > > quite verbose:
+> > >
+> > >   BOD |> list() |> setNames(".") |> with(setNames(.,
+> toupper(names(.))))
+> > >
+> > > but could be made simpler with a utility function.
+> > >
+> > >
+> > >
+> > > This utility function is not as good for setNames but would still
+> > >
+> > > result in shorter code than the anonymous function in the example at
+> > >
+> > > the top of this email and is more general so it would also apply in
+> > >
+> > > other situations too.  Here R would define a function with. (note dot
+> > >
+> > > at end) which would be defined and used as follows.
+> > >
+> > >
+> > >
+> > >   with. <- function(data, expr, ...) {
+> > >
+> > >     eval(substitute(expr), list(. = data), enclos = parent.frame())
+> > >
+> > >   }
+> > >
+> > >
+> > >
+> > >   BOD |> with.(setNames(., toupper(names(.))))
+> > >
+> > >
+> > >
+> > > with. is not as efficient as straight pipes but in many cases such as
+> > >
+> > > this it does not really matter and one just wants to get it done
+> > >
+> > > without the parenthesis laden anonymous function.
+> > >
+> > >
+> > >
+> > > Having both of these two would be nice to make it easier to use R
+> pipes.
+> > >
+> > >
+> > >
+> > > --
+> > >
+> > > Statistics & Software Consulting
+> > >
+> > > GKX Group, GKX Associates Inc.
+> > >
+> > > tel: 1-877-GKX-GROUP
+> > >
+> > > email: ggrothendieck at gmail.com
+> > >
+> > >
+> > >
+> > > ______________________________________________
+> > >
+> > > R-devel at r-project.org mailing list
+> > >
+> > > https://stat.ethz.ch/mailman/listinfo/r-devel
+> > >
+> > > ______________________________________________
+> > > R-devel at r-project.org mailing list
+> > > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+> >
+> >
+> > --
+> > Statistics & Software Consulting
+> > GKX Group, GKX Associates Inc.
+> > tel: 1-877-GKX-GROUP
+> > email: ggrothendieck at gmail.com
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From pd@|gd @end|ng |rom gm@||@com  Tue Apr 19 09:24:32 2022
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Tue, 19 Apr 2022 09:24:32 +0200
+Subject: [Rd] Pipe operator status, placeholders?
+In-Reply-To: <f70c4e1e-468f-abcd-187e-124f8b7a3891@gmail.com>
+References: <f70c4e1e-468f-abcd-187e-124f8b7a3891@gmail.com>
+Message-ID: <D58C198A-7C19-4E0A-AC78-807293B9182C@gmail.com>
+
+You probably want Luke Tierney for the full story, but what I gather from the deliberations (on the private R-core list), there are issues with how non-funcall syntax like lm(....) |> _$coef[2] should work. This, in turn, has to do with wanting to have the placeholder occur only as a toplevel substitution (i.e. "["("$"(_, coef), 2) is a no-go. And the reason for that has to do with the way the pipe works in the absense of placeholder, e.g. the parser gets confused by
+
+> x |> f(g(x=_))
+Error in f(x, g(x = "_")) : invalid use of pipe placeholder
+
+-pd
+
+> On 17 Apr 2022, at 01:04 , Benjamin Redelings <benjamin.redelings at gmail.com> wrote:
+> 
+> Hi,
+> 
+> I see that R 4.2 adds the underscore _ as a placeholder for the new forward pipe operator |> , but only for named arguments. The reason why placeholders for position arguments was NOT added isn't clear to me, so I've been looking for the discussion around the introduction of the placeholder.
+> 
+> By searching subject lines in the r-devel mailing list archive, I've found
+> 
+>     https://stat.ethz.ch/pipermail/r-devel/2021-April/080646.html
+> 
+> https://stat.ethz.ch/pipermail/r-devel/2021-January/080396.html
+> 
+> https://stat.ethz.ch/pipermail/r-devel/2020-December/080173.html and following messages
+> 
+> but not much else.
+> 
+> 1. Am I looking in the wrong place?
+> 
+> 2. What is the reasoning behind allowing _ as a placeholder only for named arguments?
+> 
+> take care,
+> 
+> -BenRI
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From ||one| @end|ng |rom r@tud|o@com  Tue Apr 19 11:00:49 2022
+From: ||one| @end|ng |rom r@tud|o@com (Lionel Henry)
+Date: Tue, 19 Apr 2022 11:00:49 +0200
+Subject: [Rd] Pipe operator status, placeholders?
+In-Reply-To: <D58C198A-7C19-4E0A-AC78-807293B9182C@gmail.com>
+References: <f70c4e1e-468f-abcd-187e-124f8b7a3891@gmail.com>
+ <D58C198A-7C19-4E0A-AC78-807293B9182C@gmail.com>
+Message-ID: <CAJf4E3rqcv3Ee9i=cNN08WrR0MGOebYWXeGA2BVC07xf-2GhTg@mail.gmail.com>
+
+I think usage of the placeholder in nested calls is another question.
+The placeholder requires a named argument to improve readability
+because it's a single character that is easy to miss.
+
+Best,
+Lionel
+
+On 4/19/22, peter dalgaard <pdalgd at gmail.com> wrote:
+> You probably want Luke Tierney for the full story, but what I gather from
+> the deliberations (on the private R-core list), there are issues with how
+> non-funcall syntax like lm(....) |> _$coef[2] should work. This, in turn,
+> has to do with wanting to have the placeholder occur only as a toplevel
+> substitution (i.e. "["("$"(_, coef), 2) is a no-go. And the reason for that
+> has to do with the way the pipe works in the absense of placeholder, e.g.
+> the parser gets confused by
+>
+>> x |> f(g(x=_))
+> Error in f(x, g(x = "_")) : invalid use of pipe placeholder
+>
+> -pd
+>
+>> On 17 Apr 2022, at 01:04 , Benjamin Redelings
+>> <benjamin.redelings at gmail.com> wrote:
+>>
+>> Hi,
+>>
+>> I see that R 4.2 adds the underscore _ as a placeholder for the new
+>> forward pipe operator |> , but only for named arguments. The reason why
+>> placeholders for position arguments was NOT added isn't clear to me, so
+>> I've been looking for the discussion around the introduction of the
+>> placeholder.
+>>
+>> By searching subject lines in the r-devel mailing list archive, I've
+>> found
+>>
+>>     https://stat.ethz.ch/pipermail/r-devel/2021-April/080646.html
+>>
+>> https://stat.ethz.ch/pipermail/r-devel/2021-January/080396.html
+>>
+>> https://stat.ethz.ch/pipermail/r-devel/2020-December/080173.html and
+>> following messages
+>>
+>> but not much else.
+>>
+>> 1. Am I looking in the wrong place?
+>>
+>> 2. What is the reasoning behind allowing _ as a placeholder only for named
+>> arguments?
+>>
+>> take care,
+>>
+>> -BenRI
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> --
+> Peter Dalgaard, Professor,
+> Center for Statistics, Copenhagen Business School
+> Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+> Phone: (+45)38153501
+> Office: A 4.23
+> Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From h@w|ckh@m @end|ng |rom gm@||@com  Tue Apr 19 14:01:45 2022
+From: h@w|ckh@m @end|ng |rom gm@||@com (Hadley Wickham)
+Date: Tue, 19 Apr 2022 07:01:45 -0500
+Subject: [Rd] pipes and setNames
+In-Reply-To: <CA+6hu7ceRpjSPp0tzFU8tAQg5meZdMoYRVnZKBpv2TSgJGzq2g@mail.gmail.com>
+References: <CAP01uR=Z2+Zg6T9Hwn_mw-sMijpmv8H55RhPBkk1AS-gRpfCkQ@mail.gmail.com>
+ <1666355068.355430.1650228560776@mail.yahoo.com>
+ <CAP01uRk9=ufFUpnmRZ1=_gFuot_L3P+DVMmiEiWzn4wGKFebQg@mail.gmail.com>
+ <CAD4oTHE2Kh6BhL4B0By+u3CSKTDhdsdsxu2ToMPkrjPR02kjgw@mail.gmail.com>
+ <CA+6hu7ceRpjSPp0tzFU8tAQg5meZdMoYRVnZKBpv2TSgJGzq2g@mail.gmail.com>
+Message-ID: <CABdHhvHv2aHqndxZU5yFRns4Eh5JBwSqZARR=w64nzNy-3Uk5w@mail.gmail.com>
+
+On Tue, Apr 19, 2022 at 1:56 AM Jan Net?k <netikja at gmail.com> wrote:
+>
+> I agree that would be nice, but this task is indeed manageable with
+> one-line function definition as mentioned above.
+>
+> For reference, take a look at dplyr::rename_with which does something
+> nearly identical as your proposal does. Note that even tidyverse setNames
+> implementation does not allow for functions nor lambdas.
+
+The closest equivalent to setNames() is rlang::set_names() which does
+allow you to supply a character vector, a function, or NULL:
+
+``` r
+library(rlang)
+
+x <- c(a = 1, b = 2, c = 3)
+x |> set_names(c("x", "y", "z"))
+#> x y z
+#> 1 2 3
+x |> set_names(toupper)
+#> A B C
+#> 1 2 3
+x |> set_names(NULL)
+#> [1] 1 2 3
+```
+
+When called with only one argument it uses the vector values for the names:
+
+``` r
+x |> set_names()
+#> 1 2 3
+#> 1 2 3
+```
+
+(this is often useful before lapply() and friends, if the vector is,
+e.g. a vector of paths)
+
+It also supports ... so you can avoid `c()` for simple cases:
+
+```r
+x |> set_names("x", "y", "z")
+#> x y z
+#> 1 2 3
+```
+
+And is a little stricter when it comes to the length of supplied names:
+
+``` r
+x |> set_names("x", "y")
+#> Error in `set_names()`:
+#> ! The size of `nm` (2) must be compatible with the size of `x` (3).
+x |> setNames(c("x", "y"))
+#>    x    y <NA>
+#>    1    2    3
+```
+
+Hadley
+
+-- 
+http://hadley.nz
+
+
+From benj@m|n@rede||ng@ @end|ng |rom gm@||@com  Tue Apr 19 14:43:00 2022
+From: benj@m|n@rede||ng@ @end|ng |rom gm@||@com (Benjamin Redelings)
+Date: Tue, 19 Apr 2022 08:43:00 -0400
+Subject: [Rd] Pipe operator status, placeholders?
+In-Reply-To: <D58C198A-7C19-4E0A-AC78-807293B9182C@gmail.com>
+References: <f70c4e1e-468f-abcd-187e-124f8b7a3891@gmail.com>
+ <D58C198A-7C19-4E0A-AC78-807293B9182C@gmail.com>
+Message-ID: <4af6625a-edef-3b91-2f21-9a07a728e6b8@gmail.com>
+
+Thanks to you and Lionel for the info!? I wasn't sure if there was a 
+private core developers list, or if I was just looking in the wrong place.
+
+1. Its good to know that the only reason not to allow _ in positional 
+arguments is that its easy to miss.? Personally, I would like to be able 
+to write f(x, _), but its not a big deal.
+
+Is the idea that when you see
+
+ ??? x |> f(x, y, _, z, w)
+
+its hard for the eye to scan the RHS and find the _?
+
+Hmm.... I notice that a lot of languages (i.e. Haskell) use _ as a 
+wildcard pattern, and I don't recall any complaints about it being hard 
+to see.
+
+2. I can see how there would be issues with placeholders that aren't at 
+the top level... although I'm not sure precisely what they are.? Any 
+hints? :-)? I did briefly look at the parser/grammar file...
+
+Thanks again for the info!
+
+-BenRI
+
+On 4/19/22 3:24 AM, peter dalgaard wrote:
+> You probably want Luke Tierney for the full story, but what I gather from the deliberations (on the private R-core list), there are issues with how non-funcall syntax like lm(....) |> _$coef[2] should work. This, in turn, has to do with wanting to have the placeholder occur only as a toplevel substitution (i.e. "["("$"(_, coef), 2) is a no-go. And the reason for that has to do with the way the pipe works in the absense of placeholder, e.g. the parser gets confused by
+>
+>> x |> f(g(x=_))
+> Error in f(x, g(x = "_")) : invalid use of pipe placeholder
+>
+> -pd
+>
+>> On 17 Apr 2022, at 01:04 , Benjamin Redelings <benjamin.redelings at gmail.com> wrote:
+>>
+>> Hi,
+>>
+>> I see that R 4.2 adds the underscore _ as a placeholder for the new forward pipe operator |> , but only for named arguments. The reason why placeholders for position arguments was NOT added isn't clear to me, so I've been looking for the discussion around the introduction of the placeholder.
+>>
+>> By searching subject lines in the r-devel mailing list archive, I've found
+>>
+>>      https://stat.ethz.ch/pipermail/r-devel/2021-April/080646.html
+>>
+>> https://stat.ethz.ch/pipermail/r-devel/2021-January/080396.html
+>>
+>> https://stat.ethz.ch/pipermail/r-devel/2020-December/080173.html and following messages
+>>
+>> but not much else.
+>>
+>> 1. Am I looking in the wrong place?
+>>
+>> 2. What is the reasoning behind allowing _ as a placeholder only for named arguments?
+>>
+>> take care,
+>>
+>> -BenRI
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Wed Apr 20 00:55:17 2022
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Wed, 20 Apr 2022 10:55:17 +1200
+Subject: [Rd] Pipe operator status, placeholders?
+In-Reply-To: <4af6625a-edef-3b91-2f21-9a07a728e6b8@gmail.com>
+References: <f70c4e1e-468f-abcd-187e-124f8b7a3891@gmail.com>
+ <D58C198A-7C19-4E0A-AC78-807293B9182C@gmail.com>
+ <4af6625a-edef-3b91-2f21-9a07a728e6b8@gmail.com>
+Message-ID: <302E5507-3EBC-41CA-B0BC-65D67DA5154D@R-project.org>
+
+Ben,
+
+I think you considered only part of Peter's response. Placeholders can safely only work for the first call, hence at the top level. Anything below may not do what you think as you'd have to skip frames and suddenly things can have entirely different meaning since you're not evaluating in the scope of the preceding call. That is also the reason why only named arguments are allowed, because if it was not the case then you might be tempted to write x |> _$foo[1] which looks legit at a first glance, but is no longer at the top level (since it is `[`(`$`(_, foo), 1)) and thus not valid.
+
+Cheers,
+Simon
+
+
+
+> On Apr 20, 2022, at 12:43 AM, Benjamin Redelings <benjamin.redelings at gmail.com> wrote:
+> 
+> Thanks to you and Lionel for the info!  I wasn't sure if there was a private core developers list, or if I was just looking in the wrong place.
+> 
+> 1. Its good to know that the only reason not to allow _ in positional arguments is that its easy to miss.  Personally, I would like to be able to write f(x, _), but its not a big deal.
+> 
+> Is the idea that when you see
+> 
+>     x |> f(x, y, _, z, w)
+> 
+> its hard for the eye to scan the RHS and find the _?
+> 
+> Hmm.... I notice that a lot of languages (i.e. Haskell) use _ as a wildcard pattern, and I don't recall any complaints about it being hard to see.
+> 
+> 2. I can see how there would be issues with placeholders that aren't at the top level... although I'm not sure precisely what they are.  Any hints? :-)  I did briefly look at the parser/grammar file...
+> 
+> Thanks again for the info!
+> 
+> -BenRI
+> 
+> On 4/19/22 3:24 AM, peter dalgaard wrote:
+>> You probably want Luke Tierney for the full story, but what I gather from the deliberations (on the private R-core list), there are issues with how non-funcall syntax like lm(....) |> _$coef[2] should work. This, in turn, has to do with wanting to have the placeholder occur only as a toplevel substitution (i.e. "["("$"(_, coef), 2) is a no-go. And the reason for that has to do with the way the pipe works in the absense of placeholder, e.g. the parser gets confused by
+>> 
+>>> x |> f(g(x=_))
+>> Error in f(x, g(x = "_")) : invalid use of pipe placeholder
+>> 
+>> -pd
+>> 
+>>> On 17 Apr 2022, at 01:04 , Benjamin Redelings <benjamin.redelings at gmail.com> wrote:
+>>> 
+>>> Hi,
+>>> 
+>>> I see that R 4.2 adds the underscore _ as a placeholder for the new forward pipe operator |> , but only for named arguments. The reason why placeholders for position arguments was NOT added isn't clear to me, so I've been looking for the discussion around the introduction of the placeholder.
+>>> 
+>>> By searching subject lines in the r-devel mailing list archive, I've found
+>>> 
+>>>     https://stat.ethz.ch/pipermail/r-devel/2021-April/080646.html
+>>> 
+>>> https://stat.ethz.ch/pipermail/r-devel/2021-January/080396.html
+>>> 
+>>> https://stat.ethz.ch/pipermail/r-devel/2020-December/080173.html and following messages
+>>> 
+>>> but not much else.
+>>> 
+>>> 1. Am I looking in the wrong place?
+>>> 
+>>> 2. What is the reasoning behind allowing _ as a placeholder only for named arguments?
+>>> 
+>>> take care,
+>>> 
+>>> -BenRI
+>>> 
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Wed Apr 20 02:22:30 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 19 Apr 2022 20:22:30 -0400
+Subject: [Rd] Pipe operator status, placeholders?
+In-Reply-To: <302E5507-3EBC-41CA-B0BC-65D67DA5154D@R-project.org>
+References: <f70c4e1e-468f-abcd-187e-124f8b7a3891@gmail.com>
+ <D58C198A-7C19-4E0A-AC78-807293B9182C@gmail.com>
+ <4af6625a-edef-3b91-2f21-9a07a728e6b8@gmail.com>
+ <302E5507-3EBC-41CA-B0BC-65D67DA5154D@R-project.org>
+Message-ID: <3227a062-c6a4-e2e7-2cbf-f2a240f5f79e@gmail.com>
+
+On 19/04/2022 6:55 p.m., Simon Urbanek wrote:
+> Ben,
+> 
+> I think you considered only part of Peter's response. Placeholders can safely only work for the first call, hence at the top level. Anything below may not do what you think as you'd have to skip frames and suddenly things can have entirely different meaning since you're not evaluating in the scope of the preceding call. That is also the reason why only named arguments are allowed, because if it was not the case then you might be tempted to write x |> _$foo[1] which looks legit at a first glance, but is no longer at the top level (since it is `[`(`$`(_, foo), 1)) and thus not valid.
+
+The R pipe is purely syntactic sugar, it just transforms expressions.  I 
+think the real reason not to allow _ to be deeply nested in an 
+expression is that it would make parsing really hard.  If you have
+
+  x |> { some really huge expression }
+
+then the parser would have to parse the huge expression and search it 
+for underscores to see what to do with x.  With the current rule, the 
+search is much easier, it's just at the top level.
+
+There are probably cases where deeply nested underscores would be 
+ambiguous, e.g. if that huge expression contained a pipe operator 
+itself, who gets the substitution?
+
+The other limitation of the transformation approach is that _ can only 
+occur once.  magrittr evaluates x and puts the value in where it sees a 
+dot, so this works to print 2 once and give a value of 4:
+
+   print(2) %>% `+`(., .)
+
+It's equivalent to
+
+   *tmp* <- print(2)
+   *tmp* + *tmp*
+
+However, you'd have the print executed twice in
+
+   print(2) |> `+`(_, _)
+
+(if such was allowed), because it would be equivalent to
+
+   print(2) + print(2)
+
+Duncan Murdoch
+
+> 
+> Cheers,
+> Simon
+> 
+> 
+> 
+>> On Apr 20, 2022, at 12:43 AM, Benjamin Redelings <benjamin.redelings at gmail.com> wrote:
+>>
+>> Thanks to you and Lionel for the info!  I wasn't sure if there was a private core developers list, or if I was just looking in the wrong place.
+>>
+>> 1. Its good to know that the only reason not to allow _ in positional arguments is that its easy to miss.  Personally, I would like to be able to write f(x, _), but its not a big deal.
+>>
+>> Is the idea that when you see
+>>
+>>      x |> f(x, y, _, z, w)
+>>
+>> its hard for the eye to scan the RHS and find the _?
+>>
+>> Hmm.... I notice that a lot of languages (i.e. Haskell) use _ as a wildcard pattern, and I don't recall any complaints about it being hard to see.
+>>
+>> 2. I can see how there would be issues with placeholders that aren't at the top level... although I'm not sure precisely what they are.  Any hints? :-)  I did briefly look at the parser/grammar file...
+>>
+>> Thanks again for the info!
+>>
+>> -BenRI
+>>
+>> On 4/19/22 3:24 AM, peter dalgaard wrote:
+>>> You probably want Luke Tierney for the full story, but what I gather from the deliberations (on the private R-core list), there are issues with how non-funcall syntax like lm(....) |> _$coef[2] should work. This, in turn, has to do with wanting to have the placeholder occur only as a toplevel substitution (i.e. "["("$"(_, coef), 2) is a no-go. And the reason for that has to do with the way the pipe works in the absense of placeholder, e.g. the parser gets confused by
+>>>
+>>>> x |> f(g(x=_))
+>>> Error in f(x, g(x = "_")) : invalid use of pipe placeholder
+>>>
+>>> -pd
+>>>
+>>>> On 17 Apr 2022, at 01:04 , Benjamin Redelings <benjamin.redelings at gmail.com> wrote:
+>>>>
+>>>> Hi,
+>>>>
+>>>> I see that R 4.2 adds the underscore _ as a placeholder for the new forward pipe operator |> , but only for named arguments. The reason why placeholders for position arguments was NOT added isn't clear to me, so I've been looking for the discussion around the introduction of the placeholder.
+>>>>
+>>>> By searching subject lines in the r-devel mailing list archive, I've found
+>>>>
+>>>>      https://stat.ethz.ch/pipermail/r-devel/2021-April/080646.html
+>>>>
+>>>> https://stat.ethz.ch/pipermail/r-devel/2021-January/080396.html
+>>>>
+>>>> https://stat.ethz.ch/pipermail/r-devel/2020-December/080173.html and following messages
+>>>>
+>>>> but not much else.
+>>>>
+>>>> 1. Am I looking in the wrong place?
+>>>>
+>>>> 2. What is the reasoning behind allowing _ as a placeholder only for named arguments?
+>>>>
+>>>> take care,
+>>>>
+>>>> -BenRI
+>>>>
+>>>> ______________________________________________
+>>>> R-devel at r-project.org mailing list
+>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
