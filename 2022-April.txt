@@ -7832,3 +7832,809 @@ Dirk
 dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
 
 
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue Apr 26 09:18:54 2022
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 26 Apr 2022 09:18:54 +0200
+Subject: [Rd] 
+ Matrix issues when building R with znver3 architecture under GCC 11
+In-Reply-To: <CANkVCd7GxthyuNjxm+3Mtn5WfYWWcznC8KrziGWXrd7PH05_=Q@mail.gmail.com>
+References: <CANkVCd7HGyvejpEkweiEBKtNq28Fpr_ggZ30Tadf=tgD7Z_vpQ@mail.gmail.com>
+ <0b8d32ef-8426-6c92-0798-e28dfd4b6bba@gmail.com>
+ <CANkVCd6yfgwq4=+X85U=Cyg7KXtwZkyS1qOdu9Ti7hnQ0jmLzg@mail.gmail.com>
+ <e77b959a-ceec-79d9-0bc9-0f8638a51aac@gmail.com>
+ <CANkVCd7GxthyuNjxm+3Mtn5WfYWWcznC8KrziGWXrd7PH05_=Q@mail.gmail.com>
+Message-ID: <28d34b24-825b-233d-b436-3363ed897333@gmail.com>
+
+Hi Kieran,
+
+On 4/26/22 06:03, Kieran Short wrote:
+> Dear Tomas,
+>
+> Thanks once again for your insight. I'll take all this on board.
+> I'll have a poke around to see what's up with Matrix, but I really 
+> don't have time to dig deep.
+> However, I'm curious. Assuming I have the necessary resources, how do 
+> we check against all CRAN contributed packages - as the dev team does? 
+> Is there any advice, documentation, or scripts about how one goes 
+> about doing that?
+
+certainly this is something that needs time to set up and tune to run at 
+least somewhat reliably. With nearly 19,000 packages, you always get 
+some failures (intermittent - when remote systems are down, 
+non-deterministic - when there are non-deterministic bugs, stable - when 
+packages simply need to be updated). Sometimes some packages lock-up 
+during checking (or run into an infinite loop), etc. Some packages may 
+cause corruption of the package library, which needs extra precautions. 
+Of course you need to install external software for the packages, you 
+need to build the right version of R, set up a local mirror of CRAN, etc.
+
+So again it depends on what you want to do. CRAN systems primarily look 
+for bugs in packages and some also build binaries (of packages or/and 
+R). My set of such scripts (though for experimental builds and checks, 
+not regular operations) is under the dev svn 
+(https://svn.r-project.org/R-dev-web/trunk/WindowsBuilds/winutf8/ucrt3/) 
+with some comments? at 
+https://developer.r-project.org/WindowsBuilds/winutf8/ucrt3/howto.html. 
+But this is for Windows. You will find several other sets in the dev 
+svn, for other platforms. These sets differ as they do slightly 
+different things (mine are for testing Rtools). A perhaps surprising 
+challenge is to implement timeouts so that they are reliable. This is a 
+moving target - new versions of packages sometimes come up with code 
+that locks up systems in new ways. And it is platform-specific. 
+Inevitably, setting such a system also requires debugging packages, 
+because you want to have confidence that the failures are not caused by 
+limitations in the scripts - and this is again a moving target as 
+packages evolve (different versions of external software may wake up 
+bugs, even different depth of the directory tree you run in, etc) and as 
+external software evolves.
+
+Then you may want to use CRAN packages as a regression test for R. For 
+that, you would want to ensure testing exactly the same set of packages 
+(protect library against corruption). And then you need to handle 
+intermittent issues due to external sites going up and down (I do that 
+by iterating the old and the new version). On the other hand, you would 
+probably give up on debugging packages failing on both systems ("before" 
+and "after") if they are not too many. This is what one could do to try 
+to see if a C compiler optimization causes new crashes/errors/warnings.
+
+Then you may want to do timing. It makes sense to select a subset of 
+packages for this, and their long-running examples, such that they do 
+not download anything, they are stable (no non-deterministic issues), 
+have no warnings or errors (so that you are not measuring error paths), 
+they do not lock-up the systems (no timeouts needed). You need to run 
+them sequentially, with some repetitions. But you can avoid some of the 
+problems above by simply not including packages causing different kinds 
+of trouble. One challenge is that if after more repetitions you find 
+some non-deterministic failure, you should be able to remove packages 
+from the measurements.
+
+And then there are variants of the above. Such as using bug-finding 
+tools to find bugs in packages.
+
+So, you may find some scripts in the dev svn, with some comments in 
+them, to get some inspiration, but I know it will be a lot of work to 
+set it up. An obvious obstacle is that these things run long - a 
+debugging turnaround for scripts/set up is long.
+
+If you want to do just some one-off, partially manual experiment, on a 
+subset of packages that seem to work for you, that would be easier to do 
+something very simple from scratch.
+
+>
+> For now, I'm running some lengthy scripts at the moment that require a 
+> large number of packages with many dependencies. With this, I hope to 
+> both check the speed differences between the different builds and any 
+> differences in their outputs.
+
+This may be better anyway as they I assume represent more the workload 
+you have. But then it depends on your goal (if you need more specific 
+advice, please define it).
+
+But, as I wrote before, what would be really helpful for others would be 
+if you could narrow down the issue to a tiny reproducible example, so 
+that it could be narrowed down and fixed (in Matrix, in GCC, etc). 
+Without that, I'd not recommend using the optimized builds, anyway, 
+regardless of performance impacts.
+
+Also, if you don't have time to do the measuring etc, if you don't have 
+a specific workload with performance issues at hand, I would simply give 
+up on it and use the standard builds. The chances this will help a lot 
+are small. Measuring this carefully requires a lot of effort. It is a 
+long time ago, but I remember a solid evaluation study showing on 
+standard application benchmarks, via very careful measurements, that -O3 
+optimizations didn't produce faster code than -O2.
+
+Best
+Tomas
+
+>
+> best regards,
+> Kieran
+>
+> On Wed, Apr 13, 2022 at 8:26 PM Tomas Kalibera 
+> <tomas.kalibera at gmail.com> wrote:
+>
+>
+>     On 4/13/22 11:20, Kieran Short wrote:
+>>     Hi Tomas,
+>>
+>>     Many thanks for your thorough response, it is very much
+>>     appreciated and what you say makes perfect sense to me.
+>>
+>>     I was relying on the in-built R compilation checks, I have been
+>>     working on the assumption that everything on the R side is
+>>     correct (including the matrix package).
+>>
+>>     Indeed, R 4.1.3 builds and "make check-all" passes with the more
+>>     general?-march=x86-64 architecture compiled with -O3
+>>     optimizations (in my hands, on the Zen3 system). So I had no
+>>     underlying reason not to believe R or its packages were the
+>>     problem when -march=znver3 was trialed. I found it interesting
+>>     that it was only the one factorizing.R?script in the Matrix suite
+>>     that failed (out of the seemingly hundreds of remaining checks
+>>     overall which passed). So I was more wondering if there might
+>>     have been prior knowledge within the brain's trust on this list
+>>     that "oh the factorizing.R matrix test does ABC error when R or
+>>     the package is compiled with GCC using?XYZ flags". As you'll read
+>>     ahead, you can say that now. :)
+>     Right, but something must be broken. You might get specific
+>     comments from the Matrix package maintainer, but it would help at
+>     least minimizing that failing example to some commands you can run
+>     in R console, and showing the differences in outputs.
+>>
+>>     I don't think I have the capability to determine the root trigger
+>>     in R itself, the package, or the compiler (whichever one, or
+>>     combination,? it actually?is). However, assuming R isn't the
+>>     issue, I have done is go through the GCC optimizations and I have
+>>     now isolated the culprit optimization which crashes factorizing.R.
+>>
+>>     It is "-fexpensive-optimizations".
+>>
+>>     If I use?"-fno-expensive-optimizations" paired with -O2 or -O3
+>>     optimizations, all "make check-all" checks pass. So I can build a
+>>     fully checked and passed R 4.1.3 under my environment now with:
+>>
+>>     ~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2 FC=gfortran-11.2
+>>     CXXFLAGS="-O3 -march=znver3 -fno-expensive-optimizations -flto"
+>>     CFLAGS="-O3 -march=znver3 -fno-expensive-optimizations -flto"
+>>     FFLAGS="-O3 -march=znver3 -fno-expensive-optimizations -flto"
+>>     --enable-memory-profiling --enable-R-shlib
+>     Ok. The default optimization options used by R on selected current
+>     and future versions of GCC and clang also get tested via checking
+>     all of CRAN contributed packages. This testing sometimes finds
+>     errors not detected by "make check-all", including bugs in GCC.
+>     You would need a lot of resources to run these checks, though. In
+>     my experience it is not so rare that a bug (in R or GCC) only
+>     affects a very small number of packages, often even only one.
+>>     I'm yet to benchmark whether the loss of that particular
+>>     optimization flag negates the advantages of using znver3 as a
+>>     core architecture target over a -x86-64 target in the first place.
+>>     So I think I've solved my own problem (at least, it appears that
+>>     way based on the checks).
+>>     So the remaining question is, what method or package does the
+>>     development team use (if any) for testing the speed of various
+>>     base R calculations?
+>
+>     That depends on the developer and the calculations, and on your
+>     goals - what you want to measure or show. I don't have a simple
+>     advice. If you are considering this for your own work, I'd
+>     recommend measuring some of your workloads. Also you can
+>     extrapolate from your workloads (from where time is spent in them)
+>     what would be a relevant benchmark. For example, if most time is
+>     spent in BLAS, then it is about finding a good optimized
+>     implementation (and for that checking the impact of the
+>     optimizations). Similarly, if it is some R package (base,
+>     recommended, or contributed), it may be using a computational
+>     kernel written in C or Fortran, something you could test
+>     separately or with a specific benchmark. I think it would be
+>     unlikely that CPU-specific C compiler optimizations would
+>     substantially speed up the R interpreter itself.
+>
+>     For just deciding whether -fno-expensive-optimization negates the
+>     gains, you might look at some general computational/other
+>     benchmarks (not R). If it negated it even on benchmarks used by
+>     others to present the gains, then it probably is not worth it.
+>
+>     One of the things I did in the past was looking at timings of
+>     selected CRAN packages (longer running examples, packages with
+>     most reverse dependencies) and then looking into the reasons for
+>     the individual bigger differences. That was when looking at the
+>     impacts of the byte-code compiler. Unlikely worth the effort in
+>     this case. Also, primarily, I think the bug should be traced down
+>     and fixed, wherever it is. Only then the measuring would make sense.
+>
+>     Best
+>     Tomas
+>
+>
+>
+>>
+>>     best regards,
+>>     Kieran
+>>
+>>     On Wed, Apr 13, 2022 at 4:00 PM Tomas Kalibera
+>>     <tomas.kalibera at gmail.com> wrote:
+>>
+>>         Hi Kieran,
+>>
+>>         On 4/12/22 02:36, Kieran Short wrote:
+>>         > Hello,
+>>         >
+>>         > I'm new to this list, and have subscribed particularly
+>>         because I've come
+>>         > across an issue with building R from source with an
+>>         AMD-based Zen
+>>         > architecture under GCC11. Please don't attack me for my
+>>         linux operating
+>>         > system choice, but it is Ubuntu 20.04 with Linux Kernel
+>>         5.10.102.1 -
+>>         > microsoft-standard-WSL2. I've built GCC11 using GCC8 (the
+>>         standard GCC
+>>         > under Ubuntu20.04 WSL release), under Windows11 with wslg.
+>>         WSL2/g runs as a
+>>         > hypervisor with ports to all system resources including
+>>         display, GPU (cuda,
+>>         > etc).
+>>         >
+>>         > The reason why I am posting this email is that I am trying
+>>         to compile R
+>>         > using the AMD Zen3 platform architecture rather than
+>>         x86/64, because it has
+>>         > processor-specific optimizations that improve performance
+>>         over the standard
+>>         > x86/64 in benchmarks. The Zen3 architecture optimizations
+>>         are not available
+>>         > in earlier versions of GCC (actually, they have possibly
+>>         been backported to
+>>         > GCC10 now). Since Ubuntu 20.04 doesn't have GCC11, I
+>>         compiled the GCC11
+>>         > compiler using the native GCC8.
+>>         >
+>>         > The GCC11 I have built can build R 4.1.3 with a standard x86-64
+>>         > architecture and pass all tests with "make check-all".
+>>         > I configured that with:
+>>         >> ~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2
+>>         FC=gfortran-11.2
+>>         > CXXFLAGS="-O3 -march=x86-64" CFLAGS="-O3 -march=x86-64"
+>>         FFLAGS="-O3
+>>         > -march=x86-64" --enable-memory-profiling --enable-R-shlib
+>>         > and built with
+>>         >> make -j 32 -O
+>>         >> make check-all
+>>         > ## PASS.
+>>         >
+>>         > So I can build R in my environment with GCC11.
+>>         > In configure, I am using references to "gcc-11.2"
+>>         "gfortran-11.2" and
+>>         > "g++-11.2" because I compiled GCC11 compilers with these
+>>         suffixes.
+>>         >
+>>         > Now, I'm using a 32 thread (16 core) AMD Zen3 CPU (a
+>>         5950x), and want to
+>>         > use it to its full potential. Zen3 optimizations are
+>>         available as a
+>>         > -march=znver3 option n GCC11. The znver3 optimizations
+>>         improve performance
+>>         > in Phoronix Test Suite benchmarks (I'm not aware of anyone
+>>         that has
+>>         > compiled R with them). See:
+>>         >
+>>         https://www.phoronix.com/scan.php?page=article&item=amd-5950x-gcc11
+>>         <https://www.phoronix.com/scan.php?page=article&item=amd-5950x-gcc11>
+>>         >
+>>         > However, the R 4.1.3 build (made with "make -j 32 -O"),
+>>         configured with
+>>         > -march=znver3, produces an R that fails "make check-all".
+>>         >
+>>         >> ~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2
+>>         FC=gfortran-11.2
+>>         > CXXFLAGS="-O2 -march=znver3" CFLAGS="-O2 -march=znver3"
+>>         FFLAGS="-O2
+>>         > -march=znver3" --enable-memory-profiling --enable-R-shlib
+>>         > or
+>>         >> ~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2
+>>         FC=gfortran-11.2
+>>         > CXXFLAGS="-O3 -march=znver3" CFLAGS="-O3 -march=znver3"
+>>         FFLAGS="-O3
+>>         > -march=znver3" --enable-memory-profiling --enable-R-shlib
+>>         >
+>>         > The fail is always in the factorizing.R Matrix.R tests, and
+>>         in particular,
+>>         > there are a number of errors and a fatal error.
+>>         > I have attached the output because I cannot really
+>>         understand what is going
+>>         > wrong. But results returned from matrix calculations are
+>>         obviously odd with
+>>         > -march=znver3 in GCC 11. There is another
+>>         backwards-compatible architecture
+>>         > option "znver2" and this has EXACTLY the same result.
+>>         >
+>>         > While there are other warrnings and errors (many in
+>>         assert.EQ() ), the
+>>         > factorizing.R script continues. The fatal error (at line
+>>         2662 in the
+>>         > attached factorizing.Rout.fail text file) is:
+>>         >
+>>         >> ## problematic rank deficient rankMatrix() case -- only
+>>         seen in large
+>>         > cases ??
+>>         >> Z. <- readRDS(system.file("external", "Z_NA_rnk.rds",
+>>         package="Matrix"))
+>>         >> tools::assertWarning(rnkZ. <- rankMatrix(Z., method =
+>>         "qr")) # gave errors
+>>         > Error in assertCondition(expr, classes, .exprString = d.expr) :
+>>         >? ? Failed to get warning in evaluating rnkZ. <-
+>>         rankMatrix(Z., method? ...
+>>         > Calls: <Anonymous> -> assertCondition
+>>         > Execution halted
+>>         >
+>>         > Can anybody shed light on what might be going on here?
+>>         'make check-all'
+>>         > passes all the other checks. It is just factorizing.R in
+>>         Matrix that fails
+>>         > (other matrix tests run ok).
+>>         > Sorry this is a bit long-winded, but I thought details
+>>         might be important.
+>>
+>>         R gets used and tested most with the default optimizations,
+>>         without use
+>>         of model-specific instructions and with -O2 (GCC). It happens
+>>         time to
+>>         time that some people try other optimization options and run
+>>         into
+>>         problems. In principle, there are these cases (seen before):
+>>
+>>         (1) the test in R package (or R) is wrong - it
+>>         (unintentionally) expects
+>>         behavior which has been observed in builds with default
+>>         optimizations,
+>>         but is not necessarily the only correct one; in case of
+>>         numerical
+>>         tolerances set empirically, they could simply be too tight
+>>
+>>         (2) the algorithm in R package or R has a bug - the result is
+>>         really
+>>         wrong and it is because the algorithm is (unintentionally)
+>>         not portable
+>>         enough, it (unintentionally) only works with default
+>>         optimizations or
+>>         lower; in case of numerical results, this can be because it
+>>         expects more
+>>         precision from the floating point computations than mandated
+>>         by IEEE, or
+>>         assumes behavior not mandated
+>>
+>>         (3) the optimization by design violates some properties the
+>>         algorithm
+>>         knowingly depends on; with numerical computations, this can
+>>         be a sort of
+>>         "fast" (and similarly referred to) mode which violates IEEE
+>>         floating
+>>         point standard by design, in the aim of better performance;
+>>         due to the
+>>         nature of the algorithm depending on IEEE, and poor luck, the
+>>         results
+>>         end up completely wrong
+>>
+>>         (4) there is a bug in the C or Fortran compiler (GCC as we
+>>         use GCC) that
+>>         only exhibits with the unusual optimizations; the compiler
+>>         produces
+>>         wrong code
+>>
+>>         So, when you run into a problem like this and want to get
+>>         that fixed,
+>>         the first thing is to identify which case of the above it is,
+>>         in case of
+>>         1 and 2 also differentiate between base R and a package (and
+>>         which
+>>         concrete package). Different people maintain these things and
+>>         you would
+>>         ideally narrow down the problem to a very small, isolated,
+>>         reproducible
+>>         example to support your claim where the bug is. If you do
+>>         this right,
+>>         the problem can often get fixed very fast.
+>>
+>>         Such an example for (1) could be: few lines of standalone R
+>>         code using
+>>         Matrix that produces correct results, but the test is not
+>>         happy. With
+>>         pointers to the real check in the tests that is wrong. And an
+>>         explanation why the result is wrong.
+>>
+>>         For (2)-(4) it would be a minimal standalone C/Fortran
+>>         example including
+>>         only the critical function/part of algorithm that is not
+>>         correct/not
+>>         portable/not compiled correctly, with results obtained with
+>>         optimizations where it works and where it doesn't. Unless you
+>>         find an
+>>         obvious bug in R easy to explain (2), when the example would
+>>         not have to
+>>         be standalone. With such standalone C example, you could
+>>         easily test the
+>>         results with different optimizations and compilers, it is
+>>         easier to
+>>         analyze, and easier to produce a bug report for GCC. What
+>>         would make it
+>>         harder in this case is that it needs special hardware, but
+>>         you could
+>>         still try with the example, and worry about that later (one
+>>         option is
+>>         running in an emulator, and again a standalone example really
+>>         helps
+>>         here). In principle, as it needs special hardware, the
+>>         chances someone
+>>         else would do this work is smaller. Indeed, if it turns out
+>>         to be (3),
+>>         it is unlikely to get resolved, but at least would get
+>>         isolated (you
+>>         would know what not to run).
+>>
+>>         As a user, if you run into a problem like this and do not
+>>         want to get it
+>>         fixed, but just work it around somehow. First, it may be
+>>         dangerous,
+>>         possibly one would get incorrect results from computations,
+>>         but say in
+>>         applications where they are verified externally. You could
+>>         try disabling
+>>         individual specific optimization until the tests pass. You
+>>         could try
+>>         with later versions of gcc-11 (even unreleased) or gcc-12.
+>>         Still, a lot
+>>         of this is easier with a small example, too. You could ignore
+>>         the
+>>         failing test. And it may not be worth it - it may be that you
+>>         could get
+>>         your speedups in a different, but more reliable way.
+>>
+>>         Using wsl2 on its own should not necessarily be a problem and
+>>         the way
+>>         you built gcc from the description should be ok, but at some
+>>         point it
+>>         would be worth checking under Linux and running natively -
+>>         because even
+>>         if these are numerical differences, they could be in
+>>         principle caused by
+>>         running on Windows (or in wsl2), at least in the past such
+>>         differences
+>>         were seen (related to (2) above). I would recommend checking
+>>         on Linux
+>>         natively once you have at least a standalone R example.
+>>
+>>         Best
+>>         Tomas
+>>
+>>
+>>         >
+>>         > best regards,
+>>         > Kieran
+>>         > ______________________________________________
+>>         > R-devel at r-project.org mailing list
+>>         > https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+	[[alternative HTML version deleted]]
+
+
+From k|er@n@@hort @end|ng |rom gm@||@com  Tue Apr 26 06:03:50 2022
+From: k|er@n@@hort @end|ng |rom gm@||@com (Kieran Short)
+Date: Tue, 26 Apr 2022 14:03:50 +1000
+Subject: [Rd] 
+ Matrix issues when building R with znver3 architecture under GCC 11
+In-Reply-To: <e77b959a-ceec-79d9-0bc9-0f8638a51aac@gmail.com>
+References: <CANkVCd7HGyvejpEkweiEBKtNq28Fpr_ggZ30Tadf=tgD7Z_vpQ@mail.gmail.com>
+ <0b8d32ef-8426-6c92-0798-e28dfd4b6bba@gmail.com>
+ <CANkVCd6yfgwq4=+X85U=Cyg7KXtwZkyS1qOdu9Ti7hnQ0jmLzg@mail.gmail.com>
+ <e77b959a-ceec-79d9-0bc9-0f8638a51aac@gmail.com>
+Message-ID: <CANkVCd7GxthyuNjxm+3Mtn5WfYWWcznC8KrziGWXrd7PH05_=Q@mail.gmail.com>
+
+Dear Tomas,
+
+Thanks once again for your insight. I'll take all this on board.
+I'll have a poke around to see what's up with Matrix, but I really don't
+have time to dig deep.
+However, I'm curious. Assuming I have the necessary resources, how do we
+check against all CRAN contributed packages - as the dev team does? Is
+there any advice, documentation, or scripts about how one goes about doing
+that?
+
+For now, I'm running some lengthy scripts at the moment that require a
+large number of packages with many dependencies. With this, I hope to both
+check the speed differences between the different builds and any
+differences in their outputs.
+
+best regards,
+Kieran
+
+On Wed, Apr 13, 2022 at 8:26 PM Tomas Kalibera <tomas.kalibera at gmail.com>
+wrote:
+
+>
+> On 4/13/22 11:20, Kieran Short wrote:
+>
+> Hi Tomas,
+>
+> Many thanks for your thorough response, it is very much appreciated and
+> what you say makes perfect sense to me.
+>
+> I was relying on the in-built R compilation checks, I have been working on
+> the assumption that everything on the R side is correct (including the
+> matrix package).
+>
+> Indeed, R 4.1.3 builds and "make check-all" passes with the more
+> general -march=x86-64 architecture compiled with -O3 optimizations (in my
+> hands, on the Zen3 system). So I had no underlying reason not to believe R
+> or its packages were the problem when -march=znver3 was trialed. I found it
+> interesting that it was only the one factorizing.R script in the Matrix
+> suite that failed (out of the seemingly hundreds of remaining checks
+> overall which passed). So I was more wondering if there might have been
+> prior knowledge within the brain's trust on this list that "oh the
+> factorizing.R matrix test does ABC error when R or the package is compiled
+> with GCC using XYZ flags". As you'll read ahead, you can say that now. :)
+>
+> Right, but something must be broken. You might get specific comments from
+> the Matrix package maintainer, but it would help at least minimizing that
+> failing example to some commands you can run in R console, and showing the
+> differences in outputs.
+>
+>
+> I don't think I have the capability to determine the root trigger in R
+> itself, the package, or the compiler (whichever one, or combination,  it
+> actually is). However, assuming R isn't the issue, I have done is go
+> through the GCC optimizations and I have now isolated the culprit
+> optimization which crashes factorizing.R.
+>
+> It is "-fexpensive-optimizations".
+>
+> If I use "-fno-expensive-optimizations" paired with -O2 or -O3
+> optimizations, all "make check-all" checks pass. So I can build a fully
+> checked and passed R 4.1.3 under my environment now with:
+>
+> ~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2 FC=gfortran-11.2
+> CXXFLAGS="-O3 -march=znver3 -fno-expensive-optimizations -flto" CFLAGS="-O3
+> -march=znver3 -fno-expensive-optimizations -flto" FFLAGS="-O3 -march=znver3
+> -fno-expensive-optimizations -flto" --enable-memory-profiling
+> --enable-R-shlib
+>
+> Ok. The default optimization options used by R on selected current and
+> future versions of GCC and clang also get tested via checking all of CRAN
+> contributed packages. This testing sometimes finds errors not detected by
+> "make check-all", including bugs in GCC. You would need a lot of resources
+> to run these checks, though. In my experience it is not so rare that a bug
+> (in R or GCC) only affects a very small number of packages, often even only
+> one.
+>
+> I'm yet to benchmark whether the loss of that particular optimization flag
+> negates the advantages of using znver3 as a core architecture target over a
+> -x86-64 target in the first place.
+> So I think I've solved my own problem (at least, it appears that way based
+> on the checks).
+> So the remaining question is, what method or package does the development
+> team use (if any) for testing the speed of various base R calculations?
+>
+> That depends on the developer and the calculations, and on your goals -
+> what you want to measure or show. I don't have a simple advice. If you are
+> considering this for your own work, I'd recommend measuring some of your
+> workloads. Also you can extrapolate from your workloads (from where time is
+> spent in them) what would be a relevant benchmark. For example, if most
+> time is spent in BLAS, then it is about finding a good optimized
+> implementation (and for that checking the impact of the optimizations).
+> Similarly, if it is some R package (base, recommended, or contributed), it
+> may be using a computational kernel written in C or Fortran, something you
+> could test separately or with a specific benchmark. I think it would be
+> unlikely that CPU-specific C compiler optimizations would substantially
+> speed up the R interpreter itself.
+>
+> For just deciding whether -fno-expensive-optimization negates the gains,
+> you might look at some general computational/other benchmarks (not R). If
+> it negated it even on benchmarks used by others to present the gains, then
+> it probably is not worth it.
+>
+> One of the things I did in the past was looking at timings of selected
+> CRAN packages (longer running examples, packages with most reverse
+> dependencies) and then looking into the reasons for the individual bigger
+> differences. That was when looking at the impacts of the byte-code
+> compiler. Unlikely worth the effort in this case. Also, primarily, I think
+> the bug should be traced down and fixed, wherever it is. Only then the
+> measuring would make sense.
+>
+> Best
+> Tomas
+>
+>
+>
+> best regards,
+> Kieran
+>
+> On Wed, Apr 13, 2022 at 4:00 PM Tomas Kalibera <tomas.kalibera at gmail.com>
+> wrote:
+>
+>> Hi Kieran,
+>>
+>> On 4/12/22 02:36, Kieran Short wrote:
+>> > Hello,
+>> >
+>> > I'm new to this list, and have subscribed particularly because I've come
+>> > across an issue with building R from source with an AMD-based Zen
+>> > architecture under GCC11. Please don't attack me for my linux operating
+>> > system choice, but it is Ubuntu 20.04 with Linux Kernel 5.10.102.1 -
+>> > microsoft-standard-WSL2. I've built GCC11 using GCC8 (the standard GCC
+>> > under Ubuntu20.04 WSL release), under Windows11 with wslg. WSL2/g runs
+>> as a
+>> > hypervisor with ports to all system resources including display, GPU
+>> (cuda,
+>> > etc).
+>> >
+>> > The reason why I am posting this email is that I am trying to compile R
+>> > using the AMD Zen3 platform architecture rather than x86/64, because it
+>> has
+>> > processor-specific optimizations that improve performance over the
+>> standard
+>> > x86/64 in benchmarks. The Zen3 architecture optimizations are not
+>> available
+>> > in earlier versions of GCC (actually, they have possibly been
+>> backported to
+>> > GCC10 now). Since Ubuntu 20.04 doesn't have GCC11, I compiled the GCC11
+>> > compiler using the native GCC8.
+>> >
+>> > The GCC11 I have built can build R 4.1.3 with a standard x86-64
+>> > architecture and pass all tests with "make check-all".
+>> > I configured that with:
+>> >> ~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2 FC=gfortran-11.2
+>> > CXXFLAGS="-O3 -march=x86-64" CFLAGS="-O3 -march=x86-64" FFLAGS="-O3
+>> > -march=x86-64" --enable-memory-profiling --enable-R-shlib
+>> > and built with
+>> >> make -j 32 -O
+>> >> make check-all
+>> > ## PASS.
+>> >
+>> > So I can build R in my environment with GCC11.
+>> > In configure, I am using references to "gcc-11.2" "gfortran-11.2" and
+>> > "g++-11.2" because I compiled GCC11 compilers with these suffixes.
+>> >
+>> > Now, I'm using a 32 thread (16 core) AMD Zen3 CPU (a 5950x), and want to
+>> > use it to its full potential. Zen3 optimizations are available as a
+>> > -march=znver3 option n GCC11. The znver3 optimizations improve
+>> performance
+>> > in Phoronix Test Suite benchmarks (I'm not aware of anyone that has
+>> > compiled R with them). See:
+>> > https://www.phoronix.com/scan.php?page=article&item=amd-5950x-gcc11
+>> >
+>> > However, the R 4.1.3 build (made with "make -j 32 -O"), configured with
+>> > -march=znver3, produces an R that fails "make check-all".
+>> >
+>> >> ~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2 FC=gfortran-11.2
+>> > CXXFLAGS="-O2 -march=znver3" CFLAGS="-O2 -march=znver3" FFLAGS="-O2
+>> > -march=znver3" --enable-memory-profiling --enable-R-shlib
+>> > or
+>> >> ~/R/R-4.1.3/configure CC=gcc-11.2 CXX=g++-11.2 FC=gfortran-11.2
+>> > CXXFLAGS="-O3 -march=znver3" CFLAGS="-O3 -march=znver3" FFLAGS="-O3
+>> > -march=znver3" --enable-memory-profiling --enable-R-shlib
+>> >
+>> > The fail is always in the factorizing.R Matrix.R tests, and in
+>> particular,
+>> > there are a number of errors and a fatal error.
+>> > I have attached the output because I cannot really understand what is
+>> going
+>> > wrong. But results returned from matrix calculations are obviously odd
+>> with
+>> > -march=znver3 in GCC 11. There is another backwards-compatible
+>> architecture
+>> > option "znver2" and this has EXACTLY the same result.
+>> >
+>> > While there are other warrnings and errors (many in assert.EQ() ), the
+>> > factorizing.R script continues. The fatal error (at line 2662 in the
+>> > attached factorizing.Rout.fail text file) is:
+>> >
+>> >> ## problematic rank deficient rankMatrix() case -- only seen in large
+>> > cases ??
+>> >> Z. <- readRDS(system.file("external", "Z_NA_rnk.rds",
+>> package="Matrix"))
+>> >> tools::assertWarning(rnkZ. <- rankMatrix(Z., method = "qr")) # gave
+>> errors
+>> > Error in assertCondition(expr, classes, .exprString = d.expr) :
+>> >    Failed to get warning in evaluating rnkZ. <- rankMatrix(Z., method
+>> ...
+>> > Calls: <Anonymous> -> assertCondition
+>> > Execution halted
+>> >
+>> > Can anybody shed light on what might be going on here? 'make check-all'
+>> > passes all the other checks. It is just factorizing.R in Matrix that
+>> fails
+>> > (other matrix tests run ok).
+>> > Sorry this is a bit long-winded, but I thought details might be
+>> important.
+>>
+>> R gets used and tested most with the default optimizations, without use
+>> of model-specific instructions and with -O2 (GCC). It happens time to
+>> time that some people try other optimization options and run into
+>> problems. In principle, there are these cases (seen before):
+>>
+>> (1) the test in R package (or R) is wrong - it (unintentionally) expects
+>> behavior which has been observed in builds with default optimizations,
+>> but is not necessarily the only correct one; in case of numerical
+>> tolerances set empirically, they could simply be too tight
+>>
+>> (2) the algorithm in R package or R has a bug - the result is really
+>> wrong and it is because the algorithm is (unintentionally) not portable
+>> enough, it (unintentionally) only works with default optimizations or
+>> lower; in case of numerical results, this can be because it expects more
+>> precision from the floating point computations than mandated by IEEE, or
+>> assumes behavior not mandated
+>>
+>> (3) the optimization by design violates some properties the algorithm
+>> knowingly depends on; with numerical computations, this can be a sort of
+>> "fast" (and similarly referred to) mode which violates IEEE floating
+>> point standard by design, in the aim of better performance; due to the
+>> nature of the algorithm depending on IEEE, and poor luck, the results
+>> end up completely wrong
+>>
+>> (4) there is a bug in the C or Fortran compiler (GCC as we use GCC) that
+>> only exhibits with the unusual optimizations; the compiler produces
+>> wrong code
+>>
+>> So, when you run into a problem like this and want to get that fixed,
+>> the first thing is to identify which case of the above it is, in case of
+>> 1 and 2 also differentiate between base R and a package (and which
+>> concrete package). Different people maintain these things and you would
+>> ideally narrow down the problem to a very small, isolated, reproducible
+>> example to support your claim where the bug is. If you do this right,
+>> the problem can often get fixed very fast.
+>>
+>> Such an example for (1) could be: few lines of standalone R code using
+>> Matrix that produces correct results, but the test is not happy. With
+>> pointers to the real check in the tests that is wrong. And an
+>> explanation why the result is wrong.
+>>
+>> For (2)-(4) it would be a minimal standalone C/Fortran example including
+>> only the critical function/part of algorithm that is not correct/not
+>> portable/not compiled correctly, with results obtained with
+>> optimizations where it works and where it doesn't. Unless you find an
+>> obvious bug in R easy to explain (2), when the example would not have to
+>> be standalone. With such standalone C example, you could easily test the
+>> results with different optimizations and compilers, it is easier to
+>> analyze, and easier to produce a bug report for GCC. What would make it
+>> harder in this case is that it needs special hardware, but you could
+>> still try with the example, and worry about that later (one option is
+>> running in an emulator, and again a standalone example really helps
+>> here). In principle, as it needs special hardware, the chances someone
+>> else would do this work is smaller. Indeed, if it turns out to be (3),
+>> it is unlikely to get resolved, but at least would get isolated (you
+>> would know what not to run).
+>>
+>> As a user, if you run into a problem like this and do not want to get it
+>> fixed, but just work it around somehow. First, it may be dangerous,
+>> possibly one would get incorrect results from computations, but say in
+>> applications where they are verified externally. You could try disabling
+>> individual specific optimization until the tests pass. You could try
+>> with later versions of gcc-11 (even unreleased) or gcc-12. Still, a lot
+>> of this is easier with a small example, too. You could ignore the
+>> failing test. And it may not be worth it - it may be that you could get
+>> your speedups in a different, but more reliable way.
+>>
+>> Using wsl2 on its own should not necessarily be a problem and the way
+>> you built gcc from the description should be ok, but at some point it
+>> would be worth checking under Linux and running natively - because even
+>> if these are numerical differences, they could be in principle caused by
+>> running on Windows (or in wsl2), at least in the past such differences
+>> were seen (related to (2) above). I would recommend checking on Linux
+>> natively once you have at least a standalone R example.
+>>
+>> Best
+>> Tomas
+>>
+>>
+>> >
+>> > best regards,
+>> > Kieran
+>> > ______________________________________________
+>> > R-devel at r-project.org mailing list
+>> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+
+	[[alternative HTML version deleted]]
+
+
