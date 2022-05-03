@@ -1,0 +1,999 @@
+From @pencer@gr@ve@ @end|ng |rom prod@y@e@com  Sun May  1 21:41:39 2022
+From: @pencer@gr@ve@ @end|ng |rom prod@y@e@com (Spencer Graves)
+Date: Sun, 1 May 2022 14:41:39 -0500
+Subject: [Rd] "with" doesn't work with names with blanks
+Message-ID: <a70b7e3c-8975-dd83-705b-488945bb1af0@prodsyse.com>
+
+Hello, All:
+
+
+	  Column names in a data.frame are not supposed to have trailing 
+blanks.  However, a CRAN package created one, which threw an error with 
+"with".  Consider the following example:
+
+
+ > (tst <- data.frame(1))
+   X1
+1  1
+ > names(tst) <- 'x '
+ > tst$x
+[1] 1
+ > with(txt, x)
+Error in with(txt, x) : object 'txt' not found
+
+
+	  I think it's interesting that "tst$x" works, but "with(txt, x)".
+
+
+	  Comments?
+
+
+	  It's not a major problem, though it took me a while to diagnose.  (I 
+reported it to the maintainer of the package that returned a data.frame 
+with names with trailing blanks.)
+
+
+	  Thanks, for all your work in maintaining and upgrading R -- and in 
+responding to emails from this list.
+
+
+	  Spencer Graves
+
+
+ > sessionInfo()
+R version 4.2.0 (2022-04-22)
+Platform: x86_64-apple-darwin17.0 (64-bit)
+Running under: macOS Big Sur 11.6.5
+
+Matrix products: default
+LAPACK: 
+/Library/Frameworks/R.framework/Versions/4.2/Resources/lib/libRlapack.dylib
+
+locale:
+[1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base
+
+loaded via a namespace (and not attached):
+[1] compiler_4.2.0 tools_4.2.0
+ >
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sun May  1 21:51:20 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sun, 1 May 2022 15:51:20 -0400
+Subject: [Rd] "with" doesn't work with names with blanks
+In-Reply-To: <a70b7e3c-8975-dd83-705b-488945bb1af0@prodsyse.com>
+References: <a70b7e3c-8975-dd83-705b-488945bb1af0@prodsyse.com>
+Message-ID: <44e04e08-a17f-5b34-092d-5fb172dcffb1@gmail.com>
+
+On 01/05/2022 3:41 p.m., Spencer Graves wrote:
+> Hello, All:
+> 
+> 
+> 	  Column names in a data.frame are not supposed to have trailing
+> blanks.  However, a CRAN package created one, which threw an error with
+> "with".  Consider the following example:
+> 
+> 
+>   > (tst <- data.frame(1))
+>     X1
+> 1  1
+>   > names(tst) <- 'x '
+>   > tst$x
+> [1] 1
+>   > with(txt, x)
+> Error in with(txt, x) : object 'txt' not found
+> 
+> 
+> 	  I think it's interesting that "tst$x" works, but "with(txt, x)".
+> 
+> 
+> 	  Comments?
+
+tst$x works because of partial name matching.  (That leniency is one of 
+the reasons for advice to avoid using $ in programs.)  It would be chaos 
+if with() used partial name matching.
+
+You can use
+
+with(txt, `x `)
+
+to include the space in the name.
+
+Duncan Murdoch
+
+> 
+> 
+> 	  It's not a major problem, though it took me a while to diagnose.  (I
+> reported it to the maintainer of the package that returned a data.frame
+> with names with trailing blanks.)
+> 
+> 
+> 	  Thanks, for all your work in maintaining and upgrading R -- and in
+> responding to emails from this list.
+> 
+> 
+> 	  Spencer Graves
+> 
+> 
+>   > sessionInfo()
+> R version 4.2.0 (2022-04-22)
+> Platform: x86_64-apple-darwin17.0 (64-bit)
+> Running under: macOS Big Sur 11.6.5
+> 
+> Matrix products: default
+> LAPACK:
+> /Library/Frameworks/R.framework/Versions/4.2/Resources/lib/libRlapack.dylib
+> 
+> locale:
+> [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+> 
+> attached base packages:
+> [1] stats     graphics  grDevices utils     datasets  methods   base
+> 
+> loaded via a namespace (and not attached):
+> [1] compiler_4.2.0 tools_4.2.0
+>   >
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @pencer@gr@ve@ @end|ng |rom prod@y@e@com  Sun May  1 23:19:32 2022
+From: @pencer@gr@ve@ @end|ng |rom prod@y@e@com (Spencer Graves)
+Date: Sun, 1 May 2022 16:19:32 -0500
+Subject: [Rd] "with" doesn't work with names with blanks
+In-Reply-To: <44e04e08-a17f-5b34-092d-5fb172dcffb1@gmail.com>
+References: <a70b7e3c-8975-dd83-705b-488945bb1af0@prodsyse.com>
+ <44e04e08-a17f-5b34-092d-5fb172dcffb1@gmail.com>
+Message-ID: <0022828d-30c7-43eb-859d-dc77fba32b6e@prodsyse.com>
+
+
+
+On 5/1/22 2:51 PM, Duncan Murdoch wrote:
+> On 01/05/2022 3:41 p.m., Spencer Graves wrote:
+>> Hello, All:
+>>
+>>
+>> ????? Column names in a data.frame are not supposed to have trailing
+>> blanks.? However, a CRAN package created one, which threw an error with
+>> "with".? Consider the following example:
+>>
+>>
+>> ? > (tst <- data.frame(1))
+>> ??? X1
+>> 1? 1
+>> ? > names(tst) <- 'x '
+>> ? > tst$x
+>> [1] 1
+>> ? > with(tst, x)
+>> Error in eval(substitute(expr), data, enclos = parent.frame()) : 
+   object 'x' not found>>
+>>
+>> ????? I think it's interesting that "tst$x" works, but "with(txt, x)".
+>>
+>>
+>> ????? Comments?
+> 
+> tst$x works because of partial name matching.? (That leniency is one of 
+> the reasons for advice to avoid using $ in programs.)? It would be chaos 
+> if with() used partial name matching.
+> 
+> You can use
+> 
+> with(txt, `x `)
+> 
+> to include the space in the name.
+
+
+but to use that, I have to KNOW that the name is `x `, not `x`.  It took 
+me a while to identify that as the source of the problem:  What I saw 
+was that "with(tst
+
+
+	  And thanks for the reminder that you recommend avoiding use of "$".
+
+
+	  sg
+
+
+p.s.  After I found the problem, I fixed it using
+names(x) <- tis::stripBlanks(names(x))
+
+> 
+> Duncan Murdoch
+> 
+>>
+>>
+>> ????? It's not a major problem, though it took me a while to 
+>> diagnose.? (I
+>> reported it to the maintainer of the package that returned a data.frame
+>> with names with trailing blanks.)
+>>
+>>
+>> ????? Thanks, for all your work in maintaining and upgrading R -- and in
+>> responding to emails from this list.
+>>
+>>
+>> ????? Spencer Graves
+>>
+>>
+>> ? > sessionInfo()
+>> R version 4.2.0 (2022-04-22)
+>> Platform: x86_64-apple-darwin17.0 (64-bit)
+>> Running under: macOS Big Sur 11.6.5
+>>
+>> Matrix products: default
+>> LAPACK:
+>> /Library/Frameworks/R.framework/Versions/4.2/Resources/lib/libRlapack.dylib 
+>>
+>>
+>> locale:
+>> [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+>>
+>> attached base packages:
+>> [1] stats???? graphics? grDevices utils???? datasets? methods?? base
+>>
+>> loaded via a namespace (and not attached):
+>> [1] compiler_4.2.0 tools_4.2.0
+>> ? >
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From bbo|ker @end|ng |rom gm@||@com  Sun May  1 23:35:25 2022
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Sun, 1 May 2022 17:35:25 -0400
+Subject: [Rd] "with" doesn't work with names with blanks
+In-Reply-To: <0022828d-30c7-43eb-859d-dc77fba32b6e@prodsyse.com>
+References: <a70b7e3c-8975-dd83-705b-488945bb1af0@prodsyse.com>
+ <44e04e08-a17f-5b34-092d-5fb172dcffb1@gmail.com>
+ <0022828d-30c7-43eb-859d-dc77fba32b6e@prodsyse.com>
+Message-ID: <CABghstTL+L0XkkMtDk-gS47hWaKpnLCR94W3VH1p73zB+WSziA@mail.gmail.com>
+
+Think trimws() from base R would work too?
+
+On Sun, May 1, 2022, 5:20 PM Spencer Graves <spencer.graves at prodsyse.com>
+wrote:
+
+>
+>
+> On 5/1/22 2:51 PM, Duncan Murdoch wrote:
+> > On 01/05/2022 3:41 p.m., Spencer Graves wrote:
+> >> Hello, All:
+> >>
+> >>
+> >>       Column names in a data.frame are not supposed to have trailing
+> >> blanks.  However, a CRAN package created one, which threw an error with
+> >> "with".  Consider the following example:
+> >>
+> >>
+> >>   > (tst <- data.frame(1))
+> >>     X1
+> >> 1  1
+> >>   > names(tst) <- 'x '
+> >>   > tst$x
+> >> [1] 1
+> >>   > with(tst, x)
+> >> Error in eval(substitute(expr), data, enclos = parent.frame()) :
+>    object 'x' not found>>
+> >>
+> >>       I think it's interesting that "tst$x" works, but "with(txt, x)".
+> >>
+> >>
+> >>       Comments?
+> >
+> > tst$x works because of partial name matching.  (That leniency is one of
+> > the reasons for advice to avoid using $ in programs.)  It would be chaos
+> > if with() used partial name matching.
+> >
+> > You can use
+> >
+> > with(txt, `x `)
+> >
+> > to include the space in the name.
+>
+>
+> but to use that, I have to KNOW that the name is `x `, not `x`.  It took
+> me a while to identify that as the source of the problem:  What I saw
+> was that "with(tst
+>
+>
+>           And thanks for the reminder that you recommend avoiding use of
+> "$".
+>
+>
+>           sg
+>
+>
+> p.s.  After I found the problem, I fixed it using
+> names(x) <- tis::stripBlanks(names(x))
+>
+> >
+> > Duncan Murdoch
+> >
+> >>
+> >>
+> >>       It's not a major problem, though it took me a while to
+> >> diagnose.  (I
+> >> reported it to the maintainer of the package that returned a data.frame
+> >> with names with trailing blanks.)
+> >>
+> >>
+> >>       Thanks, for all your work in maintaining and upgrading R -- and in
+> >> responding to emails from this list.
+> >>
+> >>
+> >>       Spencer Graves
+> >>
+> >>
+> >>   > sessionInfo()
+> >> R version 4.2.0 (2022-04-22)
+> >> Platform: x86_64-apple-darwin17.0 (64-bit)
+> >> Running under: macOS Big Sur 11.6.5
+> >>
+> >> Matrix products: default
+> >> LAPACK:
+> >>
+> /Library/Frameworks/R.framework/Versions/4.2/Resources/lib/libRlapack.dylib
+> >>
+> >>
+> >> locale:
+> >> [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+> >>
+> >> attached base packages:
+> >> [1] stats     graphics  grDevices utils     datasets  methods   base
+> >>
+> >> loaded via a namespace (and not attached):
+> >> [1] compiler_4.2.0 tools_4.2.0
+> >>   >
+> >>
+> >> ______________________________________________
+> >> R-devel at r-project.org mailing list
+> >> https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From @pencer@gr@ve@ @end|ng |rom prod@y@e@com  Sun May  1 23:48:05 2022
+From: @pencer@gr@ve@ @end|ng |rom prod@y@e@com (Spencer Graves)
+Date: Sun, 1 May 2022 16:48:05 -0500
+Subject: [Rd] "with" doesn't work with names with blanks
+In-Reply-To: <CABghstTL+L0XkkMtDk-gS47hWaKpnLCR94W3VH1p73zB+WSziA@mail.gmail.com>
+References: <a70b7e3c-8975-dd83-705b-488945bb1af0@prodsyse.com>
+ <44e04e08-a17f-5b34-092d-5fb172dcffb1@gmail.com>
+ <0022828d-30c7-43eb-859d-dc77fba32b6e@prodsyse.com>
+ <CABghstTL+L0XkkMtDk-gS47hWaKpnLCR94W3VH1p73zB+WSziA@mail.gmail.com>
+Message-ID: <1150bbc0-93dc-0837-ebc7-1731ebee3a65@prodsyse.com>
+
+
+
+On 5/1/22 4:35 PM, Ben Bolker wrote:
+> Think trimws() from base R would work too?
+
+
+Yes.  Thanks.  sg
+
+> 
+> On Sun, May 1, 2022, 5:20 PM Spencer Graves <spencer.graves at prodsyse.com 
+> <mailto:spencer.graves at prodsyse.com>> wrote:
+> 
+> 
+> 
+>     On 5/1/22 2:51 PM, Duncan Murdoch wrote:
+>      > On 01/05/2022 3:41 p.m., Spencer Graves wrote:
+>      >> Hello, All:
+>      >>
+>      >>
+>      >> ????? Column names in a data.frame are not supposed to have trailing
+>      >> blanks.? However, a CRAN package created one, which threw an
+>     error with
+>      >> "with".? Consider the following example:
+>      >>
+>      >>
+>      >> ? > (tst <- data.frame(1))
+>      >> ??? X1
+>      >> 1? 1
+>      >> ? > names(tst) <- 'x '
+>      >> ? > tst$x
+>      >> [1] 1
+>      >> ? > with(tst, x)
+>      >> Error in eval(substitute(expr), data, enclos = parent.frame()) :
+>      ? ?object 'x' not found>>
+>      >>
+>      >> ????? I think it's interesting that "tst$x" works, but
+>     "with(txt, x)".
+>      >>
+>      >>
+>      >> ????? Comments?
+>      >
+>      > tst$x works because of partial name matching.? (That leniency is
+>     one of
+>      > the reasons for advice to avoid using $ in programs.)? It would
+>     be chaos
+>      > if with() used partial name matching.
+>      >
+>      > You can use
+>      >
+>      > with(txt, `x `)
+>      >
+>      > to include the space in the name.
+> 
+> 
+>     but to use that, I have to KNOW that the name is `x `, not `x`.? It
+>     took
+>     me a while to identify that as the source of the problem:? What I saw
+>     was that "with(tst
+> 
+> 
+>      ? ? ? ? ? And thanks for the reminder that you recommend avoiding
+>     use of "$".
+> 
+> 
+>      ? ? ? ? ? sg
+> 
+> 
+>     p.s.? After I found the problem, I fixed it using
+>     names(x) <- tis::stripBlanks(names(x))
+> 
+>      >
+>      > Duncan Murdoch
+>      >
+>      >>
+>      >>
+>      >> ????? It's not a major problem, though it took me a while to
+>      >> diagnose.? (I
+>      >> reported it to the maintainer of the package that returned a
+>     data.frame
+>      >> with names with trailing blanks.)
+>      >>
+>      >>
+>      >> ????? Thanks, for all your work in maintaining and upgrading R
+>     -- and in
+>      >> responding to emails from this list.
+>      >>
+>      >>
+>      >> ????? Spencer Graves
+>      >>
+>      >>
+>      >> ? > sessionInfo()
+>      >> R version 4.2.0 (2022-04-22)
+>      >> Platform: x86_64-apple-darwin17.0 (64-bit)
+>      >> Running under: macOS Big Sur 11.6.5
+>      >>
+>      >> Matrix products: default
+>      >> LAPACK:
+>      >>
+>     /Library/Frameworks/R.framework/Versions/4.2/Resources/lib/libRlapack.dylib
+> 
+>      >>
+>      >>
+>      >> locale:
+>      >> [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+>      >>
+>      >> attached base packages:
+>      >> [1] stats???? graphics? grDevices utils???? datasets? methods?? base
+>      >>
+>      >> loaded via a namespace (and not attached):
+>      >> [1] compiler_4.2.0 tools_4.2.0
+>      >> ? >
+>      >>
+>      >> ______________________________________________
+>      >> R-devel at r-project.org <mailto:R-devel at r-project.org> mailing list
+>      >> https://stat.ethz.ch/mailman/listinfo/r-devel
+>     <https://stat.ethz.ch/mailman/listinfo/r-devel>
+>      >
+> 
+>     ______________________________________________
+>     R-devel at r-project.org <mailto:R-devel at r-project.org> mailing list
+>     https://stat.ethz.ch/mailman/listinfo/r-devel
+>     <https://stat.ethz.ch/mailman/listinfo/r-devel>
+>
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Mon May  2 01:01:43 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sun, 1 May 2022 19:01:43 -0400
+Subject: [Rd] "with" doesn't work with names with blanks
+In-Reply-To: <0022828d-30c7-43eb-859d-dc77fba32b6e@prodsyse.com>
+References: <a70b7e3c-8975-dd83-705b-488945bb1af0@prodsyse.com>
+ <44e04e08-a17f-5b34-092d-5fb172dcffb1@gmail.com>
+ <0022828d-30c7-43eb-859d-dc77fba32b6e@prodsyse.com>
+Message-ID: <f96ece4e-3307-b785-e953-cd5db6252790@gmail.com>
+
+On 01/05/2022 5:19 p.m., Spencer Graves wrote:
+> 
+> 
+> On 5/1/22 2:51 PM, Duncan Murdoch wrote:
+>> On 01/05/2022 3:41 p.m., Spencer Graves wrote:
+>>> Hello, All:
+>>>
+>>>
+>>>  ????? Column names in a data.frame are not supposed to have trailing
+>>> blanks.? However, a CRAN package created one, which threw an error with
+>>> "with".? Consider the following example:
+>>>
+>>>
+>>>  ? > (tst <- data.frame(1))
+>>>  ??? X1
+>>> 1? 1
+>>>  ? > names(tst) <- 'x '
+>>>  ? > tst$x
+>>> [1] 1
+>>>  ? > with(tst, x)
+>>> Error in eval(substitute(expr), data, enclos = parent.frame()) :
+>     object 'x' not found>>
+>>>
+>>>  ????? I think it's interesting that "tst$x" works, but "with(txt, x)".
+>>>
+>>>
+>>>  ????? Comments?
+>>
+>> tst$x works because of partial name matching.? (That leniency is one of
+>> the reasons for advice to avoid using $ in programs.)? It would be chaos
+>> if with() used partial name matching.
+>>
+>> You can use
+>>
+>> with(txt, `x `)
+>>
+>> to include the space in the name.
+> 
+> 
+> but to use that, I have to KNOW that the name is `x `, not `x`.  It took
+> me a while to identify that as the source of the problem:  What I saw
+> was that "with(tst
+
+Printing names(tst) would make it somewhat clear.  Running str(tst) 
+(which is what I'd do) would hide it:
+
+ > tst$y <- 2
+ > tst$x <- 3
+ > str(tst)
+'data.frame':	1 obs. of  3 variables:
+  $ x : num 1
+  $ y : num 2
+  $ x : num 3
+
+Duncan Murdoch
+
+> 
+> 
+> 	  And thanks for the reminder that you recommend avoiding use of "$".
+> 
+> 
+> 	  sg
+> 
+> 
+> p.s.  After I found the problem, I fixed it using
+> names(x) <- tis::stripBlanks(names(x))
+> 
+>>
+>> Duncan Murdoch
+>>
+>>>
+>>>
+>>>  ????? It's not a major problem, though it took me a while to
+>>> diagnose.? (I
+>>> reported it to the maintainer of the package that returned a data.frame
+>>> with names with trailing blanks.)
+>>>
+>>>
+>>>  ????? Thanks, for all your work in maintaining and upgrading R -- and in
+>>> responding to emails from this list.
+>>>
+>>>
+>>>  ????? Spencer Graves
+>>>
+>>>
+>>>  ? > sessionInfo()
+>>> R version 4.2.0 (2022-04-22)
+>>> Platform: x86_64-apple-darwin17.0 (64-bit)
+>>> Running under: macOS Big Sur 11.6.5
+>>>
+>>> Matrix products: default
+>>> LAPACK:
+>>> /Library/Frameworks/R.framework/Versions/4.2/Resources/lib/libRlapack.dylib
+>>>
+>>>
+>>> locale:
+>>> [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+>>>
+>>> attached base packages:
+>>> [1] stats???? graphics? grDevices utils???? datasets? methods?? base
+>>>
+>>> loaded via a namespace (and not attached):
+>>> [1] compiler_4.2.0 tools_4.2.0
+>>>  ? >
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+
+
+From m@rc@we|be| @end|ng |rom en|@o-p@rtner@@com  Mon May  2 10:12:01 2022
+From: m@rc@we|be| @end|ng |rom en|@o-p@rtner@@com (Marc Weibel)
+Date: Mon, 2 May 2022 10:12:01 +0200
+Subject: [Rd] New R version - Issue with as.vector coercion on data.frame
+Message-ID: <8CF8374A-8E45-47FD-BD8A-418102EA6729@eniso-partners.com>
+
+Hi 
+
+I recently upgraded to the latest r version and got an issue with the command as.vector() on a data.frame object. With the previous R version the returned object was a vector but now it is formatted as a list (see below)
+
+
+> futures_quotes
+  SMI Future SMIM Future Euro Stoxx 50 Future S&P 500 Mini Future FTSE 100 Future Nikkei 225 Future
+1      11999        2871                 3692                4150            7419             26853
+> class(futures_quotes)
+[1] "data.frame"
+
+> as.vector(futures_quotes[1,1:3])
+$`SMI Future`
+[1] 11999
+
+$`SMIM Future`
+[1] 2871
+
+$`Euro Stoxx 50 Future`
+[1] 3692
+
+> class(as.vector(futures_quotes[1,1:3]))
+[1] "list"
+
+
+Can you help me on this ? (I solved the issue temporarily with as.vector(t(futures_quotes[1,1:3])) 
+
+Kind regards
+Marc Weibel
+
+
+
+ <http://www.enisopartners.com/>	
+Dr. Marc Weibel
+CIO & Partner
+Tel: +41 44 286 17 02
+Mob: +41 78 892 96 55
+E-Mail: marc.weibel at enisopartners.com <mailto: marc.weibel at enisopartners.com>
+ 
+Eniso Partners AG
+Claridenstrasse 34 | Postfach | 8022 Z?rich
+ 
+ <https://www.linkedin.com/in/marc-weibel-29a396/>  
+Based on previous e-mail correspondence with you and/or an agreement reached with you, Eniso Partners considers itself authorized to contact you via unsecured e-mail. Warning: E-mails can involve SUBSTANTIAL RISKS, e.g. lack of confidentiality, potential manipulation of contents and/or sender's address, incorrect recipient (misdirection), viruses etc. Eniso Partners assumes no responsibility for any loss or damage resulting from the use of e-mails. Eniso Partners recommends in particular that you do NOT SEND ANY SENSITIVE INFORMATION, that you do not include details of the previous message in any reply, and that you enter e-mail address(es) manually every time you write an e-mail. Please notify Eniso Partners immediately if you received this e-mail by mistake or if you do not wish to receive any further e-mail correspondence. If you have received this e-mail by mistake, please completely delete it (and any attachments) and do not forward it or inform any other person of its contents.
+
+
+	[[alternative HTML version deleted]]
+
+
+From hugh@p@r@on@ge @end|ng |rom gm@||@com  Mon May  2 11:24:42 2022
+From: hugh@p@r@on@ge @end|ng |rom gm@||@com (Hugh Parsonage)
+Date: Mon, 2 May 2022 19:24:42 +1000
+Subject: [Rd] 
+ New R version - Issue with as.vector coercion on data.frame
+In-Reply-To: <8CF8374A-8E45-47FD-BD8A-418102EA6729@eniso-partners.com>
+References: <8CF8374A-8E45-47FD-BD8A-418102EA6729@eniso-partners.com>
+Message-ID: <CAJmOi+M7RREJx9SJatd2bnwk6X15n0w_mKD7m5-5=7FtmFdvww@mail.gmail.com>
+
+This is intended. From NEWS, a simple text search for "as.vector" reveals
+
+> as.vector() gains a data.frame method which returns a simple named list, also clearing a long standing ?FIXME? to enable as.vector(<data.frame>, mode="list"). This breaks code relying on as.vector(<data.frame>) to return the unchanged data frame.
+
+On Mon, 2 May 2022 at 19:19, Marc Weibel <marc.weibel at eniso-partners.com> wrote:
+>
+> Hi
+>
+> I recently upgraded to the latest r version and got an issue with the command as.vector() on a data.frame object. With the previous R version the returned object was a vector but now it is formatted as a list (see below)
+>
+>
+> > futures_quotes
+>   SMI Future SMIM Future Euro Stoxx 50 Future S&P 500 Mini Future FTSE 100 Future Nikkei 225 Future
+> 1      11999        2871                 3692                4150            7419             26853
+> > class(futures_quotes)
+> [1] "data.frame"
+>
+> > as.vector(futures_quotes[1,1:3])
+> $`SMI Future`
+> [1] 11999
+>
+> $`SMIM Future`
+> [1] 2871
+>
+> $`Euro Stoxx 50 Future`
+> [1] 3692
+>
+> > class(as.vector(futures_quotes[1,1:3]))
+> [1] "list"
+>
+>
+> Can you help me on this ? (I solved the issue temporarily with as.vector(t(futures_quotes[1,1:3]))
+>
+> Kind regards
+> Marc Weibel
+>
+>
+>
+>  <http://www.enisopartners.com/>
+> Dr. Marc Weibel
+> CIO & Partner
+> Tel: +41 44 286 17 02
+> Mob: +41 78 892 96 55
+> E-Mail: marc.weibel at enisopartners.com <mailto: marc.weibel at enisopartners.com>
+>
+> Eniso Partners AG
+> Claridenstrasse 34 | Postfach | 8022 Z?rich
+>
+>  <https://www.linkedin.com/in/marc-weibel-29a396/>
+> Based on previous e-mail correspondence with you and/or an agreement reached with you, Eniso Partners considers itself authorized to contact you via unsecured e-mail. Warning: E-mails can involve SUBSTANTIAL RISKS, e.g. lack of confidentiality, potential manipulation of contents and/or sender's address, incorrect recipient (misdirection), viruses etc. Eniso Partners assumes no responsibility for any loss or damage resulting from the use of e-mails. Eniso Partners recommends in particular that you do NOT SEND ANY SENSITIVE INFORMATION, that you do not include details of the previous message in any reply, and that you enter e-mail address(es) manually every time you write an e-mail. Please notify Eniso Partners immediately if you received this e-mail by mistake or if you do not wish to receive any further e-mail correspondence. If you have received this e-mail by mistake, please completely delete it (and any attachments) and do not forward it or inform any other person of its contents.
+>
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From w||||@mwdun|@p @end|ng |rom gm@||@com  Mon May  2 17:07:41 2022
+From: w||||@mwdun|@p @end|ng |rom gm@||@com (Bill Dunlap)
+Date: Mon, 2 May 2022 08:07:41 -0700
+Subject: [Rd] 
+ New R version - Issue with as.vector coercion on data.frame
+In-Reply-To: <8CF8374A-8E45-47FD-BD8A-418102EA6729@eniso-partners.com>
+References: <8CF8374A-8E45-47FD-BD8A-418102EA6729@eniso-partners.com>
+Message-ID: <CAHqSRuRC=Kptkcp6us6MsgYy2La+b=189fat=g4Y55apaB8mSA@mail.gmail.com>
+
+In R-4.1.2 (and before) as.vector(aDataFrame) returned aDataFrame,
+unchanged.  E.g.,
+  4.1.2> aDataFrame <- data.frame(X=101:103, Y=201:203, Z=301:303)
+  4.1.2> attr(aDataFrame, "anAttr") <- "an attribute"
+  4.1.2> identical(as.vector(aDataFrame), aDataFrame)
+  [1] TRUE
+  4.1.2> dput(aDataFrame)
+  structure(list(X = 101:103, Y = 201:203, Z = 301:303), class =
+"data.frame", row.names = c(NA, -3L), anAttr = "an attribute")
+
+In R-4.2.0 it removes the class, names, and row.names attributes, but
+leaves other stray attributes alone.  E.g.,
+  4.2.0> aDataFrame <- data.frame(X=101:103, Y=201:203, Z=301:303)
+  4.2.0> attr(aDataFrame, "anAttr") <- "an attribute"
+  4.2.0> identical(as.vector(aDataFrame), aDataFrame)
+  [1] FALSE
+  4.2.0> dput(aDataFrame)
+  structure(list(X = 101:103, Y = 201:203, Z = 301:303), class =
+"data.frame", row.names = c(NA, -3L), anAttr = "an attribute")
+  4.2.0> dput(as.vector(aDataFrame))
+  structure(list(X = 101:103, Y = 201:203, Z = 301:303), anAttr = "an
+attribute")
+
+In both versions as.list(aDataFrame) returns the same thing that R-4.1.2's
+as.vector(aDataFrame) did.
+
+I think that as.vector() is a function that few people should use.   It has
+almost nothing to do with with the notion of a vector in math or physics.
+
+-Bill
+
+On Mon, May 2, 2022 at 2:19 AM Marc Weibel <marc.weibel at eniso-partners.com>
+wrote:
+
+> Hi
+>
+> I recently upgraded to the latest r version and got an issue with the
+> command as.vector() on a data.frame object. With the previous R version the
+> returned object was a vector but now it is formatted as a list (see below)
+>
+>
+> > futures_quotes
+>   SMI Future SMIM Future Euro Stoxx 50 Future S&P 500 Mini Future FTSE 100
+> Future Nikkei 225 Future
+> 1      11999        2871                 3692                4150
+>   7419             26853
+> > class(futures_quotes)
+> [1] "data.frame"
+>
+> > as.vector(futures_quotes[1,1:3])
+> $`SMI Future`
+> [1] 11999
+>
+> $`SMIM Future`
+> [1] 2871
+>
+> $`Euro Stoxx 50 Future`
+> [1] 3692
+>
+> > class(as.vector(futures_quotes[1,1:3]))
+> [1] "list"
+>
+>
+> Can you help me on this ? (I solved the issue temporarily with
+> as.vector(t(futures_quotes[1,1:3]))
+>
+> Kind regards
+> Marc Weibel
+>
+>
+>
+>  <http://www.enisopartners.com/>
+> Dr. Marc Weibel
+> CIO & Partner
+> Tel: +41 44 286 17 02
+> Mob: +41 78 892 96 55
+> E-Mail: marc.weibel at enisopartners.com <mailto:
+> marc.weibel at enisopartners.com>
+>
+> Eniso Partners AG
+> Claridenstrasse 34 | Postfach | 8022 Z?rich
+>
+>  <https://www.linkedin.com/in/marc-weibel-29a396/>
+> Based on previous e-mail correspondence with you and/or an agreement
+> reached with you, Eniso Partners considers itself authorized to contact you
+> via unsecured e-mail. Warning: E-mails can involve SUBSTANTIAL RISKS, e.g.
+> lack of confidentiality, potential manipulation of contents and/or sender's
+> address, incorrect recipient (misdirection), viruses etc. Eniso Partners
+> assumes no responsibility for any loss or damage resulting from the use of
+> e-mails. Eniso Partners recommends in particular that you do NOT SEND ANY
+> SENSITIVE INFORMATION, that you do not include details of the previous
+> message in any reply, and that you enter e-mail address(es) manually every
+> time you write an e-mail. Please notify Eniso Partners immediately if you
+> received this e-mail by mistake or if you do not wish to receive any
+> further e-mail correspondence. If you have received this e-mail by mistake,
+> please completely delete it (and any attachments) and do not forward it or
+> inform any other person of its contents.
+>
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From w||||@mwdun|@p @end|ng |rom gm@||@com  Mon May  2 17:33:58 2022
+From: w||||@mwdun|@p @end|ng |rom gm@||@com (Bill Dunlap)
+Date: Mon, 2 May 2022 08:33:58 -0700
+Subject: [Rd] 
+ New R version - Issue with as.vector coercion on data.frame
+In-Reply-To: <CAHqSRuRC=Kptkcp6us6MsgYy2La+b=189fat=g4Y55apaB8mSA@mail.gmail.com>
+References: <8CF8374A-8E45-47FD-BD8A-418102EA6729@eniso-partners.com>
+ <CAHqSRuRC=Kptkcp6us6MsgYy2La+b=189fat=g4Y55apaB8mSA@mail.gmail.com>
+Message-ID: <CAHqSRuRiWWfFxY-rOa6LM7brHRaH5dEkToVnOy=L-wM_0xk=Wg@mail.gmail.com>
+
+> In both versions as.list(aDataFrame) returns the same thing that
+R-4.1.2's as.vector(aDataFrame) did.
+
+I sent this too quickly.  I meant to say that as.list(aDataFrame) did the
+same in both versions.  Since as.vector(aDataFrame) in 4.1.2 did nothing,
+you can just drop that line from your code.
+
+-Bill
+
+On Mon, May 2, 2022 at 8:07 AM Bill Dunlap <williamwdunlap at gmail.com> wrote:
+
+> In R-4.1.2 (and before) as.vector(aDataFrame) returned aDataFrame,
+> unchanged.  E.g.,
+>   4.1.2> aDataFrame <- data.frame(X=101:103, Y=201:203, Z=301:303)
+>   4.1.2> attr(aDataFrame, "anAttr") <- "an attribute"
+>   4.1.2> identical(as.vector(aDataFrame), aDataFrame)
+>   [1] TRUE
+>   4.1.2> dput(aDataFrame)
+>   structure(list(X = 101:103, Y = 201:203, Z = 301:303), class =
+> "data.frame", row.names = c(NA, -3L), anAttr = "an attribute")
+>
+> In R-4.2.0 it removes the class, names, and row.names attributes, but
+> leaves other stray attributes alone.  E.g.,
+>   4.2.0> aDataFrame <- data.frame(X=101:103, Y=201:203, Z=301:303)
+>   4.2.0> attr(aDataFrame, "anAttr") <- "an attribute"
+>   4.2.0> identical(as.vector(aDataFrame), aDataFrame)
+>   [1] FALSE
+>   4.2.0> dput(aDataFrame)
+>   structure(list(X = 101:103, Y = 201:203, Z = 301:303), class =
+> "data.frame", row.names = c(NA, -3L), anAttr = "an attribute")
+>   4.2.0> dput(as.vector(aDataFrame))
+>   structure(list(X = 101:103, Y = 201:203, Z = 301:303), anAttr = "an
+> attribute")
+>
+> In both versions as.list(aDataFrame) returns the same thing that R-4.1.2's
+> as.vector(aDataFrame) did.
+>
+> I think that as.vector() is a function that few people should use.   It
+> has almost nothing to do with with the notion of a vector in math or
+> physics.
+>
+> -Bill
+>
+> On Mon, May 2, 2022 at 2:19 AM Marc Weibel <marc.weibel at eniso-partners.com>
+> wrote:
+>
+>> Hi
+>>
+>> I recently upgraded to the latest r version and got an issue with the
+>> command as.vector() on a data.frame object. With the previous R version the
+>> returned object was a vector but now it is formatted as a list (see below)
+>>
+>>
+>> > futures_quotes
+>>   SMI Future SMIM Future Euro Stoxx 50 Future S&P 500 Mini Future FTSE
+>> 100 Future Nikkei 225 Future
+>> 1      11999        2871                 3692                4150
+>>     7419             26853
+>> > class(futures_quotes)
+>> [1] "data.frame"
+>>
+>> > as.vector(futures_quotes[1,1:3])
+>> $`SMI Future`
+>> [1] 11999
+>>
+>> $`SMIM Future`
+>> [1] 2871
+>>
+>> $`Euro Stoxx 50 Future`
+>> [1] 3692
+>>
+>> > class(as.vector(futures_quotes[1,1:3]))
+>> [1] "list"
+>>
+>>
+>> Can you help me on this ? (I solved the issue temporarily with
+>> as.vector(t(futures_quotes[1,1:3]))
+>>
+>> Kind regards
+>> Marc Weibel
+>>
+>>
+>>
+>>  <http://www.enisopartners.com/>
+>> Dr. Marc Weibel
+>> CIO & Partner
+>> Tel: +41 44 286 17 02
+>> Mob: +41 78 892 96 55
+>> E-Mail: marc.weibel at enisopartners.com <mailto:
+>> marc.weibel at enisopartners.com>
+>>
+>> Eniso Partners AG
+>> Claridenstrasse 34 | Postfach | 8022 Z?rich
+>>
+>>  <https://www.linkedin.com/in/marc-weibel-29a396/>
+>> Based on previous e-mail correspondence with you and/or an agreement
+>> reached with you, Eniso Partners considers itself authorized to contact you
+>> via unsecured e-mail. Warning: E-mails can involve SUBSTANTIAL RISKS, e.g.
+>> lack of confidentiality, potential manipulation of contents and/or sender's
+>> address, incorrect recipient (misdirection), viruses etc. Eniso Partners
+>> assumes no responsibility for any loss or damage resulting from the use of
+>> e-mails. Eniso Partners recommends in particular that you do NOT SEND ANY
+>> SENSITIVE INFORMATION, that you do not include details of the previous
+>> message in any reply, and that you enter e-mail address(es) manually every
+>> time you write an e-mail. Please notify Eniso Partners immediately if you
+>> received this e-mail by mistake or if you do not wish to receive any
+>> further e-mail correspondence. If you have received this e-mail by mistake,
+>> please completely delete it (and any attachments) and do not forward it or
+>> inform any other person of its contents.
+>>
+>>
+>>         [[alternative HTML version deleted]]
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+
+	[[alternative HTML version deleted]]
+
+
