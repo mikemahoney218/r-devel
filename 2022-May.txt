@@ -1195,3 +1195,286 @@ Dirk
 dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
 
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu May  5 16:08:33 2022
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 5 May 2022 16:08:33 +0200
+Subject: [Rd] 
+ New R version - Issue with as.vector coercion on data.frame
+In-Reply-To: <CAHqSRuRC=Kptkcp6us6MsgYy2La+b=189fat=g4Y55apaB8mSA@mail.gmail.com>
+References: <8CF8374A-8E45-47FD-BD8A-418102EA6729@eniso-partners.com>
+ <CAHqSRuRC=Kptkcp6us6MsgYy2La+b=189fat=g4Y55apaB8mSA@mail.gmail.com>
+Message-ID: <25203.55905.107203.132628@stat.math.ethz.ch>
+
+>>>>> Bill Dunlap 
+>>>>>     on Mon, 2 May 2022 08:07:41 -0700 writes:
+
+    > In R-4.1.2 (and before) as.vector(aDataFrame) returned aDataFrame,
+    > unchanged.  E.g.,
+    4.1.2> aDataFrame <- data.frame(X=101:103, Y=201:203, Z=301:303)
+    4.1.2> attr(aDataFrame, "anAttr") <- "an attribute"
+    4.1.2> identical(as.vector(aDataFrame), aDataFrame)
+    > [1] TRUE
+    4.1.2> dput(aDataFrame)
+    > structure(list(X = 101:103, Y = 201:203, Z = 301:303), class =
+    > "data.frame", row.names = c(NA, -3L), anAttr = "an attribute")
+
+    > In R-4.2.0 it
+
+is based on the already existing  as.list.data.frame() which
+
+    > removes the class, names, and row.names attributes, but
+    > leaves other stray attributes alone.  E.g.,
+    4.2.0> aDataFrame <- data.frame(X=101:103, Y=201:203, Z=301:303)
+    4.2.0> attr(aDataFrame, "anAttr") <- "an attribute"
+    4.2.0> identical(as.vector(aDataFrame), aDataFrame)
+    > [1] FALSE
+    4.2.0> dput(aDataFrame)
+    > structure(list(X = 101:103, Y = 201:203, Z = 301:303), class =
+    > "data.frame", row.names = c(NA, -3L), anAttr = "an attribute")
+    4.2.0> dput(as.vector(aDataFrame))
+    > structure(list(X = 101:103, Y = 201:203, Z = 301:303), anAttr = "an
+    > attribute")
+
+Yes, this was a somewhat "hard" change in an effort to slightly
+improve the still unsatisfactory behavior of  as.vector() and is.vector().
+and it solved a very long standing FIXME / TODO which wanted
+that
+
+   as.vector(df, mode = "list")    should be the same as
+   as.list  (df)
+
+
+   [....]
+
+    > I think that as.vector() is a function that few people should use.   It has
+    > almost nothing to do with with the notion of a vector in math or physics.
+
+I tend to agree on that.
+
+The confusion comes from the fact that in R (and S before it, no?)
+a list() or an expression() are also a 'vector'  {a generalized one},
+
+but that math/physics/... term of a "vector" is what is an
+"atomic vector" in R.
+
+Note that we also ventured into a relatively time confusing effort
+to do more about the  as.vector()  <-->  is.vector()  decrepancies.
+
+One step towards that I'd like to take up again --- and was in
+the mean time helped by some package maintainers who adapted
+their code --- is to make  is.atomic(.)  truly a test for the
+above "atomic vector"s.
+It currently is *not*, as   is.atomic(NULL)   is TRUE,
+but NULL is really not an atomic vector.
+
+So our plan has been that is.atomic(NULL) should become FALSE, so
+programmeRs could use is.atomic() checks before using
+as.vector(),  which would bring them back to the traditional
+realm of 1st semester math where your vector spaces are
+typically R^n (or C^n ..)
+
+Martin
+
+
+    > -Bill
+
+    > On Mon, May 2, 2022 at 2:19 AM Marc Weibel <marc.weibel at eniso-partners.com>
+    > wrote:
+
+    >> Hi
+    >> 
+    >> I recently upgraded to the latest r version and got an issue with the
+    >> command as.vector() on a data.frame object. With the previous R version the
+    >> returned object was a vector but now it is formatted as a list (see below)
+    >> 
+    >> 
+    >> > futures_quotes
+    >> SMI Future SMIM Future Euro Stoxx 50 Future S&P 500 Mini Future FTSE 100
+    >> Future Nikkei 225 Future
+    >> 1      11999        2871                 3692                4150
+    >> 7419             26853
+    >> > class(futures_quotes)
+    >> [1] "data.frame"
+    >> 
+    >> > as.vector(futures_quotes[1,1:3])
+    >> $`SMI Future`
+    >> [1] 11999
+    >> 
+    >> $`SMIM Future`
+    >> [1] 2871
+    >> 
+    >> $`Euro Stoxx 50 Future`
+    >> [1] 3692
+    >> 
+    >> > class(as.vector(futures_quotes[1,1:3]))
+    >> [1] "list"
+    >> 
+    >> 
+    >> Can you help me on this ? (I solved the issue temporarily with
+    >> as.vector(t(futures_quotes[1,1:3]))
+    >> 
+    >> Kind regards
+    >> Marc Weibel
+    >> 
+    >> 
+    >> <http://www.enisopartners.com/>
+    >> Dr. Marc Weibel
+    >> CIO & Partner
+    >> Tel: +41 44 286 17 02
+    >> Mob: +41 78 892 96 55
+    >> E-Mail: marc.weibel at enisopartners.com <mailto:
+    >> marc.weibel at enisopartners.com>
+    >> 
+    >> Eniso Partners AG
+    >> Claridenstrasse 34 | Postfach | 8022 Z?rich
+    >> 
+    >> <https://www.linkedin.com/in/marc-weibel-29a396/>
+
+
+From jo@ec|@ud|o@|@r|@ @end|ng |rom gm@||@com  Thu May  5 17:17:13 2022
+From: jo@ec|@ud|o@|@r|@ @end|ng |rom gm@||@com (jcfaria)
+Date: Thu, 05 May 2022 15:17:13 +0000
+Subject: [Rd] Rgui.exe 4.2.0 does not receive characters via the Windows
+ API's PostMessage function
+Message-ID: <em26d64aef-2f66-415f-be9d-ae71a91c1d56@dell>
+
+Hello,
+
+Rgui.exe 4.2.0 does not receive characters via the Windows API's 
+PostMessage function.
+
+The Tinn-R project sends messages to Rgui.exe (SDI mode) via the Windows 
+API's PostMessage function.
+A simplification of the code (in object Pascal) can be seen below.
+
+procedure TfMain.btnPasteClick(Sender: TObject);
+var
+   i: integer;
+   sTmp: WideString;
+   hBN: HWND;
+
+begin
+   hBN:= FindWindowA(nil,
+                     'R Console (64-bit)');
+
+   sTmp:= 'sd';
+
+   for i:= 1 to Length(sTmp) do begin
+     PostMessage(hBN,
+                 WM_CHAR,
+                 Ord(sTmp[i]),
+                 0);
+   end;
+
+   PostMessage(hBN,
+               WM_KEYDOWN,
+               VK_RETURN, 0);
+end;
+
+This code has always worked fine for all versions of Rgui.exe with the 
+exception of the last one released, ie 4.2.0.
+
+We've been trying to get around the problem on the Object Pascal side, 
+but without success so far.
+
+Does anyone connected to the compilation of Rqui.exe know what the 
+problem is?
+
+Best,
+///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+Jose Claudio Faria
+UESC/DCET/Brasil
+joseclaudio.faria at gmail.com
+Telefones:
+55(73)3680.5545 - UESC
+55(73)99966.9100 - VIVO
+///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+If you have software to deal with statistics, you have arms,
+if you have good software, you have arms and legs,
+if you have software like R, you have arms, legs and wings...
+the height of your flight depends only on you.
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Thu May  5 18:17:53 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Thu, 5 May 2022 12:17:53 -0400
+Subject: [Rd] Rgui.exe 4.2.0 does not receive characters via the Windows
+ API's PostMessage function
+In-Reply-To: <em26d64aef-2f66-415f-be9d-ae71a91c1d56@dell>
+References: <em26d64aef-2f66-415f-be9d-ae71a91c1d56@dell>
+Message-ID: <8e41c7bc-466c-ca00-6141-66520f8818b8@gmail.com>
+
+On 05/05/2022 11:17 a.m., jcfaria wrote:
+> Hello,
+> 
+> Rgui.exe 4.2.0 does not receive characters via the Windows API's
+> PostMessage function.
+> 
+> The Tinn-R project sends messages to Rgui.exe (SDI mode) via the Windows
+> API's PostMessage function.
+> A simplification of the code (in object Pascal) can be seen below.
+> 
+> procedure TfMain.btnPasteClick(Sender: TObject);
+> var
+>     i: integer;
+>     sTmp: WideString;
+>     hBN: HWND;
+> 
+> begin
+>     hBN:= FindWindowA(nil,
+>                       'R Console (64-bit)');
+> 
+>     sTmp:= 'sd';
+> 
+>     for i:= 1 to Length(sTmp) do begin
+>       PostMessage(hBN,
+>                   WM_CHAR,
+>                   Ord(sTmp[i]),
+>                   0);
+>     end;
+> 
+>     PostMessage(hBN,
+>                 WM_KEYDOWN,
+>                 VK_RETURN, 0);
+> end;
+> 
+> This code has always worked fine for all versions of Rgui.exe with the
+> exception of the last one released, ie 4.2.0.
+> 
+> We've been trying to get around the problem on the Object Pascal side,
+> but without success so far.
+> 
+> Does anyone connected to the compilation of Rqui.exe know what the
+> problem is?
+
+It could be that the new build enforces Windows security more 
+stringently.  More details are described in the answer to this question: 
+  https://stackoverflow.com/a/40139498/2554330, but at a minimum you 
+should be checking the return value from PostMessage.
+
+Duncan Murdoch
+
+> 
+> Best,
+> ///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+> Jose Claudio Faria
+> UESC/DCET/Brasil
+> joseclaudio.faria at gmail.com
+> Telefones:
+> 55(73)3680.5545 - UESC
+> 55(73)99966.9100 - VIVO
+> ///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+> If you have software to deal with statistics, you have arms,
+> if you have good software, you have arms and legs,
+> if you have software like R, you have arms, legs and wings...
+> the height of your flight depends only on you.
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
