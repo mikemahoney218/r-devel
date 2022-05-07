@@ -1478,3 +1478,322 @@ Duncan Murdoch
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From jo@ec|@ud|o@|@r|@ @end|ng |rom gm@||@com  Fri May  6 07:03:31 2022
+From: jo@ec|@ud|o@|@r|@ @end|ng |rom gm@||@com (jcfaria)
+Date: Fri, 06 May 2022 05:03:31 +0000
+Subject: [Rd] Rgui.exe 4.2.0 does not receive characters via the Windows
+ API's PostMessage function
+In-Reply-To: <8e41c7bc-466c-ca00-6141-66520f8818b8@gmail.com>
+References: <em26d64aef-2f66-415f-be9d-ae71a91c1d56@dell>
+ <8e41c7bc-466c-ca00-6141-66520f8818b8@gmail.com>
+Message-ID: <em8cb2eaf6-27fe-4d26-84b2-3eef11fa9530@dell>
+
+Dear Duncan,
+I believe the problem is of a different nature.
+I get TRUE 3 times running the code below:
+
+procedure TfMain.btnPasteClick(Sender: TObject);
+var
+   i: integer;
+   sTmp: string;
+   hBN: HWND;
+   j: bool;
+
+begin
+   hBN:= FindWindowA(nil,
+                     'R Console (64-bit)');
+
+   sTmp:= 'sd';
+
+   for i:= 1 to Length(sTmp) do begin
+     j:= PostMessage(hBN,
+                     WM_CHAR,
+                     Ord(sTmp[i]),
+                     0);
+
+     ShowMessage(BoolToStr(j,
+                           True));
+   end;
+
+   j:= PostMessage(hBN,
+               WM_KEYDOWN,
+               VK_RETURN, 0);
+
+   ShowMessage(BoolToStr(j,
+                         True));
+end;
+
+That is, Rgui is receiving the message of the characters (via 
+PostMessage), but it is blocking because it does not show them in the 
+console.
+The only thing Rgui blames is Carriage Return, as it adds an additional 
+prompt with each run.
+
+ >
+ >
+
+Best,
+///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+Jose Claudio Faria
+UESC/DCET/Brasil
+joseclaudio.faria at gmail.com
+Telefones:
+55(73)3680.5545 - UESC
+55(73)99966.9100 - VIVO
+///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+If you have software to deal with statistics, you have arms,
+if you have good software, you have arms and legs,
+if you have software like R, you have arms, legs and wings...
+the height of your flight depends only on you.
+
+------ Mensagem original ------
+De: "Duncan Murdoch" <murdoch.duncan at gmail.com>
+Para: "jcfaria" <joseclaudio.faria at gmail.com>; r-devel at r-project.org
+Enviado(s): 05/05/2022 13:17:53
+Assunto: Re: [Rd] Rgui.exe 4.2.0 does not receive characters via the 
+Windows API's PostMessage function
+
+>On 05/05/2022 11:17 a.m., jcfaria wrote:
+>>Hello,
+>>
+>>Rgui.exe 4.2.0 does not receive characters via the Windows API's
+>>PostMessage function.
+>>
+>>The Tinn-R project sends messages to Rgui.exe (SDI mode) via the Windows
+>>API's PostMessage function.
+>>A simplification of the code (in object Pascal) can be seen below.
+>>
+>>procedure TfMain.btnPasteClick(Sender: TObject);
+>>var
+>>     i: integer;
+>>     sTmp: WideString;
+>>     hBN: HWND;
+>>
+>>begin
+>>     hBN:= FindWindowA(nil,
+>>                       'R Console (64-bit)');
+>>
+>>     sTmp:= 'sd';
+>>
+>>     for i:= 1 to Length(sTmp) do begin
+>>       PostMessage(hBN,
+>>                   WM_CHAR,
+>>                   Ord(sTmp[i]),
+>>                   0);
+>>     end;
+>>
+>>     PostMessage(hBN,
+>>                 WM_KEYDOWN,
+>>                 VK_RETURN, 0);
+>>end;
+>>
+>>This code has always worked fine for all versions of Rgui.exe with the
+>>exception of the last one released, ie 4.2.0.
+>>
+>>We've been trying to get around the problem on the Object Pascal side,
+>>but without success so far.
+>>
+>>Does anyone connected to the compilation of Rqui.exe know what the
+>>problem is?
+>
+>It could be that the new build enforces Windows security more stringently.  More details are described in the answer to this question:  https://stackoverflow.com/a/40139498/2554330, but at a minimum you should be checking the return value from PostMessage.
+>
+>Duncan Murdoch
+>
+>>
+>>Best,
+>>///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>>Jose Claudio Faria
+>>UESC/DCET/Brasil
+>>joseclaudio.faria at gmail.com
+>>Telefones:
+>>55(73)3680.5545 - UESC
+>>55(73)99966.9100 - VIVO
+>>///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>>If you have software to deal with statistics, you have arms,
+>>if you have good software, you have arms and legs,
+>>if you have software like R, you have arms, legs and wings...
+>>the height of your flight depends only on you.
+>>
+>>	[[alternative HTML version deleted]]
+>>
+>>______________________________________________
+>>R-devel at r-project.org mailing list
+>>https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Fri May  6 09:24:44 2022
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Fri, 6 May 2022 09:24:44 +0200
+Subject: [Rd] Rgui.exe 4.2.0 does not receive characters via the Windows
+ API's PostMessage function
+In-Reply-To: <em8cb2eaf6-27fe-4d26-84b2-3eef11fa9530@dell>
+References: <em26d64aef-2f66-415f-be9d-ae71a91c1d56@dell>
+ <8e41c7bc-466c-ca00-6141-66520f8818b8@gmail.com>
+ <em8cb2eaf6-27fe-4d26-84b2-3eef11fa9530@dell>
+Message-ID: <5e580ff4-ac60-6b79-e0d7-f9a84ee200d7@gmail.com>
+
+
+On 5/6/22 07:03, jcfaria wrote:
+> Dear Duncan,
+> I believe the problem is of a different nature.
+> I get TRUE 3 times running the code below:
+>
+> procedure TfMain.btnPasteClick(Sender: TObject);
+> var
+> ? i: integer;
+> ? sTmp: string;
+> ? hBN: HWND;
+> ? j: bool;
+>
+> begin
+> ? hBN:= FindWindowA(nil,
+> ??????????????????? 'R Console (64-bit)');
+>
+> ? sTmp:= 'sd';
+>
+> ? for i:= 1 to Length(sTmp) do begin
+> ??? j:= PostMessage(hBN,
+> ??????????????????? WM_CHAR,
+> ??????????????????? Ord(sTmp[i]),
+> ??????????????????? 0);
+>
+> ??? ShowMessage(BoolToStr(j,
+> ????????????????????????? True));
+> ? end;
+>
+> ? j:= PostMessage(hBN,
+> ????????????? WM_KEYDOWN,
+> ????????????? VK_RETURN, 0);
+>
+> ? ShowMessage(BoolToStr(j,
+> ??????????????????????? True));
+> end;
+>
+> That is, Rgui is receiving the message of the characters (via 
+> PostMessage), but it is blocking because it does not show them in the 
+> console.
+> The only thing Rgui blames is Carriage Return, as it adds an 
+> additional prompt with each run.
+
+I can't provide a good guess what impacted your use, but if you could 
+give me a full example, ideally in C, which can be compiled with 
+Rtools42 (so gcc, MinGW) and I can edit/recompile, and works with R 4.1, 
+I am happy to help debugging on 4.2.
+
+Rgui now uses GraphApp Unicode windows on systems where it didn't 
+before, because it uses UTF-8 also on systems it didn't before (on 
+systems that would use a single-byte locale in R 4.1). These Unicode 
+windows are a different code path and there may be bugs not reported 
+previously, including processing inputs (recently I fixed handling of 
+accents, for example). Otherwise indeed R now uses UTF-8 as native 
+encoding and UCRT as the C runtime.
+
+Best
+Tomas
+
+
+>
+> >
+> >
+>
+> Best,
+> ///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+> Jose Claudio Faria
+> UESC/DCET/Brasil
+> joseclaudio.faria at gmail.com
+> Telefones:
+> 55(73)3680.5545 - UESC
+> 55(73)99966.9100 - VIVO
+> ///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+> If you have software to deal with statistics, you have arms,
+> if you have good software, you have arms and legs,
+> if you have software like R, you have arms, legs and wings...
+> the height of your flight depends only on you.
+>
+> ------ Mensagem original ------
+> De: "Duncan Murdoch" <murdoch.duncan at gmail.com>
+> Para: "jcfaria" <joseclaudio.faria at gmail.com>; r-devel at r-project.org
+> Enviado(s): 05/05/2022 13:17:53
+> Assunto: Re: [Rd] Rgui.exe 4.2.0 does not receive characters via the 
+> Windows API's PostMessage function
+>
+>> On 05/05/2022 11:17 a.m., jcfaria wrote:
+>>> Hello,
+>>>
+>>> Rgui.exe 4.2.0 does not receive characters via the Windows API's
+>>> PostMessage function.
+>>>
+>>> The Tinn-R project sends messages to Rgui.exe (SDI mode) via the 
+>>> Windows
+>>> API's PostMessage function.
+>>> A simplification of the code (in object Pascal) can be seen below.
+>>>
+>>> procedure TfMain.btnPasteClick(Sender: TObject);
+>>> var
+>>> ??? i: integer;
+>>> ??? sTmp: WideString;
+>>> ??? hBN: HWND;
+>>>
+>>> begin
+>>> ??? hBN:= FindWindowA(nil,
+>>> ????????????????????? 'R Console (64-bit)');
+>>>
+>>> ??? sTmp:= 'sd';
+>>>
+>>> ??? for i:= 1 to Length(sTmp) do begin
+>>> ????? PostMessage(hBN,
+>>> ????????????????? WM_CHAR,
+>>> ????????????????? Ord(sTmp[i]),
+>>> ????????????????? 0);
+>>> ??? end;
+>>>
+>>> ??? PostMessage(hBN,
+>>> ??????????????? WM_KEYDOWN,
+>>> ??????????????? VK_RETURN, 0);
+>>> end;
+>>>
+>>> This code has always worked fine for all versions of Rgui.exe with the
+>>> exception of the last one released, ie 4.2.0.
+>>>
+>>> We've been trying to get around the problem on the Object Pascal side,
+>>> but without success so far.
+>>>
+>>> Does anyone connected to the compilation of Rqui.exe know what the
+>>> problem is?
+>>
+>> It could be that the new build enforces Windows security more 
+>> stringently.? More details are described in the answer to this 
+>> question:? https://stackoverflow.com/a/40139498/2554330, but at a 
+>> minimum you should be checking the return value from PostMessage.
+>>
+>> Duncan Murdoch
+>>
+>>>
+>>> Best,
+>>> ///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>>> Jose Claudio Faria
+>>> UESC/DCET/Brasil
+>>> joseclaudio.faria at gmail.com
+>>> Telefones:
+>>> 55(73)3680.5545 - UESC
+>>> 55(73)99966.9100 - VIVO
+>>> ///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>>> If you have software to deal with statistics, you have arms,
+>>> if you have good software, you have arms and legs,
+>>> if you have software like R, you have arms, legs and wings...
+>>> the height of your flight depends only on you.
+>>>
+>>> ????[[alternative HTML version deleted]]
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
