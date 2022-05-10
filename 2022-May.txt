@@ -1979,3 +1979,194 @@ Cheers, Dirk
 dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
 
 
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Mon May  9 10:23:43 2022
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Mon, 9 May 2022 10:23:43 +0200
+Subject: [Rd] Regression in 4.2.0: unable to type special characters in
+ Windows RGui
+In-Reply-To: <027b1c8f-c479-e269-4824-2c1ff0507e4a@gmail.com>
+References: <027b1c8f-c479-e269-4824-2c1ff0507e4a@gmail.com>
+Message-ID: <a44a69d2-987e-b2a9-2559-acc810ebc17e@gmail.com>
+
+
+On 5/7/22 15:14, Cesko Voeten wrote:
+> Hi,
+>
+> Since upgrading to 4.2.0, I can't type special characters in RGui 
+> anymore. Specifically affected are at least "'~^ which, on my 
+> US-International keyboard layout, all rely on dead keys. This was not 
+> a problem in R <= 4.1.3, although I can't say whether the reason is 
+> any change in R itself, or the fact that 4.2.0 is the first version 
+> built against ucrt. OS is an up-to-date Windows 10, language is Dutch. 
+> I tried toggling the 'experimental' Unicode support in Windows's 
+> Country & Region settings, but it makes no difference. Is this a known 
+> regression?
+
+Thanks, could you please try the latest R-patched snapshot build and 
+test it there? If there is still any problem, please report.
+
+I've fixed handling of the dead keys in Rgui/GraphApp last week. It was 
+a long standing bug (lack of support) in GraphApp Unicode windows, which 
+are used when R is running in a multi-byte locale. As R 4.2 switched to 
+UTF-8, this code path started to be used on systems where it wasn't 
+before, but sadly this hasn't been discovered by testing before the release.
+
+Technically, there were two bugs: one that dead keys could not be 
+printed in non-combining form in principle, and another that some 
+accents were not recognized. The former should be fixed fully. For the 
+latter, I've added support for a number of accent keys and I can add 
+more if needed (and if there is anyone who can test that).
+
+Please test, in principle, there may be also other issues in the Unicode 
+windows not reported before, and it would be nice to get these things 
+fixed at least for R 4.1.
+
+Thanks
+Tomas
+
+
+
+
+
+>
+> Cesko Voeten
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From cvoeten @end|ng |rom gm@||@com  Mon May  9 19:44:08 2022
+From: cvoeten @end|ng |rom gm@||@com (Cesko Voeten)
+Date: Mon, 9 May 2022 19:44:08 +0200
+Subject: [Rd] Regression in 4.2.0: unable to type special characters in
+ Windows RGui
+In-Reply-To: <a44a69d2-987e-b2a9-2559-acc810ebc17e@gmail.com>
+References: <027b1c8f-c479-e269-4824-2c1ff0507e4a@gmail.com>
+ <a44a69d2-987e-b2a9-2559-acc810ebc17e@gmail.com>
+Message-ID: <5d91c1ac-b6e2-e446-5e23-8430514ddfb8@gmail.com>
+
+Hi Tomas,
+
+On 09-05-2022 at 10:23, Tomas Kalibera wrote:
+> 
+> On 5/7/22 15:14, Cesko Voeten wrote:
+>> Hi,
+>>
+>> Since upgrading to 4.2.0, I can't type special characters in RGui anymore. Specifically affected are at least "'~^ which, on my US-International keyboard layout, all rely on dead keys. This was not a problem in R <= 4.1.3, although I can't say whether the reason is any change in R itself, or the fact that 4.2.0 is the first version built against ucrt. OS is an up-to-date Windows 10, language is Dutch. I tried toggling the 'experimental' Unicode support in Windows's Country & Region settings, but it makes no difference. Is this a known regression?
+> 
+> Thanks, could you please try the latest R-patched snapshot build and test it there? If there is still any problem, please report.
+
+No problem, happy to test! First of all, I'm happy to say it works and I can type deadkey characters again, but there are some issues and discrepancies compared to other Windows apps:
+
+  - Some accents don't work. For instance, pressing 'a produces ?, but pressing 'a produces 'a rather than ?. From my testing, `^~ seem to work as expected, but '" don't.
+  - Nonexistent deadkey combinations are handled differently from native Windows. For example, typing ~^ should output ~^, but produces nothing. Typing ~^a should output ~^a, but actually yields ~?. So it seems that the first ~ is correctly translated to the tilde symbol, but simultaneously the second ^ is being treated as a new deadkey press, which other Windows programs don't do in this case.
+  - Related to the above two issues, '& should produce '&, while it only gives &. This again affects only '" --- something like ^& correctly produces ^&.
+
+Also, I'm noticing only now that selecting typed text in RGui and pressing Ctrl deletes that text, so trying to Ctrl+C text that I typed is kind of awkward. But this might simply be a feature that I wasn't aware of before.
+
+Thanks for your efforts! I hope these observations help.
+
+Cesko
+
+> 
+> I've fixed handling of the dead keys in Rgui/GraphApp last week. It was a long standing bug (lack of support) in GraphApp Unicode windows, which are used when R is running in a multi-byte locale. As R 4.2 switched to UTF-8, this code path started to be used on systems where it wasn't before, but sadly this hasn't been discovered by testing before the release.
+> 
+> Technically, there were two bugs: one that dead keys could not be printed in non-combining form in principle, and another that some accents were not recognized. The former should be fixed fully. For the latter, I've added support for a number of accent keys and I can add more if needed (and if there is anyone who can test that).
+> 
+> Please test, in principle, there may be also other issues in the Unicode windows not reported before, and it would be nice to get these things fixed at least for R 4.1.
+> 
+> Thanks
+> Tomas
+> 
+> 
+> 
+> 
+> 
+>>
+>> Cesko Voeten
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From w@|ter@djur|c @end|ng |rom gm@||@com  Mon May  9 18:36:50 2022
+From: w@|ter@djur|c @end|ng |rom gm@||@com (Gmail)
+Date: Mon, 9 May 2022 18:36:50 +0200
+Subject: [Rd] Building R-4.1.3  from source - creating .msi fails
+Message-ID: <07e901d863c2$fbe20ad0$f3a62070$@gmail.com>
+
+Dear all, 
+lately I was building R-4.1.3 from source and 
+as the final step I decided to also try and build the .msi file. 
+
+I was following along the R Admin manual and using Jeroens ?r-windows/r-base? GitHub repo as a basis. 
+The build, the tests all the way to the Inno-Setup Windows .exe installer completed successfully - but not the "R-4.1.3.msi" file. 
+Since I am not really knowledgeable when it comes to debugging WiX failures I was hoping someone here has some helpful comments. 
+
+Below are the logs/output/errors/file excerpts: 
+=========================
+
+R-4.1.3.log: 
+----------------
+Windows Installer XML Toolset Compiler version 3.11.2.4516
+Copyright (c) .NET Foundation and contributors. All rights reserved.
+
+*** asterisk lines separate content of different files **********************************
+
+*****************************************************************************
+R.wxs [file]
+D:\r-base\src\R-source\src\gnuwin32\installer\R.wxs(50036) : error CNDL0104 : Not a valid source file; 
+detail: The 'DirectoryRef' start tag on line 50033 position 14 does not match the end tag of 'Component'. Line 50036, position 19.
+
+
+*****************************************************************************
+R.wxs [file] (lines 50032 ? 50037, etc.) 
+I understand the error is the result of line 50034 having the first of many (after that line there are hundreds) 
+?unprovoked? NA?s : 
+...
+...
+            </DirectoryRef>
+            <DirectoryRef Id="dirDFBCD23F607D1BCC15748A367C06C465">
+    NA
+                    <File Id="fil49DED439D60E725AA5D6402B8A36B915" KeyPath="yes" Source="R-4.1.3\library\base\help\print.DLLInfoList.html" />
+                </Component>
+            </DirectoryRef>
+            <DirectoryRef Id="dir4A5E34FDE4B660BFC361AB8682CC00A3">
+....
+....
+Additionally here follows  line 82158 where, because there are no more file-ids after line 82160 below the NAs also disappear: 
+            <DirectoryRef Id="dir1FF2414B716F9EC0C950A7D0C5600532">
+    NA
+                    <File Id="fil7FBA10F4604BA92660D4FA85CA81B1BC" KeyPath="yes" Source="R-4.1.3\library\Matrix\help\coerce+2ClsTMatrix+2CdsTMatrix-method.html" />
+                </Component>
+            </DirectoryRef>
+            <DirectoryRef Id="dirD31021A615C26B5D3F93CF12408AE4B5">
+                <Directory Id="dir0016419565268E77B190EFC6ECFE56AD" Name="LC_MESSAGES" />
+            </DirectoryRef>
+
+*****************************************************************************
+files.wxs [file] here is the corresponding files Fragment of the above (first)  "corrupted" tag 
+ie of file-id: fil49DED439D60E725AA5D6402B8A36B915
+...
+...
+<Fragment>
+        <DirectoryRef Id="dirDFBCD23F607D1BCC15748A367C06C465">
+            <Component Id="cmp9D50FF8D0F55461A69B18CCAC6292CA3" Guid="PUT-GUID-HERE">
+                <File Id="fil49DED439D60E725AA5D6402B8A36B915" KeyPath="yes" Source="SourceDir\library\base\help\print.DLLInfoList.html" />
+            </Component>
+        </DirectoryRef>
+    </Fragment>
+    <Fragment>
+...
+...
+
+*****************************************************************************
+The ?WiXins.R? file I am using is the unmodified /src/gnuwin32/installer/WiXins.R of the .tar.gz downloaded from: https://cran.r-project.org/src/base/R-4/R-4.1.3.tar.gz  
+
+=========================
+Greetings, 
+Walter 
+
+
