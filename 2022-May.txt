@@ -2170,3 +2170,680 @@ Greetings,
 Walter 
 
 
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue May 10 14:02:19 2022
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 10 May 2022 14:02:19 +0200
+Subject: [Rd] Regression in 4.2.0: unable to type special characters in
+ Windows RGui
+In-Reply-To: <5d91c1ac-b6e2-e446-5e23-8430514ddfb8@gmail.com>
+References: <027b1c8f-c479-e269-4824-2c1ff0507e4a@gmail.com>
+ <a44a69d2-987e-b2a9-2559-acc810ebc17e@gmail.com>
+ <5d91c1ac-b6e2-e446-5e23-8430514ddfb8@gmail.com>
+Message-ID: <f16306c8-4c08-c0a9-b2f6-f91eb2983c25@gmail.com>
+
+
+On 5/9/22 19:44, Cesko Voeten wrote:
+> Hi Tomas,
+>
+> On 09-05-2022 at 10:23, Tomas Kalibera wrote:
+>>
+>> On 5/7/22 15:14, Cesko Voeten wrote:
+>>> Hi,
+>>>
+>>> Since upgrading to 4.2.0, I can't type special characters in RGui 
+>>> anymore. Specifically affected are at least "'~^ which, on my 
+>>> US-International keyboard layout, all rely on dead keys. This was 
+>>> not a problem in R <= 4.1.3, although I can't say whether the reason 
+>>> is any change in R itself, or the fact that 4.2.0 is the first 
+>>> version built against ucrt. OS is an up-to-date Windows 10, language 
+>>> is Dutch. I tried toggling the 'experimental' Unicode support in 
+>>> Windows's Country & Region settings, but it makes no difference. Is 
+>>> this a known regression?
+>>
+>> Thanks, could you please try the latest R-patched snapshot build and 
+>> test it there? If there is still any problem, please report.
+
+Hi Cesko,
+
+thanks a lot for the testing.
+
+>
+> No problem, happy to test! First of all, I'm happy to say it works and 
+> I can type deadkey characters again, but there are some issues and 
+> discrepancies compared to other Windows apps:
+>
+> ?- Some accents don't work. For instance, pressing 'a produces ?, but 
+> pressing 'a produces 'a rather than ?. From my testing, `^~ seem to 
+> work as expected, but '" don't.
+
+I could reproduce this on the US International keyboard and it is fixed 
+now. There may be missing support for more accents, so if you or anyone 
+else find about them, please let me know.
+
+> ?- Nonexistent deadkey combinations are handled differently from 
+> native Windows. For example, typing ~^ should output ~^, but produces 
+> nothing. Typing ~^a should output ~^a, but actually yields ~?. So it 
+> seems that the first ~ is correctly translated to the tilde symbol, 
+> but simultaneously the second ^ is being treated as a new deadkey 
+> press, which other Windows programs don't do in this case.
+Thanks, fixed now. It was another bug in the old code, plus a "feature" 
+I added that by pressing e.g. the dead-key apostrophe twice you get it 
+printed only once (this is what Linux does and I find it more natural). 
+But I made it now to work as usual on Windows.
+> ?- Related to the above two issues, '& should produce '&, while it 
+> only gives &. This again affects only '" --- something like ^& 
+> correctly produces ^&.
+
+It should be fixed by now as well.
+
+The fixes are in 82332 (R-patched) and 82331 (R-devel). If you could 
+test again after the snapshot build gets there, that would be great. It 
+is easy to miss something.
+
+When testing now, I've been using http://kbdlayout.info/ as a reference 
+for several keyboard layouts on Windows, to find how to type different 
+dead-keys. That can give you also names of the deadkeys, which can be 
+easily communicated without having to copy-paste from the Rgui window. 
+On some layouts, additional deadkeys are available with right Alt (AltGr).
+
+>
+> Also, I'm noticing only now that selecting typed text in RGui and 
+> pressing Ctrl deletes that text, so trying to Ctrl+C text that I typed 
+> is kind of awkward. But this might simply be a feature that I wasn't 
+> aware of before.
+
+Interesting. It isn't happening on my system, but I can't tell whether 
+it is a "feature" under some circumstances. Maybe you can try to find 
+out more about this: whether it is repeatable, whether it depends on 
+some setting, whether it was happening also in R 4.1, etc.
+
+> Thanks for your efforts! I hope these observations help.
+They did, thanks!
+
+Tomas
+
+>
+> Cesko
+>
+>>
+>> I've fixed handling of the dead keys in Rgui/GraphApp last week. It 
+>> was a long standing bug (lack of support) in GraphApp Unicode 
+>> windows, which are used when R is running in a multi-byte locale. As 
+>> R 4.2 switched to UTF-8, this code path started to be used on systems 
+>> where it wasn't before, but sadly this hasn't been discovered by 
+>> testing before the release.
+>>
+>> Technically, there were two bugs: one that dead keys could not be 
+>> printed in non-combining form in principle, and another that some 
+>> accents were not recognized. The former should be fixed fully. For 
+>> the latter, I've added support for a number of accent keys and I can 
+>> add more if needed (and if there is anyone who can test that).
+>>
+>> Please test, in principle, there may be also other issues in the 
+>> Unicode windows not reported before, and it would be nice to get 
+>> these things fixed at least for R 4.1.
+>>
+>> Thanks
+>> Tomas
+>>
+>>
+>>
+>>
+>>
+>>>
+>>> Cesko Voeten
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue May 10 15:07:15 2022
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 10 May 2022 15:07:15 +0200
+Subject: [Rd] Building R-4.1.3 from source - creating .msi fails
+In-Reply-To: <07e901d863c2$fbe20ad0$f3a62070$@gmail.com>
+References: <07e901d863c2$fbe20ad0$f3a62070$@gmail.com>
+Message-ID: <7eb5c514-8cb8-035c-9ee3-38d3f2ded174@gmail.com>
+
+
+On 5/9/22 18:36, Gmail wrote:
+> Dear all,
+> lately I was building R-4.1.3 from source and
+> as the final step I decided to also try and build the .msi file.
+>
+> I was following along the R Admin manual and using Jeroens ?r-windows/r-base? GitHub repo as a basis.
+> The build, the tests all the way to the Inno-Setup Windows .exe installer completed successfully - but not the "R-4.1.3.msi" file.
+
+The MSI installer is not supported. I can't see it mentioned in R-Admin, 
+but if you found it there or in some documentation, please report, so 
+that it can be removed.
+
+Best
+Tomas
+
+> Since I am not really knowledgeable when it comes to debugging WiX failures I was hoping someone here has some helpful comments.
+>
+> Below are the logs/output/errors/file excerpts:
+> =========================
+>
+> R-4.1.3.log:
+> ----------------
+> Windows Installer XML Toolset Compiler version 3.11.2.4516
+> Copyright (c) .NET Foundation and contributors. All rights reserved.
+>
+> *** asterisk lines separate content of different files **********************************
+>
+> *****************************************************************************
+> R.wxs [file]
+> D:\r-base\src\R-source\src\gnuwin32\installer\R.wxs(50036) : error CNDL0104 : Not a valid source file;
+> detail: The 'DirectoryRef' start tag on line 50033 position 14 does not match the end tag of 'Component'. Line 50036, position 19.
+>
+>
+> *****************************************************************************
+> R.wxs [file] (lines 50032 ? 50037, etc.)
+> I understand the error is the result of line 50034 having the first of many (after that line there are hundreds)
+> ?unprovoked? NA?s :
+> ...
+> ...
+>              </DirectoryRef>
+>              <DirectoryRef Id="dirDFBCD23F607D1BCC15748A367C06C465">
+>      NA
+>                      <File Id="fil49DED439D60E725AA5D6402B8A36B915" KeyPath="yes" Source="R-4.1.3\library\base\help\print.DLLInfoList.html" />
+>                  </Component>
+>              </DirectoryRef>
+>              <DirectoryRef Id="dir4A5E34FDE4B660BFC361AB8682CC00A3">
+> ....
+> ....
+> Additionally here follows  line 82158 where, because there are no more file-ids after line 82160 below the NAs also disappear:
+>              <DirectoryRef Id="dir1FF2414B716F9EC0C950A7D0C5600532">
+>      NA
+>                      <File Id="fil7FBA10F4604BA92660D4FA85CA81B1BC" KeyPath="yes" Source="R-4.1.3\library\Matrix\help\coerce+2ClsTMatrix+2CdsTMatrix-method.html" />
+>                  </Component>
+>              </DirectoryRef>
+>              <DirectoryRef Id="dirD31021A615C26B5D3F93CF12408AE4B5">
+>                  <Directory Id="dir0016419565268E77B190EFC6ECFE56AD" Name="LC_MESSAGES" />
+>              </DirectoryRef>
+>
+> *****************************************************************************
+> files.wxs [file] here is the corresponding files Fragment of the above (first)  "corrupted" tag
+> ie of file-id: fil49DED439D60E725AA5D6402B8A36B915
+> ...
+> ...
+> <Fragment>
+>          <DirectoryRef Id="dirDFBCD23F607D1BCC15748A367C06C465">
+>              <Component Id="cmp9D50FF8D0F55461A69B18CCAC6292CA3" Guid="PUT-GUID-HERE">
+>                  <File Id="fil49DED439D60E725AA5D6402B8A36B915" KeyPath="yes" Source="SourceDir\library\base\help\print.DLLInfoList.html" />
+>              </Component>
+>          </DirectoryRef>
+>      </Fragment>
+>      <Fragment>
+> ...
+> ...
+>
+> *****************************************************************************
+> The ?WiXins.R? file I am using is the unmodified /src/gnuwin32/installer/WiXins.R of the .tar.gz downloaded from: https://cran.r-project.org/src/base/R-4/R-4.1.3.tar.gz
+>
+> =========================
+> Greetings,
+> Walter
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From w@|ter@djur|c @end|ng |rom gm@||@com  Tue May 10 21:01:27 2022
+From: w@|ter@djur|c @end|ng |rom gm@||@com (Gmail)
+Date: Tue, 10 May 2022 21:01:27 +0200
+Subject: [Rd] Building R-4.1.3 from source - creating .msi fails
+In-Reply-To: <7eb5c514-8cb8-035c-9ee3-38d3f2ded174@gmail.com>
+References: <07e901d863c2$fbe20ad0$f3a62070$@gmail.com>
+ <7eb5c514-8cb8-035c-9ee3-38d3f2ded174@gmail.com>
+Message-ID: <008101d864a0$5aa8b360$0ffa1a20$@gmail.com>
+
+Thanks for the swift reply. 
+
+Maybe some clarifications from my side - I am not referring to the R-4.2.0 version (manual). 
+But the earlier up to R-4.1.3 version manuals, where there always was a section about "Building the MSI installer" [right after Building the Inno Setup Installer] included (ending with thanks to David del Campo).  
+And as far as I can tell the Inno Setup section is also gone from the 4.2.0 manual now? On purpose?
+Then why is it that there is still an /installer folder in R-4.2.0 with all the Inno Setup files eg header.iss and JRins.R as well as WiXins.R in it, and the installer/Makefile also still includes all these sections.  
+
+So in the spirit of things I guess that all lines in the .../installer/Makefile (line 49 and lines 180 ff.) as well as the whole ?WiXins.R? file in the /installer folder should be removed from R-4.1.3.tar.gz (which is available in that form for download from r-project)? And judging from the manual the .iss related parts as well? 
+
+At the same time R-4.0.5 msi build works fine so probably should not be altered/removed in R-4.0.5.tar.gz? 
+
+G, W
+
+
+-----Original Message-----
+From: Tomas Kalibera <tomas.kalibera at gmail.com> 
+Sent: Tuesday, May 10, 2022 3:07 PM
+To: Gmail <walter.djuric at gmail.com>; r-devel at R-project.org
+Subject: Re: [Rd] Building R-4.1.3 from source - creating .msi fails
+
+
+On 5/9/22 18:36, Gmail wrote:
+> Dear all,
+> lately I was building R-4.1.3 from source and as the final step I 
+> decided to also try and build the .msi file.
+>
+> I was following along the R Admin manual and using Jeroens ?r-windows/r-base? GitHub repo as a basis.
+> The build, the tests all the way to the Inno-Setup Windows .exe installer completed successfully - but not the "R-4.1.3.msi" file.
+
+The MSI installer is not supported. I can't see it mentioned in R-Admin, but if you found it there or in some documentation, please report, so that it can be removed.
+
+Best
+Tomas
+
+> Since I am not really knowledgeable when it comes to debugging WiX failures I was hoping someone here has some helpful comments.
+>
+> Below are the logs/output/errors/file excerpts:
+> =========================
+>
+> R-4.1.3.log:
+> ----------------
+> Windows Installer XML Toolset Compiler version 3.11.2.4516 Copyright 
+> (c) .NET Foundation and contributors. All rights reserved.
+>
+> *** asterisk lines separate content of different files 
+> **********************************
+>
+> **********************************************************************
+> *******
+> R.wxs [file]
+> D:\r-base\src\R-source\src\gnuwin32\installer\R.wxs(50036) : error 
+> CNDL0104 : Not a valid source file;
+> detail: The 'DirectoryRef' start tag on line 50033 position 14 does not match the end tag of 'Component'. Line 50036, position 19.
+>
+>
+> **********************************************************************
+> ******* R.wxs [file] (lines 50032 ? 50037, etc.) I understand the 
+> error is the result of line 50034 having the first of many (after that 
+> line there are hundreds) ?unprovoked? NA?s :
+> ...
+> ...
+>              </DirectoryRef>
+>              <DirectoryRef Id="dirDFBCD23F607D1BCC15748A367C06C465">
+>      NA
+>                      <File Id="fil49DED439D60E725AA5D6402B8A36B915" KeyPath="yes" Source="R-4.1.3\library\base\help\print.DLLInfoList.html" />
+>                  </Component>
+>              </DirectoryRef>
+>              <DirectoryRef Id="dir4A5E34FDE4B660BFC361AB8682CC00A3">
+> ....
+> ....
+> Additionally here follows  line 82158 where, because there are no more file-ids after line 82160 below the NAs also disappear:
+>              <DirectoryRef Id="dir1FF2414B716F9EC0C950A7D0C5600532">
+>      NA
+>                      <File Id="fil7FBA10F4604BA92660D4FA85CA81B1BC" KeyPath="yes" Source="R-4.1.3\library\Matrix\help\coerce+2ClsTMatrix+2CdsTMatrix-method.html" />
+>                  </Component>
+>              </DirectoryRef>
+>              <DirectoryRef Id="dirD31021A615C26B5D3F93CF12408AE4B5">
+>                  <Directory Id="dir0016419565268E77B190EFC6ECFE56AD" Name="LC_MESSAGES" />
+>              </DirectoryRef>
+>
+> **********************************************************************
+> ******* files.wxs [file] here is the corresponding files Fragment of 
+> the above (first)  "corrupted" tag ie of file-id: 
+> fil49DED439D60E725AA5D6402B8A36B915
+> ...
+> ...
+> <Fragment>
+>          <DirectoryRef Id="dirDFBCD23F607D1BCC15748A367C06C465">
+>              <Component Id="cmp9D50FF8D0F55461A69B18CCAC6292CA3" Guid="PUT-GUID-HERE">
+>                  <File Id="fil49DED439D60E725AA5D6402B8A36B915" KeyPath="yes" Source="SourceDir\library\base\help\print.DLLInfoList.html" />
+>              </Component>
+>          </DirectoryRef>
+>      </Fragment>
+>      <Fragment>
+> ...
+> ...
+>
+> **********************************************************************
+> ******* The ?WiXins.R? file I am using is the unmodified 
+> /src/gnuwin32/installer/WiXins.R of the .tar.gz downloaded from: 
+> https://cran.r-project.org/src/base/R-4/R-4.1.3.tar.gz
+>
+> =========================
+> Greetings,
+> Walter
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Tue May 10 22:15:27 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 10 May 2022 16:15:27 -0400
+Subject: [Rd] Building R-4.1.3 from source - creating .msi fails
+In-Reply-To: <008101d864a0$5aa8b360$0ffa1a20$@gmail.com>
+References: <07e901d863c2$fbe20ad0$f3a62070$@gmail.com>
+ <7eb5c514-8cb8-035c-9ee3-38d3f2ded174@gmail.com>
+ <008101d864a0$5aa8b360$0ffa1a20$@gmail.com>
+Message-ID: <a03f378c-0cce-7d6e-0577-cfdeb67bbe54@gmail.com>
+
+On 10/05/2022 3:01 p.m., Gmail wrote:
+> Thanks for the swift reply.
+> 
+> Maybe some clarifications from my side - I am not referring to the R-4.2.0 version (manual).
+> But the earlier up to R-4.1.3 version manuals, where there always was a section about "Building the MSI installer" [right after Building the Inno Setup Installer] included (ending with thanks to David del Campo).
+
+Some more clarification, please:  which manual are you talking about?  I 
+don't see those sections in the R Admin manual.  Maybe they were 
+conditional on the Windows build?
+
+> And as far as I can tell the Inno Setup section is also gone from the 4.2.0 manual now? On purpose?
+
+You could look at the svn history of the source file to see what the log 
+message says.  So could I, if I only knew which manual you are looking at.
+
+> Then why is it that there is still an /installer folder in R-4.2.0 with all the Inno Setup files eg header.iss and JRins.R as well as WiXins.R in it, and the installer/Makefile also still includes all these sections.
+> 
+> So in the spirit of things I guess that all lines in the .../installer/Makefile (line 49 and lines 180 ff.) as well as the whole ?WiXins.R? file in the /installer folder should be removed from R-4.1.3.tar.gz (which is available in that form for download from r-project)? And judging from the manual the .iss related parts as well?
+
+The 4.1.3 tarfile has been released, and can't be modified.  The only 
+way a modification would be possible would be to release a new 4.1.x 
+patch version, but that's really, really unlikely.
+
+> At the same time R-4.0.5 msi build works fine so probably should not be altered/removed in R-4.0.5.tar.gz?
+
+Changes there are even less likely, so don't worry about them.
+
+Duncan Murdoch
+
+> 
+> G, W
+> 
+> 
+> -----Original Message-----
+> From: Tomas Kalibera <tomas.kalibera at gmail.com>
+> Sent: Tuesday, May 10, 2022 3:07 PM
+> To: Gmail <walter.djuric at gmail.com>; r-devel at R-project.org
+> Subject: Re: [Rd] Building R-4.1.3 from source - creating .msi fails
+> 
+> 
+> On 5/9/22 18:36, Gmail wrote:
+>> Dear all,
+>> lately I was building R-4.1.3 from source and as the final step I
+>> decided to also try and build the .msi file.
+>>
+>> I was following along the R Admin manual and using Jeroens ?r-windows/r-base? GitHub repo as a basis.
+>> The build, the tests all the way to the Inno-Setup Windows .exe installer completed successfully - but not the "R-4.1.3.msi" file.
+> 
+> The MSI installer is not supported. I can't see it mentioned in R-Admin, but if you found it there or in some documentation, please report, so that it can be removed.
+> 
+> Best
+> Tomas
+> 
+>> Since I am not really knowledgeable when it comes to debugging WiX failures I was hoping someone here has some helpful comments.
+>>
+>> Below are the logs/output/errors/file excerpts:
+>> =========================
+>>
+>> R-4.1.3.log:
+>> ----------------
+>> Windows Installer XML Toolset Compiler version 3.11.2.4516 Copyright
+>> (c) .NET Foundation and contributors. All rights reserved.
+>>
+>> *** asterisk lines separate content of different files
+>> **********************************
+>>
+>> **********************************************************************
+>> *******
+>> R.wxs [file]
+>> D:\r-base\src\R-source\src\gnuwin32\installer\R.wxs(50036) : error
+>> CNDL0104 : Not a valid source file;
+>> detail: The 'DirectoryRef' start tag on line 50033 position 14 does not match the end tag of 'Component'. Line 50036, position 19.
+>>
+>>
+>> **********************************************************************
+>> ******* R.wxs [file] (lines 50032 ? 50037, etc.) I understand the
+>> error is the result of line 50034 having the first of many (after that
+>> line there are hundreds) ?unprovoked? NA?s :
+>> ...
+>> ...
+>>               </DirectoryRef>
+>>               <DirectoryRef Id="dirDFBCD23F607D1BCC15748A367C06C465">
+>>       NA
+>>                       <File Id="fil49DED439D60E725AA5D6402B8A36B915" KeyPath="yes" Source="R-4.1.3\library\base\help\print.DLLInfoList.html" />
+>>                   </Component>
+>>               </DirectoryRef>
+>>               <DirectoryRef Id="dir4A5E34FDE4B660BFC361AB8682CC00A3">
+>> ....
+>> ....
+>> Additionally here follows  line 82158 where, because there are no more file-ids after line 82160 below the NAs also disappear:
+>>               <DirectoryRef Id="dir1FF2414B716F9EC0C950A7D0C5600532">
+>>       NA
+>>                       <File Id="fil7FBA10F4604BA92660D4FA85CA81B1BC" KeyPath="yes" Source="R-4.1.3\library\Matrix\help\coerce+2ClsTMatrix+2CdsTMatrix-method.html" />
+>>                   </Component>
+>>               </DirectoryRef>
+>>               <DirectoryRef Id="dirD31021A615C26B5D3F93CF12408AE4B5">
+>>                   <Directory Id="dir0016419565268E77B190EFC6ECFE56AD" Name="LC_MESSAGES" />
+>>               </DirectoryRef>
+>>
+>> **********************************************************************
+>> ******* files.wxs [file] here is the corresponding files Fragment of
+>> the above (first)  "corrupted" tag ie of file-id:
+>> fil49DED439D60E725AA5D6402B8A36B915
+>> ...
+>> ...
+>> <Fragment>
+>>           <DirectoryRef Id="dirDFBCD23F607D1BCC15748A367C06C465">
+>>               <Component Id="cmp9D50FF8D0F55461A69B18CCAC6292CA3" Guid="PUT-GUID-HERE">
+>>                   <File Id="fil49DED439D60E725AA5D6402B8A36B915" KeyPath="yes" Source="SourceDir\library\base\help\print.DLLInfoList.html" />
+>>               </Component>
+>>           </DirectoryRef>
+>>       </Fragment>
+>>       <Fragment>
+>> ...
+>> ...
+>>
+>> **********************************************************************
+>> ******* The ?WiXins.R? file I am using is the unmodified
+>> /src/gnuwin32/installer/WiXins.R of the .tar.gz downloaded from:
+>> https://cran.r-project.org/src/base/R-4/R-4.1.3.tar.gz
+>>
+>> =========================
+>> Greetings,
+>> Walter
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From jo@ec|@ud|o@|@r|@ @end|ng |rom gm@||@com  Wed May 11 03:02:51 2022
+From: jo@ec|@ud|o@|@r|@ @end|ng |rom gm@||@com (jcfaria)
+Date: Wed, 11 May 2022 01:02:51 +0000
+Subject: [Rd] Rgui.exe 4.2.0 does not receive characters via the Windows
+ API's PostMessage function
+In-Reply-To: <5e580ff4-ac60-6b79-e0d7-f9a84ee200d7@gmail.com>
+References: <em26d64aef-2f66-415f-be9d-ae71a91c1d56@dell>
+ <8e41c7bc-466c-ca00-6141-66520f8818b8@gmail.com>
+ <em8cb2eaf6-27fe-4d26-84b2-3eef11fa9530@dell>
+ <5e580ff4-ac60-6b79-e0d7-f9a84ee200d7@gmail.com>
+Message-ID: <em46f02f23-aa3d-4db3-9f88-1b338b047298@dell>
+
+Dear Tomas,
+I've tried, but I don't have the necessary C/C++ programming skills to 
+fulfill your request.
+
+Maybe someone can help us by transcribing the little code in object 
+Pascal that I sent to C/C++.
+
+If a small executable, made in Object Pascal, can help in your debug, I 
+can provide.
+
+Grateful for the attention,,
+///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+Jose Claudio Faria
+UESC/DCET/Brasil
+joseclaudio.faria at gmail.com
+Telefones:
+55(73)3680.5545 - UESC
+55(73)99966.9100 - VIVO
+///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+If you have software to deal with statistics, you have arms,
+if you have good software, you have arms and legs,
+if you have software like R, you have arms, legs and wings...
+the height of your flight depends only on you.
+
+------ Mensagem original ------
+De: "Tomas Kalibera" <tomas.kalibera at gmail.com>
+Para: "jcfaria" <joseclaudio.faria at gmail.com>; "Duncan Murdoch" 
+<murdoch.duncan at gmail.com>; r-devel at r-project.org
+Enviado(s): 06/05/2022 04:24:44
+Assunto: Re: [Rd] Rgui.exe 4.2.0 does not receive characters via the 
+Windows API's PostMessage function
+
+>
+>On 5/6/22 07:03, jcfaria wrote:
+>>Dear Duncan,
+>>I believe the problem is of a different nature.
+>>I get TRUE 3 times running the code below:
+>>
+>>procedure TfMain.btnPasteClick(Sender: TObject);
+>>var
+>>   i: integer;
+>>   sTmp: string;
+>>   hBN: HWND;
+>>   j: bool;
+>>
+>>begin
+>>   hBN:= FindWindowA(nil,
+>>                     'R Console (64-bit)');
+>>
+>>   sTmp:= 'sd';
+>>
+>>   for i:= 1 to Length(sTmp) do begin
+>>     j:= PostMessage(hBN,
+>>                     WM_CHAR,
+>>                     Ord(sTmp[i]),
+>>                     0);
+>>
+>>     ShowMessage(BoolToStr(j,
+>>                           True));
+>>   end;
+>>
+>>   j:= PostMessage(hBN,
+>>               WM_KEYDOWN,
+>>               VK_RETURN, 0);
+>>
+>>   ShowMessage(BoolToStr(j,
+>>                         True));
+>>end;
+>>
+>>That is, Rgui is receiving the message of the characters (via PostMessage), but it is blocking because it does not show them in the console.
+>>The only thing Rgui blames is Carriage Return, as it adds an additional prompt with each run.
+>
+>I can't provide a good guess what impacted your use, but if you could give me a full example, ideally in C, which can be compiled with Rtools42 (so gcc, MinGW) and I can edit/recompile, and works with R 4.1, I am happy to help debugging on 4.2.
+>
+>Rgui now uses GraphApp Unicode windows on systems where it didn't before, because it uses UTF-8 also on systems it didn't before (on systems that would use a single-byte locale in R 4.1). These Unicode windows are a different code path and there may be bugs not reported previously, including processing inputs (recently I fixed handling of accents, for example). Otherwise indeed R now uses UTF-8 as native encoding and UCRT as the C runtime.
+>
+>Best
+>Tomas
+>
+>
+>>
+>> >
+>> >
+>>
+>>Best,
+>>///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>>Jose Claudio Faria
+>>UESC/DCET/Brasil
+>>joseclaudio.faria at gmail.com
+>>Telefones:
+>>55(73)3680.5545 - UESC
+>>55(73)99966.9100 - VIVO
+>>///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>>If you have software to deal with statistics, you have arms,
+>>if you have good software, you have arms and legs,
+>>if you have software like R, you have arms, legs and wings...
+>>the height of your flight depends only on you.
+>>
+>>------ Mensagem original ------
+>>De: "Duncan Murdoch" <murdoch.duncan at gmail.com>
+>>Para: "jcfaria" <joseclaudio.faria at gmail.com>; r-devel at r-project.org
+>>Enviado(s): 05/05/2022 13:17:53
+>>Assunto: Re: [Rd] Rgui.exe 4.2.0 does not receive characters via the Windows API's PostMessage function
+>>
+>>>On 05/05/2022 11:17 a.m., jcfaria wrote:
+>>>>Hello,
+>>>>
+>>>>Rgui.exe 4.2.0 does not receive characters via the Windows API's
+>>>>PostMessage function.
+>>>>
+>>>>The Tinn-R project sends messages to Rgui.exe (SDI mode) via the Windows
+>>>>API's PostMessage function.
+>>>>A simplification of the code (in object Pascal) can be seen below.
+>>>>
+>>>>procedure TfMain.btnPasteClick(Sender: TObject);
+>>>>var
+>>>>     i: integer;
+>>>>     sTmp: WideString;
+>>>>     hBN: HWND;
+>>>>
+>>>>begin
+>>>>     hBN:= FindWindowA(nil,
+>>>>                       'R Console (64-bit)');
+>>>>
+>>>>     sTmp:= 'sd';
+>>>>
+>>>>     for i:= 1 to Length(sTmp) do begin
+>>>>       PostMessage(hBN,
+>>>>                   WM_CHAR,
+>>>>                   Ord(sTmp[i]),
+>>>>                   0);
+>>>>     end;
+>>>>
+>>>>     PostMessage(hBN,
+>>>>                 WM_KEYDOWN,
+>>>>                 VK_RETURN, 0);
+>>>>end;
+>>>>
+>>>>This code has always worked fine for all versions of Rgui.exe with the
+>>>>exception of the last one released, ie 4.2.0.
+>>>>
+>>>>We've been trying to get around the problem on the Object Pascal side,
+>>>>but without success so far.
+>>>>
+>>>>Does anyone connected to the compilation of Rqui.exe know what the
+>>>>problem is?
+>>>
+>>>It could be that the new build enforces Windows security more stringently.  More details are described in the answer to this question:  https://stackoverflow.com/a/40139498/2554330, but at a minimum you should be checking the return value from PostMessage.
+>>>
+>>>Duncan Murdoch
+>>>
+>>>>
+>>>>Best,
+>>>>///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>>>>Jose Claudio Faria
+>>>>UESC/DCET/Brasil
+>>>>joseclaudio.faria at gmail.com
+>>>>Telefones:
+>>>>55(73)3680.5545 - UESC
+>>>>55(73)99966.9100 - VIVO
+>>>>///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>>>>If you have software to deal with statistics, you have arms,
+>>>>if you have good software, you have arms and legs,
+>>>>if you have software like R, you have arms, legs and wings...
+>>>>the height of your flight depends only on you.
+>>>>
+>>>>     [[alternative HTML version deleted]]
+>>>>
+>>>>______________________________________________
+>>>>R-devel at r-project.org mailing list
+>>>>https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>
+>>
+>>______________________________________________
+>>R-devel at r-project.org mailing list
+>>https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
