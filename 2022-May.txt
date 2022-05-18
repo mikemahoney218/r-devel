@@ -7771,3 +7771,450 @@ Duncan Murdoch
 >
 
 
+From pb @end|ng |rom |n|o||nk@com@br  Tue May 17 15:04:35 2022
+From: pb @end|ng |rom |n|o||nk@com@br (Paulo Barata)
+Date: Tue, 17 May 2022 10:04:35 -0300
+Subject: [Rd] 
+ Writing in R // R 4.2.0 on Windows doesn't work with Dasher
+In-Reply-To: <1b89fdd2-9218-42df-5855-4017107d610f@gmail.com>
+References: <787fa700-0ea6-9639-f123-5fd585d0e056@infolink.com.br>
+ <65941da8-a180-5273-9554-fd51df5f6812@infolink.com.br>
+ <1b89fdd2-9218-42df-5855-4017107d610f@gmail.com>
+Message-ID: <d859b36f-d2c5-5cde-0b04-ac3ff9afa9b6@infolink.com.br>
+
+
+Dear Tomas,
+
+Great news! I downloaded R-devel 2022-05-16 r82368 for Windows and 
+installed it on my Windows 10 Professional. It works perfectly well with 
+Dasher 5.0 beta!
+
+In Dasher, I tried all special characters like $ & | *, many small and 
+capital letters, including some accented ones like ? ? ? ? that exist in 
+Portuguese (and other languages, e.g. French (there are versions of 
+Dasher for many languages)), all digits, space, the Enter character and 
+the "Backspace" movement (to erase previously written characters), 
+everything works well.
+
+Now, we can fully use Dasher in the R console.
+
+It seems that we cannot yet normally install packages in this R-devel 
+r82368. So I look forward to the day when a stable R 4.3.0 will be 
+available. Meanwhile, for my ecological work, I can use R perfectly well 
+with the versions 4.1.3 and 4.2.0 that I have here, so, from my 
+viewpoint, this R 4.3.0 can take its time to come to light.
+
+I can only thank you very much, and all the other people who took part 
+in this discussion, for the quick fix to this issue.
+
+Best regards,
+
+Paulo Barata
+
+(Rio de Janeiro - Brazil)
+
+----------------------------------------------------------
+
+On 16/05/2022 14:08, Tomas Kalibera wrote:
+> 
+> On 5/15/22 16:10, Paulo Barata wrote:
+>>
+>> To the R developers,
+>>
+>> I noticed today that R 4.2.0 responds to the "Enter" character of 
+>> Dasher version 5.0.0 beta in "Direct Entry" mode. An "Enter" in Dasher 
+>> causes the R prompt to jump to the next line, as an "Enter" should do.
+>>
+>> No other characters (letters, digits, special characters like + = & ~ 
+>> | # $) are accepted by R 4.2.0 through Dasher.
+>>
+>> The "Enter" shows that, somehow, the communication between Dasher and 
+>> R 4.2.0 through the Windows system is not completely curtailed.
+> 
+> Dear Paulo,
+> 
+> thanks for the report and thanks to all for the useful comments in the 
+> followup discussion. I've committed a fix to R-devel, 82368, and I would 
+> be grateful if you could test whether it fixes the problem for you. I've 
+> tested it only on a small example which is using the same method to 
+> insert keys to Rgui as Dasher does.
+> 
+> The problem is caused by a limitation in GraphApp, a library used by 
+> Rgui and included in the R distribution. GraphApp has two modes: Unicode 
+> windows (with this limitation) and non-Unicode windows (without it). 
+> GraphApp uses Unicode windows when running in a multi-byte locale, and 
+> as of R 4.2, this is the case for all systems on recent Windows where 
+> the native encoding is UTF-8. This means that most likely R 4.1.3 didn't 
+> work with Dasher on systems running in a multi-byte locale and that most 
+> likely R 4.2.0 would work with Dasher on old Windows systems (where 
+> UTF-8 cannot be used as native encoding).
+> 
+> Dasher uses SendInput/KEYEVENTF_UNICODE to inject text into Rgui, which 
+> is fine as far as I can tell and should work. It didn't work, because 
+> the Unicode windows didn't handle WM_CHAR nor WM_KEYDOWN/WM_KEYUP for 
+> VK_PACKET. By design, Unicode windows get input via WM_IME_COMPOSITION 
+> and WM_KEYDOWN, so I've added support for VK_PACKET to WM_KEYDOWN 
+> (taking the logic in gdk as an example).
+> 
+> I am cc'ing Jose as Tinn-R has a similar problem, though this patch 
+> doesn't solve it.
+> 
+> Best
+> Tomas
+> 
+>>
+>> Regards,
+>>
+>> Paulo Barata
+>>
+>> ----------------------------------------------------------
+>>
+>> On 13/05/2022 16:44, Paulo Barata wrote:
+>>> To the R developers,
+>>>
+>>> I would like to point out an issue that occurs with the new R 4.2.0 
+>>> running on Windows; this is possibly related to the recent wide 
+>>> changes made to the Windows port of R. The issue has to do with 
+>>> writing of the R window.
+>>>
+>>> My computer runs on Windows 10 Professional 64-bit with all the 
+>>> latest updates, and has a 4-core 8-thread Intel Xeon processor with 
+>>> 32 Gb of RAM.
+>>>
+>>> I have some slight impairment in my hands, so for typing I avoid 
+>>> using the computer keyboard as much as possible. For most of my 
+>>> typing, I use the software Dasher, a kind of assistive technology 
+>>> software. Dasher was created by the Inference Group led by Professor 
+>>> David MacKay (died in 2016) at Cambridge University in England. 
+>>> Later, Dasher was further developed by Ada Majorek (a Google 
+>>> engineer, recently deceased).
+>>>
+>>> General information on Dasher and about the Dasher Project can be 
+>>> found on the Inference Group page:
+>>>
+>>> http://www.inference.org.uk/dasher/
+>>>
+>>> An example of Dasher in action can be seen on this 2-minute YouTube 
+>>> video:
+>>>
+>>> https://www.youtube.com/watch?v=nr3s4613DX8
+>>>
+>>> An one-hour YouTube video of a 2007 Google Talk by Professor MacKay 
+>>> himself explaining the Dasher concept can be found here:
+>>>
+>>> https://www.youtube.com/watch?v=wpOxbesRNBc
+>>>
+>>> In the 2-minute video (the first YouTube address above), the sentence 
+>>> written through Dasher, for actual use, needs to be copied and then 
+>>> pasted into another software, say a text editor. But Dasher also has 
+>>> a "Direct Entry" mode, where words typed are entered directly on the 
+>>> screen of the text editor or other software -- this is how I use 
+>>> Dasher to write on the R window.
+>>>
+>>> Using Dasher`s "Direct Entry" mode, for all effects, to write a word 
+>>> through Dasher works exactly like writing the word through the normal 
+>>> computer keyboard. Somehow (I do not know about system programming), 
+>>> in "Direct Entry" mode, the output of Dasher is understood by the 
+>>> computer as an input of the same nature as a keyboard input.
+>>>
+>>> But this is the issue: until R 4.1.3, R accepted normally the 
+>>> word-typing through Dasher. But R 4.2.0 (and R 4.2.0-patched build 
+>>> r82348, 12 May 2022) does not accept Dasher anymore.
+>>>
+>>> So, for now, if I wish to use R during some extended interactive 
+>>> section (say, for a first look at a complex data set), and if I wish 
+>>> to use Dasher for this interactive session, then I have to use R 
+>>> 4.1.3. For using R through programming, I can use the new R 4.2.0, by 
+>>> writing the program with Dasher in my text editor, and then pasting 
+>>> that program into R.
+>>>
+>>> The latest Windows version of Dasher, version 5.0.0 beta, works 
+>>> perfectly well with text editors (I use EditPad Pro), with 
+>>> Microsoft-like Office packages (I use SoftMaker Office), for writing 
+>>> e-mails (I use Mozilla Thunderbird), for writing on a web page (I use 
+>>> mostly Mozilla Firefox). It worked perfectly well with R up to 
+>>> version 4.1.3, but it does not work with R 4.2.0
+>>>
+>>> The latest Dasher 5.0.0 beta Windows installer and the source code 
+>>> can be found on this page below (please click on "Windows installer" 
+>>> and on "source code", just below the head "Dasher 5.0 beta release"):
+>>>
+>>> https://github.com/dasher-project/dasher/releases
+>>>
+>>> To set Dasher 5.0.0 beta to the "Direct Entry" mode, after installing 
+>>> Dasher one should go to Preferences > Application > Application Style.
+>>>
+>>> Currently, after the passing of Ada Majorek, the Dasher Project is 
+>>> being put forward by a group of people in England, but, it seems, at 
+>>> a very slow pace. They have announced the existence of a version 6 
+>>> beta, but this is only an online instance of Dasher, there is no 
+>>> Windows installer, as far as I know. Their web page:
+>>>
+>>> https://dasher.acecentre.net/
+>>>
+>>> For me, and possibly for other users, the Dasher version 5.0.0 beta 
+>>> for Windows that is available works perfectly well, and allows me to 
+>>> use the computer with a proficiency that would be hardly possible 
+>>> otherwise.
+>>>
+>>> Here I request that the R developers take a look at this word-typing 
+>>> issue that happens with the new R 4.2.0 on Windows.
+>>>
+>>> As an R user (I work in ecological research), I can only thank the R 
+>>> team for this really wonderful piece of statistical software that you 
+>>> make freely available to us all.
+>>>
+>>> Regards,
+>>>
+>>> Paulo Barata
+>>>
+>>> (Rio de Janeiro - Brazil)
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue May 17 15:45:54 2022
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 17 May 2022 15:45:54 +0200
+Subject: [Rd] 
+ Writing in R // R 4.2.0 on Windows doesn't work with Dasher
+In-Reply-To: <d859b36f-d2c5-5cde-0b04-ac3ff9afa9b6@infolink.com.br>
+References: <787fa700-0ea6-9639-f123-5fd585d0e056@infolink.com.br>
+ <65941da8-a180-5273-9554-fd51df5f6812@infolink.com.br>
+ <1b89fdd2-9218-42df-5855-4017107d610f@gmail.com>
+ <d859b36f-d2c5-5cde-0b04-ac3ff9afa9b6@infolink.com.br>
+Message-ID: <609d5703-67c8-5a61-b37e-ac7de8091830@gmail.com>
+
+Dear Paulo,
+
+On 5/17/22 15:04, Paulo Barata wrote:
+>
+> Dear Tomas,
+>
+> Great news! I downloaded R-devel 2022-05-16 r82368 for Windows and 
+> installed it on my Windows 10 Professional. It works perfectly well 
+> with Dasher 5.0 beta!
+>
+> In Dasher, I tried all special characters like $ & | *, many small and 
+> capital letters, including some accented ones like ? ? ? ? that exist 
+> in Portuguese (and other languages, e.g. French (there are versions of 
+> Dasher for many languages)), all digits, space, the Enter character 
+> and the "Backspace" movement (to erase previously written characters), 
+> everything works well.
+>
+> Now, we can fully use Dasher in the R console.
+I am happy it works again, thanks for the testing and the report. I've 
+ported the fix to R-patched, which means it will appear in R 4.2.1.
+> It seems that we cannot yet normally install packages in this R-devel 
+> r82368. So I look forward to the day when a stable R 4.3.0 will be 
+> available. Meanwhile, for my ecological work, I can use R perfectly 
+> well with the versions 4.1.3 and 4.2.0 that I have here, so, from my 
+> viewpoint, this R 4.3.0 can take its time to come to light.
+
+R 4.3.0 will be released probably around next April, but R 4.2.1 much 
+sooner (expect in 1-3 months, though this hasn't been scheduled, yet). 
+Before that, you should be able to use an R-patched snapshot build 
+available from
+
+https://cran.r-project.org/bin/windows/base/rpatched.html
+
+but only after the build is of release >= 82371 (which should happen by 
+tomorrow - the page shows the revision number). R-patched is R 4.2.0 
+with updates that will eventually become 4.2.1, so should be more stable 
+than R-devel is now (to become 4.3.0 around next April).
+
+If you have any problems with installing packages in either version of 
+R, please report, so that someone can help or indeed if there is a bug, 
+it could be fixed.
+
+> I can only thank you very much, and all the other people who took part 
+> in this discussion, for the quick fix to this issue.
+
+Thank you for the report. Without it, the problem wouldn't have been fixed.
+
+Best
+Tomas
+
+>
+> Best regards,
+>
+> Paulo Barata
+>
+> (Rio de Janeiro - Brazil)
+>
+> ----------------------------------------------------------
+>
+> On 16/05/2022 14:08, Tomas Kalibera wrote:
+>>
+>> On 5/15/22 16:10, Paulo Barata wrote:
+>>>
+>>> To the R developers,
+>>>
+>>> I noticed today that R 4.2.0 responds to the "Enter" character of 
+>>> Dasher version 5.0.0 beta in "Direct Entry" mode. An "Enter" in 
+>>> Dasher causes the R prompt to jump to the next line, as an "Enter" 
+>>> should do.
+>>>
+>>> No other characters (letters, digits, special characters like + = & 
+>>> ~ | # $) are accepted by R 4.2.0 through Dasher.
+>>>
+>>> The "Enter" shows that, somehow, the communication between Dasher 
+>>> and R 4.2.0 through the Windows system is not completely curtailed.
+>>
+>> Dear Paulo,
+>>
+>> thanks for the report and thanks to all for the useful comments in 
+>> the followup discussion. I've committed a fix to R-devel, 82368, and 
+>> I would be grateful if you could test whether it fixes the problem 
+>> for you. I've tested it only on a small example which is using the 
+>> same method to insert keys to Rgui as Dasher does.
+>>
+>> The problem is caused by a limitation in GraphApp, a library used by 
+>> Rgui and included in the R distribution. GraphApp has two modes: 
+>> Unicode windows (with this limitation) and non-Unicode windows 
+>> (without it). GraphApp uses Unicode windows when running in a 
+>> multi-byte locale, and as of R 4.2, this is the case for all systems 
+>> on recent Windows where the native encoding is UTF-8. This means that 
+>> most likely R 4.1.3 didn't work with Dasher on systems running in a 
+>> multi-byte locale and that most likely R 4.2.0 would work with Dasher 
+>> on old Windows systems (where UTF-8 cannot be used as native encoding).
+>>
+>> Dasher uses SendInput/KEYEVENTF_UNICODE to inject text into Rgui, 
+>> which is fine as far as I can tell and should work. It didn't work, 
+>> because the Unicode windows didn't handle WM_CHAR nor 
+>> WM_KEYDOWN/WM_KEYUP for VK_PACKET. By design, Unicode windows get 
+>> input via WM_IME_COMPOSITION and WM_KEYDOWN, so I've added support 
+>> for VK_PACKET to WM_KEYDOWN (taking the logic in gdk as an example).
+>>
+>> I am cc'ing Jose as Tinn-R has a similar problem, though this patch 
+>> doesn't solve it.
+>>
+>> Best
+>> Tomas
+>>
+>>>
+>>> Regards,
+>>>
+>>> Paulo Barata
+>>>
+>>> ----------------------------------------------------------
+>>>
+>>> On 13/05/2022 16:44, Paulo Barata wrote:
+>>>> To the R developers,
+>>>>
+>>>> I would like to point out an issue that occurs with the new R 4.2.0 
+>>>> running on Windows; this is possibly related to the recent wide 
+>>>> changes made to the Windows port of R. The issue has to do with 
+>>>> writing of the R window.
+>>>>
+>>>> My computer runs on Windows 10 Professional 64-bit with all the 
+>>>> latest updates, and has a 4-core 8-thread Intel Xeon processor with 
+>>>> 32 Gb of RAM.
+>>>>
+>>>> I have some slight impairment in my hands, so for typing I avoid 
+>>>> using the computer keyboard as much as possible. For most of my 
+>>>> typing, I use the software Dasher, a kind of assistive technology 
+>>>> software. Dasher was created by the Inference Group led by 
+>>>> Professor David MacKay (died in 2016) at Cambridge University in 
+>>>> England. Later, Dasher was further developed by Ada Majorek (a 
+>>>> Google engineer, recently deceased).
+>>>>
+>>>> General information on Dasher and about the Dasher Project can be 
+>>>> found on the Inference Group page:
+>>>>
+>>>> http://www.inference.org.uk/dasher/
+>>>>
+>>>> An example of Dasher in action can be seen on this 2-minute YouTube 
+>>>> video:
+>>>>
+>>>> https://www.youtube.com/watch?v=nr3s4613DX8
+>>>>
+>>>> An one-hour YouTube video of a 2007 Google Talk by Professor MacKay 
+>>>> himself explaining the Dasher concept can be found here:
+>>>>
+>>>> https://www.youtube.com/watch?v=wpOxbesRNBc
+>>>>
+>>>> In the 2-minute video (the first YouTube address above), the 
+>>>> sentence written through Dasher, for actual use, needs to be copied 
+>>>> and then pasted into another software, say a text editor. But 
+>>>> Dasher also has a "Direct Entry" mode, where words typed are 
+>>>> entered directly on the screen of the text editor or other software 
+>>>> -- this is how I use Dasher to write on the R window.
+>>>>
+>>>> Using Dasher`s "Direct Entry" mode, for all effects, to write a 
+>>>> word through Dasher works exactly like writing the word through the 
+>>>> normal computer keyboard. Somehow (I do not know about system 
+>>>> programming), in "Direct Entry" mode, the output of Dasher is 
+>>>> understood by the computer as an input of the same nature as a 
+>>>> keyboard input.
+>>>>
+>>>> But this is the issue: until R 4.1.3, R accepted normally the 
+>>>> word-typing through Dasher. But R 4.2.0 (and R 4.2.0-patched build 
+>>>> r82348, 12 May 2022) does not accept Dasher anymore.
+>>>>
+>>>> So, for now, if I wish to use R during some extended interactive 
+>>>> section (say, for a first look at a complex data set), and if I 
+>>>> wish to use Dasher for this interactive session, then I have to use 
+>>>> R 4.1.3. For using R through programming, I can use the new R 
+>>>> 4.2.0, by writing the program with Dasher in my text editor, and 
+>>>> then pasting that program into R.
+>>>>
+>>>> The latest Windows version of Dasher, version 5.0.0 beta, works 
+>>>> perfectly well with text editors (I use EditPad Pro), with 
+>>>> Microsoft-like Office packages (I use SoftMaker Office), for 
+>>>> writing e-mails (I use Mozilla Thunderbird), for writing on a web 
+>>>> page (I use mostly Mozilla Firefox). It worked perfectly well with 
+>>>> R up to version 4.1.3, but it does not work with R 4.2.0
+>>>>
+>>>> The latest Dasher 5.0.0 beta Windows installer and the source code 
+>>>> can be found on this page below (please click on "Windows 
+>>>> installer" and on "source code", just below the head "Dasher 5.0 
+>>>> beta release"):
+>>>>
+>>>> https://github.com/dasher-project/dasher/releases
+>>>>
+>>>> To set Dasher 5.0.0 beta to the "Direct Entry" mode, after 
+>>>> installing Dasher one should go to Preferences > Application > 
+>>>> Application Style.
+>>>>
+>>>> Currently, after the passing of Ada Majorek, the Dasher Project is 
+>>>> being put forward by a group of people in England, but, it seems, 
+>>>> at a very slow pace. They have announced the existence of a version 
+>>>> 6 beta, but this is only an online instance of Dasher, there is no 
+>>>> Windows installer, as far as I know. Their web page:
+>>>>
+>>>> https://dasher.acecentre.net/
+>>>>
+>>>> For me, and possibly for other users, the Dasher version 5.0.0 beta 
+>>>> for Windows that is available works perfectly well, and allows me 
+>>>> to use the computer with a proficiency that would be hardly 
+>>>> possible otherwise.
+>>>>
+>>>> Here I request that the R developers take a look at this 
+>>>> word-typing issue that happens with the new R 4.2.0 on Windows.
+>>>>
+>>>> As an R user (I work in ecological research), I can only thank the 
+>>>> R team for this really wonderful piece of statistical software that 
+>>>> you make freely available to us all.
+>>>>
+>>>> Regards,
+>>>>
+>>>> Paulo Barata
+>>>>
+>>>> (Rio de Janeiro - Brazil)
+>>>>
+>>>> ______________________________________________
+>>>> R-devel at r-project.org mailing list
+>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
