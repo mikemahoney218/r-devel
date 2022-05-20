@@ -8566,3 +8566,589 @@ prasanth.dhanapal at stateauto.com> wrote:
 	[[alternative HTML version deleted]]
 
 
+From tob|@@@@choch @end|ng |rom |hnw@ch  Thu May 19 20:37:30 2022
+From: tob|@@@@choch @end|ng |rom |hnw@ch (Tobias Schoch)
+Date: Thu, 19 May 2022 18:37:30 +0000
+Subject: [Rd] Windows Rgui.exe 4.2.0: Call of txtProgressBar() slows down
+ dramatically after subsequent calls
+Message-ID: <ZRAP278MB046245BD6D9F6D7BBAFBFEAAF8D09@ZRAP278MB0462.CHEP278.PROD.OUTLOOK.COM>
+
+The issue appears in Rgui.exe version 4.2.0 (called "new" version; see bottom). The issue does NOT appear with Rterm.exe (same R version).
+
+I provide a minimal example (foo) below. If I run function foo 3 times in a row, the execution time increases considerably (although it should not).
+
+1st foo call: 5 seconds
+2nd foo call: 13 seconds
+3rd foo call: 20 seconds
+
+The execution time keeps increasing when I call foo more often. In addition, Rgui.exe becomes laggy in taking input from the keyboard.
+
+Sometimes, but rarely, I observe that Rgui.exe terminates with "Error: C stack usage is too close to the limit". Unfortunately, I cannot reproduce the stack error consistently.
+
+On the "old" Rgui.exe version 4.1.2, execution time stays roughly constant over consecutive calls of foo (as expected). Unfortunately, I do not have a running 4.1.3 version; thus, I cannot tell how it behaves there.
+
+Do you have any clue why this happens?
+
+Kind regards,
+Tobias
+
+
+#------------------------------
+# minimal working example: interestingly, the issue does not occur
+# when 'style = 1' in txtProgressBar()
+foo <- function(n)
+{
+    p_bar <- txtProgressBar(style = 3)
+    for (i in 1:n) {
+        Sys.sleep(0.01)
+        setTxtProgressBar(p_bar, i / n)
+    }
+    close(p_bar)
+}
+# 1st call
+system.time(foo(100))
+# 2nd call
+system.time(foo(100))
+# 3rd call
+system.time(foo(100))
+#------------------------------
+
+
+My R versions: 
+
+"Old" Rgui.exe
+    R version 4.1.2 (2021-11-01)
+    Platform: x86_64-w64-mingw32/x64 (64-bit)
+    Running under: Windows 10 x64 (build 19044)
+
+"New" Rgui.exe
+    R version 4.2.0 (2022-04-22 ucrt)
+    Platform: x86_64-w64-mingw32/x64 (64-bit)
+    Running under: Windows 10 x64 (build 19044)
+
+
+------------------------------------------------------------------
+Fachhochschule Nordwestschweiz FHNW 
+Hochschule f?r Wirtschaft 
+Institute for Competitiveness and Communication
+Empirische Wirtschafts- und Sozialforschung
+
+Prof. Dr. Tobias Schoch
+Riggenbachstrasse 16
+CH-4600 Olten
+Schweiz / Switzerland
+------------------------------------------------------------------
+T +41 62 957 21 02
+Mail tobias.schoch at fhnw.ch
+http://www.fhnw.ch/de/personen/tobias-schoch
+
+
+From pb @end|ng |rom |n|o||nk@com@br  Thu May 19 22:34:35 2022
+From: pb @end|ng |rom |n|o||nk@com@br (Paulo Barata)
+Date: Thu, 19 May 2022 17:34:35 -0300
+Subject: [Rd] 
+ Windows Rgui.exe 4.2.0: Call of txtProgressBar() slows down
+ dramatically after subsequent calls
+In-Reply-To: <ZRAP278MB046245BD6D9F6D7BBAFBFEAAF8D09@ZRAP278MB0462.CHEP278.PROD.OUTLOOK.COM>
+References: <ZRAP278MB046245BD6D9F6D7BBAFBFEAAF8D09@ZRAP278MB0462.CHEP278.PROD.OUTLOOK.COM>
+Message-ID: <1ebd33b2-17a0-b69e-a063-f753a99acc31@infolink.com.br>
+
+
+There runs of Tobias' foo function on different versions of R that I 
+have installed here.
+
+R version 4.1.1 Patched (2021-09-30 r80997)
+elapsed time of three trials: 1.31 / 1.33 / 1.35
+
+R version 4.1.2 Patched (2021-11-02 r81131)
+elapsed time of three trials: 1.34 / 1.34 / 1.34
+
+R version 4.1.3 Patched (2022-03-10 r81878)
+elapsed time of three trials: 1.33 / 1.34 / 1.37
+
+R version 4.2.0 Patched (2022-05-17 r82371 ucrt)
+elapsed time of three trials: 7.14 / 17.56 / 27.21
+
+Platform is always: x86_64-w64-mingw32/x64 (64-bit)
+RGui.exe running on Windows 10 Professional 64-bit (build 19044.1706)
+
+Not only, as Tobias has shown, there is an increasing time among the 
+three trials in R 4.2.0 Patched, but also the average time for each of 
+the 4.1.X Patched versions (with nearly constant time each) is well 
+smaller than the first trial with R 4.2.0 Patched.
+
+Regards,
+
+Paulo Barata
+
+(Rio de Janeiro - Brazil)
+
+----------------------------------------------------------
+
+On 19/05/2022 15:37, Tobias Schoch wrote:
+> The issue appears in Rgui.exe version 4.2.0 (called "new" version; see bottom). The issue does NOT appear with Rterm.exe (same R version).
+> 
+> I provide a minimal example (foo) below. If I run function foo 3 times in a row, the execution time increases considerably (although it should not).
+> 
+> 1st foo call: 5 seconds
+> 2nd foo call: 13 seconds
+> 3rd foo call: 20 seconds
+> 
+> The execution time keeps increasing when I call foo more often. In addition, Rgui.exe becomes laggy in taking input from the keyboard.
+> 
+> Sometimes, but rarely, I observe that Rgui.exe terminates with "Error: C stack usage is too close to the limit". Unfortunately, I cannot reproduce the stack error consistently.
+> 
+> On the "old" Rgui.exe version 4.1.2, execution time stays roughly constant over consecutive calls of foo (as expected). Unfortunately, I do not have a running 4.1.3 version; thus, I cannot tell how it behaves there.
+> 
+> Do you have any clue why this happens?
+> 
+> Kind regards,
+> Tobias
+> 
+> 
+> #------------------------------
+> # minimal working example: interestingly, the issue does not occur
+> # when 'style = 1' in txtProgressBar()
+> foo <- function(n)
+> {
+>      p_bar <- txtProgressBar(style = 3)
+>      for (i in 1:n) {
+>          Sys.sleep(0.01)
+>          setTxtProgressBar(p_bar, i / n)
+>      }
+>      close(p_bar)
+> }
+> # 1st call
+> system.time(foo(100))
+> # 2nd call
+> system.time(foo(100))
+> # 3rd call
+> system.time(foo(100))
+> #------------------------------
+> 
+> 
+> My R versions:
+> 
+> "Old" Rgui.exe
+>      R version 4.1.2 (2021-11-01)
+>      Platform: x86_64-w64-mingw32/x64 (64-bit)
+>      Running under: Windows 10 x64 (build 19044)
+> 
+> "New" Rgui.exe
+>      R version 4.2.0 (2022-04-22 ucrt)
+>      Platform: x86_64-w64-mingw32/x64 (64-bit)
+>      Running under: Windows 10 x64 (build 19044)
+> 
+> 
+> ------------------------------------------------------------------
+> Fachhochschule Nordwestschweiz FHNW
+> Hochschule f?r Wirtschaft
+> Institute for Competitiveness and Communication
+> Empirische Wirtschafts- und Sozialforschung
+> 
+> Prof. Dr. Tobias Schoch
+> Riggenbachstrasse 16
+> CH-4600 Olten
+> Schweiz / Switzerland
+> ------------------------------------------------------------------
+> T +41 62 957 21 02
+> Mail tobias.schoch at fhnw.ch
+> http://www.fhnw.ch/de/personen/tobias-schoch
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Thu May 19 23:18:46 2022
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Thu, 19 May 2022 23:18:46 +0200
+Subject: [Rd] 
+ Windows Rgui.exe 4.2.0: Call of txtProgressBar() slows down
+ dramatically after subsequent calls
+In-Reply-To: <1ebd33b2-17a0-b69e-a063-f753a99acc31@infolink.com.br>
+References: <ZRAP278MB046245BD6D9F6D7BBAFBFEAAF8D09@ZRAP278MB0462.CHEP278.PROD.OUTLOOK.COM>
+ <1ebd33b2-17a0-b69e-a063-f753a99acc31@infolink.com.br>
+Message-ID: <f7b7b957-4098-a29b-a08e-9ef59f39eecf@gmail.com>
+
+
+On 5/19/22 22:34, Paulo Barata wrote:
+>
+> There runs of Tobias' foo function on different versions of R that I 
+> have installed here.
+>
+> R version 4.1.1 Patched (2021-09-30 r80997)
+> elapsed time of three trials: 1.31 / 1.33 / 1.35
+>
+> R version 4.1.2 Patched (2021-11-02 r81131)
+> elapsed time of three trials: 1.34 / 1.34 / 1.34
+>
+> R version 4.1.3 Patched (2022-03-10 r81878)
+> elapsed time of three trials: 1.33 / 1.34 / 1.37
+>
+> R version 4.2.0 Patched (2022-05-17 r82371 ucrt)
+> elapsed time of three trials: 7.14 / 17.56 / 27.21
+>
+> Platform is always: x86_64-w64-mingw32/x64 (64-bit)
+> RGui.exe running on Windows 10 Professional 64-bit (build 19044.1706)
+>
+> Not only, as Tobias has shown, there is an increasing time among the 
+> three trials in R 4.2.0 Patched, but also the average time for each of 
+> the 4.1.X Patched versions (with nearly constant time each) is well 
+> smaller than the first trial with R 4.2.0 Patched.
+
+Thanks, yes, I can reproduce the problem. Changing the implementation of 
+the progress bar to print "\n" instead of "\r" makes the problem go away 
+(and type=2 and 3 have the problem and use \r, while type=1 doesn't have 
+the problem nor uses \r). Perhaps the carriage return is not interpreted 
+correctly and the line somehow internally keeps the previously printed 
+characters, always adding the new ones at the end. That is also 
+consistent with that the time is increasing linearly. I will investigate 
+further.
+
+Best
+Tomas
+
+>
+> Regards,
+>
+> Paulo Barata
+>
+> (Rio de Janeiro - Brazil)
+>
+> ----------------------------------------------------------
+>
+> On 19/05/2022 15:37, Tobias Schoch wrote:
+>> The issue appears in Rgui.exe version 4.2.0 (called "new" version; 
+>> see bottom). The issue does NOT appear with Rterm.exe (same R version).
+>>
+>> I provide a minimal example (foo) below. If I run function foo 3 
+>> times in a row, the execution time increases considerably (although 
+>> it should not).
+>>
+>> 1st foo call: 5 seconds
+>> 2nd foo call: 13 seconds
+>> 3rd foo call: 20 seconds
+>>
+>> The execution time keeps increasing when I call foo more often. In 
+>> addition, Rgui.exe becomes laggy in taking input from the keyboard.
+>>
+>> Sometimes, but rarely, I observe that Rgui.exe terminates with 
+>> "Error: C stack usage is too close to the limit". Unfortunately, I 
+>> cannot reproduce the stack error consistently.
+>>
+>> On the "old" Rgui.exe version 4.1.2, execution time stays roughly 
+>> constant over consecutive calls of foo (as expected). Unfortunately, 
+>> I do not have a running 4.1.3 version; thus, I cannot tell how it 
+>> behaves there.
+>>
+>> Do you have any clue why this happens?
+>>
+>> Kind regards,
+>> Tobias
+>>
+>>
+>> #------------------------------
+>> # minimal working example: interestingly, the issue does not occur
+>> # when 'style = 1' in txtProgressBar()
+>> foo <- function(n)
+>> {
+>> ???? p_bar <- txtProgressBar(style = 3)
+>> ???? for (i in 1:n) {
+>> ???????? Sys.sleep(0.01)
+>> ???????? setTxtProgressBar(p_bar, i / n)
+>> ???? }
+>> ???? close(p_bar)
+>> }
+>> # 1st call
+>> system.time(foo(100))
+>> # 2nd call
+>> system.time(foo(100))
+>> # 3rd call
+>> system.time(foo(100))
+>> #------------------------------
+>>
+>>
+>> My R versions:
+>>
+>> "Old" Rgui.exe
+>> ???? R version 4.1.2 (2021-11-01)
+>> ???? Platform: x86_64-w64-mingw32/x64 (64-bit)
+>> ???? Running under: Windows 10 x64 (build 19044)
+>>
+>> "New" Rgui.exe
+>> ???? R version 4.2.0 (2022-04-22 ucrt)
+>> ???? Platform: x86_64-w64-mingw32/x64 (64-bit)
+>> ???? Running under: Windows 10 x64 (build 19044)
+>>
+>>
+>> ------------------------------------------------------------------
+>> Fachhochschule Nordwestschweiz FHNW
+>> Hochschule f?r Wirtschaft
+>> Institute for Competitiveness and Communication
+>> Empirische Wirtschafts- und Sozialforschung
+>>
+>> Prof. Dr. Tobias Schoch
+>> Riggenbachstrasse 16
+>> CH-4600 Olten
+>> Schweiz / Switzerland
+>> ------------------------------------------------------------------
+>> T +41 62 957 21 02
+>> Mail tobias.schoch at fhnw.ch
+>> http://www.fhnw.ch/de/personen/tobias-schoch
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From jo@ec|@ud|o@|@r|@ @end|ng |rom gm@||@com  Fri May 20 00:01:39 2022
+From: jo@ec|@ud|o@|@r|@ @end|ng |rom gm@||@com (jcfaria)
+Date: Thu, 19 May 2022 22:01:39 +0000
+Subject: [Rd] Rgui.exe: bug associated with non-ASCII characters
+Message-ID: <em548fa1a0-66b6-4b8f-851d-7ab68cb3be85@dell>
+
+Hello,
+
+R devel R82368
+
+1- Open Rgui.exe
+2- New script (Rgui's built-in editor)
+3- Type the below
+
+v1 <- ('p?', 'p?', 'p?', 'p?', 'p?')
+
+4- Select the entire line and try to send using the shortcut CTRL+R
+
+ > v1 <- ('p?', 'p?', 'p?', 'p?', '?')
+Error: unexpected ',' in "v1 <- ('p?',"
+ >
+
+5- If you try to select the entire text (CTRL+C) and to paste (CTRL+V) 
+into the console:
+
+ > v1 <- ('p?', 'p?', 'p?', 'p?', 'p?')
+Error: unexpected ',' in "v1 <- ('p?',"
+ >
+
+i.e. the same result,
+
+6- Place the cursor at the beginning of the line and try to send it via 
+CTRL+R
+
+ > v1 <- ('p
++
+
+We have a problem there, don't we?
+
+Best,
+///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+Jose Claudio Faria
+UESC/DCET/Brasil
+joseclaudio.faria at gmail.com
+Telefones:
+55(73)3680.5545 - UESC
+55(73)99966.9100 - VIVO
+///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+If you have software to deal with statistics, you have arms,
+if you have good software, you have arms and legs,
+if you have software like R, you have arms, legs and wings...
+the height of your flight depends only on you.
+
+	[[alternative HTML version deleted]]
+
+
+From brod|e@g@@|@m @end|ng |rom y@hoo@com  Fri May 20 00:55:17 2022
+From: brod|e@g@@|@m @end|ng |rom y@hoo@com (Brodie Gaslam)
+Date: Thu, 19 May 2022 22:55:17 +0000 (UTC)
+Subject: [Rd] Rgui.exe: bug associated with non-ASCII characters
+In-Reply-To: <em548fa1a0-66b6-4b8f-851d-7ab68cb3be85@dell>
+References: <em548fa1a0-66b6-4b8f-851d-7ab68cb3be85@dell>
+Message-ID: <1030932979.579322.1653000917450@mail.yahoo.com>
+
+Is it possible you intended to use:
+
+c('p?', 'p?', 'p?', 'p?', 'p?')
+
+instead of:
+
+('p?', 'p?', 'p?', 'p?', 'p?')
+
+Note the missing `c` in the second one.? That's just not a valid R expression.
+
+I don't use Rgui but if I just type (1,2) in my R terminal I get the same error.
+
+Best,
+
+B.
+
+
+
+
+
+On Thursday, May 19, 2022, 06:01:40 PM EDT, jcfaria <joseclaudio.faria at gmail.com> wrote: 
+
+
+
+
+
+Hello,
+
+R devel R82368
+
+1- Open Rgui.exe
+2- New script (Rgui's built-in editor)
+3- Type the below
+
+v1 <- ('p?', 'p?', 'p?', 'p?', 'p?')
+
+4- Select the entire line and try to send using the shortcut CTRL+R
+
+> v1 <- ('p?', 'p?', 'p?', 'p?', '?')
+Error: unexpected ',' in "v1 <- ('p?',"
+>
+
+5- If you try to select the entire text (CTRL+C) and to paste (CTRL+V) 
+into the console:
+
+> v1 <- ('p?', 'p?', 'p?', 'p?', 'p?')
+Error: unexpected ',' in "v1 <- ('p?',"
+>
+
+i.e. the same result,
+
+6- Place the cursor at the beginning of the line and try to send it via 
+CTRL+R
+
+> v1 <- ('p
++
+
+We have a problem there, don't we?
+
+Best,
+///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+Jose Claudio Faria
+UESC/DCET/Brasil
+joseclaudio.faria at gmail.com
+Telefones:
+55(73)3680.5545 - UESC
+55(73)99966.9100 - VIVO
+///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+If you have software to deal with statistics, you have arms,
+if you have good software, you have arms and legs,
+if you have software like R, you have arms, legs and wings...
+the height of your flight depends only on you.
+
+??? [[alternative HTML version deleted]]
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Fri May 20 01:50:20 2022
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Fri, 20 May 2022 11:50:20 +1200
+Subject: [Rd] Rgui.exe: bug associated with non-ASCII characters
+In-Reply-To: <1030932979.579322.1653000917450@mail.yahoo.com>
+References: <em548fa1a0-66b6-4b8f-851d-7ab68cb3be85@dell>
+ <1030932979.579322.1653000917450@mail.yahoo.com>
+Message-ID: <6B53D168-D21D-4AF6-ADE3-5347325D3F0A@R-project.org>
+
+I think it was just a really confusing report (it took me a while to parse it), but I suspect the issue the poster tried to raise was the fact that <Ctrl><R> without selection apparently submits an incomplete line if non-ASCII chars are involved. All the steps 1-5 were correct behaviour, but 6 (submitting a line without selection) was not since it truncated the line at the non-ASCII character.
+
+Cheers,
+Simon
+
+
+> On 20/05/2022, at 10:55 AM, Brodie Gaslam via R-devel <r-devel at r-project.org> wrote:
+> 
+> Is it possible you intended to use:
+> 
+> c('p?', 'p?', 'p?', 'p?', 'p?')
+> 
+> instead of:
+> 
+> ('p?', 'p?', 'p?', 'p?', 'p?')
+> 
+> Note the missing `c` in the second one.  That's just not a valid R expression.
+> 
+> I don't use Rgui but if I just type (1,2) in my R terminal I get the same error.
+> 
+> Best,
+> 
+> B.
+> 
+> 
+> 
+> 
+> 
+> On Thursday, May 19, 2022, 06:01:40 PM EDT, jcfaria <joseclaudio.faria at gmail.com> wrote: 
+> 
+> 
+> 
+> 
+> 
+> Hello,
+> 
+> R devel R82368
+> 
+> 1- Open Rgui.exe
+> 2- New script (Rgui's built-in editor)
+> 3- Type the below
+> 
+> v1 <- ('p?', 'p?', 'p?', 'p?', 'p?')
+> 
+> 4- Select the entire line and try to send using the shortcut CTRL+R
+> 
+>> v1 <- ('p?', 'p?', 'p?', 'p?', '?')
+> Error: unexpected ',' in "v1 <- ('p?',"
+>> 
+> 
+> 5- If you try to select the entire text (CTRL+C) and to paste (CTRL+V) 
+> into the console:
+> 
+>> v1 <- ('p?', 'p?', 'p?', 'p?', 'p?')
+> Error: unexpected ',' in "v1 <- ('p?',"
+>> 
+> 
+> i.e. the same result,
+> 
+> 6- Place the cursor at the beginning of the line and try to send it via 
+> CTRL+R
+> 
+>> v1 <- ('p
+> +
+> 
+> We have a problem there, don't we?
+> 
+> Best,
+> ///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+> Jose Claudio Faria
+> UESC/DCET/Brasil
+> joseclaudio.faria at gmail.com
+> Telefones:
+> 55(73)3680.5545 - UESC
+> 55(73)99966.9100 - VIVO
+> ///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+> If you have software to deal with statistics, you have arms,
+> if you have good software, you have arms and legs,
+> if you have software like R, you have arms, legs and wings...
+> the height of your flight depends only on you.
+> 
+>     [[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
