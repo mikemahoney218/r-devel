@@ -9642,3 +9642,326 @@ Brian D. Ripley,                  ripley at stats.ox.ac.uk
 Emeritus Professor of Applied Statistics, University of Oxford
 
 
+From pd@|gd @end|ng |rom gm@||@com  Mon May 23 10:29:38 2022
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Mon, 23 May 2022 10:29:38 +0200
+Subject: [Rd] CRAN webserver down
+In-Reply-To: <93a10b93-d3f2-ed77-b2fb-1378156c2859@stats.ox.ac.uk>
+References: <25225.32501.109208.97418@rob.eddelbuettel.com>
+ <93a10b93-d3f2-ed77-b2fb-1378156c2859@stats.ox.ac.uk>
+Message-ID: <C661B534-4C5A-44C8-9CEB-BAA9CEE601BF@gmail.com>
+
+Apparently resurrected now.
+
+-pd
+
+> On 22 May 2022, at 20:05 , Prof Brian Ripley <ripley at stats.ox.ac.uk> wrote:
+> 
+> On 22/05/2022 01:08, Dirk Eddelbuettel wrote:
+>>> From what I can tell from there, the CRAN webserver appears to be down so no
+>> cran.r-project.org or www.r-project.org. It appears that other ports respond
+>> so it may just be in need of restart of the apache service. I am sure someone
+>> will get to it in due course. Until then we have the mirrors.
+>> Best,  Dirk
+> 
+> The sysadmins are aware (they have a monitor service), but attempts to restart Apache remotely failed.  So hopefully this will work again in working hours in Austria tomorrow.
+> 
+> -- 
+> Brian D. Ripley,                  ripley at stats.ox.ac.uk
+> Emeritus Professor of Applied Statistics, University of Oxford
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Mon May 23 15:35:22 2022
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Mon, 23 May 2022 15:35:22 +0200
+Subject: [Rd] Rgui.exe: bug associated with non-ASCII characters
+In-Reply-To: <bc0e132a-a5c3-7481-1a76-dba7c46e8e36@gmail.com>
+References: <em548fa1a0-66b6-4b8f-851d-7ab68cb3be85@dell>
+ <1030932979.579322.1653000917450@mail.yahoo.com>
+ <em6eec9a06-ad9c-4819-bab4-1e20a1f6abba@dell>
+ <bc0e132a-a5c3-7481-1a76-dba7c46e8e36@gmail.com>
+Message-ID: <e1a3615a-46d5-5e80-e7a6-3030eb39320f@gmail.com>
+
+
+On 5/20/22 20:50, Tomas Kalibera wrote:
+>
+> On 5/20/22 03:36, jcfaria wrote:
+>> Sorry, I noticed the bug but I really forgot to add the "c", for 
+>> combine arguments, when I wrote the email.
+>>
+>> In fact, adding "c" R accepts sending the selection and copy/paste, 
+>> but it does not accept the sending with the cursor at the beginning 
+>> of the line.
+>>
+>> v1 <- c('p?', 'p?', 'p?', 'p?', 'p?')
+>>
+>> Place the cursor at the beginning of the line and try to send it via 
+>> CTRL+R
+>>
+>> > v1 <- c('p
+>> ? +
+>>
+> Thanks, I can reproduce the problem. Rgui uses via GraphApp an ANSI 
+> RichEdit window to implement the script editor. What happens is that 
+> the text obtained from that window is in Latin 1 encoding (on my 
+> machine, probably also on yours), even though Rgui runs in UTF-8 via 
+> the active code page specified in the manifest file, which I find 
+> rather surprising. You can see that even in R 4.1, you cannot use 
+> characters not representable in your native/ANSI encoding in the 
+> editor window. But, now you cannot even use characters with different 
+> representation between your ANSI code page and UTF-8 encoding (so only 
+> ASCII is safe). I will investigate further how this could be fixed, it 
+> may not be completely trivial as there are also other operations on 
+> the content of the window, and it would really be nice if the RichEdit 
+> window could be made to respect the active code page.
+
+Now fixed in R-devel (82394). Once the R-devel snapshot build is of this 
+or later release, could you please test? Ideally not only this example, 
+but also other uses of the script editor. Thanks.
+
+Technically, after some more investigation I found out that RichEdit20W 
+class of the Rich Edit control (so the Unicode version of it) actually 
+respects the ACP when it is UTF-8, even when using the *A interface. 
+RichEdit20A class doesn't. I don't see this in the documentation, though.
+
+Compared to R 4.1, one can now use in the script editor even characters 
+not representable in the Windows ANSI encoding. All scripts saved to 
+disk should be now in UTF-8 to be used with the script editor (on recent 
+Windows where the native encoding in R is UTF-8), if they contain any 
+non-ASCII characters.
+
+Best
+Tomas
+
+>
+> Best
+> Tomas
+>
+>
+>> Best,
+>> ///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>> Jose Claudio Faria
+>> UESC/DCET/Brasil
+>> joseclaudio.faria at gmail.com
+>> Telefones:
+>> 55(73)3680.5545 - UESC
+>> 55(73)99966.9100 - VIVO
+>> ///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>> If you have software to deal with statistics, you have arms,
+>> if you have good software, you have arms and legs,
+>> if you have software like R, you have arms, legs and wings...
+>> the height of your flight depends only on you.
+>>
+>> ------ Mensagem original ------
+>> De: "Brodie Gaslam" <brodie.gaslam at yahoo.com>
+>> Para: "r-devel at r-project.org" <r-devel at r-project.org>; "jcfaria" 
+>> <joseclaudio.faria at gmail.com>
+>> Enviado(s): 19/05/2022 19:55:17
+>> Assunto: Re: [Rd] Rgui.exe: bug associated with non-ASCII characters
+>>
+>>> Is it possible you intended to use:
+>>>
+>>> c('p?', 'p?', 'p?', 'p?', 'p?')
+>>>
+>>> instead of:
+>>>
+>>> ('p?', 'p?', 'p?', 'p?', 'p?')
+>>>
+>>> Note the missing `c` in the second one.? That's just not a valid R 
+>>> expression.
+>>>
+>>> I don't use Rgui but if I just type (1,2) in my R terminal I get the 
+>>> same error.
+>>>
+>>> Best,
+>>>
+>>> B.
+>>>
+>>>
+>>>
+>>>
+>>>
+>>> On Thursday, May 19, 2022, 06:01:40 PM EDT, jcfaria 
+>>> <joseclaudio.faria at gmail.com> wrote:
+>>>
+>>>
+>>>
+>>>
+>>>
+>>> Hello,
+>>>
+>>> R devel R82368
+>>>
+>>> 1- Open Rgui.exe
+>>> 2- New script (Rgui's built-in editor)
+>>> 3- Type the below
+>>>
+>>> v1 <- ('p?', 'p?', 'p?', 'p?', 'p?')
+>>>
+>>> 4- Select the entire line and try to send using the shortcut CTRL+R
+>>>
+>>>> ?v1 <- ('p?', 'p?', 'p?', 'p?', '?')
+>>> Error: unexpected ',' in "v1 <- ('p?',"
+>>>>
+>>>
+>>> 5- If you try to select the entire text (CTRL+C) and to paste (CTRL+V)
+>>> into the console:
+>>>
+>>>> ?v1 <- ('p?', 'p?', 'p?', 'p?', 'p?')
+>>> Error: unexpected ',' in "v1 <- ('p?',"
+>>>>
+>>>
+>>> i.e. the same result,
+>>>
+>>> 6- Place the cursor at the beginning of the line and try to send it via
+>>> CTRL+R
+>>>
+>>>> ?v1 <- ('p
+>>> +
+>>>
+>>> We have a problem there, don't we?
+>>>
+>>> Best,
+>>> ///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>>> Jose Claudio Faria
+>>> UESC/DCET/Brasil
+>>> joseclaudio.faria at gmail.com
+>>> Telefones:
+>>> 55(73)3680.5545 - UESC
+>>> 55(73)99966.9100 - VIVO
+>>> ///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>>> If you have software to deal with statistics, you have arms,
+>>> if you have good software, you have arms and legs,
+>>> if you have software like R, you have arms, legs and wings...
+>>> the height of your flight depends only on you.
+>>>
+>>> ??? [[alternative HTML version deleted]]
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From edd @end|ng |rom deb|@n@org  Mon May 23 16:06:32 2022
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Mon, 23 May 2022 09:06:32 -0500
+Subject: [Rd] CRAN webserver down
+In-Reply-To: <C661B534-4C5A-44C8-9CEB-BAA9CEE601BF@gmail.com>
+References: <25225.32501.109208.97418@rob.eddelbuettel.com>
+ <93a10b93-d3f2-ed77-b2fb-1378156c2859@stats.ox.ac.uk>
+ <C661B534-4C5A-44C8-9CEB-BAA9CEE601BF@gmail.com>
+Message-ID: <25227.38120.589113.63633@rob.eddelbuettel.com>
+
+
+On 23 May 2022 at 10:29, peter dalgaard wrote:
+| Apparently resurrected now.
+
+As another maintainer told me, the submission page appears to be down.
+
+Going to
+
+   https://cran.r-project.org/submit.html
+
+(and then refreshing over the stale iframe) gets me
+
+   The webpage at https://xmpalantir.wu.ac.at/cransubmit/ might be
+   temporarily down or it may have moved permanently to a new web address.
+
+suggesting the VM may be down.
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From pd@|gd @end|ng |rom gm@||@com  Mon May 23 16:26:30 2022
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Mon, 23 May 2022 16:26:30 +0200
+Subject: [Rd] CRAN webserver down
+In-Reply-To: <25227.38120.589113.63633@rob.eddelbuettel.com>
+References: <25225.32501.109208.97418@rob.eddelbuettel.com>
+ <93a10b93-d3f2-ed77-b2fb-1378156c2859@stats.ox.ac.uk>
+ <C661B534-4C5A-44C8-9CEB-BAA9CEE601BF@gmail.com>
+ <25227.38120.589113.63633@rob.eddelbuettel.com>
+Message-ID: <44070926-03AF-4369-96C4-A83ADFA6B13B@gmail.com>
+
+Worked for me on 2nd try (someone read your post?)
+
+- Peter
+
+
+
+> On 23 May 2022, at 16:06 , Dirk Eddelbuettel <edd at debian.org> wrote:
+> 
+> 
+> On 23 May 2022 at 10:29, peter dalgaard wrote:
+> | Apparently resurrected now.
+> 
+> As another maintainer told me, the submission page appears to be down.
+> 
+> Going to
+> 
+>   https://cran.r-project.org/submit.html
+> 
+> (and then refreshing over the stale iframe) gets me
+> 
+>   The webpage at https://xmpalantir.wu.ac.at/cransubmit/ might be
+>   temporarily down or it may have moved permanently to a new web address.
+> 
+> suggesting the VM may be down.
+> 
+> Dirk
+> 
+> -- 
+> dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From edd @end|ng |rom deb|@n@org  Mon May 23 16:57:42 2022
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Mon, 23 May 2022 09:57:42 -0500
+Subject: [Rd] CRAN webserver down
+In-Reply-To: <44070926-03AF-4369-96C4-A83ADFA6B13B@gmail.com>
+References: <25225.32501.109208.97418@rob.eddelbuettel.com>
+ <93a10b93-d3f2-ed77-b2fb-1378156c2859@stats.ox.ac.uk>
+ <C661B534-4C5A-44C8-9CEB-BAA9CEE601BF@gmail.com>
+ <25227.38120.589113.63633@rob.eddelbuettel.com>
+ <44070926-03AF-4369-96C4-A83ADFA6B13B@gmail.com>
+Message-ID: <25227.41190.300179.211073@rob.eddelbuettel.com>
+
+
+On 23 May 2022 at 16:26, peter dalgaard wrote:
+| Worked for me on 2nd try (someone read your post?)
+
+Thanks, same here.
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
