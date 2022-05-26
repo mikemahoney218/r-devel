@@ -10952,3 +10952,1026 @@ On Tue, May 24, 2022 at 8:52 AM Sokol Serguei <sokol at insa-toulouse.fr> wrote:
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From jo@ec|@ud|o@|@r|@ @end|ng |rom gm@||@com  Wed May 25 15:17:59 2022
+From: jo@ec|@ud|o@|@r|@ @end|ng |rom gm@||@com (jcfaria)
+Date: Wed, 25 May 2022 13:17:59 +0000
+Subject: [Rd] Rgui.exe 4.2.0 does not receive characters via the Windows
+ API's PostMessage function
+In-Reply-To: <cdec2d96-2178-f833-ce6e-d4cfe449ff1f@gmail.com>
+References: <em26d64aef-2f66-415f-be9d-ae71a91c1d56@dell>
+ <8e41c7bc-466c-ca00-6141-66520f8818b8@gmail.com>
+ <em8cb2eaf6-27fe-4d26-84b2-3eef11fa9530@dell>
+ <5e580ff4-ac60-6b79-e0d7-f9a84ee200d7@gmail.com>
+ <em46f02f23-aa3d-4db3-9f88-1b338b047298@dell>
+ <7bbdbe00-51e2-e9cf-ae16-5e969fb756b7@gmail.com>
+ <82957f65-28f0-cc11-b07b-1e6076d23d9c@gmail.com>
+ <a8733d02-ff78-a41b-446c-7347268bb27f@gmail.com>
+ <emc6b82537-e5e2-4512-9a59-7a90dda45dfd@dell>
+ <b821d61d-5eb9-41d4-41a3-7e500dee11ed@gmail.com>
+ <cdec2d96-2178-f833-ce6e-d4cfe449ff1f@gmail.com>
+Message-ID: <em7d1d9850-23ea-4818-86bf-db89b7ef4c48@dell>
+
+Dear Tomas,
+
+I've been getting copies of your emails - and also from 
+r-devel at project.org - in my email client, I've been replying to 
+everyone, but for some reason - probably associated with the server - 
+I'm not able to see my replies at this URL: https: 
+//stat.ethz.ch/pipermail/r-devel/2022-May/thread.html
+
+Due to the content of your responses, I believe you are getting them.
+
+Well, I'm grateful for all of your attention to the issues I've 
+reported. I'll test your propositions and modifications in the R-devel 
+code and as soon as possible I'll get back to you. I need time for 
+testing and recoding.
+
+Best,
+///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+Jose Claudio Faria
+UESC/DCET/Brasil
+joseclaudio.faria at gmail.com
+Telefones:
+55(73)3680.5545 - UESC
+55(73)99966.9100 - VIVO
+///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+If you have software to deal with statistics, you have arms,
+if you have good software, you have arms and legs,
+if you have software like R, you have arms, legs and wings...
+the height of your flight depends only on you.
+
+------ Mensagem original ------
+De: "Tomas Kalibera" <tomas.kalibera at gmail.com>
+Para: "jcfaria" <joseclaudio.faria at gmail.com>; r-devel at r-project.org
+Enviado(s): 24/05/2022 04:34:54
+Assunto: Re: [Rd] Rgui.exe 4.2.0 does not receive characters via the 
+Windows API's PostMessage function
+
+>
+>On 5/16/22 19:21, Tomas Kalibera wrote:
+>>Dear Jose,
+>>
+>>On 5/15/22 01:31, jcfaria wrote:
+>>>Dear Tomas,
+>>>
+>>>I am very grateful for your attention!
+>>>
+>>>I've been reading some things about the GraphApp toolkit(http://enchantia.com/software/graphapp/) that is being used in the development of new versions of Rgui.
+>>>
+>>>Really, if it's a matter of choice, the problems I reported cannot be considered a "bug". It's up to us - GUI and IDE application developers - to adapt to the new features.
+>>>
+>>>I'm studying how to get around the problem, but I still haven't found a simple way.
+>>>
+>>>The solution you proposed (code below) ran fine here in all versions of Rgui I have installed, but it's working only for very simple strings, like the one I tested. When testing the needs close to the real I found some problems.
+>>>
+>>>For example, when sending the string below:
+>>>- char *s = "(s <- c('?', 'b', 'c', '?'))";
+>>>
+>>>Rgui receives:
+>>> > 9s ,- c9'', 'b', 'c', ''00
+>>>Error: unexpected symbol in "9s"
+>>> >
+>>>
+>>>
+>>>#include <windows.h>
+>>>#include <stdio.h>
+>>>#include <string.h>
+>>>
+>>>int main(int argc, char **argv) {
+>>>    HWND hw;
+>>>    int i, res;
+>>>
+>>>    printf("Getting Rgui window...\n");
+>>>    hw = FindWindow(NULL, "R Console (64-bit)");
+>>>
+>>>    printf("Got window: %x\n", hw);
+>>>    if (hw == NULL) {
+>>>      printf("Could not get Rgui window: %x\n", GetLastError());
+>>>      return 2;
+>>>    }
+>>>
+>>>    //Samples to send:
+>>>// char *s = "sd";
+>>>    char *s = "(s <- c('?', 'b', 'c', '?'))";
+>>>
+>>>    for(i = 0; i < strlen(s); i++) {
+>>>      res = PostMessage(hw, WM_KEYDOWN, VkKeyScan(s[i]), 0);
+>>>      printf("Sending char %c: %d.\n", s[i], res);
+>>>    }
+>>>
+>>>    res = PostMessage(hw, WM_KEYDOWN, VK_RETURN, 0);
+>>>    printf("Sending return: %d\n.", res);
+>>>    return 0;
+>>>}
+>>>
+>>>The idea of Tinn-R communicating with Rgui.exe is to take advantage of the great stability of Rgui. Since communication with Rterm is done via pipe.
+>>>
+>>>I believe that developing a new interface using the resources of the R.dll library, as proposed, is outside the simple purposes of the Tinn-R project.
+>>>
+>>>Any help in this regard is welcome.
+>>
+>>If embedding R seems too involved, and the hack above doesn't work well enough, perhaps you could use SendInput() (also mentioned in the blog post [1] below as a more correct way to inject input as WM_KEYDOWN).  This is an example:
+>>
+>>---
+>>
+>>#include <windows.h>
+>>#include <stdio.h>
+>>
+>>int main(int argc, char **argv) {
+>>   HWND hw, ow;
+>>   int i, res;
+>>
+>>   hw = FindWindow(NULL, "R Console (64-bit)");
+>>   if (hw == NULL) {
+>>     printf("Could not get Rgui window: %x\n", GetLastError());
+>>     return 2;
+>>   }
+>>
+>>   ow = GetForegroundWindow();
+>>   if (ow == NULL)
+>>     printf("Foreground window is NULL\n");
+>>
+>>   if (!SetForegroundWindow(hw))
+>>     printf("Could not set Rgui as foreground window\n");
+>>
+>>   char *sd = "sd";
+>>   for(i = 0; i < strlen(sd); i++) {
+>>     INPUT input;
+>>
+>>     ZeroMemory(&input, sizeof(INPUT));
+>>     input.type = INPUT_KEYBOARD;
+>>     input.ki.dwFlags = KEYEVENTF_UNICODE;
+>>     input.ki.wScan = (unsigned) sd[i];
+>>     res = SendInput(1, &input, sizeof(INPUT));
+>>
+>>     printf("Sending char %c (%x): %d.\n", sd[i], sd[i], res);
+>>   }
+>>
+>>   {
+>>     INPUT input[2];
+>>
+>>     ZeroMemory(input, 2*sizeof(INPUT));
+>>     input[0].type = input[1].type = INPUT_KEYBOARD;
+>>     input[1].ki.dwFlags = KEYEVENTF_KEYUP;
+>>     input[0].ki.wVk = input[1].ki.wVk = VK_RETURN;
+>>     res = SendInput(2, input, sizeof(INPUT));
+>>     printf("Sending return: %d.\n", res);
+>>   }
+>>
+>>   if (!SetForegroundWindow(ow))
+>>     printf("Could not set the original window as foreground");
+>>
+>>   return 0;
+>>}
+>
+>Dear Jose,
+>
+>to send non-ASCII and repeated characters, you can modify the loop above as follows (use wchar_t to send Unicode characters, send also KEYEVENTF_KEYUP events to ensure that repeated characters such as ')' in the example are received). Otherwise, please refer to the MSDN documentation.
+>
+>   wchar_t *sd = L"(s <- c('?', 'b', 'c', '?'))";
+>   for(i = 0; i < wcslen(sd); i++) {
+>     INPUT input;
+>
+>     ZeroMemory(&input, sizeof(INPUT));
+>     input.type = INPUT_KEYBOARD;
+>     input.ki.dwFlags = KEYEVENTF_UNICODE;
+>     input.ki.wScan = (unsigned) sd[i];
+>     res1 = SendInput(1, &input, sizeof(INPUT));
+>
+>     ZeroMemory(&input, sizeof(INPUT));
+>     input.type = INPUT_KEYBOARD;
+>     input.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
+>     input.ki.wScan = (unsigned) sd[i];
+>     res2 = SendInput(1, &input, sizeof(INPUT));
+>
+>     printf("Sending char %lc (%x): %d,%d .\n", sd[i], sd[i], res1, res2);
+>   }
+>
+>Best
+>Tomas
+>
+>>
+>>---
+>>
+>>This example works for me with R 4.1.3 and with R-devel 82368. It doesn't work with R 4.2.0 (see a related thread about Dasher on this list).
+>>
+>>Best
+>>Tomas
+>>
+>>>
+>>>Best,
+>>>///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>>>Jose Claudio Faria
+>>>UESC/DCET/Brasil
+>>>joseclaudio.faria at gmail.com
+>>>Telefones:
+>>>55(73)3680.5545 - UESC
+>>>55(73)99966.9100 - VIVO
+>>>///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>>>If you have software to deal with statistics, you have arms,
+>>>if you have good software, you have arms and legs,
+>>>if you have software like R, you have arms, legs and wings...
+>>>the height of your flight depends only on you.
+>>>
+>>>------ Mensagem original ------
+>>>De: "Tomas Kalibera" <tomas.kalibera at gmail.com>
+>>>Para: "jcfaria" <joseclaudio.faria at gmail.com>; "Duncan Murdoch" <murdoch.duncan at gmail.com>; r-devel at r-project.org
+>>>Enviado(s): 11/05/2022 13:32:23
+>>>Assunto: Re: [Rd] Rgui.exe 4.2.0 does not receive characters via the Windows API's PostMessage function
+>>>
+>>>>
+>>>>On 5/11/22 15:39, Tomas Kalibera wrote:
+>>>>>
+>>>>>On 5/11/22 08:15, Tomas Kalibera wrote:
+>>>>>>
+>>>>>>On 5/11/22 03:02, jcfaria wrote:
+>>>>>>>Dear Tomas,
+>>>>>>>I've tried, but I don't have the necessary C/C++ programming skills to fulfill your request.
+>>>>>>>
+>>>>>>>Maybe someone can help us by transcribing the little code in object Pascal that I sent to C/C++.
+>>>>>>>
+>>>>>>>If a small executable, made in Object Pascal, can help in your debug, I can provide.
+>>>>>>
+>>>>>>Dear Jose,
+>>>>>>
+>>>>>>no problem, I can try out with the Pascal code.
+>>>>>>Is there a free compiler I can use to build and run it?
+>>>>>
+>>>>>Actually I can reproduce it in a C program doing the same thing.
+>>>>>
+>>>>>The primary cause is that Rgui is using GraphApp Unicode windows on systems running in a multi-byte locale, which affects most systems since R 4.2 because of the switch to UTF-8. While Unicode windows have been used even in older versions of R, it was only on systems then running in a multi-byte locale, and apparently this hasn't been reported.
+>>>>>
+>>>>>When I modify R-devel to use non-Unicode GraphApp windows, the message sending works again. I will have a closer look, thanks for the report.
+>>>>
+>>>>I had a closer look and this doesn't really seem to be a bug in R to me. For Unicode Windows, GraphApp uses WM_IME_COMPOSITION messages to read the keys instead of WM_CHAR, which it uses for non-Unicode windows. This is internal functionality of Rgui and a legitimate choice. Rgui cannot simply handle both messages in Unicode windows, because the characters would be doubled (if you see an easy, elegant change to Rgui that would mimic the previous behavior, let me know). This is certainly not a documented interface for Rgui, so I am afraid you would have to change something in your application.
+>>>>
+>>>>I read that using PostMessage to simulate keyboard input is considered wrong, see [1], and then one should instead use SendInput (which then requires bringing the window to the foreground), if at all simulating keyboard input. Maybe one could create a better working solution that way, or using some automation library.
+>>>>
+>>>>As a quick hack, I found that [2] happens to be working on my system, but again relying on the current implementation of Rgui (simply you send WM_KEYDOWN also for the characters other than the newline/return). It seems to be working also with R 4.1 for me.
+>>>>
+>>>>The usual way for GUIs/front-ends is to "embed" R, to link it as a DLL. Rgui itself does it and also external applications such as RStudio. Typically you would want to have a thin layer application embedding R and make your GUI communicate with that, but switching to that from sending the messages would require some work.
+>>>>
+>>>>Best
+>>>>Tomas
+>>>>
+>>>>[1] https://devblogs.microsoft.com/oldnewthing/20050530-11/?p=35513
+>>>>
+>>>>[2]
+>>>>#include <windows.h>
+>>>>#include <stdio.h>
+>>>>#include <string.h>
+>>>>
+>>>>int main(int argc, char **argv) {
+>>>>   HWND hw;
+>>>>   int i, res;
+>>>>
+>>>>   printf("Getting Rgui window...\n");
+>>>>   hw = FindWindow(NULL, "R Console (64-bit)");
+>>>>
+>>>>   printf("Got window: %x\n", hw);
+>>>>   if (hw == NULL) {
+>>>>     printf("Could not get Rgui window: %x\n", GetLastError());
+>>>>     return 2;
+>>>>   }
+>>>>
+>>>>   char *sd = "sd";
+>>>>   for(i = 0; i < strlen(sd); i++) {
+>>>>     res = PostMessage(hw, WM_KEYDOWN, VkKeyScan(sd[i]), 0);
+>>>>     printf("Sending char %c: %d.\n", sd[i], res);
+>>>>   }
+>>>>
+>>>>   res = PostMessage(hw, WM_KEYDOWN, VK_RETURN, 0);
+>>>>   printf("Sending return: %d\n.", res);
+>>>>   return 0;
+>>>>}
+>>>>
+>>>>
+>>>>>
+>>>>>For reference, to reproduce I ran
+>>>>>
+>>>>>Rgui --sdi
+>>>>>
+>>>>>and used this C example:
+>>>>>
+>>>>>#include <windows.h>
+>>>>>#include <stdio.h>
+>>>>>#include <string.h>
+>>>>>
+>>>>>int main(int argc, char **argv) {
+>>>>>   HWND hw;
+>>>>>   int i, res;
+>>>>>
+>>>>>   printf("Getting Rgui window...\n");
+>>>>>   hw = FindWindow(NULL, "R Console (64-bit)");
+>>>>>
+>>>>>   printf("Got window: %x\n", hw);
+>>>>>   if (hw == NULL) {
+>>>>>     printf("Could not get Rgui window: %x\n", GetLastError());
+>>>>>     return 2;
+>>>>>   }
+>>>>>
+>>>>>   char *sd = "sd";
+>>>>>   for(i = 0; i < strlen(sd); i++) {
+>>>>>     res = PostMessage(hw, WM_CHAR, (unsigned int) sd[i], 0);
+>>>>>     printf("Sending char %c: %d.\n", sd[i], res);
+>>>>>   }
+>>>>>
+>>>>>   res = PostMessage(hw, WM_KEYDOWN, VK_RETURN, 0);
+>>>>>   printf("Sending return: %d\n.", res);
+>>>>>   return 0;
+>>>>>}
+>>>>>
+>>>>>Best
+>>>>>Tomas
+>>>>>
+>>>>>
+>>>>>>
+>>>>>>Thanks
+>>>>>>Tomas
+>>>>>>
+>>>>>>>
+>>>>>>>Grateful for the attention,,
+>>>>>>>///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>>>>>>>Jose Claudio Faria
+>>>>>>>UESC/DCET/Brasil
+>>>>>>>joseclaudio.faria at gmail.com
+>>>>>>>Telefones:
+>>>>>>>55(73)3680.5545 - UESC
+>>>>>>>55(73)99966.9100 - VIVO
+>>>>>>>///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>>>>>>>If you have software to deal with statistics, you have arms,
+>>>>>>>if you have good software, you have arms and legs,
+>>>>>>>if you have software like R, you have arms, legs and wings...
+>>>>>>>the height of your flight depends only on you.
+>>>>>>>
+>>>>>>>------ Mensagem original ------
+>>>>>>>De: "Tomas Kalibera" <tomas.kalibera at gmail.com>
+>>>>>>>Para: "jcfaria" <joseclaudio.faria at gmail.com>; "Duncan Murdoch" <murdoch.duncan at gmail.com>; r-devel at r-project.org
+>>>>>>>Enviado(s): 06/05/2022 04:24:44
+>>>>>>>Assunto: Re: [Rd] Rgui.exe 4.2.0 does not receive characters via the Windows API's PostMessage function
+>>>>>>>
+>>>>>>>>
+>>>>>>>>On 5/6/22 07:03, jcfaria wrote:
+>>>>>>>>>Dear Duncan,
+>>>>>>>>>I believe the problem is of a different nature.
+>>>>>>>>>I get TRUE 3 times running the code below:
+>>>>>>>>>
+>>>>>>>>>procedure TfMain.btnPasteClick(Sender: TObject);
+>>>>>>>>>var
+>>>>>>>>>   i: integer;
+>>>>>>>>>   sTmp: string;
+>>>>>>>>>   hBN: HWND;
+>>>>>>>>>   j: bool;
+>>>>>>>>>
+>>>>>>>>>begin
+>>>>>>>>>   hBN:= FindWindowA(nil,
+>>>>>>>>>                     'R Console (64-bit)');
+>>>>>>>>>
+>>>>>>>>>   sTmp:= 'sd';
+>>>>>>>>>
+>>>>>>>>>   for i:= 1 to Length(sTmp) do begin
+>>>>>>>>>     j:= PostMessage(hBN,
+>>>>>>>>>                     WM_CHAR,
+>>>>>>>>>                     Ord(sTmp[i]),
+>>>>>>>>>                     0);
+>>>>>>>>>
+>>>>>>>>>     ShowMessage(BoolToStr(j,
+>>>>>>>>>                           True));
+>>>>>>>>>   end;
+>>>>>>>>>
+>>>>>>>>>   j:= PostMessage(hBN,
+>>>>>>>>>               WM_KEYDOWN,
+>>>>>>>>>               VK_RETURN, 0);
+>>>>>>>>>
+>>>>>>>>>   ShowMessage(BoolToStr(j,
+>>>>>>>>>                         True));
+>>>>>>>>>end;
+>>>>>>>>>
+>>>>>>>>>That is, Rgui is receiving the message of the characters (via PostMessage), but it is blocking because it does not show them in the console.
+>>>>>>>>>The only thing Rgui blames is Carriage Return, as it adds an additional prompt with each run.
+>>>>>>>>
+>>>>>>>>I can't provide a good guess what impacted your use, but if you could give me a full example, ideally in C, which can be compiled with Rtools42 (so gcc, MinGW) and I can edit/recompile, and works with R 4.1, I am happy to help debugging on 4.2.
+>>>>>>>>
+>>>>>>>>Rgui now uses GraphApp Unicode windows on systems where it didn't before, because it uses UTF-8 also on systems it didn't before (on systems that would use a single-byte locale in R 4.1). These Unicode windows are a different code path and there may be bugs not reported previously, including processing inputs (recently I fixed handling of accents, for example). Otherwise indeed R now uses UTF-8 as native encoding and UCRT as the C runtime.
+>>>>>>>>
+>>>>>>>>Best
+>>>>>>>>Tomas
+>>>>>>>>
+>>>>>>>>
+>>>>>>>>>
+>>>>>>>>> >
+>>>>>>>>> >
+>>>>>>>>>
+>>>>>>>>>Best,
+>>>>>>>>>///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>>>>>>>>>Jose Claudio Faria
+>>>>>>>>>UESC/DCET/Brasil
+>>>>>>>>>joseclaudio.faria at gmail.com
+>>>>>>>>>Telefones:
+>>>>>>>>>55(73)3680.5545 - UESC
+>>>>>>>>>55(73)99966.9100 - VIVO
+>>>>>>>>>///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>>>>>>>>>If you have software to deal with statistics, you have arms,
+>>>>>>>>>if you have good software, you have arms and legs,
+>>>>>>>>>if you have software like R, you have arms, legs and wings...
+>>>>>>>>>the height of your flight depends only on you.
+>>>>>>>>>
+>>>>>>>>>------ Mensagem original ------
+>>>>>>>>>De: "Duncan Murdoch" <murdoch.duncan at gmail.com>
+>>>>>>>>>Para: "jcfaria" <joseclaudio.faria at gmail.com>; r-devel at r-project.org
+>>>>>>>>>Enviado(s): 05/05/2022 13:17:53
+>>>>>>>>>Assunto: Re: [Rd] Rgui.exe 4.2.0 does not receive characters via the Windows API's PostMessage function
+>>>>>>>>>
+>>>>>>>>>>On 05/05/2022 11:17 a.m., jcfaria wrote:
+>>>>>>>>>>>Hello,
+>>>>>>>>>>>
+>>>>>>>>>>>Rgui.exe 4.2.0 does not receive characters via the Windows API's
+>>>>>>>>>>>PostMessage function.
+>>>>>>>>>>>
+>>>>>>>>>>>The Tinn-R project sends messages to Rgui.exe (SDI mode) via the Windows
+>>>>>>>>>>>API's PostMessage function.
+>>>>>>>>>>>A simplification of the code (in object Pascal) can be seen below.
+>>>>>>>>>>>
+>>>>>>>>>>>procedure TfMain.btnPasteClick(Sender: TObject);
+>>>>>>>>>>>var
+>>>>>>>>>>>     i: integer;
+>>>>>>>>>>>     sTmp: WideString;
+>>>>>>>>>>>     hBN: HWND;
+>>>>>>>>>>>
+>>>>>>>>>>>begin
+>>>>>>>>>>>     hBN:= FindWindowA(nil,
+>>>>>>>>>>>                       'R Console (64-bit)');
+>>>>>>>>>>>
+>>>>>>>>>>>     sTmp:= 'sd';
+>>>>>>>>>>>
+>>>>>>>>>>>     for i:= 1 to Length(sTmp) do begin
+>>>>>>>>>>>       PostMessage(hBN,
+>>>>>>>>>>>                   WM_CHAR,
+>>>>>>>>>>>                   Ord(sTmp[i]),
+>>>>>>>>>>>                   0);
+>>>>>>>>>>>     end;
+>>>>>>>>>>>
+>>>>>>>>>>>     PostMessage(hBN,
+>>>>>>>>>>>                 WM_KEYDOWN,
+>>>>>>>>>>>                 VK_RETURN, 0);
+>>>>>>>>>>>end;
+>>>>>>>>>>>
+>>>>>>>>>>>This code has always worked fine for all versions of Rgui.exe with the
+>>>>>>>>>>>exception of the last one released, ie 4.2.0.
+>>>>>>>>>>>
+>>>>>>>>>>>We've been trying to get around the problem on the Object Pascal side,
+>>>>>>>>>>>but without success so far.
+>>>>>>>>>>>
+>>>>>>>>>>>Does anyone connected to the compilation of Rqui.exe know what the
+>>>>>>>>>>>problem is?
+>>>>>>>>>>
+>>>>>>>>>>It could be that the new build enforces Windows security more stringently.  More details are described in the answer to this question: https://stackoverflow.com/a/40139498/2554330, but at a minimum you should be checking the return value from PostMessage.
+>>>>>>>>>>
+>>>>>>>>>>Duncan Murdoch
+>>>>>>>>>>
+>>>>>>>>>>>
+>>>>>>>>>>>Best,
+>>>>>>>>>>>///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>>>>>>>>>>>Jose Claudio Faria
+>>>>>>>>>>>UESC/DCET/Brasil
+>>>>>>>>>>>joseclaudio.faria at gmail.com
+>>>>>>>>>>>Telefones:
+>>>>>>>>>>>55(73)3680.5545 - UESC
+>>>>>>>>>>>55(73)99966.9100 - VIVO
+>>>>>>>>>>>///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>>>>>>>>>>>If you have software to deal with statistics, you have arms,
+>>>>>>>>>>>if you have good software, you have arms and legs,
+>>>>>>>>>>>if you have software like R, you have arms, legs and wings...
+>>>>>>>>>>>the height of your flight depends only on you.
+>>>>>>>>>>>
+>>>>>>>>>>>     [[alternative HTML version deleted]]
+>>>>>>>>>>>
+>>>>>>>>>>>______________________________________________
+>>>>>>>>>>>R-devel at r-project.org mailing list
+>>>>>>>>>>>https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>>>>>>>>
+>>>>>>>>>
+>>>>>>>>>______________________________________________
+>>>>>>>>>R-devel at r-project.org mailing list
+>>>>>>>>>https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>>>>>
+>>>
+
+
+From pd@|gd @end|ng |rom gm@||@com  Wed May 25 15:53:07 2022
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Wed, 25 May 2022 15:53:07 +0200
+Subject: [Rd] Rgui.exe 4.2.0 does not receive characters via the Windows
+ API's PostMessage function
+In-Reply-To: <em7d1d9850-23ea-4818-86bf-db89b7ef4c48@dell>
+References: <em26d64aef-2f66-415f-be9d-ae71a91c1d56@dell>
+ <8e41c7bc-466c-ca00-6141-66520f8818b8@gmail.com>
+ <em8cb2eaf6-27fe-4d26-84b2-3eef11fa9530@dell>
+ <5e580ff4-ac60-6b79-e0d7-f9a84ee200d7@gmail.com>
+ <em46f02f23-aa3d-4db3-9f88-1b338b047298@dell>
+ <7bbdbe00-51e2-e9cf-ae16-5e969fb756b7@gmail.com>
+ <82957f65-28f0-cc11-b07b-1e6076d23d9c@gmail.com>
+ <a8733d02-ff78-a41b-446c-7347268bb27f@gmail.com>
+ <emc6b82537-e5e2-4512-9a59-7a90dda45dfd@dell>
+ <b821d61d-5eb9-41d4-41a3-7e500dee11ed@gmail.com>
+ <cdec2d96-2178-f833-ce6e-d4cfe449ff1f@gmail.com>
+ <em7d1d9850-23ea-4818-86bf-db89b7ef4c48@dell>
+Message-ID: <443B699B-4D7A-481D-B9EF-F0EF81ECAE17@gmail.com>
+
+I see 5 messages from you in the thread, including this one... (Did you perhaps overlook that threads sort by date of _1st_ message?)
+
+- pd
+
+> On 25 May 2022, at 15:17 , jcfaria <joseclaudio.faria at gmail.com> wrote:
+> 
+> Dear Tomas,
+> 
+> I've been getting copies of your emails - and also from r-devel at project.org - in my email client, I've been replying to everyone, but for some reason - probably associated with the server - I'm not able to see my replies at this URL: https: //stat.ethz.ch/pipermail/r-devel/2022-May/thread.html
+> 
+> Due to the content of your responses, I believe you are getting them.
+> 
+> Well, I'm grateful for all of your attention to the issues I've reported. I'll test your propositions and modifications in the R-devel code and as soon as possible I'll get back to you. I need time for testing and recoding.
+> 
+> Best,
+> ///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+> Jose Claudio Faria
+> UESC/DCET/Brasil
+> joseclaudio.faria at gmail.com
+> Telefones:
+> 55(73)3680.5545 - UESC
+> 55(73)99966.9100 - VIVO
+> ///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+> If you have software to deal with statistics, you have arms,
+> if you have good software, you have arms and legs,
+> if you have software like R, you have arms, legs and wings...
+> the height of your flight depends only on you.
+> 
+> ------ Mensagem original ------
+> De: "Tomas Kalibera" <tomas.kalibera at gmail.com>
+> Para: "jcfaria" <joseclaudio.faria at gmail.com>; r-devel at r-project.org
+> Enviado(s): 24/05/2022 04:34:54
+> Assunto: Re: [Rd] Rgui.exe 4.2.0 does not receive characters via the Windows API's PostMessage function
+> 
+>> 
+>> On 5/16/22 19:21, Tomas Kalibera wrote:
+>>> Dear Jose,
+>>> 
+>>> On 5/15/22 01:31, jcfaria wrote:
+>>>> Dear Tomas,
+>>>> 
+>>>> I am very grateful for your attention!
+>>>> 
+>>>> I've been reading some things about the GraphApp toolkit(http://enchantia.com/software/graphapp/) that is being used in the development of new versions of Rgui.
+>>>> 
+>>>> Really, if it's a matter of choice, the problems I reported cannot be considered a "bug". It's up to us - GUI and IDE application developers - to adapt to the new features.
+>>>> 
+>>>> I'm studying how to get around the problem, but I still haven't found a simple way.
+>>>> 
+>>>> The solution you proposed (code below) ran fine here in all versions of Rgui I have installed, but it's working only for very simple strings, like the one I tested. When testing the needs close to the real I found some problems.
+>>>> 
+>>>> For example, when sending the string below:
+>>>> - char *s = "(s <- c('?', 'b', 'c', '?'))";
+>>>> 
+>>>> Rgui receives:
+>>>> > 9s ,- c9'', 'b', 'c', ''00
+>>>> Error: unexpected symbol in "9s"
+>>>> >
+>>>> 
+>>>> 
+>>>> #include <windows.h>
+>>>> #include <stdio.h>
+>>>> #include <string.h>
+>>>> 
+>>>> int main(int argc, char **argv) {
+>>>>   HWND hw;
+>>>>   int i, res;
+>>>> 
+>>>>   printf("Getting Rgui window...\n");
+>>>>   hw = FindWindow(NULL, "R Console (64-bit)");
+>>>> 
+>>>>   printf("Got window: %x\n", hw);
+>>>>   if (hw == NULL) {
+>>>>     printf("Could not get Rgui window: %x\n", GetLastError());
+>>>>     return 2;
+>>>>   }
+>>>> 
+>>>>   //Samples to send:
+>>>> // char *s = "sd";
+>>>>   char *s = "(s <- c('?', 'b', 'c', '?'))";
+>>>> 
+>>>>   for(i = 0; i < strlen(s); i++) {
+>>>>     res = PostMessage(hw, WM_KEYDOWN, VkKeyScan(s[i]), 0);
+>>>>     printf("Sending char %c: %d.\n", s[i], res);
+>>>>   }
+>>>> 
+>>>>   res = PostMessage(hw, WM_KEYDOWN, VK_RETURN, 0);
+>>>>   printf("Sending return: %d\n.", res);
+>>>>   return 0;
+>>>> }
+>>>> 
+>>>> The idea of Tinn-R communicating with Rgui.exe is to take advantage of the great stability of Rgui. Since communication with Rterm is done via pipe.
+>>>> 
+>>>> I believe that developing a new interface using the resources of the R.dll library, as proposed, is outside the simple purposes of the Tinn-R project.
+>>>> 
+>>>> Any help in this regard is welcome.
+>>> 
+>>> If embedding R seems too involved, and the hack above doesn't work well enough, perhaps you could use SendInput() (also mentioned in the blog post [1] below as a more correct way to inject input as WM_KEYDOWN).  This is an example:
+>>> 
+>>> ---
+>>> 
+>>> #include <windows.h>
+>>> #include <stdio.h>
+>>> 
+>>> int main(int argc, char **argv) {
+>>>  HWND hw, ow;
+>>>  int i, res;
+>>> 
+>>>  hw = FindWindow(NULL, "R Console (64-bit)");
+>>>  if (hw == NULL) {
+>>>    printf("Could not get Rgui window: %x\n", GetLastError());
+>>>    return 2;
+>>>  }
+>>> 
+>>>  ow = GetForegroundWindow();
+>>>  if (ow == NULL)
+>>>    printf("Foreground window is NULL\n");
+>>> 
+>>>  if (!SetForegroundWindow(hw))
+>>>    printf("Could not set Rgui as foreground window\n");
+>>> 
+>>>  char *sd = "sd";
+>>>  for(i = 0; i < strlen(sd); i++) {
+>>>    INPUT input;
+>>> 
+>>>    ZeroMemory(&input, sizeof(INPUT));
+>>>    input.type = INPUT_KEYBOARD;
+>>>    input.ki.dwFlags = KEYEVENTF_UNICODE;
+>>>    input.ki.wScan = (unsigned) sd[i];
+>>>    res = SendInput(1, &input, sizeof(INPUT));
+>>> 
+>>>    printf("Sending char %c (%x): %d.\n", sd[i], sd[i], res);
+>>>  }
+>>> 
+>>>  {
+>>>    INPUT input[2];
+>>> 
+>>>    ZeroMemory(input, 2*sizeof(INPUT));
+>>>    input[0].type = input[1].type = INPUT_KEYBOARD;
+>>>    input[1].ki.dwFlags = KEYEVENTF_KEYUP;
+>>>    input[0].ki.wVk = input[1].ki.wVk = VK_RETURN;
+>>>    res = SendInput(2, input, sizeof(INPUT));
+>>>    printf("Sending return: %d.\n", res);
+>>>  }
+>>> 
+>>>  if (!SetForegroundWindow(ow))
+>>>    printf("Could not set the original window as foreground");
+>>> 
+>>>  return 0;
+>>> }
+>> 
+>> Dear Jose,
+>> 
+>> to send non-ASCII and repeated characters, you can modify the loop above as follows (use wchar_t to send Unicode characters, send also KEYEVENTF_KEYUP events to ensure that repeated characters such as ')' in the example are received). Otherwise, please refer to the MSDN documentation.
+>> 
+>>  wchar_t *sd = L"(s <- c('?', 'b', 'c', '?'))";
+>>  for(i = 0; i < wcslen(sd); i++) {
+>>    INPUT input;
+>> 
+>>    ZeroMemory(&input, sizeof(INPUT));
+>>    input.type = INPUT_KEYBOARD;
+>>    input.ki.dwFlags = KEYEVENTF_UNICODE;
+>>    input.ki.wScan = (unsigned) sd[i];
+>>    res1 = SendInput(1, &input, sizeof(INPUT));
+>> 
+>>    ZeroMemory(&input, sizeof(INPUT));
+>>    input.type = INPUT_KEYBOARD;
+>>    input.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
+>>    input.ki.wScan = (unsigned) sd[i];
+>>    res2 = SendInput(1, &input, sizeof(INPUT));
+>> 
+>>    printf("Sending char %lc (%x): %d,%d .\n", sd[i], sd[i], res1, res2);
+>>  }
+>> 
+>> Best
+>> Tomas
+>> 
+>>> 
+>>> ---
+>>> 
+>>> This example works for me with R 4.1.3 and with R-devel 82368. It doesn't work with R 4.2.0 (see a related thread about Dasher on this list).
+>>> 
+>>> Best
+>>> Tomas
+>>> 
+>>>> 
+>>>> Best,
+>>>> ///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>>>> Jose Claudio Faria
+>>>> UESC/DCET/Brasil
+>>>> joseclaudio.faria at gmail.com
+>>>> Telefones:
+>>>> 55(73)3680.5545 - UESC
+>>>> 55(73)99966.9100 - VIVO
+>>>> ///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>>>> If you have software to deal with statistics, you have arms,
+>>>> if you have good software, you have arms and legs,
+>>>> if you have software like R, you have arms, legs and wings...
+>>>> the height of your flight depends only on you.
+>>>> 
+>>>> ------ Mensagem original ------
+>>>> De: "Tomas Kalibera" <tomas.kalibera at gmail.com>
+>>>> Para: "jcfaria" <joseclaudio.faria at gmail.com>; "Duncan Murdoch" <murdoch.duncan at gmail.com>; r-devel at r-project.org
+>>>> Enviado(s): 11/05/2022 13:32:23
+>>>> Assunto: Re: [Rd] Rgui.exe 4.2.0 does not receive characters via the Windows API's PostMessage function
+>>>> 
+>>>>> 
+>>>>> On 5/11/22 15:39, Tomas Kalibera wrote:
+>>>>>> 
+>>>>>> On 5/11/22 08:15, Tomas Kalibera wrote:
+>>>>>>> 
+>>>>>>> On 5/11/22 03:02, jcfaria wrote:
+>>>>>>>> Dear Tomas,
+>>>>>>>> I've tried, but I don't have the necessary C/C++ programming skills to fulfill your request.
+>>>>>>>> 
+>>>>>>>> Maybe someone can help us by transcribing the little code in object Pascal that I sent to C/C++.
+>>>>>>>> 
+>>>>>>>> If a small executable, made in Object Pascal, can help in your debug, I can provide.
+>>>>>>> 
+>>>>>>> Dear Jose,
+>>>>>>> 
+>>>>>>> no problem, I can try out with the Pascal code.
+>>>>>>> Is there a free compiler I can use to build and run it?
+>>>>>> 
+>>>>>> Actually I can reproduce it in a C program doing the same thing.
+>>>>>> 
+>>>>>> The primary cause is that Rgui is using GraphApp Unicode windows on systems running in a multi-byte locale, which affects most systems since R 4.2 because of the switch to UTF-8. While Unicode windows have been used even in older versions of R, it was only on systems then running in a multi-byte locale, and apparently this hasn't been reported.
+>>>>>> 
+>>>>>> When I modify R-devel to use non-Unicode GraphApp windows, the message sending works again. I will have a closer look, thanks for the report.
+>>>>> 
+>>>>> I had a closer look and this doesn't really seem to be a bug in R to me. For Unicode Windows, GraphApp uses WM_IME_COMPOSITION messages to read the keys instead of WM_CHAR, which it uses for non-Unicode windows. This is internal functionality of Rgui and a legitimate choice. Rgui cannot simply handle both messages in Unicode windows, because the characters would be doubled (if you see an easy, elegant change to Rgui that would mimic the previous behavior, let me know). This is certainly not a documented interface for Rgui, so I am afraid you would have to change something in your application.
+>>>>> 
+>>>>> I read that using PostMessage to simulate keyboard input is considered wrong, see [1], and then one should instead use SendInput (which then requires bringing the window to the foreground), if at all simulating keyboard input. Maybe one could create a better working solution that way, or using some automation library.
+>>>>> 
+>>>>> As a quick hack, I found that [2] happens to be working on my system, but again relying on the current implementation of Rgui (simply you send WM_KEYDOWN also for the characters other than the newline/return). It seems to be working also with R 4.1 for me.
+>>>>> 
+>>>>> The usual way for GUIs/front-ends is to "embed" R, to link it as a DLL. Rgui itself does it and also external applications such as RStudio. Typically you would want to have a thin layer application embedding R and make your GUI communicate with that, but switching to that from sending the messages would require some work.
+>>>>> 
+>>>>> Best
+>>>>> Tomas
+>>>>> 
+>>>>> [1] https://devblogs.microsoft.com/oldnewthing/20050530-11/?p=35513
+>>>>> 
+>>>>> [2]
+>>>>> #include <windows.h>
+>>>>> #include <stdio.h>
+>>>>> #include <string.h>
+>>>>> 
+>>>>> int main(int argc, char **argv) {
+>>>>>  HWND hw;
+>>>>>  int i, res;
+>>>>> 
+>>>>>  printf("Getting Rgui window...\n");
+>>>>>  hw = FindWindow(NULL, "R Console (64-bit)");
+>>>>> 
+>>>>>  printf("Got window: %x\n", hw);
+>>>>>  if (hw == NULL) {
+>>>>>    printf("Could not get Rgui window: %x\n", GetLastError());
+>>>>>    return 2;
+>>>>>  }
+>>>>> 
+>>>>>  char *sd = "sd";
+>>>>>  for(i = 0; i < strlen(sd); i++) {
+>>>>>    res = PostMessage(hw, WM_KEYDOWN, VkKeyScan(sd[i]), 0);
+>>>>>    printf("Sending char %c: %d.\n", sd[i], res);
+>>>>>  }
+>>>>> 
+>>>>>  res = PostMessage(hw, WM_KEYDOWN, VK_RETURN, 0);
+>>>>>  printf("Sending return: %d\n.", res);
+>>>>>  return 0;
+>>>>> }
+>>>>> 
+>>>>> 
+>>>>>> 
+>>>>>> For reference, to reproduce I ran
+>>>>>> 
+>>>>>> Rgui --sdi
+>>>>>> 
+>>>>>> and used this C example:
+>>>>>> 
+>>>>>> #include <windows.h>
+>>>>>> #include <stdio.h>
+>>>>>> #include <string.h>
+>>>>>> 
+>>>>>> int main(int argc, char **argv) {
+>>>>>>  HWND hw;
+>>>>>>  int i, res;
+>>>>>> 
+>>>>>>  printf("Getting Rgui window...\n");
+>>>>>>  hw = FindWindow(NULL, "R Console (64-bit)");
+>>>>>> 
+>>>>>>  printf("Got window: %x\n", hw);
+>>>>>>  if (hw == NULL) {
+>>>>>>    printf("Could not get Rgui window: %x\n", GetLastError());
+>>>>>>    return 2;
+>>>>>>  }
+>>>>>> 
+>>>>>>  char *sd = "sd";
+>>>>>>  for(i = 0; i < strlen(sd); i++) {
+>>>>>>    res = PostMessage(hw, WM_CHAR, (unsigned int) sd[i], 0);
+>>>>>>    printf("Sending char %c: %d.\n", sd[i], res);
+>>>>>>  }
+>>>>>> 
+>>>>>>  res = PostMessage(hw, WM_KEYDOWN, VK_RETURN, 0);
+>>>>>>  printf("Sending return: %d\n.", res);
+>>>>>>  return 0;
+>>>>>> }
+>>>>>> 
+>>>>>> Best
+>>>>>> Tomas
+>>>>>> 
+>>>>>> 
+>>>>>>> 
+>>>>>>> Thanks
+>>>>>>> Tomas
+>>>>>>> 
+>>>>>>>> 
+>>>>>>>> Grateful for the attention,,
+>>>>>>>> ///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>>>>>>>> Jose Claudio Faria
+>>>>>>>> UESC/DCET/Brasil
+>>>>>>>> joseclaudio.faria at gmail.com
+>>>>>>>> Telefones:
+>>>>>>>> 55(73)3680.5545 - UESC
+>>>>>>>> 55(73)99966.9100 - VIVO
+>>>>>>>> ///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>>>>>>>> If you have software to deal with statistics, you have arms,
+>>>>>>>> if you have good software, you have arms and legs,
+>>>>>>>> if you have software like R, you have arms, legs and wings...
+>>>>>>>> the height of your flight depends only on you.
+>>>>>>>> 
+>>>>>>>> ------ Mensagem original ------
+>>>>>>>> De: "Tomas Kalibera" <tomas.kalibera at gmail.com>
+>>>>>>>> Para: "jcfaria" <joseclaudio.faria at gmail.com>; "Duncan Murdoch" <murdoch.duncan at gmail.com>; r-devel at r-project.org
+>>>>>>>> Enviado(s): 06/05/2022 04:24:44
+>>>>>>>> Assunto: Re: [Rd] Rgui.exe 4.2.0 does not receive characters via the Windows API's PostMessage function
+>>>>>>>> 
+>>>>>>>>> 
+>>>>>>>>> On 5/6/22 07:03, jcfaria wrote:
+>>>>>>>>>> Dear Duncan,
+>>>>>>>>>> I believe the problem is of a different nature.
+>>>>>>>>>> I get TRUE 3 times running the code below:
+>>>>>>>>>> 
+>>>>>>>>>> procedure TfMain.btnPasteClick(Sender: TObject);
+>>>>>>>>>> var
+>>>>>>>>>>  i: integer;
+>>>>>>>>>>  sTmp: string;
+>>>>>>>>>>  hBN: HWND;
+>>>>>>>>>>  j: bool;
+>>>>>>>>>> 
+>>>>>>>>>> begin
+>>>>>>>>>>  hBN:= FindWindowA(nil,
+>>>>>>>>>>                    'R Console (64-bit)');
+>>>>>>>>>> 
+>>>>>>>>>>  sTmp:= 'sd';
+>>>>>>>>>> 
+>>>>>>>>>>  for i:= 1 to Length(sTmp) do begin
+>>>>>>>>>>    j:= PostMessage(hBN,
+>>>>>>>>>>                    WM_CHAR,
+>>>>>>>>>>                    Ord(sTmp[i]),
+>>>>>>>>>>                    0);
+>>>>>>>>>> 
+>>>>>>>>>>    ShowMessage(BoolToStr(j,
+>>>>>>>>>>                          True));
+>>>>>>>>>>  end;
+>>>>>>>>>> 
+>>>>>>>>>>  j:= PostMessage(hBN,
+>>>>>>>>>>              WM_KEYDOWN,
+>>>>>>>>>>              VK_RETURN, 0);
+>>>>>>>>>> 
+>>>>>>>>>>  ShowMessage(BoolToStr(j,
+>>>>>>>>>>                        True));
+>>>>>>>>>> end;
+>>>>>>>>>> 
+>>>>>>>>>> That is, Rgui is receiving the message of the characters (via PostMessage), but it is blocking because it does not show them in the console.
+>>>>>>>>>> The only thing Rgui blames is Carriage Return, as it adds an additional prompt with each run.
+>>>>>>>>> 
+>>>>>>>>> I can't provide a good guess what impacted your use, but if you could give me a full example, ideally in C, which can be compiled with Rtools42 (so gcc, MinGW) and I can edit/recompile, and works with R 4.1, I am happy to help debugging on 4.2.
+>>>>>>>>> 
+>>>>>>>>> Rgui now uses GraphApp Unicode windows on systems where it didn't before, because it uses UTF-8 also on systems it didn't before (on systems that would use a single-byte locale in R 4.1). These Unicode windows are a different code path and there may be bugs not reported previously, including processing inputs (recently I fixed handling of accents, for example). Otherwise indeed R now uses UTF-8 as native encoding and UCRT as the C runtime.
+>>>>>>>>> 
+>>>>>>>>> Best
+>>>>>>>>> Tomas
+>>>>>>>>> 
+>>>>>>>>> 
+>>>>>>>>>> 
+>>>>>>>>>> >
+>>>>>>>>>> >
+>>>>>>>>>> 
+>>>>>>>>>> Best,
+>>>>>>>>>> ///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>>>>>>>>>> Jose Claudio Faria
+>>>>>>>>>> UESC/DCET/Brasil
+>>>>>>>>>> joseclaudio.faria at gmail.com
+>>>>>>>>>> Telefones:
+>>>>>>>>>> 55(73)3680.5545 - UESC
+>>>>>>>>>> 55(73)99966.9100 - VIVO
+>>>>>>>>>> ///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>>>>>>>>>> If you have software to deal with statistics, you have arms,
+>>>>>>>>>> if you have good software, you have arms and legs,
+>>>>>>>>>> if you have software like R, you have arms, legs and wings...
+>>>>>>>>>> the height of your flight depends only on you.
+>>>>>>>>>> 
+>>>>>>>>>> ------ Mensagem original ------
+>>>>>>>>>> De: "Duncan Murdoch" <murdoch.duncan at gmail.com>
+>>>>>>>>>> Para: "jcfaria" <joseclaudio.faria at gmail.com>; r-devel at r-project.org
+>>>>>>>>>> Enviado(s): 05/05/2022 13:17:53
+>>>>>>>>>> Assunto: Re: [Rd] Rgui.exe 4.2.0 does not receive characters via the Windows API's PostMessage function
+>>>>>>>>>> 
+>>>>>>>>>>> On 05/05/2022 11:17 a.m., jcfaria wrote:
+>>>>>>>>>>>> Hello,
+>>>>>>>>>>>> 
+>>>>>>>>>>>> Rgui.exe 4.2.0 does not receive characters via the Windows API's
+>>>>>>>>>>>> PostMessage function.
+>>>>>>>>>>>> 
+>>>>>>>>>>>> The Tinn-R project sends messages to Rgui.exe (SDI mode) via the Windows
+>>>>>>>>>>>> API's PostMessage function.
+>>>>>>>>>>>> A simplification of the code (in object Pascal) can be seen below.
+>>>>>>>>>>>> 
+>>>>>>>>>>>> procedure TfMain.btnPasteClick(Sender: TObject);
+>>>>>>>>>>>> var
+>>>>>>>>>>>>    i: integer;
+>>>>>>>>>>>>    sTmp: WideString;
+>>>>>>>>>>>>    hBN: HWND;
+>>>>>>>>>>>> 
+>>>>>>>>>>>> begin
+>>>>>>>>>>>>    hBN:= FindWindowA(nil,
+>>>>>>>>>>>>                      'R Console (64-bit)');
+>>>>>>>>>>>> 
+>>>>>>>>>>>>    sTmp:= 'sd';
+>>>>>>>>>>>> 
+>>>>>>>>>>>>    for i:= 1 to Length(sTmp) do begin
+>>>>>>>>>>>>      PostMessage(hBN,
+>>>>>>>>>>>>                  WM_CHAR,
+>>>>>>>>>>>>                  Ord(sTmp[i]),
+>>>>>>>>>>>>                  0);
+>>>>>>>>>>>>    end;
+>>>>>>>>>>>> 
+>>>>>>>>>>>>    PostMessage(hBN,
+>>>>>>>>>>>>                WM_KEYDOWN,
+>>>>>>>>>>>>                VK_RETURN, 0);
+>>>>>>>>>>>> end;
+>>>>>>>>>>>> 
+>>>>>>>>>>>> This code has always worked fine for all versions of Rgui.exe with the
+>>>>>>>>>>>> exception of the last one released, ie 4.2.0.
+>>>>>>>>>>>> 
+>>>>>>>>>>>> We've been trying to get around the problem on the Object Pascal side,
+>>>>>>>>>>>> but without success so far.
+>>>>>>>>>>>> 
+>>>>>>>>>>>> Does anyone connected to the compilation of Rqui.exe know what the
+>>>>>>>>>>>> problem is?
+>>>>>>>>>>> 
+>>>>>>>>>>> It could be that the new build enforces Windows security more stringently.  More details are described in the answer to this question: https://stackoverflow.com/a/40139498/2554330, but at a minimum you should be checking the return value from PostMessage.
+>>>>>>>>>>> 
+>>>>>>>>>>> Duncan Murdoch
+>>>>>>>>>>> 
+>>>>>>>>>>>> 
+>>>>>>>>>>>> Best,
+>>>>>>>>>>>> ///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>>>>>>>>>>>> Jose Claudio Faria
+>>>>>>>>>>>> UESC/DCET/Brasil
+>>>>>>>>>>>> joseclaudio.faria at gmail.com
+>>>>>>>>>>>> Telefones:
+>>>>>>>>>>>> 55(73)3680.5545 - UESC
+>>>>>>>>>>>> 55(73)99966.9100 - VIVO
+>>>>>>>>>>>> ///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\///\\\
+>>>>>>>>>>>> If you have software to deal with statistics, you have arms,
+>>>>>>>>>>>> if you have good software, you have arms and legs,
+>>>>>>>>>>>> if you have software like R, you have arms, legs and wings...
+>>>>>>>>>>>> the height of your flight depends only on you.
+>>>>>>>>>>>> 
+>>>>>>>>>>>>    [[alternative HTML version deleted]]
+>>>>>>>>>>>> 
+>>>>>>>>>>>> ______________________________________________
+>>>>>>>>>>>> R-devel at r-project.org mailing list
+>>>>>>>>>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>>>>>>>>> 
+>>>>>>>>>> 
+>>>>>>>>>> ______________________________________________
+>>>>>>>>>> R-devel at r-project.org mailing list
+>>>>>>>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>>>>>> 
+>>>> 
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
