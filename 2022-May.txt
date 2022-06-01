@@ -12603,3 +12603,330 @@ wrote:
 	[[alternative HTML version deleted]]
 
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Tue May 31 12:13:07 2022
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Tue, 31 May 2022 12:13:07 +0200
+Subject: [Rd] bug in plot.table(..., log='y')?
+In-Reply-To: <CAHqSRuQ3GrK1NSHaNkaiwc3qc1UhEZA5hXFT0w8AL9JXJJb6yw@mail.gmail.com>
+References: <8e2e4e16-2f02-7049-675f-70eda9525021@prodsyse.com>
+ <ae884572-7cec-8955-9961-707cc6949db1@gmail.com>
+ <04b4be1b-a42f-e0d4-21de-fc6d75dd729d@prodsyse.com>
+ <25236.40760.561339.611249@stat.math.ethz.ch>
+ <CAHqSRuQ3GrK1NSHaNkaiwc3qc1UhEZA5hXFT0w8AL9JXJJb6yw@mail.gmail.com>
+Message-ID: <25237.59955.348420.995532@stat.math.ethz.ch>
+
+>>>>> Bill Dunlap 
+>>>>>     on Mon, 30 May 2022 09:38:45 -0700 writes:
+
+    > Martin wrote
+
+    > If you have a table with  0  counts  and think you'd prefer
+    > log="y" --- something I strongly agree is often a good idea,
+    > giving much more useful plots ---
+
+    > I'd consider in this case using the good old
+    > log( 1+   y )
+    > or log( eps+ y )  trick.
+
+
+    > One could also sqrt(y), which helps stabilize the variances of count data.
+
+Definitely,  thank you, Bill!
+
+What I mean above (and I think you understood, but probably not
+many other readers because I was too terse), 
+was of course to use   log="y"  with the "+ eps" trick,
+i.e., {in a general situation}
+
+      plot(x, y+eps, log="y")
+
+so the labels show numbers on the y+eps scale, and for smallish
+eps, this is visually the same as y-scale - unless you are close to y=0.
+
+
+    > Making nicely spaced and labelled tick marks for these transformations can
+    > be a pain.  Perhaps some package already does this.
+
+    > -Bill
+
+Not used yet, but from documentation, Stahel's 'plgraphics'
+package (see bottom below),  does allow "arbitrary" transformation.
+
+For the specific case of table() {or xtable()} results with true counts,
+I agree it would be nice to have something like  'sqrt="y"' or
+just 'sqrt=TRUE' which would "show" sqrt(<count>) but label the
+axis non-equidistantly with counts.
+
+A bit like
+
+   y <- sort(rlnorm(333, 3))
+   plot(qnorm(ppoints(y)), y, log="y", yaxt="n")
+   sfsmisc::eaxis(2, sub=1)
+
+does for log-transformed.
+
+The simple traditional-graphics    plot(*, log="y") is often
+good enough, but I like to see from the ticks that there was a
+transformation.
+
+Martin
+
+    > On Mon, May 30, 2022 at 3:41 AM Martin Maechler <maechler at stat.math.ethz.ch>
+    > wrote:
+
+    >> >>>>> Spencer Graves
+    >> >>>>>     on Sat, 28 May 2022 11:41:49 -0500 writes:
+    >> 
+    >> > On 5/28/22 11:23 AM, Duncan Murdoch wrote:
+    >> >> On 28/05/2022 11:33 a.m., Spencer Graves wrote:
+    >> >>> Dear R Developers:
+    >> >>>
+    >> >>>
+    >> >>>       Consider the following example:
+    >> >>>
+    >> >>>
+    >> >>> (tstTable <- table(rep(1:3, 3:1))) plot(tstTable)
+    >> >>> plot(tstTable, log='y')
+    >> >>>
+    >> >>>
+    >> >>>       "plot(tstTable)" works as expected.
+    >> >>> "plot(tstTable, log='y')" gives a warning:
+    >> >>>
+    >> >>>
+    >> >>> Warning message: In plot.window(...) :     nonfinite
+    >> >>> axis=2 limits [GScale(-inf,0.477121,..); log=TRUE] --
+    >> >>> corrected now
+    >> >>>
+    >> >>>
+    >> >>>       AND the plot has a y axis scale running from
+    >> >>> 1e-307 to 1e+13.
+    >> >>>
+    >> >>>
+    >> >>>       This is with R 4.2.0 (R Console and the current
+    >> >>> RStudio) under macOS 11.6.6.
+    >> >>>
+    >> >>>
+    >> >>>       "plot(as.numeric(names(tstTable),
+    >> >>> as.numeric(tstTable), log='y'))" works as expected ;-)
+    >> >>>
+    >> >>>
+    >> >>>       Comments?        Thanks for your valuable work in
+    >> >>> making it easier for people everywhere to do quality
+    >> >>> statistics.
+    >> >>
+    >> >> The help page ?plot.table says that ylim defaults to c(0,
+    >> >> max(x)), i.e.  c(0,3) in your example.  If you're asking
+    >> >> to plot that on a log scale, there are bound to be
+    >> >> problems.
+    >> >>
+    >> >> If you specify ylim, e.g. as c(min(tstTable),
+    >> >> max(tstTable)), things are fine in your example; they
+    >> >> won't be in examples where the min is zero.
+    >> >>
+    >> >> Duncan Murdoch
+    >> 
+    >> >     Thanks.  I looked at the help file but didn't read it
+    >> > carefully enough.
+    >> 
+    >> >     Spencer
+    >> 
+    >> If you have a table with  0  counts  and think you'd prefer
+    >> log="y" --- something I strongly agree is often a good idea,
+    >> giving much more useful plots ---
+    >> 
+    >> I'd consider in this case using the good old
+    >> log( 1+   y )
+    >> or log( eps+ y )  trick.
+    >> 
+    >> My colleague Werner Stahel has spent quite a bit of effort in
+    >> order to make such "log-transformed plots in case of {zero etc}"
+    >> plot even smarter and convenient...
+    >> and has put this (and many more related ideas of doing smart and
+    >> robust good data analysis) in his package 'plgraphics'
+    >> (on R-forge, but still not on CRAN unfortunately).
+    >> With many thanks to Ian Howson, still nicely available also here:
+    >> 
+    >> https://rdrr.io/rforge/plgraphics/
+    >> 
+    >> His generalized  log(1 + y)   is  plgraphics::logst(),
+    >> documented on the rdrr mirror here
+    >> https://rdrr.io/rforge/plgraphics/man/logst.html
+    >> 
+    >> Martin
+
+
+From j|ox @end|ng |rom mcm@@ter@c@  Tue May 31 14:29:37 2022
+From: j|ox @end|ng |rom mcm@@ter@c@ (John Fox)
+Date: Tue, 31 May 2022 08:29:37 -0400
+Subject: [Rd] bug in plot.table(..., log='y')?
+In-Reply-To: <20728_1653992003_24VADMKx008865_25237.59955.348420.995532@stat.math.ethz.ch>
+References: <8e2e4e16-2f02-7049-675f-70eda9525021@prodsyse.com>
+ <ae884572-7cec-8955-9961-707cc6949db1@gmail.com>
+ <04b4be1b-a42f-e0d4-21de-fc6d75dd729d@prodsyse.com>
+ <25236.40760.561339.611249@stat.math.ethz.ch>
+ <CAHqSRuQ3GrK1NSHaNkaiwc3qc1UhEZA5hXFT0w8AL9JXJJb6yw@mail.gmail.com>
+ <20728_1653992003_24VADMKx008865_25237.59955.348420.995532@stat.math.ethz.ch>
+Message-ID: <807ab4c9-3131-5f66-c6fb-b2eda1e3d331@mcmaster.ca>
+
+Dear Martin and Bill,
+
+If I understand correctly, the basicPowerAxis() or bcPowerAxis() (for 
+Box-Cox transformations) in the car package do what you describe, 
+treating log (to any base) as a "0th" power and making provision for a 
+"start," such as 1. There are also functions for two families of 
+power-like transformations (Hawkins-Weisberg and Yeo-Johnson) that 
+handle 0 and negative values naturally.
+
+I hope this helps,
+  John
+
+On 2022-05-31 6:13 a.m., Martin Maechler wrote:
+>>>>>> Bill Dunlap
+>>>>>>      on Mon, 30 May 2022 09:38:45 -0700 writes:
+> 
+>      > Martin wrote
+> 
+>      > If you have a table with  0  counts  and think you'd prefer
+>      > log="y" --- something I strongly agree is often a good idea,
+>      > giving much more useful plots ---
+> 
+>      > I'd consider in this case using the good old
+>      > log( 1+   y )
+>      > or log( eps+ y )  trick.
+> 
+> 
+>      > One could also sqrt(y), which helps stabilize the variances of count data.
+> 
+> Definitely,  thank you, Bill!
+> 
+> What I mean above (and I think you understood, but probably not
+> many other readers because I was too terse),
+> was of course to use   log="y"  with the "+ eps" trick,
+> i.e., {in a general situation}
+> 
+>        plot(x, y+eps, log="y")
+> 
+> so the labels show numbers on the y+eps scale, and for smallish
+> eps, this is visually the same as y-scale - unless you are close to y=0.
+> 
+> 
+>      > Making nicely spaced and labelled tick marks for these transformations can
+>      > be a pain.  Perhaps some package already does this.
+> 
+>      > -Bill
+> 
+> Not used yet, but from documentation, Stahel's 'plgraphics'
+> package (see bottom below),  does allow "arbitrary" transformation.
+> 
+> For the specific case of table() {or xtable()} results with true counts,
+> I agree it would be nice to have something like  'sqrt="y"' or
+> just 'sqrt=TRUE' which would "show" sqrt(<count>) but label the
+> axis non-equidistantly with counts.
+> 
+> A bit like
+> 
+>     y <- sort(rlnorm(333, 3))
+>     plot(qnorm(ppoints(y)), y, log="y", yaxt="n")
+>     sfsmisc::eaxis(2, sub=1)
+> 
+> does for log-transformed.
+> 
+> The simple traditional-graphics    plot(*, log="y") is often
+> good enough, but I like to see from the ticks that there was a
+> transformation.
+> 
+> Martin
+> 
+>      > On Mon, May 30, 2022 at 3:41 AM Martin Maechler <maechler at stat.math.ethz.ch>
+>      > wrote:
+> 
+>      >> >>>>> Spencer Graves
+>      >> >>>>>     on Sat, 28 May 2022 11:41:49 -0500 writes:
+>      >>
+>      >> > On 5/28/22 11:23 AM, Duncan Murdoch wrote:
+>      >> >> On 28/05/2022 11:33 a.m., Spencer Graves wrote:
+>      >> >>> Dear R Developers:
+>      >> >>>
+>      >> >>>
+>      >> >>>       Consider the following example:
+>      >> >>>
+>      >> >>>
+>      >> >>> (tstTable <- table(rep(1:3, 3:1))) plot(tstTable)
+>      >> >>> plot(tstTable, log='y')
+>      >> >>>
+>      >> >>>
+>      >> >>>       "plot(tstTable)" works as expected.
+>      >> >>> "plot(tstTable, log='y')" gives a warning:
+>      >> >>>
+>      >> >>>
+>      >> >>> Warning message: In plot.window(...) :     nonfinite
+>      >> >>> axis=2 limits [GScale(-inf,0.477121,..); log=TRUE] --
+>      >> >>> corrected now
+>      >> >>>
+>      >> >>>
+>      >> >>>       AND the plot has a y axis scale running from
+>      >> >>> 1e-307 to 1e+13.
+>      >> >>>
+>      >> >>>
+>      >> >>>       This is with R 4.2.0 (R Console and the current
+>      >> >>> RStudio) under macOS 11.6.6.
+>      >> >>>
+>      >> >>>
+>      >> >>>       "plot(as.numeric(names(tstTable),
+>      >> >>> as.numeric(tstTable), log='y'))" works as expected ;-)
+>      >> >>>
+>      >> >>>
+>      >> >>>       Comments?        Thanks for your valuable work in
+>      >> >>> making it easier for people everywhere to do quality
+>      >> >>> statistics.
+>      >> >>
+>      >> >> The help page ?plot.table says that ylim defaults to c(0,
+>      >> >> max(x)), i.e.  c(0,3) in your example.  If you're asking
+>      >> >> to plot that on a log scale, there are bound to be
+>      >> >> problems.
+>      >> >>
+>      >> >> If you specify ylim, e.g. as c(min(tstTable),
+>      >> >> max(tstTable)), things are fine in your example; they
+>      >> >> won't be in examples where the min is zero.
+>      >> >>
+>      >> >> Duncan Murdoch
+>      >>
+>      >> >     Thanks.  I looked at the help file but didn't read it
+>      >> > carefully enough.
+>      >>
+>      >> >     Spencer
+>      >>
+>      >> If you have a table with  0  counts  and think you'd prefer
+>      >> log="y" --- something I strongly agree is often a good idea,
+>      >> giving much more useful plots ---
+>      >>
+>      >> I'd consider in this case using the good old
+>      >> log( 1+   y )
+>      >> or log( eps+ y )  trick.
+>      >>
+>      >> My colleague Werner Stahel has spent quite a bit of effort in
+>      >> order to make such "log-transformed plots in case of {zero etc}"
+>      >> plot even smarter and convenient...
+>      >> and has put this (and many more related ideas of doing smart and
+>      >> robust good data analysis) in his package 'plgraphics'
+>      >> (on R-forge, but still not on CRAN unfortunately).
+>      >> With many thanks to Ian Howson, still nicely available also here:
+>      >>
+>      >> https://rdrr.io/rforge/plgraphics/
+>      >>
+>      >> His generalized  log(1 + y)   is  plgraphics::logst(),
+>      >> documented on the rdrr mirror here
+>      >> https://rdrr.io/rforge/plgraphics/man/logst.html
+>      >>
+>      >> Martin
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+-- 
+John Fox, Professor Emeritus
+McMaster University
+Hamilton, Ontario, Canada
+web: https://socialsciences.mcmaster.ca/jfox/
+
+
