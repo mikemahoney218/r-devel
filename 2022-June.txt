@@ -518,3 +518,286 @@ Office: A 4.23
 Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
 
 
+From @tephen@berm@n @end|ng |rom gmx@net  Tue Jun 14 11:18:06 2022
+From: @tephen@berm@n @end|ng |rom gmx@net (Stephen Berman)
+Date: Tue, 14 Jun 2022 11:18:06 +0200
+Subject: [Rd] qt() returns Inf with certain negative ncp values
+Message-ID: <871qvrmwmp.fsf@gmx.net>
+
+I asked about the following observations on r-help and it was suggested
+that they may indicate an algorithmic problem with qt(), so I thought I
+should report them here.
+
+
+The Inf results below seem surprising:
+
+> sapply(-1:-10, \(ncp) qt(1-1*(10^(-4+ncp)), 35, ncp))
+ [1]  3.6527153  3.0627759  2.4158355  1.7380812  1.0506904  0.3700821
+ [7]        Inf -0.9279783 -1.5341759 -2.1085213
+
+> sapply(seq(-6.9, -7.9, -0.1), \(ncp) qt(1-1*(10^(-4+ncp)), 35, ncp))
+ [1] -0.2268386        Inf        Inf        Inf -0.4857400 -0.5497784
+ [7] -0.6135402 -0.6770143 -0.7401974 -0.8030853 -0.8656810
+
+These inputs also yield many repetitions of the following warning
+message:
+
+In qt(1 - 1 * (10^(-4 + ncp)), 35, ncp) :
+  full precision may not have been achieved in 'pnt{final}'
+
+In particular, in the range -1:-10 I don't get this warning with ncp =
+-1 through -4, but I do get it once with each of -5 and -8 through -10,
+32 times with -6, and 50 times with -7.  In the range -6.9:-7.9 I get
+the warning twice with each of -6.9 and -7.3 through -7.7, once with
+-7.8 and -7.9, and 50 times with each of -7.0 through -7.2.
+
+
+In case it matters:
+
+> sessionInfo()
+R Under development (unstable) (2022-06-05 r82452)
+Platform: x86_64-pc-linux-gnu (64-bit)
+Running under: Linux From Scratch r11.0-165
+
+Matrix products: default
+BLAS:   /usr/lib/R/lib/libRblas.so
+LAPACK: /usr/lib/R/lib/libRlapack.so
+
+locale:
+ [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C
+ [3] LC_TIME=en_US.UTF-8        LC_COLLATE=en_US.UTF-8
+ [5] LC_MONETARY=en_US.UTF-8    LC_MESSAGES=en_US.UTF-8
+ [7] LC_PAPER=en_US.UTF-8       LC_NAME=C
+ [9] LC_ADDRESS=C               LC_TELEPHONE=C
+[11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base
+
+loaded via a namespace (and not attached):
+[1] compiler_4.3.0 tools_4.3.0
+
+
+Thanks.
+Steve Berman
+
+
+From Andre@G||||bert @end|ng |rom chu-rouen@|r  Tue Jun 14 15:39:41 2022
+From: Andre@G||||bert @end|ng |rom chu-rouen@|r (GILLIBERT, Andre)
+Date: Tue, 14 Jun 2022 13:39:41 +0000
+Subject: [Rd] qt() returns Inf with certain negative ncp values
+In-Reply-To: <871qvrmwmp.fsf@gmx.net>
+References: <871qvrmwmp.fsf@gmx.net>
+Message-ID: <018a37d6d5864b1a88b11b811c876581@chu-rouen.fr>
+
+Hello, 
+
+> I asked about the following observations on r-help and it was suggested that they may indicate an algorithmic problem with qt(), so I thought I should report them here.
+
+I explored numerical accuracy issues of pt and qt with non-central parameters.
+There seems to be problems when probabilities are small (less than 10^-12 or 10^-14).
+
+A few examples:
+pnorm(-30)# equal to 4.9e-198, which looks fine
+pt(-30, df=10000, ncp=0)# equal to 1e-189, which looks fine too
+pt(-30, df=10000, ncp=0.01) # equal to 1.044e-14, which looks bad. It should be closer to zero than the previous one
+pt(-300, df=10000, ncp=0.01) # equal to 1.044e-14, while it should be even closer to zero !
+pt(-3000, df=10000, ncp=0.01) # still equal to 1.044e-14, while it should be even closer to zero !
+
+qnorm(1e-13) # equal to -7.349, which looks fine
+qt(1e-13, df=10000, ncp=0) # equal to -7.359, which looks fine
+qt(1e-13, df=10000, ncp=0.01) # equal to -7.364, which looks fine
+qt(1.044e-14, df=10000, ncp=0.01) # equal to -8.28, which looks fine
+qt(1.043e-14, df=10000, ncp=0.01) # equal to -Inf, which is far too negative...
+
+The source code shows that the non-central qt() works by inverting the non-central pt()
+https://github.com/wch/r-source/blob/trunk/src/nmath/qnt.c
+Consequently, both problems are related.
+
+
+
+-----Message d'origine-----
+De?: R-devel <r-devel-bounces at r-project.org> De la part de Stephen Berman
+Envoy??: mardi 14 juin 2022 11:18
+??: r-devel at r-project.org
+Objet?: [Rd] qt() returns Inf with certain negative ncp values
+
+
+I asked about the following observations on r-help and it was suggested that they may indicate an algorithmic problem with qt(), so I thought I should report them here.
+
+
+The Inf results below seem surprising:
+
+> sapply(-1:-10, \(ncp) qt(1-1*(10^(-4+ncp)), 35, ncp))
+ [1]  3.6527153  3.0627759  2.4158355  1.7380812  1.0506904  0.3700821
+ [7]        Inf -0.9279783 -1.5341759 -2.1085213
+
+> sapply(seq(-6.9, -7.9, -0.1), \(ncp) qt(1-1*(10^(-4+ncp)), 35, ncp))
+ [1] -0.2268386        Inf        Inf        Inf -0.4857400 -0.5497784
+ [7] -0.6135402 -0.6770143 -0.7401974 -0.8030853 -0.8656810
+
+These inputs also yield many repetitions of the following warning
+message:
+
+In qt(1 - 1 * (10^(-4 + ncp)), 35, ncp) :
+  full precision may not have been achieved in 'pnt{final}'
+
+In particular, in the range -1:-10 I don't get this warning with ncp =
+-1 through -4, but I do get it once with each of -5 and -8 through -10,
+32 times with -6, and 50 times with -7.  In the range -6.9:-7.9 I get the warning twice with each of -6.9 and -7.3 through -7.7, once with
+-7.8 and -7.9, and 50 times with each of -7.0 through -7.2.
+
+
+In case it matters:
+
+> sessionInfo()
+R Under development (unstable) (2022-06-05 r82452)
+Platform: x86_64-pc-linux-gnu (64-bit)
+Running under: Linux From Scratch r11.0-165
+
+Matrix products: default
+BLAS:   /usr/lib/R/lib/libRblas.so
+LAPACK: /usr/lib/R/lib/libRlapack.so
+
+locale:
+ [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C
+ [3] LC_TIME=en_US.UTF-8        LC_COLLATE=en_US.UTF-8
+ [5] LC_MONETARY=en_US.UTF-8    LC_MESSAGES=en_US.UTF-8
+ [7] LC_PAPER=en_US.UTF-8       LC_NAME=C
+ [9] LC_ADDRESS=C               LC_TELEPHONE=C
+[11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base
+
+loaded via a namespace (and not attached):
+[1] compiler_4.3.0 tools_4.3.0
+
+
+Thanks.
+Steve Berman
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Tue Jun 14 18:00:24 2022
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Tue, 14 Jun 2022 18:00:24 +0200
+Subject: [Rd] qt() returns Inf with certain negative ncp values
+In-Reply-To: <018a37d6d5864b1a88b11b811c876581@chu-rouen.fr>
+References: <871qvrmwmp.fsf@gmx.net>
+ <018a37d6d5864b1a88b11b811c876581@chu-rouen.fr>
+Message-ID: <25256.45208.821335.812617@stat.math.ethz.ch>
+
+>>>>> GILLIBERT, Andre 
+>>>>>     on Tue, 14 Jun 2022 13:39:41 +0000 writes:
+
+    > Hello,
+    >> I asked about the following observations on r-help and it
+    >> was suggested that they may indicate an algorithmic
+    >> problem with qt(), so I thought I should report them
+    >> here.
+
+Which is fine.
+Usually you should *CAREFULLY* read the corresponding reference
+documentation before posting.
+
+In this case, we have on R's help page {on non-central pt():}
+
+    This computes the lower tail only, so the upper tail suffers
+    from cancellation and a warning will be given when this is
+    likely to be significant. 
+
+and (in ?Note:?)
+
+    The code for non-zero ncp is principally intended to be used
+    for moderate values of ncp: it will not be highly accurate,
+    especially in the tails, for large values. 
+
+and further also that a simple inversion is used for computing
+the non-central qt().
+
+    > I explored numerical accuracy issues of pt and qt with
+    > non-central parameters.  There seems to be problems when
+    > probabilities are small (less than 10^-12 or 10^-14).
+
+Yes, the help (above) says  "especially in the tails",
+i.e., this is also well known.
+
+    > A few examples: pnorm(-30)# equal to 4.9e-198, which looks
+    > fine pt(-30, df=10000, ncp=0)# equal to 1e-189, which
+    > looks fine too pt(-30, df=10000, ncp=0.01) # equal to
+    > 1.044e-14, which looks bad. It should be closer to zero
+    > than the previous one pt(-300, df=10000, ncp=0.01) # equal
+    > to 1.044e-14, while it should be even closer to zero !
+    > pt(-3000, df=10000, ncp=0.01) # still equal to 1.044e-14,
+    > while it should be even closer to zero !
+
+    > qnorm(1e-13) # equal to -7.349, which looks fine qt(1e-13,
+    > df=10000, ncp=0) # equal to -7.359, which looks fine
+    > qt(1e-13, df=10000, ncp=0.01) # equal to -7.364, which
+    > looks fine qt(1.044e-14, df=10000, ncp=0.01) # equal to
+    > -8.28, which looks fine qt(1.043e-14, df=10000, ncp=0.01)
+    > # equal to -Inf, which is far too negative...
+
+    > The source code shows that the non-central qt() works by
+    > inverting the non-central pt()
+    > https://github.com/wch/r-source/blob/trunk/src/nmath/qnt.c
+
+exactly; as the help page also says ..
+
+    > Consequently, both problems are related.
+
+Indeed, and known and documented for a long time..
+
+Still, this lack of a better algorithm had bothered me (as R
+Core member) in the past quite a bit, and I had implemented other
+approximations for cases where the current algorithm is
+deficient... but I had not been entirely satisfied, nor had I
+finished exploring or finding solutions in all relevant cases.
+
+In the mean time I had created CRAN package 'DPQ' (Density,
+Probability, Quantile computations) which also contains
+quite a few functions related to better/alternative computations
+of pt(*, ncp=*)  which I call pnt(), not the least because R's
+implementation of the algorithm is in   <Rsrc>/src/nmath/pnt.c
+and the C function is called pnt().
+
+Till now, I have not found a student or a collaborator to
+finally get this project further  {{hint, hint!}}.
+
+In DPQ, (download the *source* package if you are interested),
+there's a help page listing the current approaches I have
+
+  https://search.r-project.org/CRAN/refmans/DPQ/html/pnt.html
+or
+  https://rdrr.io/cran/DPQ/man/pnt.html
+
+Additionally, in the source (man/pnt.Rd) there are comments about a not yet
+implemented one, and there are even two R scripts exhibiting
+bogous (and already fixed) behavior of the non-central t CDF:
+
+ https://rdrr.io/rforge/DPQ/src/tests/t-nonc-tst.R   and
+ https://rdrr.io/rforge/DPQ/src/tests/pnt-prec.R
+
+Indeed, this situation *can* be improved, but it needs dedicated work
+of people somewhat knowledgable in applied math etc.
+
+Would you (readers ..) be interested in helping?
+
+Best,
+Martin
+
+Martin Maechler
+ETH Zurich  and  R Core team
+
+
+PS: I'm adding code to explore this specific issue (better
+    inversion for those cases where pnt() is not the problem)
+    to my DPQ package  just these hours, notably a simple function
+    qtU() which only uses pt() and uniroot() to compute
+    (non-central) t-quantiles.
+
+
