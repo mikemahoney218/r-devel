@@ -1469,3 +1469,439 @@ https://github.com/r-windows/r-base/releases
 	[[alternative HTML version deleted]]
 
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Mon Jun 20 15:35:34 2022
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Mon, 20 Jun 2022 15:35:34 +0200
+Subject: [Rd] 
+ Trying to compile R 4.2.x on Linux as 32bit sub-architecture
+In-Reply-To: <20220619023003.687c603e@ECM-DTC-716.uniwa.uwa.edu.au>
+References: <20220618225819.6778cf9c@ECM-DTC-716.uniwa.uwa.edu.au>
+ <20220619023003.687c603e@ECM-DTC-716.uniwa.uwa.edu.au>
+Message-ID: <25264.30630.11417.849490@stat.math.ethz.ch>
+
+>>>>> Berwin A Turlach 
+>>>>>     on Sun, 19 Jun 2022 02:30:03 +0800 writes:
+
+    > G'day all, On Sat, 18 Jun 2022 22:58:19 +0800 Berwin A
+    > Turlach <Berwin.Turlach at gmail.com> wrote:
+
+    >> [...] I attach the relevant file from trying to compile
+    >> R-patched during last night's run.
+
+    > Mmh, on the web-interface to the mailing list I see that
+    > the attachment might have been deleted.  Perhaps because
+    > it was too large?
+
+    > So below the start and the final part from
+    > reg-tests-1d.Rout.fail which shows where the error occurs.
+
+    > Cheers,
+    > Berwin
+
+
+Aaah... now we are talking ;-)
+
+Thank you, Berwin!
+
+Your subject was misleading to me.  This does not seem to be
+about *compiling* R 4.2.x  but rather *checking* / *testing* its
+functionality *after compilation and installation.
+
+I think you are right, and we should adapt our regression tests
+to still not fail here.
+Also, as I was the one who added these checks, I'd like to get
+this "right".
+
+Last but not least:  We are *grateful* indeed for people like
+you, testing a *pre-release* version such as   '4.2.1 RC' as we
+can see below.
+
+Note that I do test with  '../R/configure --disable-long-double'
+but this cannot be the only reason.
+BTW, all the pretty *warnings* below are fine and expected; the
+problem is that resulting numbers end up "wrong"
+
+I will need some more information:
+Ideally, the R console output of these 5 lines of R code:
+
+sessionInfo()
+Sys.info()
+capabilities()
+str(.Machine)
+str(.Platform)
+
+Could you help here, doing this *off*-list?
+
+Thanking you in advance and giving best regards,
+Martin
+
+
+    > ----------------------------
+    > R version 4.2.1 RC (2022-06-17 r82501) -- "Funny-Looking Kid"
+    > Copyright (C) 2022 The R Foundation for Statistical Computing
+    > Platform: x86_64-pc-linux-gnu/32 (32-bit)
+
+    > R is free software and comes with ABSOLUTELY NO WARRANTY.
+    > You are welcome to redistribute it under certain conditions.
+    > Type 'license()' or 'licence()' for distribution details.
+
+    > R is a collaborative project with many contributors.
+    > Type 'contributors()' for more information and
+    > 'citation()' on how to cite R or R packages in publications.
+
+    > Type 'demo()' for some demos, 'help()' for on-line help, or
+    > 'help.start()' for an HTML browser interface to help.
+    > Type 'q()' to quit R.
+
+    >> ## Regression tests for R >= 3.4.0
+
+ > [...very large snip...]
+
+    >> ## pretty(x) when range(x) is finite but diff(range(x)) is +/- Inf:
+    >> B <- 1e308; 2*B; (s <- seq(-B,B,length.out = 3))
+    > [1] Inf
+    > [1] -1e+308   0e+00  1e+308
+    >> options(warn=1) # => warnings *as they happen*
+    >> (ps <- pretty(c(-B,B)))
+    > [1] -1e+308 -5e+307   0e+00  5e+307  1e+308
+    >> ## Warning in pretty.default(c(-B, B)) :
+    >> ##   Internal(pretty()): very large range 4e+307, corrected to 2.24712e+307
+    >> nps <- length(ps)
+    >> dd <- sum((dps <- diff(ps))/length(dps)) # mean w/o overflow
+    >> epsC <- .Machine$double.eps
+    >> relD <- (dps/dd - 1)/epsC
+    >> relEr <- function(f, y) abs((f-y)/(f+y)*2) # cheap relative error, |f| > 0 !
+    >> stopifnot(is.finite(mean(ps)), ## these all failed without "long-double"
+    > +           is.finite(mdp <- mean(dps)),
+    > +           all.equal(dd, mdp, tolerance=1e-15))
+    >> stopifnot(relEr(c(-B,B), ps[c(1L,nps)]) <= 4*epsC,
+    > +           -8 <= relD, relD <= 8) # seen [-1.5,.., 3.0]; w/o long-double: [-5, .., 4]
+    >> ## ps was   0 Inf Inf Inf Inf Inf Inf Inf Inf Inf  0 , in R <= 4.1.0
+    >> f. <- c(-1.797, -1.79, -1.75, seq(-1.7, -1, by=.1))
+    >> stopifnot(!is.unsorted(f.)) ; f.nm <- setNames(, f.)
+    >> fmtRng <- function(x) paste(format(range(x)), collapse=", ")
+    >> ns <- c(2:12, 15, 20, 30, 51, 100, 2001, 1e5)
+    >> nms.n <- formatC(ns, digits=0, format="f")
+    >> nmsRng <- c(t(outer(paste0("r",1:2), c("lo","hi"), paste, sep=".")))
+    >> rr <- matrix(NA, length(ns), 4, dimnames=list(nms.n, nmsRng))
+    >> for(i.n in seq_along(ns)) {
+    > +     n <- ns[i.n]
+    > +     cat("n = ", n,":\n--------\n")
+    > +     pBL <- lapply(f., function(f) structure(pretty(c(f*1e308, 2^1023.9), n), f=f))
+    > +     ## -> a warning per f
+    > +     n.s <- lengths(pBL) # how close to target 'n' ??
+    > +     cat("lengths(.) in [", fmtRng(n.s), "]\n")
+    > +     if(n <= 15) stopifnot(n.s <= 20)# seen {14,..,17}
+    > +     else stopifnot(abs(n.s/n - 1) <= 1/2)
+    > +     if(n) cat("length(.) <> n relative err in [", fmtRng(n.s/n - 1), "]\n")
+    > +     ## .pretty(*, bounds=FALSE) :
+    > +     prM <- t(sapply(f.nm, function(f)
+    > +         unlist( .pretty(c(f*1e308, 2^1023.9), n, bounds=FALSE) )))
+    > +     print(prM)
+    > +     luM <- prM[,c("ns","nu")] * prM[,"unit"] # the pretty-scaled unit
+    > +     r1 <- luM[,"ns"] / (f.nm*1e308)
+    > +     rr[i.n, 1:2] <- r1 <- range(r1)
+    > +     cat(sprintf("range(r1): [%g, %g]\n", r1[1], r1[2]))
+    > +     r2 <- luM[,"nu"] / 2^1023.9
+    > +     rr[i.n, 3:4] <- r2 <- range(r2)
+    > +     cat(sprintf("range(r2): [%g, %g]\n", r2[1], r2[2]))
+    > +     stopifnot(exprs = { is.matrix(prM)
+    > +             prM[,"nu"] - prM[,"ns"] == prM[,"n"] # could differ, but not for this data
+    > +             identical(colnames(prM), c("ns", "nu", "n", "unit"))
+    > +             ## These bounds depend on 'n' :
+    > +             r1 >= if(n <= 12) 0.55 else 0.89
+    > +             r1 <= if(n <= 15) 1.4  else 1.1
+    > +             r2 >= if(n <= 12) 0.58 else 0.95
+    > +             r2 <= if(n <= 15) 1    else 1.025
+    > +     })
+    > +     invisible(lapply(pBL, function(ps) {
+    > +         mdB <- sum((dB <- diff(ps))/length(dB))
+    > +         rd <- dB/mdB - 1 # relative differences
+    > +         ## print(range(rd))
+    > +         x <- c(attr(ps,"f")*1e308, 2^1023.9)
+    > +         stopifnot(if(n >= 1) abs(rd) <= n * 3e-15 else TRUE,
+    > +                   ps[1] <= x[1] , x[2] <= ps[length(ps)])
+    > +     }))
+    > + }
+    > n =  2 :
+    > --------
+    > Warning in pretty.default(c(f * 1e+308, 2^1023.9), n) :
+    > R_pretty(): very large range 'cell'=1.73715e+308, corrected to 1.43815e+308
+    > Warning in pretty.default(c(f * 1e+308, 2^1023.9), n) :
+    > R_pretty(): very large range 'cell'=1.73365e+308, corrected to 1.43815e+308
+    > Warning in pretty.default(c(f * 1e+308, 2^1023.9), n) :
+    > R_pretty(): very large range 'cell'=1.71365e+308, corrected to 1.43815e+308
+    > Warning in pretty.default(c(f * 1e+308, 2^1023.9), n) :
+    > R_pretty(): very large range 'cell'=1.68865e+308, corrected to 1.43815e+308
+    > Warning in pretty.default(c(f * 1e+308, 2^1023.9), n) :
+    > R_pretty(): very large range 'cell'=1.63865e+308, corrected to 1.43815e+308
+    > Warning in pretty.default(c(f * 1e+308, 2^1023.9), n) :
+    > R_pretty(): very large range 'cell'=1.58865e+308, corrected to 1.43815e+308
+    > Warning in pretty.default(c(f * 1e+308, 2^1023.9), n) :
+    > R_pretty(): very large range 'cell'=1.53865e+308, corrected to 1.43815e+308
+    > Warning in pretty.default(c(f * 1e+308, 2^1023.9), n) :
+    > R_pretty(): very large range 'cell'=1.48865e+308, corrected to 1.43815e+308
+    > Warning in pretty.default(c(f * 1e+308, 2^1023.9), n) :
+    > R_pretty(): very large range 'cell'=1.43865e+308, corrected to 1.43815e+308
+    > lengths(.) in [ 1, 3 ]
+    > length(.) <> n relative err in [ -0.5,  0.5 ]
+    > Warning in .pretty(c(f * 1e+308, 2^1023.9), n, bounds = FALSE) :
+    > R_pretty(): very large range 'cell'=1.73715e+308, corrected to 1.43815e+308
+    > Warning in .pretty(c(f * 1e+308, 2^1023.9), n, bounds = FALSE) :
+    > R_pretty(): very large range 'cell'=1.73365e+308, corrected to 1.43815e+308
+    > Warning in .pretty(c(f * 1e+308, 2^1023.9), n, bounds = FALSE) :
+    > R_pretty(): very large range 'cell'=1.71365e+308, corrected to 1.43815e+308
+    > Warning in .pretty(c(f * 1e+308, 2^1023.9), n, bounds = FALSE) :
+    > R_pretty(): very large range 'cell'=1.68865e+308, corrected to 1.43815e+308
+    > Warning in .pretty(c(f * 1e+308, 2^1023.9), n, bounds = FALSE) :
+    > R_pretty(): very large range 'cell'=1.63865e+308, corrected to 1.43815e+308
+    > Warning in .pretty(c(f * 1e+308, 2^1023.9), n, bounds = FALSE) :
+    > R_pretty(): very large range 'cell'=1.58865e+308, corrected to 1.43815e+308
+    > Warning in .pretty(c(f * 1e+308, 2^1023.9), n, bounds = FALSE) :
+    > R_pretty(): very large range 'cell'=1.53865e+308, corrected to 1.43815e+308
+    > Warning in .pretty(c(f * 1e+308, 2^1023.9), n, bounds = FALSE) :
+    > R_pretty(): very large range 'cell'=1.48865e+308, corrected to 1.43815e+308
+    > Warning in .pretty(c(f * 1e+308, 2^1023.9), n, bounds = FALSE) :
+    > R_pretty(): very large range 'cell'=1.43865e+308, corrected to 1.43815e+308
+    > ns nu n   unit
+    > -1.797  0  0 0    Inf
+    > -1.79   0  0 0    Inf
+    > -1.75   0  0 0    Inf
+    > -1.7    0  0 0    Inf
+    > -1.6    0  0 0    Inf
+    > -1.5    0  0 0    Inf
+    > -1.4    0  0 0    Inf
+    > -1.3    0  0 0    Inf
+    > -1.2    0  0 0    Inf
+    > -1.1   -1  1 2 1e+308
+    > -1     -1  1 2 1e+308
+    > range(r1): [NaN, NaN]
+    > range(r2): [NaN, NaN]
+    > Error: r1 >= if (n <= 12) 0.55 else 0.89 are not all TRUE
+    > Execution halted
+
+    > ______________________________________________
+    > R-devel at r-project.org mailing list
+    > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From berw|n@tur|@ch @end|ng |rom gm@||@com  Mon Jun 20 15:40:17 2022
+From: berw|n@tur|@ch @end|ng |rom gm@||@com (Berwin A Turlach)
+Date: Mon, 20 Jun 2022 21:40:17 +0800
+Subject: [Rd] 
+ Trying to compile R 4.2.x on Linux as 32bit sub-architecture
+In-Reply-To: <f5803feb-ce34-d9e2-0180-4bab4f964874@gmail.com>
+References: <20220618225819.6778cf9c@ECM-DTC-716.uniwa.uwa.edu.au>
+ <1bd9158c-cffd-e61a-3337-5fee2fd2ce5c@gmail.com>
+ <20220620203551.0ca8eabe@ECM-DTC-716.uniwa.uwa.edu.au>
+ <f5803feb-ce34-d9e2-0180-4bab4f964874@gmail.com>
+Message-ID: <20220620214017.5046dd43@absentia>
+
+G'day Tomas,
+
+On Mon, 20 Jun 2022 14:46:04 +0200
+Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+
+> > Well, what puzzles me is that I had no problem with R-patched right
+> > until the end of the 4.1 branch.  And I have no problems with
+> > R-devel, that is also still installing a 32bit and a 64bit version
+> > just fine.
+> >
+> > It is just R 4.2 that gives me the problem.  
+> Ah, that's interesting. And could you perhaps bisect it to the 
+> problematic commit? That might increase the chances you get attention
+> of the person who authored it. After all you could also send a patch
+
+Well, I found via Google a command that could tell me the first revision
+of a branch.  Apparently revision 81976 is the first revision of the 4.2
+branch:
+
+------------------------------------------------------------------------
+r81976 | pd | 2022-03-25 07:02:01 +0800 (Fri, 25 Mar 2022) | 1 line
+
+Create R-4-2-branch
+------------------------------------------------------------------------
+
+I checked this branch out and it already displays the same problem,
+the same test in reg-tests-1d.R falls over.  But I am pretty sure that
+R-devel (and R-patched) compiled fine on that day. So where was the
+change made before the R-4.2-branch was created?
+
+Cheers,
+
+	Berwin
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Mon Jun 20 15:45:40 2022
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Mon, 20 Jun 2022 15:45:40 +0200
+Subject: [Rd] Unsigned binary
+In-Reply-To: <CABFfbXtHGftT9s6gePMZShvzrC3SuamJGmehEuEieCLRwJOiCA@mail.gmail.com>
+References: <MW4PR12MB5665254214EE4D218F76D6A0A3A49@MW4PR12MB5665.namprd12.prod.outlook.com>
+ <CA+aisX0PDnmsL0BgVTLzOtD07UNWYZDdo+_MEcjhZih4XDnVKQ@mail.gmail.com>
+ <MW4PR12MB5665E473B8068A346A668172A3AF9@MW4PR12MB5665.namprd12.prod.outlook.com>
+ <CABFfbXtHGftT9s6gePMZShvzrC3SuamJGmehEuEieCLRwJOiCA@mail.gmail.com>
+Message-ID: <25264.31236.650358.678527@stat.math.ethz.ch>
+
+>>>>> Jeroen Ooms 
+>>>>>     on Sun, 19 Jun 2022 12:45:36 +0200 writes:
+
+    > On Fri, Jun 17, 2022 at 2:46 PM Scott McAllister <scott at patchmypc.com>
+    > wrote:
+
+    >> Thank you for your update on this
+    >> 
+    >> If you can keep me updated on when version 4.2.1 is rereleased with the
+    >> interim code signing certificate, that would be fantastic
+
+    > Signed (unofficial) builds are also available from
+    > https://github.com/r-windows/r-base/releases
+
+Hmm, sorry to be blunt,  but I think these should really *NOT*
+be used anymore (for R versions >= 4.2.0)
+as they are not based on the official R sources for Windows, 
+AFAIK, and *also* this unofficial version is still building
+packages the old way instead of the new one which is documented in e.g.
+
+     https://blog.r-project.org/
+
+viz.
+
+     https://blog.r-project.org/2021/12/07/upcoming-changes-in-r-4.2-on-windows/
+and  https://blog.r-project.org/2022/06/16/upcoming-changes-in-r-4.2.1-on-windows/
+
+Martin Maechler
+(R core team; co-author of the first blog above)
+
+
+From ht @end|ng |rom he@therturner@net  Mon Jun 20 16:21:10 2022
+From: ht @end|ng |rom he@therturner@net (Heather Turner)
+Date: Mon, 20 Jun 2022 15:21:10 +0100
+Subject: [Rd] Bug BBQ
+Message-ID: <c5c3f424-c53a-4cdc-be55-68aca8920b7c@www.fastmail.com>
+
+Dear All,
+
+The R Contribution Working Group is organizing a Bug BBQ as a satellite event to useR!
+https://contributor.r-project.org/events/bug-bbq
+
+The event is spread over Friday June 24 UTC, after useR! ends (there is no need to have registered for useR!). You are encouraged to put aside some time during the Bug BBQ to review the open bugs and see if you can contribute.
+
+There will be three organized sessions for people to discuss, work together and share their expertise - you are welcome to join in one or more of these sessions (see the link above for times + Zoom registration links, Session 1 starts on Thursday June 23 in UTC negative time zones). 
+
+We will be treating R's Bugzilla as read-only during the event: if you wish to contribute as part of the Bug BBQ, please follow the guidance on the event page.
+
+Hope to see many of you there!
+
+Best wishes,
+
+Heather
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Mon Jun 20 17:06:02 2022
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Mon, 20 Jun 2022 18:06:02 +0300
+Subject: [Rd] HTML documentation check: 'condition must be plain text'
+Message-ID: <20220620180602.36c20989@arachnoid>
+
+Hi,
+
+Use of \Sexpr in an \if condition in R documentation results in a NOTE,
+but only during HTML documentation check, not any of the previous Rd
+checks:
+
+  \if{\Sexpr{'TRUE'}}{The condition evaluates to true.}
+
+* checking HTML version of manual ... NOTE
+Encountered the following conversion/validation errors:
+foo.Rd:10: condition must be plain text
+
+Is this supported? "Writing R documentation" ?2.11 seems to agree:
+
+>> Also accepted [as a condition] are TRUE (matching all formats) and
+>> FALSE (matching no formats). These could be the output of the \Sexpr
+>> macro.
+
+In order to check the HTML documentation, check_Rd2HTML() runs
+tools::Rd2HTML() on the results of tools::Rd_db() [1]. The former runs
+\Sexpr[stage=render] macros and the latter runs \Sexpr[stage=build]
+macros, leaving \Sexpr[stage=install] macros unevaluated. The NOTE goes
+away if I switch the "stage" argument to anything but "install".
+
+Is there any downside to adding stages = c('build', 'install') to the
+Rd_db call or stages = c('install', 'render') to the Rd2HTML call in
+order to make this NOTE go away?
+
+-- 
+Best regards,
+Ivan
+
+[1]
+https://github.com/r-devel/r-svn/blob/d25e77715164e39c96baae4c180d8f980ec93932/src/library/tools/R/check.R#L4911-L4939
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Mon Jun 20 17:48:21 2022
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Mon, 20 Jun 2022 17:48:21 +0200
+Subject: [Rd] 
+ Trying to compile R 4.2.x on Linux as 32bit sub-architecture
+In-Reply-To: <20220620214017.5046dd43@absentia>
+References: <20220618225819.6778cf9c@ECM-DTC-716.uniwa.uwa.edu.au>
+ <1bd9158c-cffd-e61a-3337-5fee2fd2ce5c@gmail.com>
+ <20220620203551.0ca8eabe@ECM-DTC-716.uniwa.uwa.edu.au>
+ <f5803feb-ce34-d9e2-0180-4bab4f964874@gmail.com>
+ <20220620214017.5046dd43@absentia>
+Message-ID: <81e05bd3-649c-0066-cac7-d1b45d323ec0@gmail.com>
+
+
+On 6/20/22 15:40, Berwin A Turlach wrote:
+> G'day Tomas,
+>
+> On Mon, 20 Jun 2022 14:46:04 +0200
+> Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+>
+>>> Well, what puzzles me is that I had no problem with R-patched right
+>>> until the end of the 4.1 branch.  And I have no problems with
+>>> R-devel, that is also still installing a 32bit and a 64bit version
+>>> just fine.
+>>>
+>>> It is just R 4.2 that gives me the problem.
+>> Ah, that's interesting. And could you perhaps bisect it to the
+>> problematic commit? That might increase the chances you get attention
+>> of the person who authored it. After all you could also send a patch
+> Well, I found via Google a command that could tell me the first revision
+> of a branch.  Apparently revision 81976 is the first revision of the 4.2
+> branch:
+>
+> ------------------------------------------------------------------------
+> r81976 | pd | 2022-03-25 07:02:01 +0800 (Fri, 25 Mar 2022) | 1 line
+>
+> Create R-4-2-branch
+> ------------------------------------------------------------------------
+>
+> I checked this branch out and it already displays the same problem,
+> the same test in reg-tests-1d.R falls over.  But I am pretty sure that
+> R-devel (and R-patched) compiled fine on that day. So where was the
+> change made before the R-4.2-branch was created?
+
+the R-4-2-branch was created from R-devel branch by that commit you 
+found, so the previous changes were on R-devel. So you could now 
+actually search for a commit on R-devel (after r81978) that fixed it, 
+perhaps it is something that could be ported to R-4-2-branch.
+
+You could restrict the search for changes in the corresponding test 
+files, first, checking if the tests/the tolerances have changed (that 
+would be easy, "svn blame" would help: "svn blame", "svn blame -r xxxx", 
+"svn log --diff", etc). If it is not a change in the tests but rather in 
+the computations, that would be harder to guess, still bisecting should 
+find it.
+
+Best
+Tomas
+
+>
+> Cheers,
+>
+> 	Berwin
+
+
