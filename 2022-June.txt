@@ -1905,3 +1905,426 @@ Tomas
 > 	Berwin
 
 
+From kry|ov@r00t @end|ng |rom gm@||@com  Wed Jun 22 17:25:02 2022
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Wed, 22 Jun 2022 18:25:02 +0300
+Subject: [Rd] stats::getInitial: requires the model to live in the stats
+ namespace or above
+Message-ID: <20220622182502.191d3a93@arachnoid>
+
+Hello R-devel,
+
+Here's a corner case I've stumbled upon recently:
+
+local({
+	# Originally this was a package namespace, but a local
+	# environment also leads to failure
+	stopifnot(!identical(environment(), globalenv()))
+
+	# Make a self-starting model inside this private environment...
+	SSlinear <- selfStart(
+		~ a * x + b,
+		function(mCall, data, LHS, ...) {
+			xy <- sortedXyData(mCall[['x']], LHS, data)
+			setNames(
+				coef(lm(y ~ x, xy)),
+				mCall[c('b', 'a')]
+			)
+		},
+		c('a', 'b')
+	)
+
+	# ...and try to use it
+	x <- 1:100
+	y <- 100 + 5 * x + rnorm(length(x), sd = 10)
+	nls(y ~ SSlinear(x, a, b))
+	# error in get('SSlinear'): object not found
+})
+
+As a workaround, I'll just provide the starting values manually,
+but should this work?
+
+As implemented [1], getInitial requires the model object to live in the
+stats package namespace or any of its parents, which eventually include
+the global environment and the attached packages, but not the private
+namespaces of the packages or any other local environments. This
+results from the fact that getInitial() uses plain get() in order to
+resolve the symbol for the self-starting model, and get() defaults to
+the current environment, which leads a chain of stats -> imports:stats
+-> base -> global environment -> attached packages.
+
+It seems easy to suggest get(., envir = environment(object)) as a fix,
+which would be able to access anything available at the time of
+creation of the formula. On the other hand, it would break the case
+when the stats package is not attached to the global environment or the
+formula environment, which currently works.
+
+-- 
+Best regards,
+Ivan
+
+[1]
+https://github.com/r-devel/r-svn/blob/d43497cbc927e632c6f597fa23001c3f31d4cae6/src/library/stats/R/selfStart.R#L81-L87
+
+
+From w||||@mwdun|@p @end|ng |rom gm@||@com  Wed Jun 22 18:44:25 2022
+From: w||||@mwdun|@p @end|ng |rom gm@||@com (Bill Dunlap)
+Date: Wed, 22 Jun 2022 09:44:25 -0700
+Subject: [Rd] stats::getInitial: requires the model to live in the stats
+ namespace or above
+In-Reply-To: <20220622182502.191d3a93@arachnoid>
+References: <20220622182502.191d3a93@arachnoid>
+Message-ID: <CAHqSRuS51ruHwGy7gysr-pOA2fOEi4A2CYRuQahMrBkzdx6a5g@mail.gmail.com>
+
+Shouldn't the get()'s in stats:::getInitial.formula be looking in the
+environment of the formula, not the environment of getInitial.formula?
+
+--- selfStart.R (revision 82512)
++++ selfStart.R (working copy)
+@@ -78,13 +79,19 @@
+     switch (length(object),
+             stop("argument 'object' has an impossible length"),
+         {                              # one-sided formula
+-           func <- get(as.character(object[[2L]][[1L]]))
++            if (!is.call(object[[2L]])) {
++                stop("Right-hand side of formula is not a call")
++            }
++           func <- get(as.character(object[[2L]][[1L]]), mode="function",
+envir=environment(object))
+            getInitial(func, data,
+                       mCall = as.list(match.call(func, call =
+object[[2L]])),
+                        ...)
+         },
+         {                              # two-sided formula
+-           func <- get(as.character(object[[3L]][[1L]]))
++            if (!is.call(object[[3L]])) {
++                stop("Right-hand side of formula is not a call")
++            }
++           func <- get(as.character(object[[3L]][[1L]]), mode="function",
+envir=environment(object))
+            getInitial(func, data,
+                       mCall = as.list(match.call(func, call =
+object[[3L]])),
+                       LHS = object[[2L]], ...)
+
+-Bill
+
+
+On Wed, Jun 22, 2022 at 8:25 AM Ivan Krylov <krylov.r00t at gmail.com> wrote:
+
+> Hello R-devel,
+>
+> Here's a corner case I've stumbled upon recently:
+>
+> local({
+>         # Originally this was a package namespace, but a local
+>         # environment also leads to failure
+>         stopifnot(!identical(environment(), globalenv()))
+>
+>         # Make a self-starting model inside this private environment...
+>         SSlinear <- selfStart(
+>                 ~ a * x + b,
+>                 function(mCall, data, LHS, ...) {
+>                         xy <- sortedXyData(mCall[['x']], LHS, data)
+>                         setNames(
+>                                 coef(lm(y ~ x, xy)),
+>                                 mCall[c('b', 'a')]
+>                         )
+>                 },
+>                 c('a', 'b')
+>         )
+>
+>         # ...and try to use it
+>         x <- 1:100
+>         y <- 100 + 5 * x + rnorm(length(x), sd = 10)
+>         nls(y ~ SSlinear(x, a, b))
+>         # error in get('SSlinear'): object not found
+> })
+>
+> As a workaround, I'll just provide the starting values manually,
+> but should this work?
+>
+> As implemented [1], getInitial requires the model object to live in the
+> stats package namespace or any of its parents, which eventually include
+> the global environment and the attached packages, but not the private
+> namespaces of the packages or any other local environments. This
+> results from the fact that getInitial() uses plain get() in order to
+> resolve the symbol for the self-starting model, and get() defaults to
+> the current environment, which leads a chain of stats -> imports:stats
+> -> base -> global environment -> attached packages.
+>
+> It seems easy to suggest get(., envir = environment(object)) as a fix,
+> which would be able to access anything available at the time of
+> creation of the formula. On the other hand, it would break the case
+> when the stats package is not attached to the global environment or the
+> formula environment, which currently works.
+>
+> --
+> Best regards,
+> Ivan
+>
+> [1]
+>
+> https://github.com/r-devel/r-svn/blob/d43497cbc927e632c6f597fa23001c3f31d4cae6/src/library/stats/R/selfStart.R#L81-L87
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From @eb@meyer @end|ng |rom |@u@de  Wed Jun 22 18:47:45 2022
+From: @eb@meyer @end|ng |rom |@u@de (Sebastian Meyer)
+Date: Wed, 22 Jun 2022 18:47:45 +0200
+Subject: [Rd] stats::getInitial: requires the model to live in the stats
+ namespace or above
+In-Reply-To: <20220622182502.191d3a93@arachnoid>
+References: <20220622182502.191d3a93@arachnoid>
+Message-ID: <8c95fa55-a616-38d2-4ee0-7e4d16a50f85@fau.de>
+
+Thank you, Ivan, for this careful report. You are right and I have 
+actually found that issue myself while working on nlme bugs some months 
+ago, but had decided to postpone working on that until someone reports 
+any real problems with how this is implemented since ages.
+
+Here is my (smaller) example:
+
+> local({
+>     mySSfunc <- stats::SSlogis
+>     getInitial(circumference ~ mySSfunc(age, Asym, xmid, scal), Orange)
+> })
+
+Error in get(as.character(object[[3L]][[1L]])) :
+   object 'mySSfunc' not found
+
+And also evil code that I had planned as a regression test:
+
+> plogis <- stats::SSlogis
+> in2 <- getInitial(circumference ~ plogis(age, Asym, xmid, scal), Orange)
+
+Error in getInitial.default(func, data, mCall = as.list(match.call(func, :
+   no 'getInitial' method found for "function" objects
+
+I had similar thoughts about the "obvious" patch that you describe and 
+also assume a minor slow-down in variable lookup for the standard use 
+case with the pre-defined self-starting functions from stats. However, 
+these problems may not be relevant in practice ... they seem to be less 
+relevant than the bug itself since we now both found it independently 
+and it cannot be worked around. Furthermore, stats is a base package 
+attached by default (but packages like yours could even "Depends: stats" 
+to ensure that self-starting functions from stats are eventually found 
+starting from the formula environment, often the global environment, if 
+not masked).
+
+I'd suggest you add this report to R's Bugzilla so that it can be linked 
+from the NEWS once this gets addressed.
+
+Thanks and best regards,
+
+	Sebastian Meyer
+
+
+Am 22.06.22 um 17:25 schrieb Ivan Krylov:
+> Hello R-devel,
+> 
+> Here's a corner case I've stumbled upon recently:
+> 
+> local({
+> 	# Originally this was a package namespace, but a local
+> 	# environment also leads to failure
+> 	stopifnot(!identical(environment(), globalenv()))
+> 
+> 	# Make a self-starting model inside this private environment...
+> 	SSlinear <- selfStart(
+> 		~ a * x + b,
+> 		function(mCall, data, LHS, ...) {
+> 			xy <- sortedXyData(mCall[['x']], LHS, data)
+> 			setNames(
+> 				coef(lm(y ~ x, xy)),
+> 				mCall[c('b', 'a')]
+> 			)
+> 		},
+> 		c('a', 'b')
+> 	)
+> 
+> 	# ...and try to use it
+> 	x <- 1:100
+> 	y <- 100 + 5 * x + rnorm(length(x), sd = 10)
+> 	nls(y ~ SSlinear(x, a, b))
+> 	# error in get('SSlinear'): object not found
+> })
+> 
+> As a workaround, I'll just provide the starting values manually,
+> but should this work?
+> 
+> As implemented [1], getInitial requires the model object to live in the
+> stats package namespace or any of its parents, which eventually include
+> the global environment and the attached packages, but not the private
+> namespaces of the packages or any other local environments. This
+> results from the fact that getInitial() uses plain get() in order to
+> resolve the symbol for the self-starting model, and get() defaults to
+> the current environment, which leads a chain of stats -> imports:stats
+> -> base -> global environment -> attached packages.
+> 
+> It seems easy to suggest get(., envir = environment(object)) as a fix,
+> which would be able to access anything available at the time of
+> creation of the formula. On the other hand, it would break the case
+> when the stats package is not attached to the global environment or the
+> formula environment, which currently works.
+>
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Wed Jun 22 19:57:53 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Wed, 22 Jun 2022 13:57:53 -0400
+Subject: [Rd] stats::getInitial: requires the model to live in the stats
+ namespace or above
+In-Reply-To: <CAHqSRuS51ruHwGy7gysr-pOA2fOEi4A2CYRuQahMrBkzdx6a5g@mail.gmail.com>
+References: <20220622182502.191d3a93@arachnoid>
+ <CAHqSRuS51ruHwGy7gysr-pOA2fOEi4A2CYRuQahMrBkzdx6a5g@mail.gmail.com>
+Message-ID: <99a6c2b5-e2cf-8d09-24b2-1b6e57241ab3@gmail.com>
+
+On 22/06/2022 12:44 p.m., Bill Dunlap wrote:
+> Shouldn't the get()'s in stats:::getInitial.formula be looking in the
+> environment of the formula, not the environment of getInitial.formula?
+
+Yes, that definitely looks like the right environment to use.  Ivan, is 
+that what you meant by "environment(object)"?
+
+Duncan Murdoch
+
+> 
+> --- selfStart.R (revision 82512)
+> +++ selfStart.R (working copy)
+> @@ -78,13 +79,19 @@
+>       switch (length(object),
+>               stop("argument 'object' has an impossible length"),
+>           {                              # one-sided formula
+> -           func <- get(as.character(object[[2L]][[1L]]))
+> +            if (!is.call(object[[2L]])) {
+> +                stop("Right-hand side of formula is not a call")
+> +            }
+> +           func <- get(as.character(object[[2L]][[1L]]), mode="function",
+> envir=environment(object))
+>              getInitial(func, data,
+>                         mCall = as.list(match.call(func, call =
+> object[[2L]])),
+>                          ...)
+>           },
+>           {                              # two-sided formula
+> -           func <- get(as.character(object[[3L]][[1L]]))
+> +            if (!is.call(object[[3L]])) {
+> +                stop("Right-hand side of formula is not a call")
+> +            }
+> +           func <- get(as.character(object[[3L]][[1L]]), mode="function",
+> envir=environment(object))
+>              getInitial(func, data,
+>                         mCall = as.list(match.call(func, call =
+> object[[3L]])),
+>                         LHS = object[[2L]], ...)
+> 
+> -Bill
+> 
+> 
+> On Wed, Jun 22, 2022 at 8:25 AM Ivan Krylov <krylov.r00t at gmail.com> wrote:
+> 
+>> Hello R-devel,
+>>
+>> Here's a corner case I've stumbled upon recently:
+>>
+>> local({
+>>          # Originally this was a package namespace, but a local
+>>          # environment also leads to failure
+>>          stopifnot(!identical(environment(), globalenv()))
+>>
+>>          # Make a self-starting model inside this private environment...
+>>          SSlinear <- selfStart(
+>>                  ~ a * x + b,
+>>                  function(mCall, data, LHS, ...) {
+>>                          xy <- sortedXyData(mCall[['x']], LHS, data)
+>>                          setNames(
+>>                                  coef(lm(y ~ x, xy)),
+>>                                  mCall[c('b', 'a')]
+>>                          )
+>>                  },
+>>                  c('a', 'b')
+>>          )
+>>
+>>          # ...and try to use it
+>>          x <- 1:100
+>>          y <- 100 + 5 * x + rnorm(length(x), sd = 10)
+>>          nls(y ~ SSlinear(x, a, b))
+>>          # error in get('SSlinear'): object not found
+>> })
+>>
+>> As a workaround, I'll just provide the starting values manually,
+>> but should this work?
+>>
+>> As implemented [1], getInitial requires the model object to live in the
+>> stats package namespace or any of its parents, which eventually include
+>> the global environment and the attached packages, but not the private
+>> namespaces of the packages or any other local environments. This
+>> results from the fact that getInitial() uses plain get() in order to
+>> resolve the symbol for the self-starting model, and get() defaults to
+>> the current environment, which leads a chain of stats -> imports:stats
+>> -> base -> global environment -> attached packages.
+>>
+>> It seems easy to suggest get(., envir = environment(object)) as a fix,
+>> which would be able to access anything available at the time of
+>> creation of the formula. On the other hand, it would break the case
+>> when the stats package is not attached to the global environment or the
+>> formula environment, which currently works.
+>>
+>> --
+>> Best regards,
+>> Ivan
+>>
+>> [1]
+>>
+>> https://github.com/r-devel/r-svn/blob/d43497cbc927e632c6f597fa23001c3f31d4cae6/src/library/stats/R/selfStart.R#L81-L87
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Wed Jun 22 23:05:09 2022
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Thu, 23 Jun 2022 00:05:09 +0300
+Subject: [Rd] stats::getInitial: requires the model to live in the stats
+ namespace or above
+In-Reply-To: <99a6c2b5-e2cf-8d09-24b2-1b6e57241ab3@gmail.com>
+References: <20220622182502.191d3a93@arachnoid>
+ <CAHqSRuS51ruHwGy7gysr-pOA2fOEi4A2CYRuQahMrBkzdx6a5g@mail.gmail.com>
+ <99a6c2b5-e2cf-8d09-24b2-1b6e57241ab3@gmail.com>
+Message-ID: <20220623000509.53d374e8@Tarkus>
+
+On Wed, 22 Jun 2022 13:57:53 -0400
+Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+
+> On 22/06/2022 12:44 p.m., Bill Dunlap wrote:
+> > Shouldn't the get()'s in stats:::getInitial.formula be looking in
+> > the environment of the formula, not the environment of
+> > getInitial.formula?  
+> 
+> Yes, that definitely looks like the right environment to use.  Ivan,
+> is that what you meant by "environment(object)"?
+
+Yes, I meant the formula by "object", following the name of
+getInitial.formula's argument.
+
+-- 
+Best regards,
+Ivan
+
+
