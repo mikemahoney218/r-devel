@@ -3049,3 +3049,995 @@ Duncan Murdoch
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From @oko| @end|ng |rom |n@@-tou|ou@e@|r  Fri Jun 24 09:54:29 2022
+From: @oko| @end|ng |rom |n@@-tou|ou@e@|r (Serguei Sokol)
+Date: Fri, 24 Jun 2022 09:54:29 +0200
+Subject: [Rd] [External] Re: svd() results should have a class
+In-Reply-To: <51b2bb0e-4d9a-5a1f-c11e-1295a3df4464@gmail.com>
+References: <DM6PR04MB44740AA49A865D347A1B1874F1B59@DM6PR04MB4474.namprd04.prod.outlook.com>
+ <CAHdfS95A=m78=5-KyfL8FhsEyq3iVMMb1ZP9raEF+OggpQ8+hg@mail.gmail.com>
+ <047B89DD-29EC-438D-ABB6-264764A37FA4@uiowa.edu>
+ <51b2bb0e-4d9a-5a1f-c11e-1295a3df4464@gmail.com>
+Message-ID: <859aaea6-da82-30d5-4415-19dd80c2ee73@insa-toulouse.fr>
+
+Le 24/06/2022 ? 02:22, Duncan Murdoch a ?crit?:
+> On 23/06/2022 8:07 p.m., Lenth, Russell V wrote:
+>> Bob,
+>>
+>> I'm not talking about using svd as a generic method. I am talking 
+>> about a method FOR svd results, e.g. an S3 method like foo.svd(), for 
+>> which there already exist other methods, say foo.default and foo.qr. 
+>> Currently if I wanted to do
+>>
+>> ???? svdobj <- svd(x)
+>> ???? foo(svdobj)
+>>
+>> it would not dispatch correctly because there is no svd class. 
+>> Instead, it would be handled by foo.list if it exists, and it is 
+>> certainly not clear that foo.list would do the right thing.
+>
+> I think this would be more convincing if you gave a real example. You 
+> can see the existing methods for the "qr" and "eigen" classes using
+>
+> ? methods(class = "qr")
+> ? methods(class = "eigen")
+>
+> When I do it, I think I'm only seeing methods from base packages, and 
+> they are:
+>
+> ? kappa for qr
+> ? solve for qr
+> ? print for eigen
+>
+> I think the default print method works fine for svd() results. 
+> kappa.svd would probably make sense, but would need some thought: 
+> calculating kappa on a matrix and using the help page for kappa to 
+> naively calculate it from the svd() of that matrix give different 
+> results:
+>
+> ? > set.seed(123)
+> ? > X <- matrix(rnorm(25), 5,5)
+> ? > kappa(X)
+> ? [1] 90.71283
+> ? > s <- svd(X)
+> ? > s$d[1]/s$d[length(s$d)]
+> ? [1] 62.68048
+But ...
+
+ > kappa(X, exact=TRUE)
+[1] 62.68048
+
+So, the honor of svd() is safe ;)
+
+I would definitely see solve.svd() method if such class would be added.
+
+Best,
+Serguei.
+
+>
+> Duncan Murdoch
+>
+>> Russ
+>>
+>> Sent from my iPad
+>>
+>> On Jun 23, 2022, at 6:53 PM, Robert Harlow <rharlow86 at gmail.com> wrote:
+>>
+>> ?
+>> Don't have a view on whether it makes sense in base R or not, but WRE 
+>> section 7.1 may be helpful to you: 
+>> https://cran.r-project.org/doc/manuals/R-exts.html#Adding-new-generics.
+>>
+>> It's not uncommon for packages to want to make base methods generic 
+>> and the above link provides advice on how to do so.
+>>
+>> Bob
+>>
+>> On Thu, Jun 23, 2022 at 12:07 PM Lenth, Russell V 
+>> <russell-lenth at uiowa.edu<mailto:russell-lenth at uiowa.edu>> wrote:
+>> Dear R-Devel,
+>>
+>> I noticed that if we run base::svd(x), we obtain an object of class 
+>> "list". Shouldn't there be an "svd" class, in case someone (e.g., me) 
+>> wants to write methods for singular value decompositions? Note that 
+>> other matrix-decomposition routines like qr() and eigen() each return 
+>> objects having those names.
+>>
+>> Thanks
+>>
+>> Russ Lenth
+>> Russell-lenth at uiowa.edu<mailto:Russell-lenth at uiowa.edu>
+>>
+>> ???????? [[alternative HTML version deleted]]
+>>
+>> ______________________________________________
+>> R-devel at r-project.org<mailto:R-devel at r-project.org> mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>> ????[[alternative HTML version deleted]]
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+-- 
+Serguei Sokol
+Ingenieur de recherche INRAE
+
+Cellule Math?matiques
+TBI, INSA/INRAE UMR 792, INSA/CNRS UMR 5504
+135 Avenue de Rangueil
+31077 Toulouse Cedex 04
+
+tel: +33 5 61 55 98 49
+email: sokol at insa-toulouse.fr
+http://www.toulouse-biotechnology-institute.fr/en/technology_platforms/mathematics-cell.html
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Fri Jun 24 10:41:57 2022
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Fri, 24 Jun 2022 10:41:57 +0200
+Subject: [Rd] [External] Re: svd() results should have a class
+In-Reply-To: <DM6PR04MB44748FDE876C820D94F5C2D5F1B49@DM6PR04MB4474.namprd04.prod.outlook.com>
+References: <DM6PR04MB44740AA49A865D347A1B1874F1B59@DM6PR04MB4474.namprd04.prod.outlook.com>
+ <CAHdfS95A=m78=5-KyfL8FhsEyq3iVMMb1ZP9raEF+OggpQ8+hg@mail.gmail.com>
+ <047B89DD-29EC-438D-ABB6-264764A37FA4@uiowa.edu>
+ <51b2bb0e-4d9a-5a1f-c11e-1295a3df4464@gmail.com>
+ <DM6PR04MB44748FDE876C820D94F5C2D5F1B49@DM6PR04MB4474.namprd04.prod.outlook.com>
+Message-ID: <25269.30933.736441.238198@stat.math.ethz.ch>
+
+>>>>> Lenth, Russell V 
+>>>>>     on Fri, 24 Jun 2022 00:45:21 +0000 writes:
+
+    > Duncan et al.,
+    > The real example would be the estimability package, in which there is a generic function nonest.basis and methods for classes lm, matrix, and qr. I wanted to add a method for class svd except there is no such class.
+
+    > I agree BTW that the safe thing to do would be to have the returned object be of class c("svd", "list").
+
+Well.. "safe" is relative here.
+Practically *all* S3 classes are internally lists (notable
+exceptions: "Date", "PosixCT") and we
+never (AFAIR) append "list" to the class vector in such cases.
+
+Martin
+
+    > Best,
+
+    > Russ
+
+    > -----Original Message-----
+    > From: Duncan Murdoch <murdoch.duncan at gmail.com> 
+    > Sent: Thursday, June 23, 2022 7:23 PM
+    > To: Lenth, Russell V <russell-lenth at uiowa.edu>; Robert Harlow <rharlow86 at gmail.com>
+    > Cc: r-devel at r-project.org
+    > Subject: Re: [Rd] [External] Re: svd() results should have a class
+
+    > On 23/06/2022 8:07 p.m., Lenth, Russell V wrote:
+    >> Bob,
+    >> 
+    >> I'm not talking about using svd as a generic method. I am talking 
+    >> about a method FOR svd results, e.g. an S3 method like foo.svd(), for 
+    >> which there already exist other methods, say foo.default and foo.qr. 
+    >> Currently if I wanted to do
+    >> 
+    >> svdobj <- svd(x)
+    >> foo(svdobj)
+    >> 
+    >> it would not dispatch correctly because there is no svd class. Instead, it would be handled by foo.list if it exists, and it is certainly not clear that foo.list would do the right thing.
+
+    > I think this would be more convincing if you gave a real example.  You can see the existing methods for the "qr" and "eigen" classes using
+
+    > methods(class = "qr")
+    > methods(class = "eigen")
+
+    > When I do it, I think I'm only seeing methods from base packages, and they are:
+
+    > kappa for qr
+    > solve for qr
+    > print for eigen
+
+    > I think the default print method works fine for svd() results. 
+    > kappa.svd would probably make sense, but would need some thought: 
+    > calculating kappa on a matrix and using the help page for kappa to naively calculate it from the svd() of that matrix give different results:
+
+    >> set.seed(123)
+    >> X <- matrix(rnorm(25), 5,5)
+    >> kappa(X)
+    > [1] 90.71283
+    >> s <- svd(X)
+    >> s$d[1]/s$d[length(s$d)]
+    > [1] 62.68048
+
+    > Duncan Murdoch
+
+    >> Russ
+    >> 
+    >> Sent from my iPad
+    >> 
+    >> On Jun 23, 2022, at 6:53 PM, Robert Harlow <rharlow86 at gmail.com> wrote:
+    >> 
+    >> ?
+    >> Don't have a view on whether it makes sense in base R or not, but WRE section 7.1 may be helpful to you: https://cran.r-project.org/doc/manuals/R-exts.html#Adding-new-generics.
+    >> 
+    >> It's not uncommon for packages to want to make base methods generic and the above link provides advice on how to do so.
+    >> 
+    >> Bob
+    >> 
+    >> On Thu, Jun 23, 2022 at 12:07 PM Lenth, Russell V <russell-lenth at uiowa.edu<mailto:russell-lenth at uiowa.edu>> wrote:
+    >> Dear R-Devel,
+    >> 
+    >> I noticed that if we run base::svd(x), we obtain an object of class "list". Shouldn't there be an "svd" class, in case someone (e.g., me) wants to write methods for singular value decompositions? Note that other matrix-decomposition routines like qr() and eigen() each return objects having those names.
+    >> 
+    >> Thanks
+    >> 
+    >> Russ Lenth
+    >> Russell-lenth at uiowa.edu<mailto:Russell-lenth at uiowa.edu>
+    >> 
+    >> [[alternative HTML version deleted]]
+    >> 
+    >> ______________________________________________
+    >> R-devel at r-project.org<mailto:R-devel at r-project.org> mailing list 
+    >> https://stat.ethz.ch/mailman/listinfo/r-devel
+    >> 
+    >> [[alternative HTML version deleted]]
+    >> 
+    >> ______________________________________________
+    >> R-devel at r-project.org mailing list
+    >> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+    > ______________________________________________
+    > R-devel at r-project.org mailing list
+    > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From pro|jcn@@h @end|ng |rom gm@||@com  Fri Jun 24 14:33:37 2022
+From: pro|jcn@@h @end|ng |rom gm@||@com (J C Nash)
+Date: Fri, 24 Jun 2022 08:33:37 -0400
+Subject: [Rd] [External] Re: svd() results should have a class
+In-Reply-To: <25269.30933.736441.238198@stat.math.ethz.ch>
+References: <DM6PR04MB44740AA49A865D347A1B1874F1B59@DM6PR04MB4474.namprd04.prod.outlook.com>
+ <CAHdfS95A=m78=5-KyfL8FhsEyq3iVMMb1ZP9raEF+OggpQ8+hg@mail.gmail.com>
+ <047B89DD-29EC-438D-ABB6-264764A37FA4@uiowa.edu>
+ <51b2bb0e-4d9a-5a1f-c11e-1295a3df4464@gmail.com>
+ <DM6PR04MB44748FDE876C820D94F5C2D5F1B49@DM6PR04MB4474.namprd04.prod.outlook.com>
+ <25269.30933.736441.238198@stat.math.ethz.ch>
+Message-ID: <a7d81455-6a6a-3e35-532b-01ceb9dd5e6c@gmail.com>
+
+More a question than a comment: Is there an issue that methods for any svd result would need
+to be cautious about the possibility that there are multiple forms of the svd for a matrix?
+That is, for an m by n matrix A, we can have   A --> U S V'
+   Full:  U m*m, S m*n V n*n
+   Thin:  U m*n  S n*n V n*n
+   Truncated:  U m*r S r*r V n*r  where r is the rank (and deciding that might require a referral
+      to a higher power)
+
+There are, of course, similar issues for the various QR outputs (Householder, Givens, Gram-Schmidt,
+     modified Gram-Schmidt, and so on).
+
+JN
+
+On 2022-06-24 04:41, Martin Maechler wrote:
+>>>>>> Lenth, Russell V
+>>>>>>      on Fri, 24 Jun 2022 00:45:21 +0000 writes:
+> 
+>      > Duncan et al.,
+>      > The real example would be the estimability package, in which there is a generic function nonest.basis and methods for classes lm, matrix, and qr. I wanted to add a method for class svd except there is no such class.
+> 
+>      > I agree BTW that the safe thing to do would be to have the returned object be of class c("svd", "list").
+> 
+> Well.. "safe" is relative here.
+> Practically *all* S3 classes are internally lists (notable
+> exceptions: "Date", "PosixCT") and we
+> never (AFAIR) append "list" to the class vector in such cases.
+> 
+> Martin
+> 
+>      > Best,
+> 
+>      > Russ
+> 
+>      > -----Original Message-----
+>      > From: Duncan Murdoch <murdoch.duncan at gmail.com>
+>      > Sent: Thursday, June 23, 2022 7:23 PM
+>      > To: Lenth, Russell V <russell-lenth at uiowa.edu>; Robert Harlow <rharlow86 at gmail.com>
+>      > Cc: r-devel at r-project.org
+>      > Subject: Re: [Rd] [External] Re: svd() results should have a class
+> 
+>      > On 23/06/2022 8:07 p.m., Lenth, Russell V wrote:
+>      >> Bob,
+>      >>
+>      >> I'm not talking about using svd as a generic method. I am talking
+>      >> about a method FOR svd results, e.g. an S3 method like foo.svd(), for
+>      >> which there already exist other methods, say foo.default and foo.qr.
+>      >> Currently if I wanted to do
+>      >>
+>      >> svdobj <- svd(x)
+>      >> foo(svdobj)
+>      >>
+>      >> it would not dispatch correctly because there is no svd class. Instead, it would be handled by foo.list if it exists, and it is certainly not clear that foo.list would do the right thing.
+> 
+>      > I think this would be more convincing if you gave a real example.  You can see the existing methods for the "qr" and "eigen" classes using
+> 
+>      > methods(class = "qr")
+>      > methods(class = "eigen")
+> 
+>      > When I do it, I think I'm only seeing methods from base packages, and they are:
+> 
+>      > kappa for qr
+>      > solve for qr
+>      > print for eigen
+> 
+>      > I think the default print method works fine for svd() results.
+>      > kappa.svd would probably make sense, but would need some thought:
+>      > calculating kappa on a matrix and using the help page for kappa to naively calculate it from the svd() of that matrix give different results:
+> 
+>      >> set.seed(123)
+>      >> X <- matrix(rnorm(25), 5,5)
+>      >> kappa(X)
+>      > [1] 90.71283
+>      >> s <- svd(X)
+>      >> s$d[1]/s$d[length(s$d)]
+>      > [1] 62.68048
+> 
+>      > Duncan Murdoch
+> 
+>      >> Russ
+>      >>
+>      >> Sent from my iPad
+>      >>
+>      >> On Jun 23, 2022, at 6:53 PM, Robert Harlow <rharlow86 at gmail.com> wrote:
+>      >>
+>      >> ?
+>      >> Don't have a view on whether it makes sense in base R or not, but WRE section 7.1 may be helpful to you: https://cran.r-project.org/doc/manuals/R-exts.html#Adding-new-generics.
+>      >>
+>      >> It's not uncommon for packages to want to make base methods generic and the above link provides advice on how to do so.
+>      >>
+>      >> Bob
+>      >>
+>      >> On Thu, Jun 23, 2022 at 12:07 PM Lenth, Russell V <russell-lenth at uiowa.edu<mailto:russell-lenth at uiowa.edu>> wrote:
+>      >> Dear R-Devel,
+>      >>
+>      >> I noticed that if we run base::svd(x), we obtain an object of class "list". Shouldn't there be an "svd" class, in case someone (e.g., me) wants to write methods for singular value decompositions? Note that other matrix-decomposition routines like qr() and eigen() each return objects having those names.
+>      >>
+>      >> Thanks
+>      >>
+>      >> Russ Lenth
+>      >> Russell-lenth at uiowa.edu<mailto:Russell-lenth at uiowa.edu>
+>      >>
+>      >> [[alternative HTML version deleted]]
+>      >>
+>      >> ______________________________________________
+>      >> R-devel at r-project.org<mailto:R-devel at r-project.org> mailing list
+>      >> https://stat.ethz.ch/mailman/listinfo/r-devel
+>      >>
+>      >> [[alternative HTML version deleted]]
+>      >>
+>      >> ______________________________________________
+>      >> R-devel at r-project.org mailing list
+>      >> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+>      > ______________________________________________
+>      > R-devel at r-project.org mailing list
+>      > https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From j|ox @end|ng |rom mcm@@ter@c@  Fri Jun 24 15:55:45 2022
+From: j|ox @end|ng |rom mcm@@ter@c@ (John Fox)
+Date: Fri, 24 Jun 2022 09:55:45 -0400
+Subject: [Rd] [External] Re: svd() results should have a class
+In-Reply-To: <14370_1656031767_25O0nPc8028559_DM6PR04MB44748FDE876C820D94F5C2D5F1B49@DM6PR04MB4474.namprd04.prod.outlook.com>
+References: <DM6PR04MB44740AA49A865D347A1B1874F1B59@DM6PR04MB4474.namprd04.prod.outlook.com>
+ <CAHdfS95A=m78=5-KyfL8FhsEyq3iVMMb1ZP9raEF+OggpQ8+hg@mail.gmail.com>
+ <047B89DD-29EC-438D-ABB6-264764A37FA4@uiowa.edu>
+ <51b2bb0e-4d9a-5a1f-c11e-1295a3df4464@gmail.com>
+ <14370_1656031767_25O0nPc8028559_DM6PR04MB44748FDE876C820D94F5C2D5F1B49@DM6PR04MB4474.namprd04.prod.outlook.com>
+Message-ID: <6aebd94c-3a2d-53bf-d5ae-ac0cbf4b7e03@mcmaster.ca>
+
+Dear Russ,
+
+A couple of thoughts:
+
+First, it's not clear to me where the svd objects are coming from -- 
+that is, are they generated in the estimability package or coming, e.g., 
+from model objects? If the former, then you could do something like 
+this, creating your own svd class:
+
+ > SVD <- function(x, ...){
++   s <- svd(x, ...)
++   class(s) <- "svd" # or c("svd", class(s))
++   s
++ }
+
+And then, e.g.,
+
+ > kappa.svd <- function(z, tol=sqrt(.Machine$double.eps), ...){
++   d <- z$d
++   d <- d[abs(d) > tol]
++   d[1]/d[length(d)]
++ }
+
+ > m <- lm(Employed ~ ., data=longley)
+ > kappa(m, exact=TRUE)
+[1] 23845862
+ > kappa(SVD(model.matrix(m)))
+[1] 23845862
+
+(I suspect you would have thought of this if it solved your problem.)
+
+Second, I think that it's a good idea more generally to have base::svd() 
+return objects of class "svd", and I doubt whether it really matters to 
+append "list" to the class vector. It's not impossible, of course, that 
+changing the class to "svd" from "list" would break something, but it's 
+also hard to imagine a .list method that would expect an svd object.
+
+Best,
+  John
+
+On 2022-06-23 8:45 p.m., Lenth, Russell V wrote:
+> Duncan et al.,
+> 
+> The real example would be the estimability package, in which there is a generic function nonest.basis and methods for classes lm, matrix, and qr. I wanted to add a method for class svd except there is no such class.
+> 
+> I agree BTW that the safe thing to do would be to have the returned object be of class c("svd", "list").
+> 
+> Best,
+> 
+> Russ
+> 
+> -----Original Message-----
+> From: Duncan Murdoch <murdoch.duncan at gmail.com>
+> Sent: Thursday, June 23, 2022 7:23 PM
+> To: Lenth, Russell V <russell-lenth at uiowa.edu>; Robert Harlow <rharlow86 at gmail.com>
+> Cc: r-devel at r-project.org
+> Subject: Re: [Rd] [External] Re: svd() results should have a class
+> 
+> On 23/06/2022 8:07 p.m., Lenth, Russell V wrote:
+>> Bob,
+>>
+>> I'm not talking about using svd as a generic method. I am talking
+>> about a method FOR svd results, e.g. an S3 method like foo.svd(), for
+>> which there already exist other methods, say foo.default and foo.qr.
+>> Currently if I wanted to do
+>>
+>>       svdobj <- svd(x)
+>>       foo(svdobj)
+>>
+>> it would not dispatch correctly because there is no svd class. Instead, it would be handled by foo.list if it exists, and it is certainly not clear that foo.list would do the right thing.
+> 
+> I think this would be more convincing if you gave a real example.  You can see the existing methods for the "qr" and "eigen" classes using
+> 
+>     methods(class = "qr")
+>     methods(class = "eigen")
+> 
+> When I do it, I think I'm only seeing methods from base packages, and they are:
+> 
+>     kappa for qr
+>     solve for qr
+>     print for eigen
+> 
+> I think the default print method works fine for svd() results.
+> kappa.svd would probably make sense, but would need some thought:
+> calculating kappa on a matrix and using the help page for kappa to naively calculate it from the svd() of that matrix give different results:
+> 
+>     > set.seed(123)
+>     > X <- matrix(rnorm(25), 5,5)
+>     > kappa(X)
+>     [1] 90.71283
+>     > s <- svd(X)
+>     > s$d[1]/s$d[length(s$d)]
+>     [1] 62.68048
+> 
+> Duncan Murdoch
+> 
+>> Russ
+>>
+>> Sent from my iPad
+>>
+>> On Jun 23, 2022, at 6:53 PM, Robert Harlow <rharlow86 at gmail.com> wrote:
+>>
+>> ?
+>> Don't have a view on whether it makes sense in base R or not, but WRE section 7.1 may be helpful to you: https://cran.r-project.org/doc/manuals/R-exts.html#Adding-new-generics.
+>>
+>> It's not uncommon for packages to want to make base methods generic and the above link provides advice on how to do so.
+>>
+>> Bob
+>>
+>> On Thu, Jun 23, 2022 at 12:07 PM Lenth, Russell V <russell-lenth at uiowa.edu<mailto:russell-lenth at uiowa.edu>> wrote:
+>> Dear R-Devel,
+>>
+>> I noticed that if we run base::svd(x), we obtain an object of class "list". Shouldn't there be an "svd" class, in case someone (e.g., me) wants to write methods for singular value decompositions? Note that other matrix-decomposition routines like qr() and eigen() each return objects having those names.
+>>
+>> Thanks
+>>
+>> Russ Lenth
+>> Russell-lenth at uiowa.edu<mailto:Russell-lenth at uiowa.edu>
+>>
+>>           [[alternative HTML version deleted]]
+>>
+>> ______________________________________________
+>> R-devel at r-project.org<mailto:R-devel at r-project.org> mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>> 	[[alternative HTML version deleted]]
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+-- 
+John Fox, Professor Emeritus
+McMaster University
+Hamilton, Ontario, Canada
+web: https://socialsciences.mcmaster.ca/jfox/
+
+
+From ru@@e||-|enth @end|ng |rom u|ow@@edu  Fri Jun 24 16:41:08 2022
+From: ru@@e||-|enth @end|ng |rom u|ow@@edu (Lenth, Russell V)
+Date: Fri, 24 Jun 2022 14:41:08 +0000
+Subject: [Rd] [External] Re: svd() results should have a class
+In-Reply-To: <6aebd94c-3a2d-53bf-d5ae-ac0cbf4b7e03@mcmaster.ca>
+References: <DM6PR04MB44740AA49A865D347A1B1874F1B59@DM6PR04MB4474.namprd04.prod.outlook.com>
+ <CAHdfS95A=m78=5-KyfL8FhsEyq3iVMMb1ZP9raEF+OggpQ8+hg@mail.gmail.com>
+ <047B89DD-29EC-438D-ABB6-264764A37FA4@uiowa.edu>
+ <51b2bb0e-4d9a-5a1f-c11e-1295a3df4464@gmail.com>
+ <14370_1656031767_25O0nPc8028559_DM6PR04MB44748FDE876C820D94F5C2D5F1B49@DM6PR04MB4474.namprd04.prod.outlook.com>
+ <6aebd94c-3a2d-53bf-d5ae-ac0cbf4b7e03@mcmaster.ca>
+Message-ID: <DM6PR04MB447444A739EFD94ADD3D697CF1B49@DM6PR04MB4474.namprd04.prod.outlook.com>
+
+John,
+
+Interestingly, for testing purposes, I created an SVD() function exactly like the one you show, even the same name.
+What I think I'll do in the estimability package is just quietly add (but not export) a nonest.basis.svd function. Its main use, actually, will be that the nonest.basis.matrix method will be modified to pass most of its work to nonest.basis.svd(svd(x)) since, as it turns out, svd() is the simplest and most efficient way to obtain the desired result -- better than what I have now. I may also add a .list method that checks to see if the right named components of the right classes for svd are available, then passes to the .svd method.
+
+So what I am saying is that there is no urgency to making the requested change.
+
+If you do decide to add a class to svd() values (and La.svd()??), I defer to you experts on whether to inherit from "list". 
+
+Best,
+
+Russ
+
+-----Original Message-----
+From: John Fox <jfox at mcmaster.ca> 
+Sent: Friday, June 24, 2022 8:56 AM
+To: Lenth, Russell V <russell-lenth at uiowa.edu>
+Cc: r-devel at r-project.org; Duncan Murdoch <murdoch.duncan at gmail.com>; Robert Harlow <rharlow86 at gmail.com>
+Subject: Re: [Rd] [External] Re: svd() results should have a class
+
+Dear Russ,
+
+A couple of thoughts:
+
+First, it's not clear to me where the svd objects are coming from -- that is, are they generated in the estimability package or coming, e.g., from model objects? If the former, then you could do something like this, creating your own svd class:
+
+ > SVD <- function(x, ...){
++   s <- svd(x, ...)
++   class(s) <- "svd" # or c("svd", class(s))
++   s
++ }
+
+And then, e.g.,
+
+ > kappa.svd <- function(z, tol=sqrt(.Machine$double.eps), ...){
++   d <- z$d
++   d <- d[abs(d) > tol]
++   d[1]/d[length(d)]
++ }
+
+ > m <- lm(Employed ~ ., data=longley)
+ > kappa(m, exact=TRUE)
+[1] 23845862
+ > kappa(SVD(model.matrix(m)))
+[1] 23845862
+
+(I suspect you would have thought of this if it solved your problem.)
+
+Second, I think that it's a good idea more generally to have base::svd() return objects of class "svd", and I doubt whether it really matters to append "list" to the class vector. It's not impossible, of course, that changing the class to "svd" from "list" would break something, but it's also hard to imagine a .list method that would expect an svd object.
+
+Best,
+  John
+
+On 2022-06-23 8:45 p.m., Lenth, Russell V wrote:
+> Duncan et al.,
+> 
+> The real example would be the estimability package, in which there is a generic function nonest.basis and methods for classes lm, matrix, and qr. I wanted to add a method for class svd except there is no such class.
+> 
+> I agree BTW that the safe thing to do would be to have the returned object be of class c("svd", "list").
+> 
+> Best,
+> 
+> Russ
+> 
+> -----Original Message-----
+> From: Duncan Murdoch <murdoch.duncan at gmail.com>
+> Sent: Thursday, June 23, 2022 7:23 PM
+> To: Lenth, Russell V <russell-lenth at uiowa.edu>; Robert Harlow 
+> <rharlow86 at gmail.com>
+> Cc: r-devel at r-project.org
+> Subject: Re: [Rd] [External] Re: svd() results should have a class
+> 
+> On 23/06/2022 8:07 p.m., Lenth, Russell V wrote:
+>> Bob,
+>>
+>> I'm not talking about using svd as a generic method. I am talking 
+>> about a method FOR svd results, e.g. an S3 method like foo.svd(), for 
+>> which there already exist other methods, say foo.default and foo.qr.
+>> Currently if I wanted to do
+>>
+>>       svdobj <- svd(x)
+>>       foo(svdobj)
+>>
+>> it would not dispatch correctly because there is no svd class. Instead, it would be handled by foo.list if it exists, and it is certainly not clear that foo.list would do the right thing.
+> 
+> I think this would be more convincing if you gave a real example.  You 
+> can see the existing methods for the "qr" and "eigen" classes using
+> 
+>     methods(class = "qr")
+>     methods(class = "eigen")
+> 
+> When I do it, I think I'm only seeing methods from base packages, and they are:
+> 
+>     kappa for qr
+>     solve for qr
+>     print for eigen
+> 
+> I think the default print method works fine for svd() results.
+> kappa.svd would probably make sense, but would need some thought:
+> calculating kappa on a matrix and using the help page for kappa to naively calculate it from the svd() of that matrix give different results:
+> 
+>     > set.seed(123)
+>     > X <- matrix(rnorm(25), 5,5)
+>     > kappa(X)
+>     [1] 90.71283
+>     > s <- svd(X)
+>     > s$d[1]/s$d[length(s$d)]
+>     [1] 62.68048
+> 
+> Duncan Murdoch
+> 
+>> Russ
+>>
+>> Sent from my iPad
+>>
+>> On Jun 23, 2022, at 6:53 PM, Robert Harlow <rharlow86 at gmail.com> wrote:
+>>
+>> ?
+>> Don't have a view on whether it makes sense in base R or not, but WRE section 7.1 may be helpful to you: https://cran.r-project.org/doc/manuals/R-exts.html#Adding-new-generics.
+>>
+>> It's not uncommon for packages to want to make base methods generic and the above link provides advice on how to do so.
+>>
+>> Bob
+>>
+>> On Thu, Jun 23, 2022 at 12:07 PM Lenth, Russell V <russell-lenth at uiowa.edu<mailto:russell-lenth at uiowa.edu>> wrote:
+>> Dear R-Devel,
+>>
+>> I noticed that if we run base::svd(x), we obtain an object of class "list". Shouldn't there be an "svd" class, in case someone (e.g., me) wants to write methods for singular value decompositions? Note that other matrix-decomposition routines like qr() and eigen() each return objects having those names.
+>>
+>> Thanks
+>>
+>> Russ Lenth
+>> Russell-lenth at uiowa.edu<mailto:Russell-lenth at uiowa.edu>
+>>
+>>           [[alternative HTML version deleted]]
+>>
+>> ______________________________________________
+>> R-devel at r-project.org<mailto:R-devel at r-project.org> mailing list 
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>> 	[[alternative HTML version deleted]]
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+--
+John Fox, Professor Emeritus
+McMaster University
+Hamilton, Ontario, Canada
+web: https://socialsciences.mcmaster.ca/jfox/
+
+
+From tdhock5 @end|ng |rom gm@||@com  Fri Jun 24 17:08:05 2022
+From: tdhock5 @end|ng |rom gm@||@com (Toby Hocking)
+Date: Fri, 24 Jun 2022 17:08:05 +0200
+Subject: [Rd] new warnings when compiling cmplxblas.f
+Message-ID: <CALK03d0-BqJaRnqbZDMvkXVehFzcO2KfCDN9oN8YQufP3SgBTg@mail.gmail.com>
+
+Hi all, I am observing the following warnings which are new (at least on my
+system, ubuntu 18.04 with gfortran 10.1) when compiling the new release,
+R-4.2.1 (make command).
+
+$ ./configure --prefix=$HOME --enable-lto
+...
+$ make
+...
+make[4]: Entering directory '/home/tdhock/R/R-4.2.1/src/extra/blas'
+gfortran -fno-optimize-sibling-calls -fpic  -g -O2 -mtune=native -Wall
+-pedantic -flto -c blas.f -o blas.o
+gfortran -fno-optimize-sibling-calls -fpic  -g -O2 -mtune=native -Wall
+-pedantic -flto -c cmplxblas.f -o cmplxblas.o
+cmplxblas.f:2:21:
+
+    2 |       double complex z,zz
+      |                     1
+Warning: GNU Extension: DOUBLE COMPLEX at (1)
+...
+cmplxblas.f:4808:26:
+
+ 4808 |                   RTEMP = RTEMP + DCONJG( A( L, J ) )*A( L, J )
+      |                          1
+Warning: Possible change of value in conversion from COMPLEX(8) to REAL(8)
+at (1) [-Wconversion]
+gcc -shared -fopenmp -g -O2 -Wall -pedantic -mtune=native -flto -fpic
+ -L/home/tdhock/lib64 -o libRblas.so blas.o  cmplxblas.o -lgfortran -lm
+-lquadmath
+#gcc-ar -cr libRblas.so blas.o  cmplxblas.o
+make[4]: Leaving directory '/home/tdhock/R/R-4.2.1/src/extra/blas'
+...
+$ gfortran --version
+GNU Fortran (GCC) 10.1.0
+Copyright (C) 2020 Free Software Foundation, Inc.
+This is free software; see the source for copying conditions.  There is NO
+warranty; not even for MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+Above was the result when using the following in config.site:
+RANLIB=gcc-ranlib
+AR=gcc-ar
+CXXFLAGS="-g -O2 -Wall -pedantic -mtune=native -Wno-ignored-attributes
+-Wno-deprecated-declarations -Wno-parentheses"
+FFLAGS="-g -O2 -mtune=native -Wall -pedantic"
+CFLAGS="-g -O2 -Wall -pedantic -mtune=native"
+LDFLAGS="-L$HOME/lib64"
+
+	[[alternative HTML version deleted]]
+
+
+From pro|jcn@@h @end|ng |rom gm@||@com  Fri Jun 24 18:11:29 2022
+From: pro|jcn@@h @end|ng |rom gm@||@com (J C Nash)
+Date: Fri, 24 Jun 2022 12:11:29 -0400
+Subject: [Rd] Understanding some code within nls()
+Message-ID: <bd226ba8-2270-0008-7fce-4f9677b534df@gmail.com>
+
+In working to try to improve the nls() function, a Google Summer of Code contributor and
+I have found our understanding of the setPars() function in nls() in base R to be
+inadequate.
+
+setPars <- function(newPars) {
+    setPars(newPars)
+    resid <<- .swts * (lhs - (rhs <<- getRHS())) # envir = thisEnv {2 x}
+    dev   <<- sum(resid^2) # envir = thisEnv
+    if(length(gr <- attr(rhs, "gradient")) == 1L) gr <- c(gr)
+    QR <<- qr(.swts * gr) # envir = thisEnv
+    (QR$rank < min(dim(QR$qr))) # to catch the singular gradient matrix
+}
+
+There is a similar but not identical function in the minpack.lm.
+
+I'd be grateful if anyone who has ideas on how this function is working
+(in particular why the recursive call and then the "<<-" assignments are
+needed) would get in touch offline to profjcnash _at_ gmail.com. I suspect
+a list discussion is not useful without some preparatory work to narrow
+the queries.
+
+My intention is to write up a 1-2 page explanation as a prelude to modifying
+code to introduce Marquardt stabilizations and bounds-constrained parameters,
+which nls() currently lacks. Also I have examples where minpack.lm seems
+to be failing to get bounds constraints correct. The nlsr package (Duncan
+Murdoch and myself) does get these correct, but focusses on solving the
+nonlinear least squares problem, and lacks many useful features for modeling
+that are found in nls(). However, nls() often fails due to "singular gradient"
+or else needs to use altered calls to apply special methods.
+
+Assuming some success, I'll post links to the list.
+
+John Nash
+
+
+From j|ox @end|ng |rom mcm@@ter@c@  Fri Jun 24 18:24:10 2022
+From: j|ox @end|ng |rom mcm@@ter@c@ (John Fox)
+Date: Fri, 24 Jun 2022 12:24:10 -0400
+Subject: [Rd] [External] Re: svd() results should have a class
+In-Reply-To: <DM6PR04MB447444A739EFD94ADD3D697CF1B49@DM6PR04MB4474.namprd04.prod.outlook.com>
+References: <DM6PR04MB44740AA49A865D347A1B1874F1B59@DM6PR04MB4474.namprd04.prod.outlook.com>
+ <CAHdfS95A=m78=5-KyfL8FhsEyq3iVMMb1ZP9raEF+OggpQ8+hg@mail.gmail.com>
+ <047B89DD-29EC-438D-ABB6-264764A37FA4@uiowa.edu>
+ <51b2bb0e-4d9a-5a1f-c11e-1295a3df4464@gmail.com>
+ <14370_1656031767_25O0nPc8028559_DM6PR04MB44748FDE876C820D94F5C2D5F1B49@DM6PR04MB4474.namprd04.prod.outlook.com>
+ <6aebd94c-3a2d-53bf-d5ae-ac0cbf4b7e03@mcmaster.ca>
+ <DM6PR04MB447444A739EFD94ADD3D697CF1B49@DM6PR04MB4474.namprd04.prod.outlook.com>
+Message-ID: <c64da371-588e-9d4c-3452-16c8bd740766@mcmaster.ca>
+
+Dear Russ,
+
+On 2022-06-24 10:41 a.m., Lenth, Russell V wrote:
+> John,
+> 
+> Interestingly, for testing purposes, I created an SVD() function exactly like the one you show, even the same name.
+> What I think I'll do in the estimability package is just quietly add (but not export) a nonest.basis.svd function. Its main use, actually, will be that the nonest.basis.matrix method will be modified to pass most of its work to nonest.basis.svd(svd(x)) since, as it turns out, svd() is the simplest and most efficient way to obtain the desired result -- better than what I have now. I may also add a .list method that checks to see if the right named components of the right classes for svd are available, then passes to the .svd method.
+
+The possibility of adding a .list method and looking at the object to 
+see whether it appears to be an svd also occurred to me, but I thought 
+that it might be safer to add a .default method.
+
+> 
+> So what I am saying is that there is no urgency to making the requested change.
+> 
+> If you do decide to add a class to svd() values (and La.svd()??), I defer to you experts on whether to inherit from "list".
+
+To be clear, I'm not a member of R core and so this isn't up to me (nor 
+am I more expert than you!).
+
+Thanks, by the way, for the very useful estimability package.
+
+Best,
+  John
+
+> 
+> Best,
+> 
+> Russ
+> 
+> -----Original Message-----
+> From: John Fox <jfox at mcmaster.ca>
+> Sent: Friday, June 24, 2022 8:56 AM
+> To: Lenth, Russell V <russell-lenth at uiowa.edu>
+> Cc: r-devel at r-project.org; Duncan Murdoch <murdoch.duncan at gmail.com>; Robert Harlow <rharlow86 at gmail.com>
+> Subject: Re: [Rd] [External] Re: svd() results should have a class
+> 
+> Dear Russ,
+> 
+> A couple of thoughts:
+> 
+> First, it's not clear to me where the svd objects are coming from -- that is, are they generated in the estimability package or coming, e.g., from model objects? If the former, then you could do something like this, creating your own svd class:
+> 
+>   > SVD <- function(x, ...){
+> +   s <- svd(x, ...)
+> +   class(s) <- "svd" # or c("svd", class(s))
+> +   s
+> + }
+> 
+> And then, e.g.,
+> 
+>   > kappa.svd <- function(z, tol=sqrt(.Machine$double.eps), ...){
+> +   d <- z$d
+> +   d <- d[abs(d) > tol]
+> +   d[1]/d[length(d)]
+> + }
+> 
+>   > m <- lm(Employed ~ ., data=longley)
+>   > kappa(m, exact=TRUE)
+> [1] 23845862
+>   > kappa(SVD(model.matrix(m)))
+> [1] 23845862
+> 
+> (I suspect you would have thought of this if it solved your problem.)
+> 
+> Second, I think that it's a good idea more generally to have base::svd() return objects of class "svd", and I doubt whether it really matters to append "list" to the class vector. It's not impossible, of course, that changing the class to "svd" from "list" would break something, but it's also hard to imagine a .list method that would expect an svd object.
+> 
+> Best,
+>    John
+> 
+> On 2022-06-23 8:45 p.m., Lenth, Russell V wrote:
+>> Duncan et al.,
+>>
+>> The real example would be the estimability package, in which there is a generic function nonest.basis and methods for classes lm, matrix, and qr. I wanted to add a method for class svd except there is no such class.
+>>
+>> I agree BTW that the safe thing to do would be to have the returned object be of class c("svd", "list").
+>>
+>> Best,
+>>
+>> Russ
+>>
+>> -----Original Message-----
+>> From: Duncan Murdoch <murdoch.duncan at gmail.com>
+>> Sent: Thursday, June 23, 2022 7:23 PM
+>> To: Lenth, Russell V <russell-lenth at uiowa.edu>; Robert Harlow
+>> <rharlow86 at gmail.com>
+>> Cc: r-devel at r-project.org
+>> Subject: Re: [Rd] [External] Re: svd() results should have a class
+>>
+>> On 23/06/2022 8:07 p.m., Lenth, Russell V wrote:
+>>> Bob,
+>>>
+>>> I'm not talking about using svd as a generic method. I am talking
+>>> about a method FOR svd results, e.g. an S3 method like foo.svd(), for
+>>> which there already exist other methods, say foo.default and foo.qr.
+>>> Currently if I wanted to do
+>>>
+>>>        svdobj <- svd(x)
+>>>        foo(svdobj)
+>>>
+>>> it would not dispatch correctly because there is no svd class. Instead, it would be handled by foo.list if it exists, and it is certainly not clear that foo.list would do the right thing.
+>>
+>> I think this would be more convincing if you gave a real example.  You
+>> can see the existing methods for the "qr" and "eigen" classes using
+>>
+>>      methods(class = "qr")
+>>      methods(class = "eigen")
+>>
+>> When I do it, I think I'm only seeing methods from base packages, and they are:
+>>
+>>      kappa for qr
+>>      solve for qr
+>>      print for eigen
+>>
+>> I think the default print method works fine for svd() results.
+>> kappa.svd would probably make sense, but would need some thought:
+>> calculating kappa on a matrix and using the help page for kappa to naively calculate it from the svd() of that matrix give different results:
+>>
+>>      > set.seed(123)
+>>      > X <- matrix(rnorm(25), 5,5)
+>>      > kappa(X)
+>>      [1] 90.71283
+>>      > s <- svd(X)
+>>      > s$d[1]/s$d[length(s$d)]
+>>      [1] 62.68048
+>>
+>> Duncan Murdoch
+>>
+>>> Russ
+>>>
+>>> Sent from my iPad
+>>>
+>>> On Jun 23, 2022, at 6:53 PM, Robert Harlow <rharlow86 at gmail.com> wrote:
+>>>
+>>> ?
+>>> Don't have a view on whether it makes sense in base R or not, but WRE section 7.1 may be helpful to you: https://cran.r-project.org/doc/manuals/R-exts.html#Adding-new-generics.
+>>>
+>>> It's not uncommon for packages to want to make base methods generic and the above link provides advice on how to do so.
+>>>
+>>> Bob
+>>>
+>>> On Thu, Jun 23, 2022 at 12:07 PM Lenth, Russell V <russell-lenth at uiowa.edu<mailto:russell-lenth at uiowa.edu>> wrote:
+>>> Dear R-Devel,
+>>>
+>>> I noticed that if we run base::svd(x), we obtain an object of class "list". Shouldn't there be an "svd" class, in case someone (e.g., me) wants to write methods for singular value decompositions? Note that other matrix-decomposition routines like qr() and eigen() each return objects having those names.
+>>>
+>>> Thanks
+>>>
+>>> Russ Lenth
+>>> Russell-lenth at uiowa.edu<mailto:Russell-lenth at uiowa.edu>
+>>>
+>>>            [[alternative HTML version deleted]]
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org<mailto:R-devel at r-project.org> mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>
+>>> 	[[alternative HTML version deleted]]
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> --
+> John Fox, Professor Emeritus
+> McMaster University
+> Hamilton, Ontario, Canada
+> web: https://socialsciences.mcmaster.ca/jfox/
+> 
+-- 
+John Fox, Professor Emeritus
+McMaster University
+Hamilton, Ontario, Canada
+web: https://socialsciences.mcmaster.ca/jfox/
+
+
