@@ -4041,3 +4041,321 @@ Hamilton, Ontario, Canada
 web: https://socialsciences.mcmaster.ca/jfox/
 
 
+From @pencer@gr@ve@ @end|ng |rom prod@y@e@com  Sat Jun 25 08:37:52 2022
+From: @pencer@gr@ve@ @end|ng |rom prod@y@e@com (Spencer Graves)
+Date: Sat, 25 Jun 2022 01:37:52 -0500
+Subject: [Rd] 
+ as.Date (and strptime?) does not recognize "&nbsp; " as a blank
+Message-ID: <ffca1662-3ad3-95b0-b5f9-374dffcd0943@prodsyse.com>
+
+Hello, All:
+
+
+	  When is a space not a space?
+
+
+	  Consider the following:
+
+
+ > (pblmDate <- textutils::HTMLdecode("&nbsp;2 Mar 2018"))
+[1] " 2 Mar 2018"
+ > as.Date(pblmDate, format='%e %b %Y')
+[1] NA
+ > as.Date(' 2 Mar 2018', format='%e %b %Y')
+[1] "2018-03-02"
+
+
+	  Is this a feature or a bug?
+
+
+	  I can work around it, now that I know what it is, but it took me a 
+few hours to diagnose.
+
+
+	  Thanks,
+	  Spencer Graves
+
+
+p.s.  I got this from scraping a website with code that had worked for 
+me roughly 20 months ago.  I suspect that in the interim, someone 
+probably replaced ' 2 Mar 2018' with "&nbsp;2 Mar 2018".
+
+
+From @pencer@gr@ve@ @end|ng |rom prod@y@e@com  Sat Jun 25 08:47:41 2022
+From: @pencer@gr@ve@ @end|ng |rom prod@y@e@com (Spencer Graves)
+Date: Sat, 25 Jun 2022 01:47:41 -0500
+Subject: [Rd] 
+ as.Date (and strptime?) does not recognize "&nbsp; " as a blank
+In-Reply-To: <ffca1662-3ad3-95b0-b5f9-374dffcd0943@prodsyse.com>
+References: <ffca1662-3ad3-95b0-b5f9-374dffcd0943@prodsyse.com>
+Message-ID: <b7458796-4406-7da9-c893-db33f819b0a9@prodsyse.com>
+
+p.s.  Is there a way to get XML::readHTMLTable to automatically convert 
+"&nbsp;" to a normal blank space?
+
+
+On 6/25/22 1:37 AM, Spencer Graves wrote:
+> Hello, All:
+> 
+> 
+>  ????? When is a space not a space?
+> 
+> 
+>  ????? Consider the following:
+> 
+> 
+>  > (pblmDate <- textutils::HTMLdecode("&nbsp;2 Mar 2018"))
+> [1] " 2 Mar 2018"
+>  > as.Date(pblmDate, format='%e %b %Y')
+> [1] NA
+>  > as.Date(' 2 Mar 2018', format='%e %b %Y')
+> [1] "2018-03-02"
+> 
+> 
+>  ????? Is this a feature or a bug?
+> 
+> 
+>  ????? I can work around it, now that I know what it is, but it took me 
+> a few hours to diagnose.
+> 
+> 
+>  ????? Thanks,
+>  ????? Spencer Graves
+> 
+> 
+> p.s.? I got this from scraping a website with code that had worked for 
+> me roughly 20 months ago.? I suspect that in the interim, someone 
+> probably replaced ' 2 Mar 2018' with "&nbsp;2 Mar 2018".
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From pd@|gd @end|ng |rom gm@||@com  Sat Jun 25 10:20:39 2022
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Sat, 25 Jun 2022 10:20:39 +0200
+Subject: [Rd] Understanding some code within nls()
+In-Reply-To: <bd226ba8-2270-0008-7fce-4f9677b534df@gmail.com>
+References: <bd226ba8-2270-0008-7fce-4f9677b534df@gmail.com>
+Message-ID: <6E828323-BAA5-4997-B9BC-95674C4A05A3@gmail.com>
+
+Where do you see that?
+
+I see two instances in nls.R of
+
+setPars = function(newPars) {...
+
+but they are both part of a list element assignment, not function definitions as such. I.e., they are used for exporting an internal function to the outside world. The function sets variables in the environment of its defining function (e.g. nlsModel()), hence the <<-  
+
+AFAICT, the code you write would die in an infite recursion immediately.
+
+- Peter
+
+
+
+> On 24 Jun 2022, at 18:11 , J C Nash <profjcnash at gmail.com> wrote:
+> 
+> In working to try to improve the nls() function, a Google Summer of Code contributor and
+> I have found our understanding of the setPars() function in nls() in base R to be
+> inadequate.
+> 
+> setPars <- function(newPars) {
+>   setPars(newPars)
+>   resid <<- .swts * (lhs - (rhs <<- getRHS())) # envir = thisEnv {2 x}
+>   dev   <<- sum(resid^2) # envir = thisEnv
+>   if(length(gr <- attr(rhs, "gradient")) == 1L) gr <- c(gr)
+>   QR <<- qr(.swts * gr) # envir = thisEnv
+>   (QR$rank < min(dim(QR$qr))) # to catch the singular gradient matrix
+> }
+> 
+> There is a similar but not identical function in the minpack.lm.
+> 
+> I'd be grateful if anyone who has ideas on how this function is working
+> (in particular why the recursive call and then the "<<-" assignments are
+> needed) would get in touch offline to profjcnash _at_ gmail.com. I suspect
+> a list discussion is not useful without some preparatory work to narrow
+> the queries.
+> 
+> My intention is to write up a 1-2 page explanation as a prelude to modifying
+> code to introduce Marquardt stabilizations and bounds-constrained parameters,
+> which nls() currently lacks. Also I have examples where minpack.lm seems
+> to be failing to get bounds constraints correct. The nlsr package (Duncan
+> Murdoch and myself) does get these correct, but focusses on solving the
+> nonlinear least squares problem, and lacks many useful features for modeling
+> that are found in nls(). However, nls() often fails due to "singular gradient"
+> or else needs to use altered calls to apply special methods.
+> 
+> Assuming some success, I'll post links to the list.
+> 
+> John Nash
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From m@x|m@n@z@rov @end|ng |rom open@n@|yt|c@@eu  Sat Jun 25 13:10:43 2022
+From: m@x|m@n@z@rov @end|ng |rom open@n@|yt|c@@eu (Maxim Nazarov)
+Date: Sat, 25 Jun 2022 11:10:43 +0000
+Subject: [Rd] 
+ as.Date (and strptime?) does not recognize "&nbsp; " as a blank
+In-Reply-To: <ffca1662-3ad3-95b0-b5f9-374dffcd0943@prodsyse.com>
+References: <ffca1662-3ad3-95b0-b5f9-374dffcd0943@prodsyse.com>
+Message-ID: <010201819a8e8fd5-5b4a4be1-e8ab-4b0a-9896-c6d03385dbef-000000@eu-west-1.amazonses.com>
+
+Hello,
+
+> When is a space not a space?
+I guess the answer is when it is a non-breaking one?..
+
+We can observe:
+ > charToRaw(textutils::HTMLdecode("&nbsp;"))
+ [1] c2 a0
+ > charToRaw(" ")
+ [1] 20
+So one can argue that everything works correctly - `textutils` function converts HTML's non-breaking space '&nbsp;' into R's non-breaking space '\xa0', while %e format of as.Date expects a 'normal' space.
+But this is obviously not user-friendly especially since both symbols are displayed the same way on the console.
+So your options might be to either:
+ * manually change all 'weird' spaces into normal ones with something like gsub("\\h", " ", ..., perl = TRUE) - for the list of other weird spaces see https://www.pcre.org/original/doc/html/pcrepattern.html#genericchartypes
+ * persuade textutils author to change &nbsp; into a normal space (they seem to be working with a simple lookup table - https://github.com/enricoschumann/textutils/blob/b813c7bd4b55daef5fa7612e3fbfe82962711940/R/char_refs.R#L1465-L1466)
+ * persuade R-Core (or submit a PR) to relax expectations of as.Date/strptime
+
+Kind regards,
+Maxim Nazarov
+
+----- On Jun 25, 2022, at 8:37 AM, Spencer Graves spencer.graves at prodsyse.com wrote:
+
+> Hello, All:
+> 
+> 
+>	  When is a space not a space?
+> 
+> 
+>	  Consider the following:
+> 
+> 
+> > (pblmDate <- textutils::HTMLdecode("&nbsp;2 Mar 2018"))
+> [1] " 2 Mar 2018"
+> > as.Date(pblmDate, format='%e %b %Y')
+> [1] NA
+> > as.Date(' 2 Mar 2018', format='%e %b %Y')
+> [1] "2018-03-02"
+> 
+> 
+>	  Is this a feature or a bug?
+> 
+> 
+>	  I can work around it, now that I know what it is, but it took me a
+> few hours to diagnose.
+> 
+> 
+>	  Thanks,
+>	  Spencer Graves
+> 
+> 
+> p.s.  I got this from scraping a website with code that had worked for
+> me roughly 20 months ago.  I suspect that in the interim, someone
+> probably replaced ' 2 Mar 2018' with "&nbsp;2 Mar 2018".
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @pencer@gr@ve@ @end|ng |rom prod@y@e@com  Sat Jun 25 15:13:26 2022
+From: @pencer@gr@ve@ @end|ng |rom prod@y@e@com (Spencer Graves)
+Date: Sat, 25 Jun 2022 08:13:26 -0500
+Subject: [Rd] 
+ as.Date (and strptime?) does not recognize "&nbsp; " as a blank
+In-Reply-To: <010201819a8e8fd5-5b4a4be1-e8ab-4b0a-9896-c6d03385dbef-000000@eu-west-1.amazonses.com>
+References: <ffca1662-3ad3-95b0-b5f9-374dffcd0943@prodsyse.com>
+ <010201819a8e8fd5-5b4a4be1-e8ab-4b0a-9896-c6d03385dbef-000000@eu-west-1.amazonses.com>
+Message-ID: <3f6da3f4-5eb2-93f6-5c75-c1f35b40edb8@prodsyse.com>
+
+Hi, Maxim et al.:
+
+
+On 6/25/22 6:10 AM, Maxim Nazarov wrote:
+> Hello,
+> 
+>> When is a space not a space?
+> I guess the answer is when it is a non-breaking one?..
+> 
+> We can observe:
+>   > charToRaw(textutils::HTMLdecode("&nbsp;"))
+>   [1] c2 a0
+>   > charToRaw(" ")
+>   [1] 20
+> So one can argue that everything works correctly - `textutils` function converts HTML's non-breaking space '&nbsp;' into R's non-breaking space '\xa0', while %e format of as.Date expects a 'normal' space.
+> But this is obviously not user-friendly especially since both symbols are displayed the same way on the console.
+> So your options might be to either:
+>   * manually change all 'weird' spaces into normal ones with something like gsub("\\h", " ", ..., perl = TRUE) - for the list of other weird spaces see https://www.pcre.org/original/doc/html/pcrepattern.html#genericchartypes
+>   * persuade textutils author to change &nbsp; into a normal space (they seem to be working with a simple lookup table - https://github.com/enricoschumann/textutils/blob/b813c7bd4b55daef5fa7612e3fbfe82962711940/R/char_refs.R#L1465-L1466)
+>   * persuade R-Core (or submit a PR) to relax expectations of as.Date/strptime
+> 
+
+	  Thanks for the reply.  Since "this is obviously not user-friendly", 
+as you noted, I felt a need to bring it to the attention of this group, 
+and let them decide what if anything they would want to do about it.
+
+
+	  In any event, I found a fix for my immediate problem.  It's not as 
+elegant as yours, but it works.
+
+	  Best Wishes,
+	  Spencer
+
+
+
+
+> Kind regards,
+> Maxim Nazarov
+> 
+> ----- On Jun 25, 2022, at 8:37 AM, Spencer Graves spencer.graves at prodsyse.com wrote:
+> 
+>> Hello, All:
+>>
+>>
+>> 	  When is a space not a space?
+>>
+>>
+>> 	  Consider the following:
+>>
+>>
+>>> (pblmDate <- textutils::HTMLdecode("&nbsp;2 Mar 2018"))
+>> [1] " 2 Mar 2018"
+>>> as.Date(pblmDate, format='%e %b %Y')
+>> [1] NA
+>>> as.Date(' 2 Mar 2018', format='%e %b %Y')
+>> [1] "2018-03-02"
+>>
+>>
+>> 	  Is this a feature or a bug?
+>>
+>>
+>> 	  I can work around it, now that I know what it is, but it took me a
+>> few hours to diagnose.
+>>
+>>
+>> 	  Thanks,
+>> 	  Spencer Graves
+>>
+>>
+>> p.s.  I got this from scraping a website with code that had worked for
+>> me roughly 20 months ago.  I suspect that in the interim, someone
+>> probably replaced ' 2 Mar 2018' with "&nbsp;2 Mar 2018".
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
