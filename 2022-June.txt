@@ -4702,3 +4702,315 @@ wrote:
 	[[alternative HTML version deleted]]
 
 
+From @|gm@p| @end|ng |rom po@teo@net  Wed Jun 29 16:53:16 2022
+From: @|gm@p| @end|ng |rom po@teo@net (Panagiotis Skintzos)
+Date: Wed, 29 Jun 2022 14:53:16 +0000
+Subject: [Rd] 
+ Stack imbalance warnings while using the grid package, in R 4.2
+Message-ID: <bb5d4c8b-9712-863d-e5ef-b1c09211c6b1@posteo.net>
+
+Hello to all.
+
+In ggiraph package, we are getting some warnings about "Stack imbalance 
+in NextMethod" when we subclass a primitive grob and override the 
+widthDetails function. This started to occur from R version 4.2 onward, 
+in various platforms (linux, iOS, Windows).
+
+You can see the bug report, where I've added a minimal reprex:
+https://github.com/davidgohel/ggiraph/issues/224
+
+I've identified the issue in grid package. It occurs when calling 
+grid.Call.graphics with C_moveTo, C_lineTo, C_lines, C_segments, 
+C_arrows, C_polygon, C_path, C_circle, C_rect and C_raster at least. The 
+relevant functions in grid.c have mismatches in protect/unprotect calls.
+
+
+As I see in the code diff for grid.c, between R 4.1 and R 4.2, one extra 
+PROTECT call was added to the above functions (L_*) but the UNPROTECT 
+call at the end of the functions was not updated.
+In other functions, like gridPoints for example, the UNPROTECT call has 
+been updated, so the issue does not occur when overriding the pointsGrob.
+
+I can try to submit a patch if you wish, but perhaps there are other 
+functions elsewhere with the same issue that need to be checked.
+
+Hopefully this can be resolved for the next version.
+
+
+Thank you,
+
+Panagiotis
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Wed Jun 29 17:18:45 2022
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Wed, 29 Jun 2022 17:18:45 +0200
+Subject: [Rd] 
+ Stack imbalance warnings while using the grid package, in R 4.2
+In-Reply-To: <bb5d4c8b-9712-863d-e5ef-b1c09211c6b1@posteo.net>
+References: <bb5d4c8b-9712-863d-e5ef-b1c09211c6b1@posteo.net>
+Message-ID: <3c7b7072-6cf8-44df-153c-1fe22ce75cf2@gmail.com>
+
+
+On 6/29/22 16:53, Panagiotis Skintzos wrote:
+> Hello to all.
+>
+> In ggiraph package, we are getting some warnings about "Stack 
+> imbalance in NextMethod" when we subclass a primitive grob and 
+> override the widthDetails function. This started to occur from R 
+> version 4.2 onward, in various platforms (linux, iOS, Windows).
+>
+> You can see the bug report, where I've added a minimal reprex:
+> https://github.com/davidgohel/ggiraph/issues/224
+>
+> I've identified the issue in grid package. It occurs when calling 
+> grid.Call.graphics with C_moveTo, C_lineTo, C_lines, C_segments, 
+> C_arrows, C_polygon, C_path, C_circle, C_rect and C_raster at least. 
+> The relevant functions in grid.c have mismatches in protect/unprotect 
+> calls.
+>
+>
+> As I see in the code diff for grid.c, between R 4.1 and R 4.2, one 
+> extra PROTECT call was added to the above functions (L_*) but the 
+> UNPROTECT call at the end of the functions was not updated.
+> In other functions, like gridPoints for example, the UNPROTECT call 
+> has been updated, so the issue does not occur when overriding the 
+> pointsGrob.
+>
+> I can try to submit a patch if you wish, but perhaps there are other 
+> functions elsewhere with the same issue that need to be checked.
+
+Thanks, yes, could you please send a patch for R-devel? So that it is 
+clear which PROTECTions you have in mind, and that they haven't been 
+fixed already in the meantime in R-devel (note that there have been 
+changes recently).
+
+It doesn't matter if you don't fix them all.
+
+> Hopefully this can be resolved for the next version.
+
+Sure, PROTECT errors have very high priority.
+
+Thanks
+Tomas
+
+>
+>
+> Thank you,
+>
+> Panagiotis
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @|gm@p| @end|ng |rom po@teo@net  Wed Jun 29 21:18:18 2022
+From: @|gm@p| @end|ng |rom po@teo@net (Panagiotis Skintzos)
+Date: Wed, 29 Jun 2022 19:18:18 +0000
+Subject: [Rd] 
+ Stack imbalance warnings while using the grid package, in R 4.2
+In-Reply-To: <3c7b7072-6cf8-44df-153c-1fe22ce75cf2@gmail.com>
+References: <bb5d4c8b-9712-863d-e5ef-b1c09211c6b1@posteo.net>
+ <3c7b7072-6cf8-44df-153c-1fe22ce75cf2@gmail.com>
+Message-ID: <c8e43979-ccc3-2c2a-ce0d-ed2d30767e9a@posteo.net>
+
+
+On 29/6/22 17:18, Tomas Kalibera wrote:
+>
+> Thanks, yes, could you please send a patch for R-devel? So that it is 
+> clear which PROTECTions you have in mind, and that they haven't been 
+> fixed already in the meantime in R-devel (note that there have been 
+> changes recently).
+>
+> It doesn't matter if you don't fix them all.
+>
+>> Hopefully this can be resolved for the next version.
+>
+> Sure, PROTECT errors have very high priority.
+
+Fantastic, thanks.
+
+
+Indeed most of them have been fixed in trunk.
+
+I attach a small patch (against revision 82535) that fixes the issue for 
+the remaining functions (L_moveTo, L_lineTo, L_lines).
+
+With that applied, all tests in ggiraph pass without any warnings.
+
+
+Regards,
+
+Panagiotis
+
+
+
+-------------- next part --------------
+A non-text attachment was scrubbed...
+Name: stack_imbalance.patch
+Type: text/x-patch
+Size: 600 bytes
+Desc: not available
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20220629/749a9c23/attachment.bin>
+
+From p@u| @end|ng |rom @t@t@@uck|@nd@@c@nz  Wed Jun 29 23:09:46 2022
+From: p@u| @end|ng |rom @t@t@@uck|@nd@@c@nz (Paul Murrell)
+Date: Thu, 30 Jun 2022 09:09:46 +1200
+Subject: [Rd] 
+ Stack imbalance warnings while using the grid package, in R 4.2
+In-Reply-To: <c8e43979-ccc3-2c2a-ce0d-ed2d30767e9a@posteo.net>
+References: <bb5d4c8b-9712-863d-e5ef-b1c09211c6b1@posteo.net>
+ <3c7b7072-6cf8-44df-153c-1fe22ce75cf2@gmail.com>
+ <c8e43979-ccc3-2c2a-ce0d-ed2d30767e9a@posteo.net>
+Message-ID: <4a4516a2-45ff-d824-a436-1afcfe50ebf4@stat.auckland.ac.nz>
+
+Hi
+
+Thanks very much for the report and the patch.
+I will take a look.
+
+Paul
+
+On 30/06/2022 7:18 am, Panagiotis Skintzos wrote:
+> 
+> On 29/6/22 17:18, Tomas Kalibera wrote:
+>>
+>> Thanks, yes, could you please send a patch for R-devel? So that it is 
+>> clear which PROTECTions you have in mind, and that they haven't been 
+>> fixed already in the meantime in R-devel (note that there have been 
+>> changes recently).
+>>
+>> It doesn't matter if you don't fix them all.
+>>
+>>> Hopefully this can be resolved for the next version.
+>>
+>> Sure, PROTECT errors have very high priority.
+> 
+> Fantastic, thanks.
+> 
+> 
+> Indeed most of them have been fixed in trunk.
+> 
+> I attach a small patch (against revision 82535) that fixes the issue for 
+> the remaining functions (L_moveTo, L_lineTo, L_lines).
+> 
+> With that applied, all tests in ggiraph pass without any warnings.
+> 
+> 
+> Regards,
+> 
+> Panagiotis
+> 
+> 
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Dr Paul Murrell
+Department of Statistics
+The University of Auckland
+Private Bag 92019
+Auckland
+New Zealand
+64 9 3737599 x85392
+paul at stat.auckland.ac.nz
+http://www.stat.auckland.ac.nz/~paul/
+
+
+From murr@y@e||ord @end|ng |rom ot@go@@c@nz  Thu Jun 30 00:27:40 2022
+From: murr@y@e||ord @end|ng |rom ot@go@@c@nz (Murray Efford)
+Date: Wed, 29 Jun 2022 22:27:40 +0000
+Subject: [Rd] Problem with contrasts bug fix?
+Message-ID: <SY4PR01MB56580C1763532F70ADBB8873ACBB9@SY4PR01MB5658.ausprd01.prod.outlook.com>
+
+This worked previously but gives an error in R-devel (Windows today), triggering a warning to a package maintainer:
+
+contr.none <- function(n) contrasts(factor(1:n), contrasts = FALSE)
+lm(uptake~Treatment, CO2, contrasts=list(Treatment=contr.none))
+
+Error in 1:n : NA/NaN argument
+In addition: Warning messages:
+1: In 1:n : numerical expression has 2 elements: only the first used
+2: In factor(1:n) : NAs introduced by coercion
+
+
+From p@u| @end|ng |rom @t@t@@uck|@nd@@c@nz  Thu Jun 30 03:15:12 2022
+From: p@u| @end|ng |rom @t@t@@uck|@nd@@c@nz (Paul Murrell)
+Date: Thu, 30 Jun 2022 13:15:12 +1200
+Subject: [Rd] 
+ Stack imbalance warnings while using the grid package, in R 4.2
+In-Reply-To: <4a4516a2-45ff-d824-a436-1afcfe50ebf4@stat.auckland.ac.nz>
+References: <bb5d4c8b-9712-863d-e5ef-b1c09211c6b1@posteo.net>
+ <3c7b7072-6cf8-44df-153c-1fe22ce75cf2@gmail.com>
+ <c8e43979-ccc3-2c2a-ce0d-ed2d30767e9a@posteo.net>
+ <4a4516a2-45ff-d824-a436-1afcfe50ebf4@stat.auckland.ac.nz>
+Message-ID: <3baec130-a9ee-cc28-4212-a8708017213e@stat.auckland.ac.nz>
+
+
+This is now in r-devel and the release branch (so should be part of 4.2.2).
+
+Thanks again for the report and fix!
+
+Paul
+
+On 30/06/2022 9:09 am, Paul Murrell wrote:
+> Hi
+> 
+> Thanks very much for the report and the patch.
+> I will take a look.
+> 
+> Paul
+> 
+> On 30/06/2022 7:18 am, Panagiotis Skintzos wrote:
+>>
+>> On 29/6/22 17:18, Tomas Kalibera wrote:
+>>>
+>>> Thanks, yes, could you please send a patch for R-devel? So that it is 
+>>> clear which PROTECTions you have in mind, and that they haven't been 
+>>> fixed already in the meantime in R-devel (note that there have been 
+>>> changes recently).
+>>>
+>>> It doesn't matter if you don't fix them all.
+>>>
+>>>> Hopefully this can be resolved for the next version.
+>>>
+>>> Sure, PROTECT errors have very high priority.
+>>
+>> Fantastic, thanks.
+>>
+>>
+>> Indeed most of them have been fixed in trunk.
+>>
+>> I attach a small patch (against revision 82535) that fixes the issue 
+>> for the remaining functions (L_moveTo, L_lineTo, L_lines).
+>>
+>> With that applied, all tests in ggiraph pass without any warnings.
+>>
+>>
+>> Regards,
+>>
+>> Panagiotis
+>>
+>>
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel 
+>>
+> 
+
+-- 
+Dr Paul Murrell
+Department of Statistics
+The University of Auckland
+Private Bag 92019
+Auckland
+New Zealand
+64 9 3737599 x85392
+paul at stat.auckland.ac.nz
+http://www.stat.auckland.ac.nz/~paul/
+
+
