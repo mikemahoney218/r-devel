@@ -5014,3 +5014,168 @@ paul at stat.auckland.ac.nz
 http://www.stat.auckland.ac.nz/~paul/
 
 
+From @eb@meyer @end|ng |rom |@u@de  Thu Jun 30 10:19:52 2022
+From: @eb@meyer @end|ng |rom |@u@de (Sebastian Meyer)
+Date: Thu, 30 Jun 2022 10:19:52 +0200
+Subject: [Rd] Problem with contrasts bug fix?
+In-Reply-To: <SY4PR01MB56580C1763532F70ADBB8873ACBB9@SY4PR01MB5658.ausprd01.prod.outlook.com>
+References: <SY4PR01MB56580C1763532F70ADBB8873ACBB9@SY4PR01MB5658.ausprd01.prod.outlook.com>
+Message-ID: <c4437550-ad2e-f189-c62e-4e16cf25b6b5@fau.de>
+
+For reference: this is about 
+<https://bugs.r-project.org/show_bug.cgi?id=17616>.
+
+The problem with your 'contr.none' example is that it is not a proper 
+contrasts function (and has never been). ?contrasts says
+
+>      Suitable
+>      functions have a first argument which is the character vector of
+>      levels, a named argument 'contrasts' (always called with
+>      'contrasts = TRUE') and optionally a logical argument 'sparse'.
+
+Your example function fails also in R 4.1.3 and 4.2.1:
+
+> contr.none <- function(n) contrasts(factor(1:n), contrasts = FALSE)
+> contrasts(CO2$Treatment) <- "contr.none"
+> contrasts(CO2$Treatment)
+
+Error in ctrfn(levels(x), contrasts = contrasts) :
+   unused argument (contrasts = contrasts)
+
+Even if we fix the missing argument:
+
+> contr.none <- function(n, ...) contrasts(factor(1:n), contrasts = FALSE)
+> contrasts(CO2$Treatment) <- "contr.none"
+> contrasts(CO2$Treatment)
+
+Error in 1:n : NA/NaN argument
+In addition: Warning messages:
+1: In 1:n : numerical expression has 2 elements: only the first used
+2: In factor(1:n) : NAs introduced by coercion
+
+What *did* work (inconsistently) was :
+
+> contrasts(CO2$Treatment) <- contr.none
+> contrasts(CO2$Treatment)
+
+            1
+nonchilled 1
+chilled    0
+
+It no longer does in R-devel as 'contr.none' is now called with the 
+factor *levels* (not nlevels) also in this case as documented.
+
+Note that the argument name 'n' in the default contrast functions such 
+as contr.treatment() is a bit delicate as these support passing either 
+levels or nlevels.
+
+Hope this helps.
+Best regards,
+
+	Sebastian Meyer
+
+
+Am 30.06.22 um 00:27 schrieb Murray Efford:
+> This worked previously but gives an error in R-devel (Windows today), triggering a warning to a package maintainer:
+> 
+> contr.none <- function(n) contrasts(factor(1:n), contrasts = FALSE)
+> lm(uptake~Treatment, CO2, contrasts=list(Treatment=contr.none))
+> 
+> Error in 1:n : NA/NaN argument
+> In addition: Warning messages:
+> 1: In 1:n : numerical expression has 2 elements: only the first used
+> 2: In factor(1:n) : NAs introduced by coercion
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From murr@y@e||ord @end|ng |rom ot@go@@c@nz  Thu Jun 30 23:55:29 2022
+From: murr@y@e||ord @end|ng |rom ot@go@@c@nz (Murray Efford)
+Date: Thu, 30 Jun 2022 21:55:29 +0000
+Subject: [Rd] Problem with contrasts bug fix?
+In-Reply-To: <c4437550-ad2e-f189-c62e-4e16cf25b6b5@fau.de>
+References: <SY4PR01MB56580C1763532F70ADBB8873ACBB9@SY4PR01MB5658.ausprd01.prod.outlook.com>
+ <c4437550-ad2e-f189-c62e-4e16cf25b6b5@fau.de>
+Message-ID: <SY4PR01MB565810AB71857F2F109D468CACBA9@SY4PR01MB5658.ausprd01.prod.outlook.com>
+
+Thanks for your comprehensive explanation. Recent changes exposed errors in my code (and understanding!).
+Murray
+
+________________________________________
+From: Sebastian Meyer <seb.meyer at fau.de>
+Sent: 30 June 2022 20:19
+To: Murray Efford
+Cc: r-devel at r-project.org
+Subject: Re: [Rd] Problem with contrasts bug fix?
+
+For reference: this is about
+<https://apc01.safelinks.protection.outlook.com/?url=https%3A%2F%2Fbugs.r-project.org%2Fshow_bug.cgi%3Fid%3D17616&amp;data=05%7C01%7Cmurray.efford%40otago.ac.nz%7Cad75da3bbad346a7d0c108da5a715362%7C0225efc578fe4928b1579ef24809e9ba%7C0%7C0%7C637921740057400452%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&amp;sdata=XOLVFd9sZKQKebLOj%2BiIN%2FmNnvLNSNKdzakHHZXX2O4%3D&amp;reserved=0>.
+
+The problem with your 'contr.none' example is that it is not a proper
+contrasts function (and has never been). ?contrasts says
+
+>      Suitable
+>      functions have a first argument which is the character vector of
+>      levels, a named argument 'contrasts' (always called with
+>      'contrasts = TRUE') and optionally a logical argument 'sparse'.
+
+Your example function fails also in R 4.1.3 and 4.2.1:
+
+> contr.none <- function(n) contrasts(factor(1:n), contrasts = FALSE)
+> contrasts(CO2$Treatment) <- "contr.none"
+> contrasts(CO2$Treatment)
+
+Error in ctrfn(levels(x), contrasts = contrasts) :
+   unused argument (contrasts = contrasts)
+
+Even if we fix the missing argument:
+
+> contr.none <- function(n, ...) contrasts(factor(1:n), contrasts = FALSE)
+> contrasts(CO2$Treatment) <- "contr.none"
+> contrasts(CO2$Treatment)
+
+Error in 1:n : NA/NaN argument
+In addition: Warning messages:
+1: In 1:n : numerical expression has 2 elements: only the first used
+2: In factor(1:n) : NAs introduced by coercion
+
+What *did* work (inconsistently) was :
+
+> contrasts(CO2$Treatment) <- contr.none
+> contrasts(CO2$Treatment)
+
+            1
+nonchilled 1
+chilled    0
+
+It no longer does in R-devel as 'contr.none' is now called with the
+factor *levels* (not nlevels) also in this case as documented.
+
+Note that the argument name 'n' in the default contrast functions such
+as contr.treatment() is a bit delicate as these support passing either
+levels or nlevels.
+
+Hope this helps.
+Best regards,
+
+        Sebastian Meyer
+
+
+Am 30.06.22 um 00:27 schrieb Murray Efford:
+> This worked previously but gives an error in R-devel (Windows today), triggering a warning to a package maintainer:
+>
+> contr.none <- function(n) contrasts(factor(1:n), contrasts = FALSE)
+> lm(uptake~Treatment, CO2, contrasts=list(Treatment=contr.none))
+>
+> Error in 1:n : NA/NaN argument
+> In addition: Warning messages:
+> 1: In 1:n : numerical expression has 2 elements: only the first used
+> 2: In factor(1:n) : NAs introduced by coercion
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://apc01.safelinks.protection.outlook.com/?url=https%3A%2F%2Fstat.ethz.ch%2Fmailman%2Flistinfo%2Fr-devel&amp;data=05%7C01%7Cmurray.efford%40otago.ac.nz%7Cad75da3bbad346a7d0c108da5a715362%7C0225efc578fe4928b1579ef24809e9ba%7C0%7C0%7C637921740057400452%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&amp;sdata=vVBIv0EsP%2FmbohM9menUPmhfMl%2BsrLkohHA3JLu5BDc%3D&amp;reserved=0
+
+
