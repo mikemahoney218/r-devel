@@ -1,0 +1,509 @@
+From pik@pp@@devei m@iii@g oii gm@ii@com  Sun Jul  3 13:02:50 2022
+From: pik@pp@@devei m@iii@g oii gm@ii@com (pik@pp@@devei m@iii@g oii gm@ii@com)
+Date: Sun, 3 Jul 2022 13:02:50 +0200
+Subject: [Rd] Class union of custom classes
+Message-ID: <003001d88ecc$6fa3fbc0$4eebf340$@gmail.com>
+
+Dear all,
+
+ 
+
+This code, mostly copied from the setClassUnion help page, works as
+described in the documentation:
+
+ 
+
+# test 1
+
+setClassUnion("maybeNumber", c("numeric", "logical"))
+
+setClass("withId", contains = "maybeNumber", slots = c(id = "character"))
+
+w1 <- new("withId", 1.2, id = "test 1")
+
+ 
+
+However, the following three tests do not work:
+
+ 
+
+# test 2
+
+setClass("foo", slots = list(xb = "logical"))
+
+setClassUnion("maybeNumber", c("numeric", "foo"))
+
+setClass("withId", contains = "maybeNumber", slots = c(id = "character"))
+
+w1 <- new("withId", 1.2, id = "test 2")
+
+ 
+
+# test 3
+
+setClass("foo", slots = list(xb = "logical"))
+
+setClassUnion("maybeNumber", c("numeric"))
+
+setIs("foo", "maybeNumber")
+
+setClass("withId", contains = "maybeNumber", slots = c(id = "character"))
+
+w1 <- new("withId", 1.2, id = "test 3")
+
+ 
+
+# test 4
+
+setClass("foo", contains = "logical")
+
+setClassUnion("maybeNumber", c("numeric", "foo"))
+
+setClass("withId", contains = "maybeNumber", slots = c(id = "character"))
+
+w1 <- new("withId", 1.2, id = "test 4")
+
+ 
+
+All three return:
+
+ 
+
+  Error in initialize(value, ...) : 
+
+      'initialize' method returned an object of class "numeric" instead of
+the required class "withId"
+
+ 
+
+The error comes from:
+
+ 
+
+traceback()
+
+3: stop(gettextf("'initialize' method returned an object of class %s instead
+of the required class %s", 
+
+       paste(dQuote(class(value)), collapse = ", "),
+dQuote(class(.Object))), 
+
+       domain = NA)
+
+2: initialize(value, ...)
+
+1: new("withId", 1.2, id = "test 2")
+
+ 
+
+I would expect tests 2-4 to work similarly to the first test. Is the above
+error the intended behavior of setClassUnion? I do not see anything that
+would prevent this in the documentation. Is there something I am missing
+here?
+
+ 
+
+Any help would be very much appreciated!
+
+ 
+
+Kind regards,
+
+Pantelis
+
+
+	[[alternative HTML version deleted]]
+
+
+From ezr@ @end|ng |rom |@ndtucker@com  Sun Jul  3 19:56:34 2022
+From: ezr@ @end|ng |rom |@ndtucker@com (Ezra Tucker)
+Date: Sun, 03 Jul 2022 13:56:34 -0400
+Subject: [Rd] Class union of custom classes
+In-Reply-To: <003001d88ecc$6fa3fbc0$4eebf340$@gmail.com>
+References: <003001d88ecc$6fa3fbc0$4eebf340$@gmail.com>
+Message-ID: <31d8cd9d3407a4e52f434b600e9a11b48fca8281.camel@landtucker.com>
+
+Hi Pantelis,
+
+What usually helps me in these kinds of puzzles is splitting out
+(mentally) the s4 part from the s3 part. The first test you mention,
+using the class "withId" has an s3 part of a "maybeNumber" (numeric or
+logical) and an s4 part of a slot "id". Kind of hidden will be a second
+slot, ".Data" which contains the s3 data --The w1 value you get is
+essentially a numeric, and will be subject to numeric methods (ie you
+could do w1 + 2) and it'll add 2 to all of the values in the .Data
+slot.
+
+Test 2:
+part of the reason setClassUnion works in Test 1 is because the member
+classes of withID have the same slots-- both of them are .Data.
+However, the definition of "foo" in this test has one slot, xb, which
+is logical, and no .Data slot/no s3 part. foo and withId have
+incompatable initializers (the "initialize" method for their respective
+classes so that's why you're seeing this error.
+
+Test 3:
+In general, I'd probably avoid using setIs, as it sets an explicit
+relationship between two classes, whether or not it's logical to do so.
+While the initializer for "maybeNumber" ought to complete, because of
+the issues raised above about Test 2, it'll prevent the object from
+being created.
+
+Test 4:
+This one's tricky. A revealing question is, what happens when you try
+
+> w1 <- new("withId", TRUE, id = "test 4")
+
+Error in initialize(value, ...) : 
+  cannot use object of class "logical" in new():  class "withId" does
+not extend that class
+
+wheras if you did
+
+> setClass("withId", slots = c(data = "maybeNumber", id = "character"))
+> w1 <- new("withId", data = new("foo", TRUE), id = "test 4")
+
+it should work properly (or you could do data = 1.2 - it won't
+recognize a value TRUE as being of class foo since it's logical. Your
+withId has to have .Data of class numeric or foo, which themselves have
+incompatible initializers.
+
+Hopefully this helps!
+
+-Ezra
+
+On Sun, 2022-07-03 at 13:02 +0200, pikappa.devel at gmail.com wrote:
+> Dear all,
+> 
+> ?
+> 
+> This code, mostly copied from the setClassUnion help page, works as
+> described in the documentation:
+> 
+> ?
+> 
+> # test 1
+> 
+> setClassUnion("maybeNumber", c("numeric", "logical"))
+> 
+> setClass("withId", contains = "maybeNumber", slots = c(id =
+> "character"))
+> 
+> w1 <- new("withId", 1.2, id = "test 1")
+> 
+> ?
+> 
+> However, the following three tests do not work:
+> 
+> ?
+> 
+> # test 2
+> 
+> setClass("foo", slots = list(xb = "logical"))
+> 
+> setClassUnion("maybeNumber", c("numeric", "foo"))
+> 
+> setClass("withId", contains = "maybeNumber", slots = c(id =
+> "character"))
+> 
+> w1 <- new("withId", 1.2, id = "test 2")
+> 
+> ?
+> 
+> # test 3
+> 
+> setClass("foo", slots = list(xb = "logical"))
+> 
+> setClassUnion("maybeNumber", c("numeric"))
+> 
+> setIs("foo", "maybeNumber")
+> 
+> setClass("withId", contains = "maybeNumber", slots = c(id =
+> "character"))
+> 
+> w1 <- new("withId", 1.2, id = "test 3")
+> 
+> ?
+> 
+> # test 4
+> 
+> setClass("foo", contains = "logical")
+> 
+> setClassUnion("maybeNumber", c("numeric", "foo"))
+> 
+> setClass("withId", contains = "maybeNumber", slots = c(id =
+> "character"))
+> 
+> w1 <- new("withId", 1.2, id = "test 4")
+> 
+> ?
+> 
+> All three return:
+> 
+> ?
+> 
+> ? Error in initialize(value, ...) : 
+> 
+> ????? 'initialize' method returned an object of class "numeric"
+> instead of
+> the required class "withId"
+> 
+> ?
+> 
+> The error comes from:
+> 
+> ?
+> 
+> traceback()
+> 
+> 3: stop(gettextf("'initialize' method returned an object of class %s
+> instead
+> of the required class %s", 
+> 
+> ?????? paste(dQuote(class(value)), collapse = ", "),
+> dQuote(class(.Object))), 
+> 
+> ?????? domain = NA)
+> 
+> 2: initialize(value, ...)
+> 
+> 1: new("withId", 1.2, id = "test 2")
+> 
+> ?
+> 
+> I would expect tests 2-4 to work similarly to the first test. Is the
+> above
+> error the intended behavior of setClassUnion? I do not see anything
+> that
+> would prevent this in the documentation. Is there something I am
+> missing
+> here?
+> 
+> ?
+> 
+> Any help would be very much appreciated!
+> 
+> ?
+> 
+> Kind regards,
+> 
+> Pantelis
+> 
+> 
+> ????????[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org?mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From pik@pp@@devei m@iii@g oii gm@ii@com  Tue Jul  5 11:31:31 2022
+From: pik@pp@@devei m@iii@g oii gm@ii@com (pik@pp@@devei m@iii@g oii gm@ii@com)
+Date: Tue, 5 Jul 2022 11:31:31 +0200
+Subject: [Rd] Class union of custom classes
+In-Reply-To: <31d8cd9d3407a4e52f434b600e9a11b48fca8281.camel@landtucker.com>
+References: <003001d88ecc$6fa3fbc0$4eebf340$@gmail.com>
+ <31d8cd9d3407a4e52f434b600e9a11b48fca8281.camel@landtucker.com>
+Message-ID: <001601d89052$032cb810$09862830$@gmail.com>
+
+Hi Ezra,
+
+thanks, this was very helpful! Your answer got me thinking, and I have tried a couple of more approaches. I thought it would be good to document them here in case someone stumbles on this issue in the future.
+
+
+I have tried to define classes with combatible initializers:
+
+> # test 5
++ setClass("foo", contains = "logical")
++ setClass("bar", contains = "logical")
++ setClassUnion("foobar", c("foo", "bar"))
++ setClass("withId", contains = "foobar", slots = c(id = "character"))
++ w1 <- new("withId", new("foo", TRUE), id = "test 5")
+> Error in initialize(value, ...) : 
+  'initialize' method returned an object of class ?foo? instead of the required class ?withId?
+
+> # test 6
++ setClass("foo", slots = list(x = "logical"))
++ setClass("bar", slots = list(x = "logical"))
++ setClassUnion("foobar", c("foo", "bar"))
++ setClass("withId", contains = "foobar", slots = c(id = "character"))
++ w1 <- new("withId", new("foo", x = TRUE), id = "test 6")
+> > Error in initialize(value, ...) : 
+  'initialize' method returned an object of class ?foo? instead of the required class ?withId?
+
+I have also tried to "trick" setClassUnion by naming members of foo and bar .Data:
+
+> # test 7
++ setClass("foo", slots = list(.Data = "logical"))
++ setClass("bar", slots = list(.Data = "logical"))
++ setClassUnion("foobar", c("foo", "bar"))
++ setClass("withId", contains = "foobar", slots = c(id = "character"))
++ w1 <- new("withId", new("foo", .Data = TRUE), id = "test 7")
+Error in initialize(value, ...) : 
+  'initialize' method returned an object of class ?foo? instead of the required class ?withId?
+
+The approach you proposed is the only one that works, but with a catch. The withId class will not have access to foo methods, and wrappers are additionally needed to imitate inheritance. If foo has only a few methods, this approach is maintainable. For now, this is the approach I will follow in the real problem I am dealing with. 
+
+Kind Regards,
+Pantelis
+
+-----Original Message-----
+From: Ezra Tucker <ezra at landtucker.com> 
+Sent: Sunday, July 3, 2022 7:57 PM
+To: pikappa.devel at gmail.com; r-devel at r-project.org
+Subject: Re: [Rd] Class union of custom classes
+
+Hi Pantelis,
+
+What usually helps me in these kinds of puzzles is splitting out
+(mentally) the s4 part from the s3 part. The first test you mention, using the class "withId" has an s3 part of a "maybeNumber" (numeric or
+logical) and an s4 part of a slot "id". Kind of hidden will be a second slot, ".Data" which contains the s3 data --The w1 value you get is essentially a numeric, and will be subject to numeric methods (ie you could do w1 + 2) and it'll add 2 to all of the values in the .Data slot.
+
+Test 2:
+part of the reason setClassUnion works in Test 1 is because the member classes of withID have the same slots-- both of them are .Data.
+However, the definition of "foo" in this test has one slot, xb, which is logical, and no .Data slot/no s3 part. foo and withId have incompatable initializers (the "initialize" method for their respective classes so that's why you're seeing this error.
+
+Test 3:
+In general, I'd probably avoid using setIs, as it sets an explicit relationship between two classes, whether or not it's logical to do so.
+While the initializer for "maybeNumber" ought to complete, because of the issues raised above about Test 2, it'll prevent the object from being created.
+
+Test 4:
+This one's tricky. A revealing question is, what happens when you try
+
+> w1 <- new("withId", TRUE, id = "test 4")
+
+Error in initialize(value, ...) : 
+  cannot use object of class "logical" in new():  class "withId" does not extend that class
+
+wheras if you did
+
+> setClass("withId", slots = c(data = "maybeNumber", id = "character"))
+> w1 <- new("withId", data = new("foo", TRUE), id = "test 4")
+
+it should work properly (or you could do data = 1.2 - it won't recognize a value TRUE as being of class foo since it's logical. Your withId has to have .Data of class numeric or foo, which themselves have incompatible initializers.
+
+Hopefully this helps!
+
+-Ezra
+
+On Sun, 2022-07-03 at 13:02 +0200, pikappa.devel at gmail.com wrote:
+> Dear all,
+> 
+>  
+> 
+> This code, mostly copied from the setClassUnion help page, works as 
+> described in the documentation:
+> 
+>  
+> 
+> # test 1
+> 
+> setClassUnion("maybeNumber", c("numeric", "logical"))
+> 
+> setClass("withId", contains = "maybeNumber", slots = c(id =
+> "character"))
+> 
+> w1 <- new("withId", 1.2, id = "test 1")
+> 
+>  
+> 
+> However, the following three tests do not work:
+> 
+>  
+> 
+> # test 2
+> 
+> setClass("foo", slots = list(xb = "logical"))
+> 
+> setClassUnion("maybeNumber", c("numeric", "foo"))
+> 
+> setClass("withId", contains = "maybeNumber", slots = c(id =
+> "character"))
+> 
+> w1 <- new("withId", 1.2, id = "test 2")
+> 
+>  
+> 
+> # test 3
+> 
+> setClass("foo", slots = list(xb = "logical"))
+> 
+> setClassUnion("maybeNumber", c("numeric"))
+> 
+> setIs("foo", "maybeNumber")
+> 
+> setClass("withId", contains = "maybeNumber", slots = c(id =
+> "character"))
+> 
+> w1 <- new("withId", 1.2, id = "test 3")
+> 
+>  
+> 
+> # test 4
+> 
+> setClass("foo", contains = "logical")
+> 
+> setClassUnion("maybeNumber", c("numeric", "foo"))
+> 
+> setClass("withId", contains = "maybeNumber", slots = c(id =
+> "character"))
+> 
+> w1 <- new("withId", 1.2, id = "test 4")
+> 
+>  
+> 
+> All three return:
+> 
+>  
+> 
+>   Error in initialize(value, ...) : 
+> 
+>       'initialize' method returned an object of class "numeric"
+> instead of
+> the required class "withId"
+> 
+>  
+> 
+> The error comes from:
+> 
+>  
+> 
+> traceback()
+> 
+> 3: stop(gettextf("'initialize' method returned an object of class %s 
+> instead of the required class %s",
+> 
+>        paste(dQuote(class(value)), collapse = ", "), 
+> dQuote(class(.Object))),
+> 
+>        domain = NA)
+> 
+> 2: initialize(value, ...)
+> 
+> 1: new("withId", 1.2, id = "test 2")
+> 
+>  
+> 
+> I would expect tests 2-4 to work similarly to the first test. Is the 
+> above error the intended behavior of setClassUnion? I do not see 
+> anything that would prevent this in the documentation. Is there 
+> something I am missing here?
+> 
+>  
+> 
+> Any help would be very much appreciated!
+> 
+>  
+> 
+> Kind regards,
+> 
+> Pantelis
+> 
+> 
+>         [[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
