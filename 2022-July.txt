@@ -870,3 +870,92 @@ wrote:
 	[[alternative HTML version deleted]]
 
 
+From ch|r|com @end|ng |rom goog|e@com  Fri Jul  8 07:17:12 2022
+From: ch|r|com @end|ng |rom goog|e@com (Michael Chirico)
+Date: Thu, 7 Jul 2022 22:17:12 -0700
+Subject: [Rd] stats::poly() stopped working for Date input -- intentional?
+Message-ID: <CAD7Bkx85RaBLdhGiUUTgiyRKkBDv=gH=zLVB_+8bGZV=fP3C3g@mail.gmail.com>
+
+SVN#80126 added rep.difftime, which means rep(as.difftime(0,
+units="secs")) retains the "datetime" class.
+
+A consequence of this is that stats::poly() no longer accepts
+Date/POSIXct input (because poly calls outer() on the de-meaned input,
+which rep()):
+
+# works on R 3.6.3 (and probably everything < 4.1.0)
+#   but on R 4.1.3 (and probably everything >= 4.1.0):
+stats::poly(Sys.Date() - 0:4, 3)
+# Error in Ops.difftime(X, Y, ...) : '^' not defined for "difftime" objects
+
+Is this intentional?
+
+If not, a simple patch is to call 'x <- as.double(x)' before de-meaning.
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Fri Jul  8 16:34:43 2022
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Fri, 8 Jul 2022 16:34:43 +0200
+Subject: [Rd] 
+ stats::poly() stopped working for Date input -- intentional?
+In-Reply-To: <CAD7Bkx85RaBLdhGiUUTgiyRKkBDv=gH=zLVB_+8bGZV=fP3C3g@mail.gmail.com>
+References: <CAD7Bkx85RaBLdhGiUUTgiyRKkBDv=gH=zLVB_+8bGZV=fP3C3g@mail.gmail.com>
+Message-ID: <25288.16515.793861.777833@stat.math.ethz.ch>
+
+>>>>> Michael Chirico via R-devel 
+>>>>>     on Thu, 7 Jul 2022 22:17:12 -0700 writes:
+
+    > SVN#80126 added rep.difftime, which means rep(as.difftime(0,
+    > units="secs")) retains the "datetime" class.
+
+(yes, by me, March 2021), this was fixing PR#18066
+ ==> https://bugs.r-project.org/show_bug.cgi?id=18066 )
+
+Thank you, Michael, for the report!
+
+    > A consequence of this is that stats::poly() no longer accepts
+    > Date/POSIXct input (because poly calls outer() on the de-meaned input,
+    > which rep()):
+
+    > # works on R 3.6.3 (and probably everything < 4.1.0)
+    > #   but on R 4.1.3 (and probably everything >= 4.1.0):
+    > stats::poly(Sys.Date() - 0:4, 3)
+    > # Error in Ops.difftime(X, Y, ...) : '^' not defined for "difftime" objects
+
+    > Is this intentional?
+
+Well, actually I think it was not intentional that  poly()
+worked at all with Date/POSIXct input, ..
+OTOH you *did* encounter it.
+
+Note that 
+
+  > poly(as.Date("2020-2-2") - 0:3, 2,  raw = TRUE)
+  Error in Ops.Date(X, Y, ...) : ^ not defined for "Date" objects
+  > 
+
+happens (I think) in all versions of R, i.e., even before the
+rep() extension.
+
+    > If not, a simple patch is to call 'x <- as.double(x)' before de-meaning.
+
+well, yes, in that branch of the source code.
+... and a similar call for the  raw = TRUE  case.
+
+At first, this seems to make sense to me,
+but actually it will break when someone uses
+
+   poly(<complex>, ..)
+   
+[ Also: what about the "prediction" case  (coef = <specified>) ? 
+  could you use prediction of an lm() for your real use case ? ]
+
+---
+
+Maybe it makes most sense if you open an R bugzilla entry for
+this (including part of our current dialogue).
+
+Thank you again,
+Martin
+
+
