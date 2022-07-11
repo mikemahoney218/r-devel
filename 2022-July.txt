@@ -959,3 +959,709 @@ Thank you again,
 Martin
 
 
+From @nto|ne@|@br| @end|ng |rom gm@||@com  Sun Jul 10 16:00:02 2022
+From: @nto|ne@|@br| @end|ng |rom gm@||@com (Antoine Fabri)
+Date: Sun, 10 Jul 2022 16:00:02 +0200
+Subject: [Rd] Floating point issue
+Message-ID: <CAEKh8uhNTF3RczavV-jh82tK9e=iDr2tzys=wGSk6ZD5e2tndg@mail.gmail.com>
+
+Dear r-devel,
+
+For some numbers, the printed value is not equivalent to the input :
+
+options(scipen = 999)
+## GOOD
+1e24
+#> [1]  999999999999999983222784
+1e24 == 999999999999999983222784
+#> [1] TRUE
+
+## BAD
+1e25
+#> [1] 10000000000000000905969664
+1e25 == 10000000000000000905969664
+#> [1] FALSE
+
+## STILL BAD
+10000000000000000905969664
+#> [1] 10000000000000003053453312
+
+## GOOD AGAIN
+10000000000000003053453312
+#> [1] 10000000000000003053453312
+
+# Additionally
+10000000000000000000000000 == 1e25
+#> [1] FALSE
+
+Are these bugs ?
+
+	[[alternative HTML version deleted]]
+
+
+From edd @end|ng |rom deb|@n@org  Sun Jul 10 16:09:45 2022
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Sun, 10 Jul 2022 09:09:45 -0500
+Subject: [Rd] Floating point issue
+In-Reply-To: <CAEKh8uhNTF3RczavV-jh82tK9e=iDr2tzys=wGSk6ZD5e2tndg@mail.gmail.com>
+References: <CAEKh8uhNTF3RczavV-jh82tK9e=iDr2tzys=wGSk6ZD5e2tndg@mail.gmail.com>
+Message-ID: <25290.56745.942106.634125@rob.eddelbuettel.com>
+
+
+On 10 July 2022 at 16:00, Antoine Fabri wrote:
+| Dear r-devel,
+| 
+| For some numbers, the printed value is not equivalent to the input :
+| 
+| options(scipen = 999)
+| ## GOOD
+| 1e24
+| #> [1]  999999999999999983222784
+| 1e24 == 999999999999999983222784
+| #> [1] TRUE
+| 
+| ## BAD
+| 1e25
+| #> [1] 10000000000000000905969664
+| 1e25 == 10000000000000000905969664
+| #> [1] FALSE
+| 
+| ## STILL BAD
+| 10000000000000000905969664
+| #> [1] 10000000000000003053453312
+| 
+| ## GOOD AGAIN
+| 10000000000000003053453312
+| #> [1] 10000000000000003053453312
+| 
+| # Additionally
+| 10000000000000000000000000 == 1e25
+| #> [1] FALSE
+| 
+| Are these bugs ?
+
+No, that is how computers work (with floating point numbers).
+
+Please R FAQ 7.31 "Why doesn?t R think these numbers are equal?" at
+  https://cran.r-project.org/doc/FAQ/R-FAQ.html#Why-doesn_0027t-R-think-these-numbers-are-equal_003f
+and the references therein for more.
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From Andre@G||||bert @end|ng |rom chu-rouen@|r  Sun Jul 10 16:28:27 2022
+From: Andre@G||||bert @end|ng |rom chu-rouen@|r (GILLIBERT, Andre)
+Date: Sun, 10 Jul 2022 14:28:27 +0000
+Subject: [Rd] Floating point issue
+In-Reply-To: <25290.56745.942106.634125@rob.eddelbuettel.com>
+References: <CAEKh8uhNTF3RczavV-jh82tK9e=iDr2tzys=wGSk6ZD5e2tndg@mail.gmail.com>,
+ <25290.56745.942106.634125@rob.eddelbuettel.com>
+Message-ID: <cb4678b2d846400194e23034c6cf7674@chu-rouen.fr>
+
+> No, that is how computers work (with floating point numbers).
+
+
+The fact that not all values are representable by floating point does not mean that outputing a number with maximum accuracy, then reading it back, should yield a different number.
+
+
+I would like to point that I cannot reproduce this "bug" on the official R 4.2.0 Windows x86_64 build on an AMD Ryzen 1700 on Windows 10.
+
+
+> 1e25
+[1] 10000000000000000906640224
+> 1e25 == 10000000000000000906640224
+[1] TRUE
+>
+
+I could also test:
+> as.double(as.character(1e25)) == 1e25
+[1] TRUE
+
+For ECMAScript, there is a rule that guarantee that converting a floating point value to a string, and converting back to a floating point value, yields to an equal number.
+https://262.ecma-international.org/5.1/#sec-9.8.1
+
+"If x is any Number value other than ?0, then ToNumber<https://262.ecma-international.org/5.1/#sec-9.3>(ToString<https://262.ecma-international.org/5.1/#sec-9.8>(x)) is exactly the same Number value as x."
+
+
+This avoids some data loss when repeatedly writing/reading floating point values to a text file.
+
+
+Of course, R is a different language, and I do not think that it has such rule. However, this does not mean that this rule is useless or impossible to implement.
+
+
+--
+
+Sincerely
+
+Andr? GILLIBERT
+
+________________________________
+De : R-devel <r-devel-bounces at r-project.org> de la part de Dirk Eddelbuettel <edd at debian.org>
+Envoy? : dimanche 10 juillet 2022 16:09:45
+? : Antoine Fabri
+Cc : R-devel
+Objet : Re: [Rd] Floating point issue
+
+ATTENTION: Cet e-mail provient d?une adresse mail ext?rieure au CHU de Rouen. Ne cliquez pas sur les liens ou n'ouvrez pas les pi?ces jointes ? moins de conna?tre l'exp?diteur et de savoir que le contenu est s?r. En cas de doute, transf?rer le mail ? ? DSI, S?curit? ? pour analyse. Merci de votre vigilance
+
+
+On 10 July 2022 at 16:00, Antoine Fabri wrote:
+| Dear r-devel,
+|
+| For some numbers, the printed value is not equivalent to the input :
+|
+| options(scipen = 999)
+| ## GOOD
+| 1e24
+| #> [1]  999999999999999983222784
+| 1e24 == 999999999999999983222784
+| #> [1] TRUE
+|
+| ## BAD
+| 1e25
+| #> [1] 10000000000000000905969664
+| 1e25 == 10000000000000000905969664
+| #> [1] FALSE
+|
+| ## STILL BAD
+| 10000000000000000905969664
+| #> [1] 10000000000000003053453312
+|
+| ## GOOD AGAIN
+| 10000000000000003053453312
+| #> [1] 10000000000000003053453312
+|
+| # Additionally
+| 10000000000000000000000000 == 1e25
+| #> [1] FALSE
+|
+| Are these bugs ?
+
+No, that is how computers work (with floating point numbers).
+
+Please R FAQ 7.31 "Why doesn?t R think these numbers are equal?" at
+  https://cran.r-project.org/doc/FAQ/R-FAQ.html#Why-doesn_0027t-R-think-these-numbers-are-equal_003f
+and the references therein for more.
+
+Dirk
+
+--
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+	[[alternative HTML version deleted]]
+
+
+From |uc@r @end|ng |rom |edor@project@org  Sun Jul 10 16:44:11 2022
+From: |uc@r @end|ng |rom |edor@project@org (=?UTF-8?Q?I=C3=B1aki_Ucar?=)
+Date: Sun, 10 Jul 2022 16:44:11 +0200
+Subject: [Rd] Floating point issue
+In-Reply-To: <cb4678b2d846400194e23034c6cf7674@chu-rouen.fr>
+References: <CAEKh8uhNTF3RczavV-jh82tK9e=iDr2tzys=wGSk6ZD5e2tndg@mail.gmail.com>
+ <25290.56745.942106.634125@rob.eddelbuettel.com>
+ <cb4678b2d846400194e23034c6cf7674@chu-rouen.fr>
+Message-ID: <CALEXWq3F86UV71qzWaUHrZkZb9k8dC2H_OR_cYqzvEf6pFz9hA@mail.gmail.com>
+
+On Sun, 10 Jul 2022 at 16:28, GILLIBERT, Andre
+<Andre.Gillibert at chu-rouen.fr> wrote:
+>
+> > No, that is how computers work (with floating point numbers).
+>
+>
+> The fact that not all values are representable by floating point does not mean that outputing a number with maximum accuracy, then reading it back, should yield a different number.
+>
+>
+> I would like to point that I cannot reproduce this "bug" on the official R 4.2.0 Windows x86_64 build on an AMD Ryzen 1700 on Windows 10.
+
+I cannot reproduce this on a 64-bit Linux build of R 4.1.3 either:
+
+options(scipen = 999)
+1e24
+#> [1]  999999999999999983222784
+1e24 == 999999999999999983222784
+#> [1] TRUE
+
+1e25
+#> [1] 10000000000000000905969664
+1e25 == 10000000000000000905969664
+#> [1] TRUE
+
+10000000000000000905969664
+#> [1] 10000000000000000905969664
+
+10000000000000003053453312
+#> [1] 10000000000000003053453312
+
+10000000000000000000000000 == 1e25
+#> [1] TRUE
+
+-- 
+I?aki ?car
+
+
+From @nto|ne@|@br| @end|ng |rom gm@||@com  Sun Jul 10 17:43:03 2022
+From: @nto|ne@|@br| @end|ng |rom gm@||@com (Antoine Fabri)
+Date: Sun, 10 Jul 2022 17:43:03 +0200
+Subject: [Rd] Floating point issue
+In-Reply-To: <CALEXWq3F86UV71qzWaUHrZkZb9k8dC2H_OR_cYqzvEf6pFz9hA@mail.gmail.com>
+References: <CAEKh8uhNTF3RczavV-jh82tK9e=iDr2tzys=wGSk6ZD5e2tndg@mail.gmail.com>
+ <25290.56745.942106.634125@rob.eddelbuettel.com>
+ <cb4678b2d846400194e23034c6cf7674@chu-rouen.fr>
+ <CALEXWq3F86UV71qzWaUHrZkZb9k8dC2H_OR_cYqzvEf6pFz9hA@mail.gmail.com>
+Message-ID: <CAEKh8ujbqCpL8Dv8OiB0LtHFsk+80gxU4ivPoqRKbLdfJLKc_A@mail.gmail.com>
+
+He is my session info :
+
+R version 4.1.3 (2022-03-10)
+Platform: aarch64-apple-darwin20 (64-bit)
+Running under: macOS Monterey 12.0.1
+
+Le dim. 10 juil. 2022 ? 16:44, I?aki Ucar <iucar at fedoraproject.org> a
+?crit :
+
+> On Sun, 10 Jul 2022 at 16:28, GILLIBERT, Andre
+> <Andre.Gillibert at chu-rouen.fr> wrote:
+> >
+> > > No, that is how computers work (with floating point numbers).
+> >
+> >
+> > The fact that not all values are representable by floating point does
+> not mean that outputing a number with maximum accuracy, then reading it
+> back, should yield a different number.
+> >
+> >
+> > I would like to point that I cannot reproduce this "bug" on the official
+> R 4.2.0 Windows x86_64 build on an AMD Ryzen 1700 on Windows 10.
+>
+> I cannot reproduce this on a 64-bit Linux build of R 4.1.3 either:
+>
+> options(scipen = 999)
+> 1e24
+> #> [1]  999999999999999983222784
+> 1e24 == 999999999999999983222784
+> #> [1] TRUE
+>
+> 1e25
+> #> [1] 10000000000000000905969664
+> 1e25 == 10000000000000000905969664
+> #> [1] TRUE
+>
+> 10000000000000000905969664
+> #> [1] 10000000000000000905969664
+>
+> 10000000000000003053453312
+> #> [1] 10000000000000003053453312
+>
+> 10000000000000000000000000 == 1e25
+> #> [1] TRUE
+>
+> --
+> I?aki ?car
+>
+
+	[[alternative HTML version deleted]]
+
+
+From ru|pb@rr@d@@ @end|ng |rom @@po@pt  Sun Jul 10 20:46:26 2022
+From: ru|pb@rr@d@@ @end|ng |rom @@po@pt (Rui Barradas)
+Date: Sun, 10 Jul 2022 19:46:26 +0100
+Subject: [Rd] Floating point issue
+In-Reply-To: <CALEXWq3F86UV71qzWaUHrZkZb9k8dC2H_OR_cYqzvEf6pFz9hA@mail.gmail.com>
+References: <CAEKh8uhNTF3RczavV-jh82tK9e=iDr2tzys=wGSk6ZD5e2tndg@mail.gmail.com>
+ <25290.56745.942106.634125@rob.eddelbuettel.com>
+ <cb4678b2d846400194e23034c6cf7674@chu-rouen.fr>
+ <CALEXWq3F86UV71qzWaUHrZkZb9k8dC2H_OR_cYqzvEf6pFz9hA@mail.gmail.com>
+Message-ID: <a48ab1cd-43b5-0810-2a29-3b0e892b3d00@sapo.pt>
+
+Hello,
+
+R 4.2.1 on Windows 11, sessionInfo() at end.
+
+I cannot reproduce this either.
+
+
+op <- options(scipen = 999)
+
+1e24
+# [1]  999999999999999983202404
+1e24 == 999999999999999983222784
+# [1] TRUE
+
+1e25
+# [1] 10000000000000000906640224
+1e25 == 10000000000000000905969664
+# [1] TRUE
+
+10000000000000000905969664
+# [1] 10000000000000000906640224
+
+10000000000000003053453312
+# [1] 10000000000000003053648442
+
+10000000000000000000000000 == 1e25
+# [1] TRUE
+
+options(op)
+
+sessionInfo()
+R version 4.2.1 (2022-06-23 ucrt)
+Platform: x86_64-w64-mingw32/x64 (64-bit)
+Running under: Windows 10 x64 (build 22000)
+
+Matrix products: default
+
+locale:
+[1] LC_COLLATE=Portuguese_Portugal.utf8 
+LC_CTYPE=Portuguese_Portugal.utf8
+[3] LC_MONETARY=Portuguese_Portugal.utf8 LC_NUMERIC=C 
+
+[5] LC_TIME=Portuguese_Portugal.utf8
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base
+
+loaded via a namespace (and not attached):
+[1] compiler_4.2.1
+
+
+Hope this helps,
+
+Rui Barradas
+
+?s 15:44 de 10/07/2022, I?aki Ucar escreveu:
+> On Sun, 10 Jul 2022 at 16:28, GILLIBERT, Andre
+> <Andre.Gillibert at chu-rouen.fr> wrote:
+>>
+>>> No, that is how computers work (with floating point numbers).
+>>
+>>
+>> The fact that not all values are representable by floating point does not mean that outputing a number with maximum accuracy, then reading it back, should yield a different number.
+>>
+>>
+>> I would like to point that I cannot reproduce this "bug" on the official R 4.2.0 Windows x86_64 build on an AMD Ryzen 1700 on Windows 10.
+> 
+> I cannot reproduce this on a 64-bit Linux build of R 4.1.3 either:
+> 
+> options(scipen = 999)
+> 1e24
+> #> [1]  999999999999999983222784
+> 1e24 == 999999999999999983222784
+> #> [1] TRUE
+> 
+> 1e25
+> #> [1] 10000000000000000905969664
+> 1e25 == 10000000000000000905969664
+> #> [1] TRUE
+> 
+> 10000000000000000905969664
+> #> [1] 10000000000000000905969664
+> 
+> 10000000000000003053453312
+> #> [1] 10000000000000003053453312
+> 
+> 10000000000000000000000000 == 1e25
+> #> [1] TRUE
+>
+
+
+From w||||@mwdun|@p @end|ng |rom gm@||@com  Sun Jul 10 22:23:22 2022
+From: w||||@mwdun|@p @end|ng |rom gm@||@com (Bill Dunlap)
+Date: Sun, 10 Jul 2022 13:23:22 -0700
+Subject: [Rd] Floating point issue
+In-Reply-To: <CAEKh8uhNTF3RczavV-jh82tK9e=iDr2tzys=wGSk6ZD5e2tndg@mail.gmail.com>
+References: <CAEKh8uhNTF3RczavV-jh82tK9e=iDr2tzys=wGSk6ZD5e2tndg@mail.gmail.com>
+Message-ID: <CAHqSRuTN7iU2ngvr2JoEiqZCrogY8GL3ssKY2vvUZstWCydzKw@mail.gmail.com>
+
+The following function, 'bitC' from ?numToBits, displays the bits in a
+double precision number, separated into the sign bit, the 11 exponent bits,
+and the 52 bits in the mantissa.  I've shown the results with your numbers
+from R-2.4.0 on my Windows 11 Lenovo laptop: what do you get?
+
+> bitC <- function(x) noquote(vapply(as.double(x), function(x) { # split
+one double
++     b <- substr(as.character(rev(numToBits(x))), 2L, 2L)
++     paste0(c(b[1L], " ", b[2:12], " | ", b[13:64]), collapse = "")
++   }, ""))
+> bitC(10^25)
+# [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+> bitC(10000000000000000905969664)
+# [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+> bitC(10000000000000000905969664 - 10^25)
+# [1] 0 00000000000 | 0000000000000000000000000000000000000000000000000000
+> bitC(1e25)
+# [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+
+-Bill
+
+On Sun, Jul 10, 2022 at 7:00 AM Antoine Fabri <antoine.fabri at gmail.com>
+wrote:
+
+> Dear r-devel,
+>
+> For some numbers, the printed value is not equivalent to the input :
+>
+> options(scipen = 999)
+> ## GOOD
+> 1e24
+> #> [1]  999999999999999983222784
+> 1e24 == 999999999999999983222784
+> #> [1] TRUE
+>
+> ## BAD
+> 1e25
+> #> [1] 10000000000000000905969664
+> 1e25 == 10000000000000000905969664
+> #> [1] FALSE
+>
+> ## STILL BAD
+> 10000000000000000905969664
+> #> [1] 10000000000000003053453312
+>
+> ## GOOD AGAIN
+> 10000000000000003053453312
+> #> [1] 10000000000000003053453312
+>
+> # Additionally
+> 10000000000000000000000000 == 1e25
+> #> [1] FALSE
+>
+> Are these bugs ?
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sun Jul 10 22:34:17 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sun, 10 Jul 2022 16:34:17 -0400
+Subject: [Rd] Floating point issue
+In-Reply-To: <CAEKh8uhNTF3RczavV-jh82tK9e=iDr2tzys=wGSk6ZD5e2tndg@mail.gmail.com>
+References: <CAEKh8uhNTF3RczavV-jh82tK9e=iDr2tzys=wGSk6ZD5e2tndg@mail.gmail.com>
+Message-ID: <a60d515f-81c4-7dcc-67f3-a962210db427@gmail.com>
+
+Here's a similar question that may give you some ideas for dealing with 
+this:
+
+https://stackoverflow.com/q/72899973/2554330
+
+Duncan Murdoch
+
+On 10/07/2022 10:00 a.m., Antoine Fabri wrote:
+> Dear r-devel,
+> 
+> For some numbers, the printed value is not equivalent to the input :
+> 
+> options(scipen = 999)
+> ## GOOD
+> 1e24
+> #> [1]  999999999999999983222784
+> 1e24 == 999999999999999983222784
+> #> [1] TRUE
+> 
+> ## BAD
+> 1e25
+> #> [1] 10000000000000000905969664
+> 1e25 == 10000000000000000905969664
+> #> [1] FALSE
+> 
+> ## STILL BAD
+> 10000000000000000905969664
+> #> [1] 10000000000000003053453312
+> 
+> ## GOOD AGAIN
+> 10000000000000003053453312
+> #> [1] 10000000000000003053453312
+> 
+> # Additionally
+> 10000000000000000000000000 == 1e25
+> #> [1] FALSE
+> 
+> Are these bugs ?
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From edd @end|ng |rom deb|@n@org  Sun Jul 10 22:50:45 2022
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Sun, 10 Jul 2022 15:50:45 -0500
+Subject: [Rd] Floating point issue
+In-Reply-To: <a60d515f-81c4-7dcc-67f3-a962210db427@gmail.com>
+References: <CAEKh8uhNTF3RczavV-jh82tK9e=iDr2tzys=wGSk6ZD5e2tndg@mail.gmail.com>
+ <a60d515f-81c4-7dcc-67f3-a962210db427@gmail.com>
+Message-ID: <25291.15269.602194.667541@rob.eddelbuettel.com>
+
+
+On 10 July 2022 at 16:34, Duncan Murdoch wrote:
+| Here's a similar question that may give you some ideas for dealing with 
+| this:
+| 
+| https://stackoverflow.com/q/72899973/2554330
+
+Good find, but that's his own question (see the profile) and he choose to
+cross-post. Which is generally discouraged. 
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From @nto|ne@|@br| @end|ng |rom gm@||@com  Sun Jul 10 23:38:51 2022
+From: @nto|ne@|@br| @end|ng |rom gm@||@com (Antoine Fabri)
+Date: Sun, 10 Jul 2022 23:38:51 +0200
+Subject: [Rd] Floating point issue
+In-Reply-To: <CAHqSRuTN7iU2ngvr2JoEiqZCrogY8GL3ssKY2vvUZstWCydzKw@mail.gmail.com>
+References: <CAEKh8uhNTF3RczavV-jh82tK9e=iDr2tzys=wGSk6ZD5e2tndg@mail.gmail.com>
+ <CAHqSRuTN7iU2ngvr2JoEiqZCrogY8GL3ssKY2vvUZstWCydzKw@mail.gmail.com>
+Message-ID: <CAEKh8ujziLSCxAEc1dmxJQMf5Kcpq2hO0yx+Tuyp4s98WuCeuA@mail.gmail.com>
+
+Thanks, I get the exact same results as yours
+
+``` r
+bitC <- function(x) noquote(vapply(as.double(x), function(x) { # split one
+double
+  b <- substr(as.character(rev(numToBits(x))), 2L, 2L)
+      paste0(c(b[1L], " ", b[2:12], " | ", b[13:64]), collapse = "")
+    }, ""))
+bitC(10^25)
+#> [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+bitC(10000000000000000905969664)
+#> [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010010
+bitC(10000000000000000905969664 - 10^25)
+#> [1] 0 10000011110 | 0000000000000000000000000000000000000000000000000000
+bitC(1e25)
+#> [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+```
+
+<sup>Created on 2022-07-10 by the [reprex package](
+https://reprex.tidyverse.org) (v2.0.1)</sup>
+
+Le dim. 10 juil. 2022 ? 22:23, Bill Dunlap <williamwdunlap at gmail.com> a
+?crit :
+
+> The following function, 'bitC' from ?numToBits, displays the bits in a
+> double precision number, separated into the sign bit, the 11 exponent bits,
+> and the 52 bits in the mantissa.  I've shown the results with your numbers
+> from R-2.4.0 on my Windows 11 Lenovo laptop: what do you get?
+>
+> > bitC <- function(x) noquote(vapply(as.double(x), function(x) { # split
+> one double
+> +     b <- substr(as.character(rev(numToBits(x))), 2L, 2L)
+> +     paste0(c(b[1L], " ", b[2:12], " | ", b[13:64]), collapse = "")
+> +   }, ""))
+> > bitC(10^25)
+> # [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+> > bitC(10000000000000000905969664)
+> # [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+> > bitC(10000000000000000905969664 - 10^25)
+> # [1] 0 00000000000 | 0000000000000000000000000000000000000000000000000000
+> > bitC(1e25)
+> # [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+>
+> -Bill
+>
+> On Sun, Jul 10, 2022 at 7:00 AM Antoine Fabri <antoine.fabri at gmail.com>
+> wrote:
+>
+>> Dear r-devel,
+>>
+>> For some numbers, the printed value is not equivalent to the input :
+>>
+>> options(scipen = 999)
+>> ## GOOD
+>> 1e24
+>> #> [1]  999999999999999983222784
+>> 1e24 == 999999999999999983222784
+>> #> [1] TRUE
+>>
+>> ## BAD
+>> 1e25
+>> #> [1] 10000000000000000905969664
+>> 1e25 == 10000000000000000905969664
+>> #> [1] FALSE
+>>
+>> ## STILL BAD
+>> 10000000000000000905969664
+>> #> [1] 10000000000000003053453312
+>>
+>> ## GOOD AGAIN
+>> 10000000000000003053453312
+>> #> [1] 10000000000000003053453312
+>>
+>> # Additionally
+>> 10000000000000000000000000 == 1e25
+>> #> [1] FALSE
+>>
+>> Are these bugs ?
+>>
+>>         [[alternative HTML version deleted]]
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+
+	[[alternative HTML version deleted]]
+
+
+From edd @end|ng |rom deb|@n@org  Mon Jul 11 00:21:48 2022
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Sun, 10 Jul 2022 17:21:48 -0500
+Subject: [Rd] Floating point issue
+In-Reply-To: <CAEKh8ujbqCpL8Dv8OiB0LtHFsk+80gxU4ivPoqRKbLdfJLKc_A@mail.gmail.com>
+References: <CAEKh8uhNTF3RczavV-jh82tK9e=iDr2tzys=wGSk6ZD5e2tndg@mail.gmail.com>
+ <25290.56745.942106.634125@rob.eddelbuettel.com>
+ <cb4678b2d846400194e23034c6cf7674@chu-rouen.fr>
+ <CALEXWq3F86UV71qzWaUHrZkZb9k8dC2H_OR_cYqzvEf6pFz9hA@mail.gmail.com>
+ <CAEKh8ujbqCpL8Dv8OiB0LtHFsk+80gxU4ivPoqRKbLdfJLKc_A@mail.gmail.com>
+Message-ID: <25291.20732.178923.721408@rob.eddelbuettel.com>
+
+
+On 10 July 2022 at 17:43, Antoine Fabri wrote:
+| He is my session info :
+| 
+| R version 4.1.3 (2022-03-10)
+| Platform: aarch64-apple-darwin20 (64-bit)
+| Running under: macOS Monterey 12.0.1
+
+Along with the different session infos posted by numerous people who are
+unable to replicate your issue (myself included) and a bit more off-line
+thinking about I started to suspect you may have an M1 chip. Which this
+confirms.
+
+Tomas and Simon had a deep dive into possible floating point concerns in
+
+  https://blog.r-project.org/2020/11/02/will-r-work-on-apple-silicon/index.html
+
+I also seem to recall that it was also said somewhere (though apparently not
+in that post) that the M1 does not have long double. Post such as this one
+
+  https://developer.apple.com/forums/thread/673482
+
+seem to suggest that 80 bit accuracy is Intel specific -- so this may in fact
+be an issue of sailing too close to the hardware boundary.
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
