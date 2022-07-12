@@ -1665,3 +1665,781 @@ Dirk
 dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
 
 
+From brod|e@g@@|@m @end|ng |rom y@hoo@com  Mon Jul 11 03:10:29 2022
+From: brod|e@g@@|@m @end|ng |rom y@hoo@com (Brodie Gaslam)
+Date: Sun, 10 Jul 2022 21:10:29 -0400
+Subject: [Rd] Floating point issue
+In-Reply-To: <CAEKh8ujziLSCxAEc1dmxJQMf5Kcpq2hO0yx+Tuyp4s98WuCeuA@mail.gmail.com>
+References: <CAEKh8uhNTF3RczavV-jh82tK9e=iDr2tzys=wGSk6ZD5e2tndg@mail.gmail.com>
+ <CAHqSRuTN7iU2ngvr2JoEiqZCrogY8GL3ssKY2vvUZstWCydzKw@mail.gmail.com>
+ <CAEKh8ujziLSCxAEc1dmxJQMf5Kcpq2hO0yx+Tuyp4s98WuCeuA@mail.gmail.com>
+Message-ID: <1af830d4-73cb-b48b-77d2-de0c74aa1f8e@yahoo.com>
+
+The results are not exactly the same.  Notice that on Bill's system the 
+bit pattern of 10^25 and 10000000000000000905969664 are the same, but 
+not so on yours.  So there is a mismatch happening on parsing between 
+your M1 mac and other's systems.
+
+This is the main thing I wanted to point out.  But since I'm here I'm 
+going to add some additional lazily researched speculation.
+
+As Dirk points out, M1 does not have long double, and if you look at 
+what I think is responsible for parsing of numbers like the ones we're 
+discussing here, we see[1]:
+
+     double R_strtod5(const char *str, char **endptr, char dec,
+     		 Rboolean NA, int exact)
+     {
+         LDOUBLE ans = 0.0;
+
+IIRC long double on systems that implement it as 80 bits (most that have 
+x87 coprocessors) has 63-4 bits of precision, vs 53 for 64 bit long 
+double.  Roughly speaking, that's 19-20 digits of base 10 precision for 
+long double, vs 15-16 for 64 bit double.  Then:
+
+     > substr(rep("10000000000000000905969664", 2),  c(1, 1), c(16, 20))
+     [1] "1000000000000000"     "10000000000000000905"
+
+Again, I have not carefully researched this, but it seems likely that 
+parsing is producing different a different outcome in this case because 
+the intermediate values generated can be kept at higher precision on 
+systems with 80 bit long doubles prior to coercing to double for the 
+final result.
+
+IIRC, if you need invertible deparsing/parsing I think you can use:
+
+     deparse(1e25, control=c('hexNumeric'))
+
+Although I don't have an 80-bit-less system to test on (and I am too 
+lazy to recompile R without long double to test).
+
+Best,
+
+B.
+
+[1]: https://github.com/r-devel/r-svn/blob/master/src/main/util.c#L1993
+
+
+
+On 7/10/22 5:38 PM, Antoine Fabri wrote:
+> Thanks, I get the exact same results as yours
+> 
+> ``` r
+> bitC <- function(x) noquote(vapply(as.double(x), function(x) { # split one
+> double
+>    b <- substr(as.character(rev(numToBits(x))), 2L, 2L)
+>        paste0(c(b[1L], " ", b[2:12], " | ", b[13:64]), collapse = "")
+>      }, ""))
+> bitC(10^25)
+> #> [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+> bitC(10000000000000000905969664)
+> #> [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010010
+> bitC(10000000000000000905969664 - 10^25)
+> #> [1] 0 10000011110 | 0000000000000000000000000000000000000000000000000000
+> bitC(1e25)
+> #> [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+> ```
+> 
+> <sup>Created on 2022-07-10 by the [reprex package](
+> https://reprex.tidyverse.org) (v2.0.1)</sup>
+> 
+> Le dim. 10 juil. 2022 ? 22:23, Bill Dunlap <williamwdunlap at gmail.com> a
+> ?crit :
+> 
+>> The following function, 'bitC' from ?numToBits, displays the bits in a
+>> double precision number, separated into the sign bit, the 11 exponent bits,
+>> and the 52 bits in the mantissa.  I've shown the results with your numbers
+>> from R-2.4.0 on my Windows 11 Lenovo laptop: what do you get?
+>>
+>>> bitC <- function(x) noquote(vapply(as.double(x), function(x) { # split
+>> one double
+>> +     b <- substr(as.character(rev(numToBits(x))), 2L, 2L)
+>> +     paste0(c(b[1L], " ", b[2:12], " | ", b[13:64]), collapse = "")
+>> +   }, ""))
+>>> bitC(10^25)
+>> # [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+>>> bitC(10000000000000000905969664)
+>> # [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+>>> bitC(10000000000000000905969664 - 10^25)
+>> # [1] 0 00000000000 | 0000000000000000000000000000000000000000000000000000
+>>> bitC(1e25)
+>> # [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+>>
+>> -Bill
+>>
+>> On Sun, Jul 10, 2022 at 7:00 AM Antoine Fabri <antoine.fabri at gmail.com>
+>> wrote:
+>>
+>>> Dear r-devel,
+>>>
+>>> For some numbers, the printed value is not equivalent to the input :
+>>>
+>>> options(scipen = 999)
+>>> ## GOOD
+>>> 1e24
+>>> #> [1]  999999999999999983222784
+>>> 1e24 == 999999999999999983222784
+>>> #> [1] TRUE
+>>>
+>>> ## BAD
+>>> 1e25
+>>> #> [1] 10000000000000000905969664
+>>> 1e25 == 10000000000000000905969664
+>>> #> [1] FALSE
+>>>
+>>> ## STILL BAD
+>>> 10000000000000000905969664
+>>> #> [1] 10000000000000003053453312
+>>>
+>>> ## GOOD AGAIN
+>>> 10000000000000003053453312
+>>> #> [1] 10000000000000003053453312
+>>>
+>>> # Additionally
+>>> 10000000000000000000000000 == 1e25
+>>> #> [1] FALSE
+>>>
+>>> Are these bugs ?
+>>>
+>>>          [[alternative HTML version deleted]]
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>
+>>
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From w||||@mwdun|@p @end|ng |rom gm@||@com  Mon Jul 11 03:14:24 2022
+From: w||||@mwdun|@p @end|ng |rom gm@||@com (Bill Dunlap)
+Date: Sun, 10 Jul 2022 18:14:24 -0700
+Subject: [Rd] Floating point issue
+In-Reply-To: <CAEKh8ujziLSCxAEc1dmxJQMf5Kcpq2hO0yx+Tuyp4s98WuCeuA@mail.gmail.com>
+References: <CAEKh8uhNTF3RczavV-jh82tK9e=iDr2tzys=wGSk6ZD5e2tndg@mail.gmail.com>
+ <CAHqSRuTN7iU2ngvr2JoEiqZCrogY8GL3ssKY2vvUZstWCydzKw@mail.gmail.com>
+ <CAEKh8ujziLSCxAEc1dmxJQMf5Kcpq2hO0yx+Tuyp4s98WuCeuA@mail.gmail.com>
+Message-ID: <CAHqSRuSS0yHxFP44MSj2cp_zNkhyz5Q=F-D6WCac0GmLOpkYoA@mail.gmail.com>
+
+You said you got the same results as I did.  Not so, the parsing of the
+long numeric differs in the last bit of the mantissa.
+
+(A=Antoine, B=Bill):
+
+bitC(10^25)
+#A [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+#B [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+
+bitC(10000000000000000905969664)
+#A [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010010
+#B [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+
+bitC(10000000000000000905969664 - 10^25)
+#A [1] 0 10000011110 | 0000000000000000000000000000000000000000000000000000
+#B [1] 0 00000000000 | 0000000000000000000000000000000000000000000000000000
+
+On Sun, Jul 10, 2022 at 2:39 PM Antoine Fabri <antoine.fabri at gmail.com>
+wrote:
+
+> Thanks, I get the exact same results as yours
+>
+> ``` r
+> bitC <- function(x) noquote(vapply(as.double(x), function(x) { # split one
+> double
+>   b <- substr(as.character(rev(numToBits(x))), 2L, 2L)
+>       paste0(c(b[1L], " ", b[2:12], " | ", b[13:64]), collapse = "")
+>     }, ""))
+> bitC(10^25)
+> #> [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+> bitC(10000000000000000905969664)
+> #> [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010010
+> bitC(10000000000000000905969664 - 10^25)
+> #> [1] 0 10000011110 | 0000000000000000000000000000000000000000000000000000
+> bitC(1e25)
+> #> [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+> ```
+>
+> <sup>Created on 2022-07-10 by the [reprex package](
+> https://reprex.tidyverse.org) (v2.0.1)</sup>
+>
+> Le dim. 10 juil. 2022 ? 22:23, Bill Dunlap <williamwdunlap at gmail.com> a
+> ?crit :
+>
+>> The following function, 'bitC' from ?numToBits, displays the bits in a
+>> double precision number, separated into the sign bit, the 11 exponent bits,
+>> and the 52 bits in the mantissa.  I've shown the results with your numbers
+>> from R-2.4.0 on my Windows 11 Lenovo laptop: what do you get?
+>>
+>> > bitC <- function(x) noquote(vapply(as.double(x), function(x) { # split
+>> one double
+>> +     b <- substr(as.character(rev(numToBits(x))), 2L, 2L)
+>> +     paste0(c(b[1L], " ", b[2:12], " | ", b[13:64]), collapse = "")
+>> +   }, ""))
+>> > bitC(10^25)
+>> # [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+>> > bitC(10000000000000000905969664)
+>> # [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+>> > bitC(10000000000000000905969664 - 10^25)
+>> # [1] 0 00000000000 | 0000000000000000000000000000000000000000000000000000
+>> > bitC(1e25)
+>> # [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+>>
+>> -Bill
+>>
+>> On Sun, Jul 10, 2022 at 7:00 AM Antoine Fabri <antoine.fabri at gmail.com>
+>> wrote:
+>>
+>>> Dear r-devel,
+>>>
+>>> For some numbers, the printed value is not equivalent to the input :
+>>>
+>>> options(scipen = 999)
+>>> ## GOOD
+>>> 1e24
+>>> #> [1]  999999999999999983222784
+>>> 1e24 == 999999999999999983222784
+>>> #> [1] TRUE
+>>>
+>>> ## BAD
+>>> 1e25
+>>> #> [1] 10000000000000000905969664
+>>> 1e25 == 10000000000000000905969664
+>>> #> [1] FALSE
+>>>
+>>> ## STILL BAD
+>>> 10000000000000000905969664
+>>> #> [1] 10000000000000003053453312
+>>>
+>>> ## GOOD AGAIN
+>>> 10000000000000003053453312
+>>> #> [1] 10000000000000003053453312
+>>>
+>>> # Additionally
+>>> 10000000000000000000000000 == 1e25
+>>> #> [1] FALSE
+>>>
+>>> Are these bugs ?
+>>>
+>>>         [[alternative HTML version deleted]]
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>
+>>
+
+	[[alternative HTML version deleted]]
+
+
+From @nto|ne@|@br| @end|ng |rom gm@||@com  Mon Jul 11 09:30:08 2022
+From: @nto|ne@|@br| @end|ng |rom gm@||@com (Antoine Fabri)
+Date: Mon, 11 Jul 2022 09:30:08 +0200
+Subject: [Rd] Floating point issue
+In-Reply-To: <CAHqSRuSS0yHxFP44MSj2cp_zNkhyz5Q=F-D6WCac0GmLOpkYoA@mail.gmail.com>
+References: <CAEKh8uhNTF3RczavV-jh82tK9e=iDr2tzys=wGSk6ZD5e2tndg@mail.gmail.com>
+ <CAHqSRuTN7iU2ngvr2JoEiqZCrogY8GL3ssKY2vvUZstWCydzKw@mail.gmail.com>
+ <CAEKh8ujziLSCxAEc1dmxJQMf5Kcpq2hO0yx+Tuyp4s98WuCeuA@mail.gmail.com>
+ <CAHqSRuSS0yHxFP44MSj2cp_zNkhyz5Q=F-D6WCac0GmLOpkYoA@mail.gmail.com>
+Message-ID: <CAEKh8uhStaAt3V-qu_5N4CpoMpDsTk7tDwaE-rQxw8h_u5qLbw@mail.gmail.com>
+
+Indeed, apologies for the oversight
+
+On Mon, 11 Jul 2022, 03:14 Bill Dunlap, <williamwdunlap at gmail.com> wrote:
+
+> You said you got the same results as I did.  Not so, the parsing of the
+> long numeric differs in the last bit of the mantissa.
+>
+> (A=Antoine, B=Bill):
+>
+> bitC(10^25)
+> #A [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+> #B [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+>
+> bitC(10000000000000000905969664)
+> #A [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010010
+> #B [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+>
+> bitC(10000000000000000905969664 - 10^25)
+> #A [1] 0 10000011110 | 0000000000000000000000000000000000000000000000000000
+> #B [1] 0 00000000000 | 0000000000000000000000000000000000000000000000000000
+>
+> On Sun, Jul 10, 2022 at 2:39 PM Antoine Fabri <antoine.fabri at gmail.com>
+> wrote:
+>
+>> Thanks, I get the exact same results as yours
+>>
+>> ``` r
+>> bitC <- function(x) noquote(vapply(as.double(x), function(x) { # split
+>> one double
+>>   b <- substr(as.character(rev(numToBits(x))), 2L, 2L)
+>>       paste0(c(b[1L], " ", b[2:12], " | ", b[13:64]), collapse = "")
+>>     }, ""))
+>> bitC(10^25)
+>> #> [1] 0 10001010010 |
+>> 0000100010110010101000101100001010000000001010010001
+>> bitC(10000000000000000905969664)
+>> #> [1] 0 10001010010 |
+>> 0000100010110010101000101100001010000000001010010010
+>> bitC(10000000000000000905969664 - 10^25)
+>> #> [1] 0 10000011110 |
+>> 0000000000000000000000000000000000000000000000000000
+>> bitC(1e25)
+>> #> [1] 0 10001010010 |
+>> 0000100010110010101000101100001010000000001010010001
+>> ```
+>>
+>> <sup>Created on 2022-07-10 by the [reprex package](
+>> https://reprex.tidyverse.org) (v2.0.1)</sup>
+>>
+>> Le dim. 10 juil. 2022 ? 22:23, Bill Dunlap <williamwdunlap at gmail.com> a
+>> ?crit :
+>>
+>>> The following function, 'bitC' from ?numToBits, displays the bits in a
+>>> double precision number, separated into the sign bit, the 11 exponent bits,
+>>> and the 52 bits in the mantissa.  I've shown the results with your numbers
+>>> from R-2.4.0 on my Windows 11 Lenovo laptop: what do you get?
+>>>
+>>> > bitC <- function(x) noquote(vapply(as.double(x), function(x) { # split
+>>> one double
+>>> +     b <- substr(as.character(rev(numToBits(x))), 2L, 2L)
+>>> +     paste0(c(b[1L], " ", b[2:12], " | ", b[13:64]), collapse = "")
+>>> +   }, ""))
+>>> > bitC(10^25)
+>>> # [1] 0 10001010010 |
+>>> 0000100010110010101000101100001010000000001010010001
+>>> > bitC(10000000000000000905969664)
+>>> # [1] 0 10001010010 |
+>>> 0000100010110010101000101100001010000000001010010001
+>>> > bitC(10000000000000000905969664 - 10^25)
+>>> # [1] 0 00000000000 |
+>>> 0000000000000000000000000000000000000000000000000000
+>>> > bitC(1e25)
+>>> # [1] 0 10001010010 |
+>>> 0000100010110010101000101100001010000000001010010001
+>>>
+>>> -Bill
+>>>
+>>> On Sun, Jul 10, 2022 at 7:00 AM Antoine Fabri <antoine.fabri at gmail.com>
+>>> wrote:
+>>>
+>>>> Dear r-devel,
+>>>>
+>>>> For some numbers, the printed value is not equivalent to the input :
+>>>>
+>>>> options(scipen = 999)
+>>>> ## GOOD
+>>>> 1e24
+>>>> #> [1]  999999999999999983222784
+>>>> 1e24 == 999999999999999983222784
+>>>> #> [1] TRUE
+>>>>
+>>>> ## BAD
+>>>> 1e25
+>>>> #> [1] 10000000000000000905969664
+>>>> 1e25 == 10000000000000000905969664
+>>>> #> [1] FALSE
+>>>>
+>>>> ## STILL BAD
+>>>> 10000000000000000905969664
+>>>> #> [1] 10000000000000003053453312
+>>>>
+>>>> ## GOOD AGAIN
+>>>> 10000000000000003053453312
+>>>> #> [1] 10000000000000003053453312
+>>>>
+>>>> # Additionally
+>>>> 10000000000000000000000000 == 1e25
+>>>> #> [1] FALSE
+>>>>
+>>>> Are these bugs ?
+>>>>
+>>>>         [[alternative HTML version deleted]]
+>>>>
+>>>> ______________________________________________
+>>>> R-devel at r-project.org mailing list
+>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>>
+>>>
+
+	[[alternative HTML version deleted]]
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Mon Jul 11 10:24:58 2022
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Mon, 11 Jul 2022 10:24:58 +0200
+Subject: [Rd] Floating point issue
+In-Reply-To: <1af830d4-73cb-b48b-77d2-de0c74aa1f8e@yahoo.com>
+References: <CAEKh8uhNTF3RczavV-jh82tK9e=iDr2tzys=wGSk6ZD5e2tndg@mail.gmail.com>
+ <CAHqSRuTN7iU2ngvr2JoEiqZCrogY8GL3ssKY2vvUZstWCydzKw@mail.gmail.com>
+ <CAEKh8ujziLSCxAEc1dmxJQMf5Kcpq2hO0yx+Tuyp4s98WuCeuA@mail.gmail.com>
+ <1af830d4-73cb-b48b-77d2-de0c74aa1f8e@yahoo.com>
+Message-ID: <25291.56922.730383.931706@stat.math.ethz.ch>
+
+>>>>> Brodie Gaslam via R-devel 
+>>>>>     on Sun, 10 Jul 2022 21:10:29 -0400 writes:
+
+    > The results are not exactly the same.  Notice that on Bill's system the 
+    > bit pattern of 10^25 and 10000000000000000905969664 are the same, but 
+    > not so on yours.  So there is a mismatch happening on parsing between 
+    > your M1 mac and other's systems.
+
+    > This is the main thing I wanted to point out.  But since I'm here I'm 
+    > going to add some additional lazily researched speculation.
+
+    > As Dirk points out, M1 does not have long double, and if you look at 
+    > what I think is responsible for parsing of numbers like the ones we're 
+    > discussing here, we see[1]:
+
+    > double R_strtod5(const char *str, char **endptr, char dec,
+    >                  Rboolean NA, int exact)
+    > {
+    >      LDOUBLE ans = 0.0;
+
+    > IIRC long double on systems that implement it as 80 bits (most that have 
+    > x87 coprocessors) has 63-4 bits of precision, vs 53 for 64 bit long 
+    > double.  Roughly speaking, that's 19-20 digits of base 10 precision for 
+    > long double, vs 15-16 for 64 bit double.  Then:
+
+    >> substr(rep("10000000000000000905969664", 2),  c(1, 1), c(16, 20))
+    > [1] "1000000000000000"     "10000000000000000905"
+
+    > Again, I have not carefully researched this, but it seems likely that 
+    > parsing is producing different a different outcome in this case because 
+    > the intermediate values generated can be kept at higher precision on 
+    > systems with 80 bit long doubles prior to coercing to double for the 
+    > final result.
+
+    > IIRC, if you need invertible deparsing/parsing I think you can use:
+
+    > deparse(1e25, control=c('hexNumeric'))
+
+    > Although I don't have an 80-bit-less system to test on (and I am too 
+    > lazy to recompile R without long double to test).
+
+    > Best,
+    > B.
+
+    > [1]: https://github.com/r-devel/r-svn/blob/master/src/main/util.c#L1993
+
+An excellent analysis, thank you, Brodie and Bill Dunlap.
+
+10 days ago I also had a colleague at ETH, involved in teaching stats,
+wanting to submit a bug report about a model fit in nlme which
+gave different results (well, a confidence interval of a
+correlation which was not at all significant (and estimated
+close to zero) changed from +/-0.45 to +/-0.85 ...
+... and when I asked for sessionInfo() etc,
+the result was that on the  M1  the result differed from all
+other platforms.
+I did not go into further analysis, but I know that nlme does
+*not* use any LDOUBLE | long double  but still, the M1 was less
+accurate than any other platform... and I also could not see this
+(the wider conf.ints) when I used a version of R configured with
+
+   configure --disable-long-double  
+
+[If anyone is interested I can provide the repr.ex. R code.]
+
+>From my current experiences, I dare to say that the M1 with all
+its speed is just a tad less reliable numerically than the
+Intel/AMD floating point implementations..
+
+Martin
+
+
+
+
+    > On 7/10/22 5:38 PM, Antoine Fabri wrote:
+    >> Thanks, I get the exact same results as yours
+    >> 
+    >> ``` r
+    >> bitC <- function(x) noquote(vapply(as.double(x), function(x) { # split one
+    >> double
+    >> b <- substr(as.character(rev(numToBits(x))), 2L, 2L)
+    >> paste0(c(b[1L], " ", b[2:12], " | ", b[13:64]), collapse = "")
+    >> }, ""))
+    >> bitC(10^25)
+    >> #> [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+    >> bitC(10000000000000000905969664)
+    >> #> [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010010
+    >> bitC(10000000000000000905969664 - 10^25)
+    >> #> [1] 0 10000011110 | 0000000000000000000000000000000000000000000000000000
+    >> bitC(1e25)
+    >> #> [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+    >> ```
+    >> 
+    >> <sup>Created on 2022-07-10 by the [reprex package](
+    >> https://reprex.tidyverse.org) (v2.0.1)</sup>
+    >> 
+    >> Le dim. 10 juil. 2022 ? 22:23, Bill Dunlap <williamwdunlap at gmail.com> a
+    >> ?crit :
+    >> 
+    >>> The following function, 'bitC' from ?numToBits, displays the bits in a
+    >>> double precision number, separated into the sign bit, the 11 exponent bits,
+    >>> and the 52 bits in the mantissa.  I've shown the results with your numbers
+    >>> from R-2.4.0 on my Windows 11 Lenovo laptop: what do you get?
+    >>> 
+    >>>> bitC <- function(x) noquote(vapply(as.double(x), function(x) { # split
+    >>> one double
+    >>> +     b <- substr(as.character(rev(numToBits(x))), 2L, 2L)
+    >>> +     paste0(c(b[1L], " ", b[2:12], " | ", b[13:64]), collapse = "")
+    >>> +   }, ""))
+    >>>> bitC(10^25)
+    >>> # [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+    >>>> bitC(10000000000000000905969664)
+    >>> # [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+    >>>> bitC(10000000000000000905969664 - 10^25)
+    >>> # [1] 0 00000000000 | 0000000000000000000000000000000000000000000000000000
+    >>>> bitC(1e25)
+    >>> # [1] 0 10001010010 | 0000100010110010101000101100001010000000001010010001
+    >>> 
+    >>> -Bill
+    >>> 
+    >>> On Sun, Jul 10, 2022 at 7:00 AM Antoine Fabri <antoine.fabri at gmail.com>
+    >>> wrote:
+    >>> 
+    >>>> Dear r-devel,
+    >>>> 
+    >>>> For some numbers, the printed value is not equivalent to the input :
+    >>>> 
+    >>>> options(scipen = 999)
+    >>>> ## GOOD
+    >>>> 1e24
+    >>>> #> [1]  999999999999999983222784
+    >>>> 1e24 == 999999999999999983222784
+    >>>> #> [1] TRUE
+    >>>> 
+    >>>> ## BAD
+    >>>> 1e25
+    >>>> #> [1] 10000000000000000905969664
+    >>>> 1e25 == 10000000000000000905969664
+    >>>> #> [1] FALSE
+    >>>> 
+    >>>> ## STILL BAD
+    >>>> 10000000000000000905969664
+    >>>> #> [1] 10000000000000003053453312
+    >>>> 
+    >>>> ## GOOD AGAIN
+    >>>> 10000000000000003053453312
+    >>>> #> [1] 10000000000000003053453312
+    >>>> 
+    >>>> # Additionally
+    >>>> 10000000000000000000000000 == 1e25
+    >>>> #> [1] FALSE
+    >>>> 
+    >>>> Are these bugs ?
+    >>>> 
+    >>>> [[alternative HTML version deleted]]
+    >>>> 
+    >>>> ______________________________________________
+    >>>> R-devel at r-project.org mailing list
+    >>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+    >>>> 
+    >>> 
+    >> 
+    >> [[alternative HTML version deleted]]
+    >> 
+    >> ______________________________________________
+    >> R-devel at r-project.org mailing list
+    >> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+    > ______________________________________________
+    > R-devel at r-project.org mailing list
+    > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From Andre@G||||bert @end|ng |rom chu-rouen@|r  Mon Jul 11 13:48:51 2022
+From: Andre@G||||bert @end|ng |rom chu-rouen@|r (GILLIBERT, Andre)
+Date: Mon, 11 Jul 2022 11:48:51 +0000
+Subject: [Rd] Floating point issue
+In-Reply-To: <25291.56922.730383.931706@stat.math.ethz.ch>
+References: <CAEKh8uhNTF3RczavV-jh82tK9e=iDr2tzys=wGSk6ZD5e2tndg@mail.gmail.com>
+ <CAHqSRuTN7iU2ngvr2JoEiqZCrogY8GL3ssKY2vvUZstWCydzKw@mail.gmail.com>
+ <CAEKh8ujziLSCxAEc1dmxJQMf5Kcpq2hO0yx+Tuyp4s98WuCeuA@mail.gmail.com>
+ <1af830d4-73cb-b48b-77d2-de0c74aa1f8e@yahoo.com>,
+ <25291.56922.730383.931706@stat.math.ethz.ch>
+Message-ID: <d771640ceb564817af3c7bdfdf0deff2@chu-rouen.fr>
+
+
+> From my current experiences, I dare to say that the M1 with all
+> its speed is just a tad less reliable numerically than the
+> Intel/AMD floating point implementations..
+
+
+80 bits floating point (FP) numbers are great, but I think we cannot rely on it for the future.
+I expect, the marketshare of ARM CPUs to grow. It's hard to predict, but ARM may spread in desktop computers in a timeframe of 10 years, and I would not expect it to gain extended precision FP.
+Moreover, performance of FP80 is not a priority of Intel. FP80 in recent Intel microprocessors are very slow when using special representations (NaN, NA, Inf, -Inf) or denormal numbers.
+
+Therefore, it may be wise to update R algorithms to make them work quite well with 64 bits FP.
+
+--
+Sincerely
+Andr? GILLIBERT
+
+	[[alternative HTML version deleted]]
+
+
+From t@r@@@z@kh@rko @end|ng |rom uzh@ch  Mon Jul 11 18:30:57 2022
+From: t@r@@@z@kh@rko @end|ng |rom uzh@ch (Taras Zakharko)
+Date: Mon, 11 Jul 2022 18:30:57 +0200
+Subject: [Rd] Floating point issue
+In-Reply-To: <d771640ceb564817af3c7bdfdf0deff2@chu-rouen.fr>
+References: <CAEKh8uhNTF3RczavV-jh82tK9e=iDr2tzys=wGSk6ZD5e2tndg@mail.gmail.com>
+ <CAHqSRuTN7iU2ngvr2JoEiqZCrogY8GL3ssKY2vvUZstWCydzKw@mail.gmail.com>
+ <CAEKh8ujziLSCxAEc1dmxJQMf5Kcpq2hO0yx+Tuyp4s98WuCeuA@mail.gmail.com>
+ <1af830d4-73cb-b48b-77d2-de0c74aa1f8e@yahoo.com>
+ <25291.56922.730383.931706@stat.math.ethz.ch>
+ <d771640ceb564817af3c7bdfdf0deff2@chu-rouen.fr>
+Message-ID: <A0D607EB-1C74-40D7-A0A1-C7277E017964@uzh.ch>
+
+To be pedantic, the C standard does not guarantee that long double offers more precision than double. If R?s internal FP/decimal conversion routines produce a different result on platforms that support Intel's 80-bit precision vs. platforms that don?t, I would classify this as a bug in R. Available precision can affect numerical properties of algorithms but should not affect things like decimal to binary or via versa conversion ? it either produces the accurate enough number or it doesn?t. 
+
+As a side note, I agree with Andre that relying on Intel?s extended precision in this day an age is not a good idea. This is a legacy feature from over forty years ago, x86 CPUs have been using SSE instructions for floating point computation for over a decade. The x87 instructions are slow and prevent compiler optimisations. Overall, I believe that R would benefit from dropping this legacy cruft. Not that there are too many places where it is used from what I see? 
+
+Best, 
+
+? Taras Zakharko
+
+
+
+> On 11 Jul 2022, at 13:48, GILLIBERT, Andre <Andre.Gillibert at chu-rouen.fr> wrote:
+> 
+> 
+>> From my current experiences, I dare to say that the M1 with all
+>> its speed is just a tad less reliable numerically than the
+>> Intel/AMD floating point implementations..
+> 
+> 
+> 80 bits floating point (FP) numbers are great, but I think we cannot rely on it for the future.
+> I expect, the marketshare of ARM CPUs to grow. It's hard to predict, but ARM may spread in desktop computers in a timeframe of 10 years, and I would not expect it to gain extended precision FP.
+> Moreover, performance of FP80 is not a priority of Intel. FP80 in recent Intel microprocessors are very slow when using special representations (NaN, NA, Inf, -Inf) or denormal numbers.
+> 
+> Therefore, it may be wise to update R algorithms to make them work quite well with 64 bits FP.
+> 
+> --
+> Sincerely
+> Andr? GILLIBERT
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Tue Jul 12 03:02:01 2022
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Tue, 12 Jul 2022 13:02:01 +1200
+Subject: [Rd] Floating point issue
+In-Reply-To: <CAEKh8uhNTF3RczavV-jh82tK9e=iDr2tzys=wGSk6ZD5e2tndg@mail.gmail.com>
+References: <CAEKh8uhNTF3RczavV-jh82tK9e=iDr2tzys=wGSk6ZD5e2tndg@mail.gmail.com>
+Message-ID: <C16B8B5F-5A2E-40B9-BFAF-95F5B52DB030@R-project.org>
+
+I don?t think there is any guarantee that unrepresentable numbers are parsed into defined patterns, because printing is done by the OS while parsing is done by R. The way R parses decimal numbers[1] is simply by using the obvious res = res * 10 + digit and it can be easily checked that for doubles the representation such obtained from 10000000000000000905969664 is 0x1.08b2a2c280292p+83 (see below if you want to see it yourself) which is not the same as 10^25 which is 0x1.08b2a2c280291p+83. This is true on all platforms, it is not specific to M1. The only difference is if your were to use a different type you can obtain a different result - and that is not well-defined (e.g. long doubles have no guarantees at all as of the precision).  Note that the decimal string above would require 83-bits of precision which is not representable.
+
+(BTW: to make it even more fun, if you were to use double res = 1; repeat(25) res = res * 10; in C, so the naive computation of the original 10^25 you?d get 9999999999999998758486016 and 0x1.08b2a2c28029p+83)
+
+Given that printing is done by the OS and parsing by R, I don?t think R guarantees anything. If you want representable number you?d use the binary representation (sprintf(?%a?) or hex-mode deparse as noted). One could argue that it could make sense to change it one way or another - either having R do it all or having the OS do it all. In the latter case one may obtain more consistent results (e.g. system stdtod() yields the original value even on M1), but it would be OS-specific. In the former R could impose its own guarantees - but currently it does not.
+
+Cheers,
+Simon
+
+[1] - https://github.com/r-devel/r-svn/blob/97c0a73f1758d09088c200f924d27b362d55ccdc/src/main/util.c#L2094
+
+
+#include <stdio.h>
+#include <math.h>
+#include <stdlib.h>
+
+int main() {
+  const char *str = "10000000000000000905969664", *c = str;
+  double ans = 0;
+  while (*c) {
+    ans = 10 * ans + (*(c++) - '0');
+    printf("%a\n", ans);
+  }
+  printf("atof: %a\n", atof(str));
+  double pow1025 = pow(10.0, 25);
+  printf("--\n10^25:\n%25.f\n%a\n", pow1025, pow1025);
+  return 0;
+}
+
+0x1p+0
+0x1.4p+3
+0x1.9p+6
+0x1.f4p+9
+0x1.388p+13
+0x1.86ap+16
+0x1.e848p+19
+0x1.312dp+23
+0x1.7d784p+26
+0x1.dcd65p+29
+0x1.2a05f2p+33
+0x1.74876e8p+36
+0x1.d1a94a2p+39
+0x1.2309ce54p+43
+0x1.6bcc41e9p+46
+0x1.c6bf52634p+49
+0x1.1c37937e08p+53
+0x1.6345785d8a001p+56
+0x1.bc16d674ec801p+59
+0x1.158e460913d01p+63
+0x1.5af1d78b58c41p+66
+0x1.b1ae4d6e2ef51p+69
+0x1.0f0cf064dd593p+73
+0x1.52d02c7e14af8p+76
+0x1.a784379d99db6p+79
+0x1.08b2a2c280292p+83
+atof: 0x1.08b2a2c280291p+83
+--
+10^25:
+10000000000000000905969664
+0x1.08b2a2c280291p+83
+
+
+> On 11/07/2022, at 02:00, Antoine Fabri <antoine.fabri at gmail.com> wrote:
+> 
+> Dear r-devel,
+> 
+> For some numbers, the printed value is not equivalent to the input :
+> 
+> options(scipen = 999)
+> ## GOOD
+> 1e24
+> #> [1]  999999999999999983222784
+> 1e24 == 999999999999999983222784
+> #> [1] TRUE
+> 
+> ## BAD
+> 1e25
+> #> [1] 10000000000000000905969664
+> 1e25 == 10000000000000000905969664
+> #> [1] FALSE
+> 
+> ## STILL BAD
+> 10000000000000000905969664
+> #> [1] 10000000000000003053453312
+> 
+> ## GOOD AGAIN
+> 10000000000000003053453312
+> #> [1] 10000000000000003053453312
+> 
+> # Additionally
+> 10000000000000000000000000 == 1e25
+> #> [1] FALSE
+> 
+> Are these bugs ?
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
