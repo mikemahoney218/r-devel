@@ -2789,3 +2789,332 @@ Best,
 Hugh.
 
 
+From dev|nm@r||n @end|ng |rom gm@||@com  Thu Jul 14 21:53:39 2022
+From: dev|nm@r||n @end|ng |rom gm@||@com (Devin Marlin)
+Date: Thu, 14 Jul 2022 15:53:39 -0400
+Subject: [Rd] Feature Request: Allow Underscore Separated Numbers
+Message-ID: <CAMnDFaaev9wEcFjvy7mSPvEApcu2FbeGiVng8sTuDQQt33o7mA@mail.gmail.com>
+
+Hello,
+
+After using R for a number of years, and venturing into other languages,
+I've noticed the ones with the ability to enter numbers separated by
+underscores for readability (like 100000 as 100_000) make life a whole lot
+easier, especially when debugging. Is this a feature that could be
+implemented in R?
+
+Regards,
+
+-- 
+*Devin Marlin*
+
+	[[alternative HTML version deleted]]
+
+
+From @vi@e@gross m@iii@g oii gm@ii@com  Fri Jul 15 02:21:38 2022
+From: @vi@e@gross m@iii@g oii gm@ii@com (@vi@e@gross m@iii@g oii gm@ii@com)
+Date: Thu, 14 Jul 2022 20:21:38 -0400
+Subject: [Rd] Feature Request: Allow Underscore Separated Numbers
+In-Reply-To: <CAMnDFaaev9wEcFjvy7mSPvEApcu2FbeGiVng8sTuDQQt33o7mA@mail.gmail.com>
+References: <CAMnDFaaev9wEcFjvy7mSPvEApcu2FbeGiVng8sTuDQQt33o7mA@mail.gmail.com>
+Message-ID: <00d501d897e0$da0e5330$8e2af990$@gmail.com>
+
+Devin,
+
+I cannot say anyone wants to tweak R after the fact to accept numeric items
+with underscores as that might impact all kinds of places.
+
+Can I suggest a workaround that allows you to enter your integer (or
+floating point which gets truncated) using this:
+
+underint <- function(text) as.integer(gsub("_+", "", text))
+
+Use a call to that anywhere you want an int like:
+
+result <- underint("1_000_000") + underint("6___6__6_6") - 6000
+
+results in: 100666
+
+If you want to see the result with underscores, using something like
+scales::comma as in
+
+You can also make similar functions that use as.numeric() and as.double()
+but note that this allows you to enter data at somewhat greater expense and
+as text/strings. Obviously a similar technique can be used with regular
+expressions of many kinds to wipe out or replace anything, including commas
+with this:
+
+undernumeric <- function(text) as.numeric(gsub("[,_]+", "", text))
+
+undernumeric("123,456.789_012")
+[1] 123456.8
+
+Yes, it truncated it but I am sure any combo of underscores and commas will
+be removed. It also truncates the same thing with all numerals and a period.
+
+
+
+-----Original Message-----
+From: R-devel <r-devel-bounces at r-project.org> On Behalf Of Devin Marlin
+Sent: Thursday, July 14, 2022 3:54 PM
+To: r-devel at r-project.org
+Subject: [Rd] Feature Request: Allow Underscore Separated Numbers
+
+Hello,
+
+After using R for a number of years, and venturing into other languages,
+I've noticed the ones with the ability to enter numbers separated by
+underscores for readability (like 100000 as 100_000) make life a whole lot
+easier, especially when debugging. Is this a feature that could be
+implemented in R?
+
+Regards,
+
+--
+*Devin Marlin*
+
+	[[alternative HTML version deleted]]
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From bbo|ker @end|ng |rom gm@||@com  Fri Jul 15 02:29:51 2022
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Thu, 14 Jul 2022 20:29:51 -0400
+Subject: [Rd] Feature Request: Allow Underscore Separated Numbers
+In-Reply-To: <00d501d897e0$da0e5330$8e2af990$@gmail.com>
+References: <CAMnDFaaev9wEcFjvy7mSPvEApcu2FbeGiVng8sTuDQQt33o7mA@mail.gmail.com>
+ <00d501d897e0$da0e5330$8e2af990$@gmail.com>
+Message-ID: <1d949cb9-c59c-67db-73d3-09434190d0f0@gmail.com>
+
+
+
+On 2022-07-14 8:21 p.m., avi.e.gross at gmail.com wrote:
+> Devin,
+> 
+> I cannot say anyone wants to tweak R after the fact to accept numeric items
+> with underscores as that might impact all kinds of places.
+> 
+> Can I suggest a workaround that allows you to enter your integer (or
+> floating point which gets truncated) using this:
+> 
+> underint <- function(text) as.integer(gsub("_+", "", text))
+> 
+> Use a call to that anywhere you want an int like:
+> 
+> result <- underint("1_000_000") + underint("6___6__6_6") - 6000
+> 
+> results in: 100666
+> 
+> If you want to see the result with underscores, using something like
+> scales::comma as in
+> 
+> You can also make similar functions that use as.numeric() and as.double()
+> but note that this allows you to enter data at somewhat greater expense and
+> as text/strings. Obviously a similar technique can be used with regular
+> expressions of many kinds to wipe out or replace anything, including commas
+> with this:
+> 
+> undernumeric <- function(text) as.numeric(gsub("[,_]+", "", text))
+> 
+> undernumeric("123,456.789_012")
+> [1] 123456.8
+> 
+> Yes, it truncated it but I am sure any combo of underscores and commas will
+> be removed. It also truncates the same thing with all numerals and a period.
+> 
+
+   It's not really 'truncated', it's just printed with limited 
+precision.  (Sorry if I'm telling you something you already know ...)
+
+options(digits = 22)
+undernumeric("123,456.789_012")
+[1] 123456.7890119999938179
+
+(and there's floating point inaccuracy rearing its ugly head again; 
+options(digits=16) works well for this example ...)
+
+> 
+> 
+> -----Original Message-----
+> From: R-devel <r-devel-bounces at r-project.org> On Behalf Of Devin Marlin
+> Sent: Thursday, July 14, 2022 3:54 PM
+> To: r-devel at r-project.org
+> Subject: [Rd] Feature Request: Allow Underscore Separated Numbers
+> 
+> Hello,
+> 
+> After using R for a number of years, and venturing into other languages,
+> I've noticed the ones with the ability to enter numbers separated by
+> underscores for readability (like 100000 as 100_000) make life a whole lot
+> easier, especially when debugging. Is this a feature that could be
+> implemented in R?
+> 
+> Regards,
+> 
+> --
+> *Devin Marlin*
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Dr. Benjamin Bolker
+Professor, Mathematics & Statistics and Biology, McMaster University
+Director, School of Computational Science and Engineering
+(Acting) Graduate chair, Mathematics & Statistics
+
+
+From @vi@e@gross m@iii@g oii gm@ii@com  Fri Jul 15 02:53:58 2022
+From: @vi@e@gross m@iii@g oii gm@ii@com (@vi@e@gross m@iii@g oii gm@ii@com)
+Date: Thu, 14 Jul 2022 20:53:58 -0400
+Subject: [Rd] Feature Request: Allow Underscore Separated Numbers
+In-Reply-To: <1d949cb9-c59c-67db-73d3-09434190d0f0@gmail.com>
+References: <CAMnDFaaev9wEcFjvy7mSPvEApcu2FbeGiVng8sTuDQQt33o7mA@mail.gmail.com>
+ <00d501d897e0$da0e5330$8e2af990$@gmail.com>
+ <1d949cb9-c59c-67db-73d3-09434190d0f0@gmail.com>
+Message-ID: <00f201d897e5$5e152a60$1a3f7f20$@gmail.com>
+
+Yes, Ben, your point (way below) is correct. As I noted, as.numeric() also
+truncated a normal notation so I did not worry about it as I could tweak the
+system and both versions (underscores too) would now show more precision. 
+
+I can think of oodles more ways to allow showing big numbers as readable
+such as writing them in segments and concatenating them with paste0() as in:
+
+assembleint <- function(...) as.integer(paste(..., sep=""))
+
+> assembleint("12", "345", "678")
+[1] 12345678
+
+But it really at some point is not very readable. I was a bit annoyed at the
+underscore method used in other languages I know as for me the comma is the
+normal separator but commas are so deeply embedded for various uses in just
+about any language, that they could not be allowed within a grouping of
+digits. Few things can be but "_" maybe could as it is allowed in other
+identifiers and in Python, even at the start in some places.
+
+But now I realize that others have different methods. I recently saw someone
+using a CSV file with numbers that use comma as a decimal delimiter and thus
+they use semicolon to keep the fields apart.  But we have R functions that
+easily handle importing from that as long as once inside, we deal with them
+without seeing them again unless needed.
+
+I am thinking of all the regular expressions that would break badly if
+underscores in digits are allowed. All the [0-9] constructs might need to be
+[0-9_] and \d might need to be redefined. The end of a number might be
+undefined if it bumped up against something else with an underscore at the
+edge.
+
+If we were re-inventing everything today, I suspect we might have started
+with something like UNICODE with lots more symbols than ASCII or EBCDIC had
+and that might include a globally defined comma-separator symbol that was
+never used except with a number so it would be part of the definition of
+what numeric digits are. But that is not going to happen.
+
+-----Original Message-----
+From: R-devel <r-devel-bounces at r-project.org> On Behalf Of Ben Bolker
+Sent: Thursday, July 14, 2022 8:30 PM
+To: r-devel at r-project.org
+Subject: Re: [Rd] Feature Request: Allow Underscore Separated Numbers
+
+
+
+On 2022-07-14 8:21 p.m., avi.e.gross at gmail.com wrote:
+> Devin,
+> 
+> I cannot say anyone wants to tweak R after the fact to accept numeric 
+> items with underscores as that might impact all kinds of places.
+> 
+> Can I suggest a workaround that allows you to enter your integer (or 
+> floating point which gets truncated) using this:
+> 
+> underint <- function(text) as.integer(gsub("_+", "", text))
+> 
+> Use a call to that anywhere you want an int like:
+> 
+> result <- underint("1_000_000") + underint("6___6__6_6") - 6000
+> 
+> results in: 100666
+> 
+> If you want to see the result with underscores, using something like 
+> scales::comma as in
+> 
+> You can also make similar functions that use as.numeric() and 
+> as.double() but note that this allows you to enter data at somewhat 
+> greater expense and as text/strings. Obviously a similar technique can 
+> be used with regular expressions of many kinds to wipe out or replace 
+> anything, including commas with this:
+> 
+> undernumeric <- function(text) as.numeric(gsub("[,_]+", "", text))
+> 
+> undernumeric("123,456.789_012")
+> [1] 123456.8
+> 
+> Yes, it truncated it but I am sure any combo of underscores and commas 
+> will be removed. It also truncates the same thing with all numerals and a
+period.
+> 
+
+   It's not really 'truncated', it's just printed with limited precision.
+(Sorry if I'm telling you something you already know ...)
+
+options(digits = 22)
+undernumeric("123,456.789_012")
+[1] 123456.7890119999938179
+
+(and there's floating point inaccuracy rearing its ugly head again;
+options(digits=16) works well for this example ...)
+
+> 
+> 
+> -----Original Message-----
+> From: R-devel <r-devel-bounces at r-project.org> On Behalf Of Devin 
+> Marlin
+> Sent: Thursday, July 14, 2022 3:54 PM
+> To: r-devel at r-project.org
+> Subject: [Rd] Feature Request: Allow Underscore Separated Numbers
+> 
+> Hello,
+> 
+> After using R for a number of years, and venturing into other 
+> languages, I've noticed the ones with the ability to enter numbers 
+> separated by underscores for readability (like 100000 as 100_000) make 
+> life a whole lot easier, especially when debugging. Is this a feature 
+> that could be implemented in R?
+> 
+> Regards,
+> 
+> --
+> *Devin Marlin*
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+--
+Dr. Benjamin Bolker
+Professor, Mathematics & Statistics and Biology, McMaster University
+Director, School of Computational Science and Engineering
+(Acting) Graduate chair, Mathematics & Statistics
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
