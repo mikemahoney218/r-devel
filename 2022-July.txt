@@ -3118,3 +3118,1353 @@ R-devel at r-project.org mailing list
 https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From Andre@G||||bert @end|ng |rom chu-rouen@|r  Fri Jul 15 08:31:05 2022
+From: Andre@G||||bert @end|ng |rom chu-rouen@|r (GILLIBERT, Andre)
+Date: Fri, 15 Jul 2022 06:31:05 +0000
+Subject: [Rd] Feature Request: Allow Underscore Separated Numbers
+In-Reply-To: <00f201d897e5$5e152a60$1a3f7f20$@gmail.com>
+References: <CAMnDFaaev9wEcFjvy7mSPvEApcu2FbeGiVng8sTuDQQt33o7mA@mail.gmail.com>
+ <00d501d897e0$da0e5330$8e2af990$@gmail.com>
+ <1d949cb9-c59c-67db-73d3-09434190d0f0@gmail.com>,
+ <00f201d897e5$5e152a60$1a3f7f20$@gmail.com>
+Message-ID: <4b2912e60b134c2894f592fb8b3ce056@chu-rouen.fr>
+
+
+
+On 2022-07-14 8:21 p.m., avi.e.gross at gmail.com wrote:
+> Devin,
+>
+> I cannot say anyone wants to tweak R after the fact to accept numeric
+> items with underscores as that might impact all kinds of places.
+>
+
+I am not sure that the feature request of Devin Marlin was correctly understood.
+I guess that he thought about adding syntactic sugar to numeric literals in the language.
+Functions such as as.numeric(), or read.csv() would not be changed.
+
+The main difference would be to make valid code that currently is a "syntax error", such as:
+> 3*100_000
+Error: unexpected input in "3*100_"
+
+Breaking code with that feature is possible but improbable.
+Indeed, code expecting that str2lang("3*100_000") make a syntax error (catching the error with try) would break.
+Most code generating other code then parsing it with str2lang() should be fine, because it would generate old-style code with normal numeric constants.
+
+--
+Sincerely
+Andr? GILLIBERT
+
+	[[alternative HTML version deleted]]
+
+
+From rhe|p @end|ng |rom eoo@@dd@@n|  Fri Jul 15 10:27:54 2022
+From: rhe|p @end|ng |rom eoo@@dd@@n| (Jan van der Laan)
+Date: Fri, 15 Jul 2022 10:27:54 +0200
+Subject: [Rd] Feature Request: Allow Underscore Separated Numbers
+In-Reply-To: <00d501d897e0$da0e5330$8e2af990$@gmail.com>
+References: <CAMnDFaaev9wEcFjvy7mSPvEApcu2FbeGiVng8sTuDQQt33o7mA@mail.gmail.com>
+ <00d501d897e0$da0e5330$8e2af990$@gmail.com>
+Message-ID: <64d11006-54b5-ddd8-e8f5-850c5edce84c@eoos.dds.nl>
+
+
+Another R-solution would be:
+
+`%,%` <- function(a, b) a*1000 + b
+
+which would allow one to write large numbers as
+
+ > 100%,%123
+
+Resulting in 100123.
+
+Not sure if this really helps with readability.
+
+
+I actually think this could better be handled by the IDE one is working 
+in. Most IDE's already do syntax highlighting and when a suitable font 
+is used text as '!=' is displayed as '?' (the unequal sign). So I guess 
+they can also apply special formatting to large numbers such as grouping 
+the numbers, underlining groups of three, using colour, ..
+
+
+Jan
+
+
+
+
+On 15-07-2022 02:21, avi.e.gross at gmail.com wrote:
+> Devin,
+> 
+> I cannot say anyone wants to tweak R after the fact to accept numeric items
+> with underscores as that might impact all kinds of places.
+> 
+> Can I suggest a workaround that allows you to enter your integer (or
+> floating point which gets truncated) using this:
+> 
+> underint <- function(text) as.integer(gsub("_+", "", text))
+> 
+> Use a call to that anywhere you want an int like:
+> 
+> result <- underint("1_000_000") + underint("6___6__6_6") - 6000
+> 
+> results in: 100666
+> 
+> If you want to see the result with underscores, using something like
+> scales::comma as in
+> 
+> You can also make similar functions that use as.numeric() and as.double()
+> but note that this allows you to enter data at somewhat greater expense and
+> as text/strings. Obviously a similar technique can be used with regular
+> expressions of many kinds to wipe out or replace anything, including commas
+> with this:
+> 
+> undernumeric <- function(text) as.numeric(gsub("[,_]+", "", text))
+> 
+> undernumeric("123,456.789_012")
+> [1] 123456.8
+> 
+> Yes, it truncated it but I am sure any combo of underscores and commas will
+> be removed. It also truncates the same thing with all numerals and a period.
+> 
+> 
+> 
+> -----Original Message-----
+> From: R-devel <r-devel-bounces at r-project.org> On Behalf Of Devin Marlin
+> Sent: Thursday, July 14, 2022 3:54 PM
+> To: r-devel at r-project.org
+> Subject: [Rd] Feature Request: Allow Underscore Separated Numbers
+> 
+> Hello,
+> 
+> After using R for a number of years, and venturing into other languages,
+> I've noticed the ones with the ability to enter numbers separated by
+> underscores for readability (like 100000 as 100_000) make life a whole lot
+> easier, especially when debugging. Is this a feature that could be
+> implemented in R?
+> 
+> Regards,
+> 
+> --
+> *Devin Marlin*
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Fri Jul 15 12:01:57 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Fri, 15 Jul 2022 06:01:57 -0400
+Subject: [Rd] Feature Request: Allow Underscore Separated Numbers
+In-Reply-To: <CAMnDFaaev9wEcFjvy7mSPvEApcu2FbeGiVng8sTuDQQt33o7mA@mail.gmail.com>
+References: <CAMnDFaaev9wEcFjvy7mSPvEApcu2FbeGiVng8sTuDQQt33o7mA@mail.gmail.com>
+Message-ID: <46a8f42d-7489-1228-f9e4-6368e15660a6@gmail.com>
+
+On 14/07/2022 3:53 p.m., Devin Marlin wrote:
+> Hello,
+> 
+> After using R for a number of years, and venturing into other languages,
+> I've noticed the ones with the ability to enter numbers separated by
+> underscores for readability (like 100000 as 100_000) make life a whole lot
+> easier, especially when debugging. Is this a feature that could be
+> implemented in R?
+
+I think this could be done, but I doubt if anyone who could make the 
+change would think the arbitrary decisions and added complexity in the 
+parser was worth the effort.  (Would it be a thousands separator, or 
+could it separate any number of digits?  Could a number start with an 
+underscore or end with one?)
+
+Instead, I'd suggest creating variables with meaningful names to hold 
+big numeric constants, e.g.
+
+     AU_in_km <- 149598262  # or 149.598262e6
+
+     Jupiter <- 5.2 * AU_in_km
+
+rather than
+
+     Jupiter <- 5.2 * 149_598_262
+
+Duncan Murdoch
+
+
+From ggrothend|eck @end|ng |rom gm@||@com  Fri Jul 15 15:12:18 2022
+From: ggrothend|eck @end|ng |rom gm@||@com (Gabor Grothendieck)
+Date: Fri, 15 Jul 2022 09:12:18 -0400
+Subject: [Rd] Feature Request: Allow Underscore Separated Numbers
+In-Reply-To: <46a8f42d-7489-1228-f9e4-6368e15660a6@gmail.com>
+References: <CAMnDFaaev9wEcFjvy7mSPvEApcu2FbeGiVng8sTuDQQt33o7mA@mail.gmail.com>
+ <46a8f42d-7489-1228-f9e4-6368e15660a6@gmail.com>
+Message-ID: <CAP01uRkRTYYb9=EcymC6uxpVyfpRJpy3q5Hpc9NKonjuMcoOGA@mail.gmail.com>
+
+It would be best to simply ignore any embedded _ in numbers rather than only
+accept them at fixed locations since it isn't always
+a thousands separator.  For example, 1 lakh is sometimes written as
+1,00,000 rupees.
+
+On Fri, Jul 15, 2022 at 7:25 AM Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+>
+> On 14/07/2022 3:53 p.m., Devin Marlin wrote:
+> > Hello,
+> >
+> > After using R for a number of years, and venturing into other languages,
+> > I've noticed the ones with the ability to enter numbers separated by
+> > underscores for readability (like 100000 as 100_000) make life a whole lot
+> > easier, especially when debugging. Is this a feature that could be
+> > implemented in R?
+>
+> I think this could be done, but I doubt if anyone who could make the
+> change would think the arbitrary decisions and added complexity in the
+> parser was worth the effort.  (Would it be a thousands separator, or
+> could it separate any number of digits?  Could a number start with an
+> underscore or end with one?)
+>
+> Instead, I'd suggest creating variables with meaningful names to hold
+> big numeric constants, e.g.
+>
+>      AU_in_km <- 149598262  # or 149.598262e6
+>
+>      Jupiter <- 5.2 * AU_in_km
+>
+> rather than
+>
+>      Jupiter <- 5.2 * 149_598_262
+>
+> Duncan Murdoch
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+
+-- 
+Statistics & Software Consulting
+GKX Group, GKX Associates Inc.
+tel: 1-877-GKX-GROUP
+email: ggrothendieck at gmail.com
+
+
+From @vi@e@gross m@iii@g oii gm@ii@com  Fri Jul 15 17:25:32 2022
+From: @vi@e@gross m@iii@g oii gm@ii@com (@vi@e@gross m@iii@g oii gm@ii@com)
+Date: Fri, 15 Jul 2022 11:25:32 -0400
+Subject: [Rd] Feature Request: Allow Underscore Separated Numbers
+In-Reply-To: <4b2912e60b134c2894f592fb8b3ce056@chu-rouen.fr>
+References: <CAMnDFaaev9wEcFjvy7mSPvEApcu2FbeGiVng8sTuDQQt33o7mA@mail.gmail.com>
+ <00d501d897e0$da0e5330$8e2af990$@gmail.com>
+ <1d949cb9-c59c-67db-73d3-09434190d0f0@gmail.com>,
+ <00f201d897e5$5e152a60$1a3f7f20$@gmail.com>
+ <4b2912e60b134c2894f592fb8b3ce056@chu-rouen.fr>
+Message-ID: <007301d8985f$205d9a70$6118cf50$@gmail.com>
+
+Andr?,
+
+ 
+
+I am not saying a change cannot be done and am not familiar enough with the
+internals of R. If you just want the interpreter to evaluate CONSTANTS in
+the code as what you consider syntactic sugar and replace 1_000 with 1000,
+that sounds superficially possible. But is it?
+
+ 
+
+R normally delays evaluation so chunks of code are handed over untouched to
+functions that often play with the text directly without evaluating it
+until, perhaps, much later. And I have pointed out how much work is done
+with things like regular expressions or reading things in from a file that
+is not done in the REPL but in functions behind the scene. So if there is
+any way for a number to slide in without being modified, or places where you
+want the darn underscores preserved, you may well cause a glitch.
+
+ 
+
+Languages that design in the ability have obviously dealt with issues and
+presumably anyone writing code anew can use a new definition in their work
+so they handle such numbers. I am not saying such a change cannot be done,
+simply that existing languages are careful about making changes as they
+strive to retain compatibility.
+
+ 
+
+So even assuming your statement about not needing to change as.numeric or
+read.csv functions is true, aren?t you introducing a change in which the
+users will inadvertently use the feature in strings or files and assume it
+is a globally recognized feature? I use CSV files and other such formats
+quite a bit as a way to exchange data between R and other environments and
+unless they all change and allow underscores in numbers, there can be
+issues. So, yes, you are suggesting nothing in R will write out numbers with
+underscores. But if others do and you import the data into R with a reader
+that does not understand, we have anomalies.
+
+ 
+
+I am not arguing with anyone about this. Like many proposed features, it
+sounds reasonable just by itself. But for a language that was crafted and
+then modified many times, the burden is often on those wanting a change to
+convince us that it can be done benignly, effectively and cheaply AND that
+it is more worthwhile than a thousand other pending ideas already submitted.
+
+ 
+
+I have never used str2lang() in my life directly so would changing that
+really help if as.numeric() and other such functions were left alone and did
+not call it? What if I read in a .CSV a line at a time and use various
+methods including regular expressions to split the line into parts and then
+make the parts into numbers based on some primitive algorithm that maps
+digits 0-9 into small integers 0-9 and then positionally multiplies digits
+to the left by 10 for each level and adds them up. Will that algorithm know
+about underscores and not only ignore them but keep track of how many times
+it multiplies the other parts by 10? Sure, we can write a new algorithm with
+added complexity but in my view, we can solve the problem in the few cases
+it matters without such a change.
+
+ 
+
+Had this been built in originally, maybe not a problem. But consider the
+enormous expense of UNICODE and the truly major upheaval needed to get it
+working  at a time when lots of code using pointers had a reasonable
+expectation that all characters took up the same number of bytes, and
+calculating the length of a string could be done by simply subtracting one
+pointer from another. Now, you actually have to read the entire string and
+count code points, or keep the length as a part of the structure that is
+changed any time it changes and so on.
+
+ 
+
+But arguably UNICODE support is now required in many cases. So, yes,
+underscores in numbers may become commonplace and cause headaches for a
+while. But mathematically, I don?t see them as needed and see many ways to
+allow a programmer to see what a number is without any problems in the few
+times they want it. Cut and paste in code can easily take out any snippet
+accurately and pluck it into a function that displays it with commas or
+whatever. But definitely, lazy humans constantly make mistakes and even with
+this would still make some.
+
+ 
+
+But if R developers seem confident this change can be done, go for it!
+Numeric literals, like other constants, have often been something compiled
+languages have optimized out of the way, such as combining multiple
+instances of the same one into one memory location.
+
+ 
+
+Avi
+
+ 
+
+ 
+
+From: GILLIBERT, Andre <Andre.Gillibert at chu-rouen.fr> 
+Sent: Friday, July 15, 2022 2:31 AM
+To: avi.e.gross at gmail.com; r-devel at r-project.org
+Subject: RE: [Rd] Feature Request: Allow Underscore Separated Numbers
+
+ 
+
+ 
+
+ 
+
+On 2022-07-14 8:21 p.m., avi.e.gross at gmail.com
+<mailto:avi.e.gross at gmail.com>  wrote:
+> Devin,
+>
+> I cannot say anyone wants to tweak R after the fact to accept numeric
+> items with underscores as that might impact all kinds of places.
+>
+
+ 
+
+I am not sure that the feature request of Devin Marlin was correctly
+understood.
+
+I guess that he thought about adding syntactic sugar to numeric literals in
+the language.
+
+Functions such as as.numeric(), or read.csv() would not be changed.
+
+ 
+
+The main difference would be to make valid code that currently is a "syntax
+error", such as:
+
+> 3*100_000
+
+Error: unexpected input in "3*100_"
+
+ 
+
+Breaking code with that feature is possible but improbable.
+
+Indeed, code expecting that str2lang("3*100_000") make a syntax error
+(catching the error with try) would break.
+
+Most code generating other code then parsing it with str2lang() should be
+fine, because it would generate old-style code with normal numeric
+constants.
+
+ 
+
+-- 
+
+Sincerely
+
+Andr? GILLIBERT
+
+
+	[[alternative HTML version deleted]]
+
+
+From @vi@e@gross m@iii@g oii gm@ii@com  Fri Jul 15 17:56:14 2022
+From: @vi@e@gross m@iii@g oii gm@ii@com (@vi@e@gross m@iii@g oii gm@ii@com)
+Date: Fri, 15 Jul 2022 11:56:14 -0400
+Subject: [Rd] Feature Request: Allow Underscore Separated Numbers
+In-Reply-To: <64d11006-54b5-ddd8-e8f5-850c5edce84c@eoos.dds.nl>
+References: <CAMnDFaaev9wEcFjvy7mSPvEApcu2FbeGiVng8sTuDQQt33o7mA@mail.gmail.com>
+ <00d501d897e0$da0e5330$8e2af990$@gmail.com>
+ <64d11006-54b5-ddd8-e8f5-850c5edce84c@eoos.dds.nl>
+Message-ID: <00c901d89863$696bb400$3c431c00$@gmail.com>
+
+Jan,
+
+Many ideas like yours are a solution that delivers something like syntactic sugar, albeit yours may be too specific. It would not be useful for say recording a social security number or other identifier that is normally clumped  (albeit it is not always treated as a number) when someone wants to accurately record 123-45-6789 but must write 123456789 and possibly not chunk it right and get a wrong number. Multiplying by a thousand here won?t get the right result.
+
+But a low tech solution at any level is to use a polynomial format of sorts so 123456789 is written as:
+
+123 * 10^6 + 456 + 10^3 + 789
+
+Or some similar notation.
+
+And, can you add a new number designator along the lines of 0x12ff meaning hexadecimal so writing some prefix like "00_" might mean what follows contains underscores you can ignore when putting it into a number format?
+
+The main reason I guess for the change seems to be for following along what others have chosen.
+
+Avi
+
+-----Original Message-----
+From: R-devel <r-devel-bounces at r-project.org> On Behalf Of Jan van der Laan
+Sent: Friday, July 15, 2022 4:28 AM
+To: r-devel at r-project.org
+Subject: Re: [Rd] Feature Request: Allow Underscore Separated Numbers
+
+
+Another R-solution would be:
+
+`%,%` <- function(a, b) a*1000 + b
+
+which would allow one to write large numbers as
+
+ > 100%,%123
+
+Resulting in 100123.
+
+Not sure if this really helps with readability.
+
+
+I actually think this could better be handled by the IDE one is working in. Most IDE's already do syntax highlighting and when a suitable font is used text as '!=' is displayed as '?' (the unequal sign). So I guess they can also apply special formatting to large numbers such as grouping the numbers, underlining groups of three, using colour, ..
+
+
+Jan
+
+
+
+
+On 15-07-2022 02:21, avi.e.gross at gmail.com wrote:
+> Devin,
+> 
+> I cannot say anyone wants to tweak R after the fact to accept numeric 
+> items with underscores as that might impact all kinds of places.
+> 
+> Can I suggest a workaround that allows you to enter your integer (or 
+> floating point which gets truncated) using this:
+> 
+> underint <- function(text) as.integer(gsub("_+", "", text))
+> 
+> Use a call to that anywhere you want an int like:
+> 
+> result <- underint("1_000_000") + underint("6___6__6_6") - 6000
+> 
+> results in: 100666
+> 
+> If you want to see the result with underscores, using something like 
+> scales::comma as in
+> 
+> You can also make similar functions that use as.numeric() and 
+> as.double() but note that this allows you to enter data at somewhat 
+> greater expense and as text/strings. Obviously a similar technique can 
+> be used with regular expressions of many kinds to wipe out or replace 
+> anything, including commas with this:
+> 
+> undernumeric <- function(text) as.numeric(gsub("[,_]+", "", text))
+> 
+> undernumeric("123,456.789_012")
+> [1] 123456.8
+> 
+> Yes, it truncated it but I am sure any combo of underscores and commas 
+> will be removed. It also truncates the same thing with all numerals and a period.
+> 
+> 
+> 
+> -----Original Message-----
+> From: R-devel <r-devel-bounces at r-project.org> On Behalf Of Devin 
+> Marlin
+> Sent: Thursday, July 14, 2022 3:54 PM
+> To: r-devel at r-project.org
+> Subject: [Rd] Feature Request: Allow Underscore Separated Numbers
+> 
+> Hello,
+> 
+> After using R for a number of years, and venturing into other 
+> languages, I've noticed the ones with the ability to enter numbers 
+> separated by underscores for readability (like 100000 as 100_000) make 
+> life a whole lot easier, especially when debugging. Is this a feature 
+> that could be implemented in R?
+> 
+> Regards,
+> 
+> --
+> *Devin Marlin*
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Fri Jul 15 19:21:31 2022
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Fri, 15 Jul 2022 20:21:31 +0300
+Subject: [Rd] Feature Request: Allow Underscore Separated Numbers
+In-Reply-To: <007301d8985f$205d9a70$6118cf50$@gmail.com>
+References: <CAMnDFaaev9wEcFjvy7mSPvEApcu2FbeGiVng8sTuDQQt33o7mA@mail.gmail.com>
+ <00d501d897e0$da0e5330$8e2af990$@gmail.com>
+ <1d949cb9-c59c-67db-73d3-09434190d0f0@gmail.com>
+ <00f201d897e5$5e152a60$1a3f7f20$@gmail.com>
+ <4b2912e60b134c2894f592fb8b3ce056@chu-rouen.fr>
+ <007301d8985f$205d9a70$6118cf50$@gmail.com>
+Message-ID: <20220715202131.3c34c81e@Tarkus>
+
+On Fri, 15 Jul 2022 11:25:32 -0400
+<avi.e.gross at gmail.com> wrote:
+
+> R normally delays evaluation so chunks of code are handed over
+> untouched to functions that often play with the text directly without
+> evaluating it until, perhaps, much later.
+
+Do they play with the text, or with the syntax tree after it went
+through the parser? While it's true that R saves the source text of the
+functions for ease of debugging, it's not guaranteed that a given
+object will have source references, and typical NSE functions operate
+on language objects which are tree-like structures containing R values,
+not source text.
+
+You are, of course, right that any changes to the syntax of the
+language must be carefully considered, but if anyone wants to play with
+this idea, it can be implemented in a very simple manner:
+
+--- src/main/gram.y	(revision 82598)
++++ src/main/gram.y	(working copy)
+@@ -2526,7 +2526,7 @@
+     YYTEXT_PUSH(c, yyp);
+     /* We don't care about other than ASCII digits */
+     while (isdigit(c = xxgetc()) || c == '.' || c == 'e' || c == 'E'
+-	   || c == 'x' || c == 'X' || c == 'L')
++	   || c == 'x' || c == 'X' || c == 'L' || c == '_')
+     {
+ 	count++;
+ 	if (c == 'L') /* must be at the end.  Won't allow 1Le3 (at present). */
+@@ -2533,6 +2533,9 @@
+ 	{   YYTEXT_PUSH(c, yyp);
+ 	    break;
+ 	}
++	if (c == '_') { /* allow an underscore anywhere inside the literal */
++	    continue;
++	}
+ 	
+ 	if (c == 'x' || c == 'X') {
+ 	    if (count > 2 || last != '0') break;  /* 0x must be first */
+
+To an NSE function, the underscored literals are indistinguishable from
+normal ones, because they don't see the literals:
+
+stopifnot(all.equal(\() 1000000, \() 1_000_000))
+f <- function(x, y) stopifnot(all.equal(substitute(x), substitute(y)))
+f(1e6, 1_000_000)
+
+Although it's true that the source references change as a result:
+
+lapply(
+ list(\() 1000000, \() 1_000_000),
+ \(.) as.character(getSrcref(.))
+)
+# [[1]]
+# [1] "\\() 1000000"
+# 
+# [[2]]
+# [1] "\\() 1_000_000"
+
+This patch is somewhat simplistic: it allows both multiple underscores
+in succession and underscores at the end of the number literal. Perl
+does so too, but with a warning:
+
+perl -wE'say "true" if 1__000_ == 1000'
+# Misplaced _ in number at -e line 1.
+# Misplaced _ in number at -e line 1.
+# true
+
+-- 
+Best regards,
+Ivan
+
+
+From j@me@@|@he@ter @end|ng |rom gm@||@com  Fri Jul 15 19:58:35 2022
+From: j@me@@|@he@ter @end|ng |rom gm@||@com (Jim Hester)
+Date: Fri, 15 Jul 2022 13:58:35 -0400
+Subject: [Rd] Feature Request: Allow Underscore Separated Numbers
+In-Reply-To: <20220715202131.3c34c81e@Tarkus>
+References: <CAMnDFaaev9wEcFjvy7mSPvEApcu2FbeGiVng8sTuDQQt33o7mA@mail.gmail.com>
+ <00d501d897e0$da0e5330$8e2af990$@gmail.com>
+ <1d949cb9-c59c-67db-73d3-09434190d0f0@gmail.com>
+ <00f201d897e5$5e152a60$1a3f7f20$@gmail.com>
+ <4b2912e60b134c2894f592fb8b3ce056@chu-rouen.fr>
+ <007301d8985f$205d9a70$6118cf50$@gmail.com> <20220715202131.3c34c81e@Tarkus>
+Message-ID: <CAD6tx94kgTRYiHS6wkuk3hsFzyasp_5_tx5_Gz5Xhr5zDY-1cw@mail.gmail.com>
+
+Allowing underscores in numeric literals is becoming a very common
+feature in computing languages. All of these languages (and more) now
+support it
+
+python: https://peps.python.org/pep-0515/
+javascript: https://v8.dev/features/numeric-separators
+julia: https://docs.julialang.org/en/v1/manual/integers-and-floating-point-numbers/#Floating-Point-Numbers
+java: https://docs.oracle.com/javase/7/docs/technotes/guides/language/underscores-literals.html#:~:text=In%20Java%20SE%207%20and,the%20readability%20of%20your%20code.
+ruby: https://docs.ruby-lang.org/en/2.0.0/syntax/literals_rdoc.html#label-Numbers
+perl: https://perldoc.perl.org/perldata#Scalar-value-constructors
+rust: https://doc.rust-lang.org/rust-by-example/primitives/literals.html
+C#: https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/builtin-types/floating-point-numeric-types#real-literals
+go: https://go.dev/ref/spec#Integer_literals
+
+Its use in this context also dates back to at least Ada 83
+(http://archive.adaic.com/standards/83lrm/html/lrm-02-04.html#:~:text=A%20decimal%20literal%20is%20a,the%20base%20is%20implicitly%20ten).&text=An%20underline%20character%20inserted%20between,value%20of%20this%20numeric%20literal.)
+
+Many other communities see the benefit of this feature, I think R's
+community would benefit from it as well.
+
+On Fri, Jul 15, 2022 at 1:22 PM Ivan Krylov <krylov.r00t at gmail.com> wrote:
+>
+> On Fri, 15 Jul 2022 11:25:32 -0400
+> <avi.e.gross at gmail.com> wrote:
+>
+> > R normally delays evaluation so chunks of code are handed over
+> > untouched to functions that often play with the text directly without
+> > evaluating it until, perhaps, much later.
+>
+> Do they play with the text, or with the syntax tree after it went
+> through the parser? While it's true that R saves the source text of the
+> functions for ease of debugging, it's not guaranteed that a given
+> object will have source references, and typical NSE functions operate
+> on language objects which are tree-like structures containing R values,
+> not source text.
+>
+> You are, of course, right that any changes to the syntax of the
+> language must be carefully considered, but if anyone wants to play with
+> this idea, it can be implemented in a very simple manner:
+>
+> --- src/main/gram.y     (revision 82598)
+> +++ src/main/gram.y     (working copy)
+> @@ -2526,7 +2526,7 @@
+>      YYTEXT_PUSH(c, yyp);
+>      /* We don't care about other than ASCII digits */
+>      while (isdigit(c = xxgetc()) || c == '.' || c == 'e' || c == 'E'
+> -          || c == 'x' || c == 'X' || c == 'L')
+> +          || c == 'x' || c == 'X' || c == 'L' || c == '_')
+>      {
+>         count++;
+>         if (c == 'L') /* must be at the end.  Won't allow 1Le3 (at present). */
+> @@ -2533,6 +2533,9 @@
+>         {   YYTEXT_PUSH(c, yyp);
+>             break;
+>         }
+> +       if (c == '_') { /* allow an underscore anywhere inside the literal */
+> +           continue;
+> +       }
+>
+>         if (c == 'x' || c == 'X') {
+>             if (count > 2 || last != '0') break;  /* 0x must be first */
+>
+> To an NSE function, the underscored literals are indistinguishable from
+> normal ones, because they don't see the literals:
+>
+> stopifnot(all.equal(\() 1000000, \() 1_000_000))
+> f <- function(x, y) stopifnot(all.equal(substitute(x), substitute(y)))
+> f(1e6, 1_000_000)
+>
+> Although it's true that the source references change as a result:
+>
+> lapply(
+>  list(\() 1000000, \() 1_000_000),
+>  \(.) as.character(getSrcref(.))
+> )
+> # [[1]]
+> # [1] "\\() 1000000"
+> #
+> # [[2]]
+> # [1] "\\() 1_000_000"
+>
+> This patch is somewhat simplistic: it allows both multiple underscores
+> in succession and underscores at the end of the number literal. Perl
+> does so too, but with a warning:
+>
+> perl -wE'say "true" if 1__000_ == 1000'
+> # Misplaced _ in number at -e line 1.
+> # Misplaced _ in number at -e line 1.
+> # true
+>
+> --
+> Best regards,
+> Ivan
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Fri Jul 15 20:26:49 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Fri, 15 Jul 2022 14:26:49 -0400
+Subject: [Rd] Feature Request: Allow Underscore Separated Numbers
+In-Reply-To: <CAD6tx94kgTRYiHS6wkuk3hsFzyasp_5_tx5_Gz5Xhr5zDY-1cw@mail.gmail.com>
+References: <CAMnDFaaev9wEcFjvy7mSPvEApcu2FbeGiVng8sTuDQQt33o7mA@mail.gmail.com>
+ <00d501d897e0$da0e5330$8e2af990$@gmail.com>
+ <1d949cb9-c59c-67db-73d3-09434190d0f0@gmail.com>
+ <00f201d897e5$5e152a60$1a3f7f20$@gmail.com>
+ <4b2912e60b134c2894f592fb8b3ce056@chu-rouen.fr>
+ <007301d8985f$205d9a70$6118cf50$@gmail.com> <20220715202131.3c34c81e@Tarkus>
+ <CAD6tx94kgTRYiHS6wkuk3hsFzyasp_5_tx5_Gz5Xhr5zDY-1cw@mail.gmail.com>
+Message-ID: <88caf40b-fecd-30d5-48a5-42eb5ba9d0fd@gmail.com>
+
+Thanks for posting that list.  The Python document is the only one I've 
+read so far; it has a really nice summary 
+(https://peps.python.org/pep-0515/#prior-art) of the differences in 
+implementations among 10 languages.  Which choice would you recommend, 
+and why?
+
+  - I think Ivan's quick solution doesn't quite match any of them.
+  - C, Fortran and C++ have special support in R, but none of them use 
+underscore separators.
+  - C++ does support separators, but uses "'", not "_", and some ancient 
+forms of Fortran ignore embedded spaces.
+
+Duncan Murdoch
+
+On 15/07/2022 1:58 p.m., Jim Hester wrote:
+> Allowing underscores in numeric literals is becoming a very common
+> feature in computing languages. All of these languages (and more) now
+> support it
+> 
+> python: https://peps.python.org/pep-0515/
+> javascript: https://v8.dev/features/numeric-separators
+> julia: https://docs.julialang.org/en/v1/manual/integers-and-floating-point-numbers/#Floating-Point-Numbers
+> java: https://docs.oracle.com/javase/7/docs/technotes/guides/language/underscores-literals.html#:~:text=In%20Java%20SE%207%20and,the%20readability%20of%20your%20code.
+> ruby: https://docs.ruby-lang.org/en/2.0.0/syntax/literals_rdoc.html#label-Numbers
+> perl: https://perldoc.perl.org/perldata#Scalar-value-constructors
+> rust: https://doc.rust-lang.org/rust-by-example/primitives/literals.html
+> C#: https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/builtin-types/floating-point-numeric-types#real-literals
+> go: https://go.dev/ref/spec#Integer_literals
+> 
+> Its use in this context also dates back to at least Ada 83
+> (http://archive.adaic.com/standards/83lrm/html/lrm-02-04.html#:~:text=A%20decimal%20literal%20is%20a,the%20base%20is%20implicitly%20ten).&text=An%20underline%20character%20inserted%20between,value%20of%20this%20numeric%20literal.)
+> 
+> Many other communities see the benefit of this feature, I think R's
+> community would benefit from it as well.
+> 
+> On Fri, Jul 15, 2022 at 1:22 PM Ivan Krylov <krylov.r00t at gmail.com> wrote:
+>>
+>> On Fri, 15 Jul 2022 11:25:32 -0400
+>> <avi.e.gross at gmail.com> wrote:
+>>
+>>> R normally delays evaluation so chunks of code are handed over
+>>> untouched to functions that often play with the text directly without
+>>> evaluating it until, perhaps, much later.
+>>
+>> Do they play with the text, or with the syntax tree after it went
+>> through the parser? While it's true that R saves the source text of the
+>> functions for ease of debugging, it's not guaranteed that a given
+>> object will have source references, and typical NSE functions operate
+>> on language objects which are tree-like structures containing R values,
+>> not source text.
+>>
+>> You are, of course, right that any changes to the syntax of the
+>> language must be carefully considered, but if anyone wants to play with
+>> this idea, it can be implemented in a very simple manner:
+>>
+>> --- src/main/gram.y     (revision 82598)
+>> +++ src/main/gram.y     (working copy)
+>> @@ -2526,7 +2526,7 @@
+>>       YYTEXT_PUSH(c, yyp);
+>>       /* We don't care about other than ASCII digits */
+>>       while (isdigit(c = xxgetc()) || c == '.' || c == 'e' || c == 'E'
+>> -          || c == 'x' || c == 'X' || c == 'L')
+>> +          || c == 'x' || c == 'X' || c == 'L' || c == '_')
+>>       {
+>>          count++;
+>>          if (c == 'L') /* must be at the end.  Won't allow 1Le3 (at present). */
+>> @@ -2533,6 +2533,9 @@
+>>          {   YYTEXT_PUSH(c, yyp);
+>>              break;
+>>          }
+>> +       if (c == '_') { /* allow an underscore anywhere inside the literal */
+>> +           continue;
+>> +       }
+>>
+>>          if (c == 'x' || c == 'X') {
+>>              if (count > 2 || last != '0') break;  /* 0x must be first */
+>>
+>> To an NSE function, the underscored literals are indistinguishable from
+>> normal ones, because they don't see the literals:
+>>
+>> stopifnot(all.equal(\() 1000000, \() 1_000_000))
+>> f <- function(x, y) stopifnot(all.equal(substitute(x), substitute(y)))
+>> f(1e6, 1_000_000)
+>>
+>> Although it's true that the source references change as a result:
+>>
+>> lapply(
+>>   list(\() 1000000, \() 1_000_000),
+>>   \(.) as.character(getSrcref(.))
+>> )
+>> # [[1]]
+>> # [1] "\\() 1000000"
+>> #
+>> # [[2]]
+>> # [1] "\\() 1_000_000"
+>>
+>> This patch is somewhat simplistic: it allows both multiple underscores
+>> in succession and underscores at the end of the number literal. Perl
+>> does so too, but with a warning:
+>>
+>> perl -wE'say "true" if 1__000_ == 1000'
+>> # Misplaced _ in number at -e line 1.
+>> # Misplaced _ in number at -e line 1.
+>> # true
+>>
+>> --
+>> Best regards,
+>> Ivan
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From j@me@@|@he@ter @end|ng |rom gm@||@com  Fri Jul 15 21:25:48 2022
+From: j@me@@|@he@ter @end|ng |rom gm@||@com (Jim Hester)
+Date: Fri, 15 Jul 2022 15:25:48 -0400
+Subject: [Rd] Feature Request: Allow Underscore Separated Numbers
+In-Reply-To: <88caf40b-fecd-30d5-48a5-42eb5ba9d0fd@gmail.com>
+References: <CAMnDFaaev9wEcFjvy7mSPvEApcu2FbeGiVng8sTuDQQt33o7mA@mail.gmail.com>
+ <00d501d897e0$da0e5330$8e2af990$@gmail.com>
+ <1d949cb9-c59c-67db-73d3-09434190d0f0@gmail.com>
+ <00f201d897e5$5e152a60$1a3f7f20$@gmail.com>
+ <4b2912e60b134c2894f592fb8b3ce056@chu-rouen.fr>
+ <007301d8985f$205d9a70$6118cf50$@gmail.com> <20220715202131.3c34c81e@Tarkus>
+ <CAD6tx94kgTRYiHS6wkuk3hsFzyasp_5_tx5_Gz5Xhr5zDY-1cw@mail.gmail.com>
+ <88caf40b-fecd-30d5-48a5-42eb5ba9d0fd@gmail.com>
+Message-ID: <CAD6tx96=Ypuu-xo6qAVf7roHsM=Nt=nQ5DE5qy_9p2Vk2UKpaA@mail.gmail.com>
+
+I think keeping it simple and less restrictive is the best approach,
+for ease of implementation, limiting future maintenance, and so users
+have the flexibility to format these however they wish. So I would
+probably lean towards allowing multiple delimiters anywhere (including
+trailing) or possibly just between digits.
+
+On Fri, Jul 15, 2022 at 2:26 PM Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+>
+> Thanks for posting that list.  The Python document is the only one I've
+> read so far; it has a really nice summary
+> (https://peps.python.org/pep-0515/#prior-art) of the differences in
+> implementations among 10 languages.  Which choice would you recommend,
+> and why?
+>
+>   - I think Ivan's quick solution doesn't quite match any of them.
+>   - C, Fortran and C++ have special support in R, but none of them use
+> underscore separators.
+>   - C++ does support separators, but uses "'", not "_", and some ancient
+> forms of Fortran ignore embedded spaces.
+>
+> Duncan Murdoch
+>
+> On 15/07/2022 1:58 p.m., Jim Hester wrote:
+> > Allowing underscores in numeric literals is becoming a very common
+> > feature in computing languages. All of these languages (and more) now
+> > support it
+> >
+> > python: https://peps.python.org/pep-0515/
+> > javascript: https://v8.dev/features/numeric-separators
+> > julia: https://docs.julialang.org/en/v1/manual/integers-and-floating-point-numbers/#Floating-Point-Numbers
+> > java: https://docs.oracle.com/javase/7/docs/technotes/guides/language/underscores-literals.html#:~:text=In%20Java%20SE%207%20and,the%20readability%20of%20your%20code.
+> > ruby: https://docs.ruby-lang.org/en/2.0.0/syntax/literals_rdoc.html#label-Numbers
+> > perl: https://perldoc.perl.org/perldata#Scalar-value-constructors
+> > rust: https://doc.rust-lang.org/rust-by-example/primitives/literals.html
+> > C#: https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/builtin-types/floating-point-numeric-types#real-literals
+> > go: https://go.dev/ref/spec#Integer_literals
+> >
+> > Its use in this context also dates back to at least Ada 83
+> > (http://archive.adaic.com/standards/83lrm/html/lrm-02-04.html#:~:text=A%20decimal%20literal%20is%20a,the%20base%20is%20implicitly%20ten).&text=An%20underline%20character%20inserted%20between,value%20of%20this%20numeric%20literal.)
+> >
+> > Many other communities see the benefit of this feature, I think R's
+> > community would benefit from it as well.
+> >
+> > On Fri, Jul 15, 2022 at 1:22 PM Ivan Krylov <krylov.r00t at gmail.com> wrote:
+> >>
+> >> On Fri, 15 Jul 2022 11:25:32 -0400
+> >> <avi.e.gross at gmail.com> wrote:
+> >>
+> >>> R normally delays evaluation so chunks of code are handed over
+> >>> untouched to functions that often play with the text directly without
+> >>> evaluating it until, perhaps, much later.
+> >>
+> >> Do they play with the text, or with the syntax tree after it went
+> >> through the parser? While it's true that R saves the source text of the
+> >> functions for ease of debugging, it's not guaranteed that a given
+> >> object will have source references, and typical NSE functions operate
+> >> on language objects which are tree-like structures containing R values,
+> >> not source text.
+> >>
+> >> You are, of course, right that any changes to the syntax of the
+> >> language must be carefully considered, but if anyone wants to play with
+> >> this idea, it can be implemented in a very simple manner:
+> >>
+> >> --- src/main/gram.y     (revision 82598)
+> >> +++ src/main/gram.y     (working copy)
+> >> @@ -2526,7 +2526,7 @@
+> >>       YYTEXT_PUSH(c, yyp);
+> >>       /* We don't care about other than ASCII digits */
+> >>       while (isdigit(c = xxgetc()) || c == '.' || c == 'e' || c == 'E'
+> >> -          || c == 'x' || c == 'X' || c == 'L')
+> >> +          || c == 'x' || c == 'X' || c == 'L' || c == '_')
+> >>       {
+> >>          count++;
+> >>          if (c == 'L') /* must be at the end.  Won't allow 1Le3 (at present). */
+> >> @@ -2533,6 +2533,9 @@
+> >>          {   YYTEXT_PUSH(c, yyp);
+> >>              break;
+> >>          }
+> >> +       if (c == '_') { /* allow an underscore anywhere inside the literal */
+> >> +           continue;
+> >> +       }
+> >>
+> >>          if (c == 'x' || c == 'X') {
+> >>              if (count > 2 || last != '0') break;  /* 0x must be first */
+> >>
+> >> To an NSE function, the underscored literals are indistinguishable from
+> >> normal ones, because they don't see the literals:
+> >>
+> >> stopifnot(all.equal(\() 1000000, \() 1_000_000))
+> >> f <- function(x, y) stopifnot(all.equal(substitute(x), substitute(y)))
+> >> f(1e6, 1_000_000)
+> >>
+> >> Although it's true that the source references change as a result:
+> >>
+> >> lapply(
+> >>   list(\() 1000000, \() 1_000_000),
+> >>   \(.) as.character(getSrcref(.))
+> >> )
+> >> # [[1]]
+> >> # [1] "\\() 1000000"
+> >> #
+> >> # [[2]]
+> >> # [1] "\\() 1_000_000"
+> >>
+> >> This patch is somewhat simplistic: it allows both multiple underscores
+> >> in succession and underscores at the end of the number literal. Perl
+> >> does so too, but with a warning:
+> >>
+> >> perl -wE'say "true" if 1__000_ == 1000'
+> >> # Misplaced _ in number at -e line 1.
+> >> # Misplaced _ in number at -e line 1.
+> >> # true
+> >>
+> >> --
+> >> Best regards,
+> >> Ivan
+> >>
+> >> ______________________________________________
+> >> R-devel at r-project.org mailing list
+> >> https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From w||||@mwdun|@p @end|ng |rom gm@||@com  Fri Jul 15 21:34:24 2022
+From: w||||@mwdun|@p @end|ng |rom gm@||@com (Bill Dunlap)
+Date: Fri, 15 Jul 2022 12:34:24 -0700
+Subject: [Rd] Feature Request: Allow Underscore Separated Numbers
+In-Reply-To: <CAD6tx96=Ypuu-xo6qAVf7roHsM=Nt=nQ5DE5qy_9p2Vk2UKpaA@mail.gmail.com>
+References: <CAMnDFaaev9wEcFjvy7mSPvEApcu2FbeGiVng8sTuDQQt33o7mA@mail.gmail.com>
+ <00d501d897e0$da0e5330$8e2af990$@gmail.com>
+ <1d949cb9-c59c-67db-73d3-09434190d0f0@gmail.com>
+ <00f201d897e5$5e152a60$1a3f7f20$@gmail.com>
+ <4b2912e60b134c2894f592fb8b3ce056@chu-rouen.fr>
+ <007301d8985f$205d9a70$6118cf50$@gmail.com> <20220715202131.3c34c81e@Tarkus>
+ <CAD6tx94kgTRYiHS6wkuk3hsFzyasp_5_tx5_Gz5Xhr5zDY-1cw@mail.gmail.com>
+ <88caf40b-fecd-30d5-48a5-42eb5ba9d0fd@gmail.com>
+ <CAD6tx96=Ypuu-xo6qAVf7roHsM=Nt=nQ5DE5qy_9p2Vk2UKpaA@mail.gmail.com>
+Message-ID: <CAHqSRuQME43oYaprEnbTfVK-mPHVxY8G=rAw9-H4LOxw6azDzA@mail.gmail.com>
+
+The token '._1' (period underscore digit) is currently parsed as a symbol
+(name).  It would become a number if underscore were ignored as in the
+first proposal.  The just-between-digits alternative would avoid this
+change.
+
+-Bill
+
+On Fri, Jul 15, 2022 at 12:26 PM Jim Hester <james.f.hester at gmail.com>
+wrote:
+
+> I think keeping it simple and less restrictive is the best approach,
+> for ease of implementation, limiting future maintenance, and so users
+> have the flexibility to format these however they wish. So I would
+> probably lean towards allowing multiple delimiters anywhere (including
+> trailing) or possibly just between digits.
+>
+> On Fri, Jul 15, 2022 at 2:26 PM Duncan Murdoch <murdoch.duncan at gmail.com>
+> wrote:
+> >
+> > Thanks for posting that list.  The Python document is the only one I've
+> > read so far; it has a really nice summary
+> > (https://peps.python.org/pep-0515/#prior-art) of the differences in
+> > implementations among 10 languages.  Which choice would you recommend,
+> > and why?
+> >
+> >   - I think Ivan's quick solution doesn't quite match any of them.
+> >   - C, Fortran and C++ have special support in R, but none of them use
+> > underscore separators.
+> >   - C++ does support separators, but uses "'", not "_", and some ancient
+> > forms of Fortran ignore embedded spaces.
+> >
+> > Duncan Murdoch
+> >
+> > On 15/07/2022 1:58 p.m., Jim Hester wrote:
+> > > Allowing underscores in numeric literals is becoming a very common
+> > > feature in computing languages. All of these languages (and more) now
+> > > support it
+> > >
+> > > python: https://peps.python.org/pep-0515/
+> > > javascript: https://v8.dev/features/numeric-separators
+> > > julia:
+> https://docs.julialang.org/en/v1/manual/integers-and-floating-point-numbers/#Floating-Point-Numbers
+> > > java:
+> https://docs.oracle.com/javase/7/docs/technotes/guides/language/underscores-literals.html#:~:text=In%20Java%20SE%207%20and,the%20readability%20of%20your%20code
+> .
+> > > ruby:
+> https://docs.ruby-lang.org/en/2.0.0/syntax/literals_rdoc.html#label-Numbers
+> > > perl: https://perldoc.perl.org/perldata#Scalar-value-constructors
+> > > rust:
+> https://doc.rust-lang.org/rust-by-example/primitives/literals.html
+> > > C#:
+> https://docs.microsoft.com/en-us/dotnet/csharp/language-reference/builtin-types/floating-point-numeric-types#real-literals
+> > > go: https://go.dev/ref/spec#Integer_literals
+> > >
+> > > Its use in this context also dates back to at least Ada 83
+> > > (
+> http://archive.adaic.com/standards/83lrm/html/lrm-02-04.html#:~:text=A%20decimal%20literal%20is%20a,the%20base%20is%20implicitly%20ten).&text=An%20underline%20character%20inserted%20between,value%20of%20this%20numeric%20literal
+> .)
+> > >
+> > > Many other communities see the benefit of this feature, I think R's
+> > > community would benefit from it as well.
+> > >
+> > > On Fri, Jul 15, 2022 at 1:22 PM Ivan Krylov <krylov.r00t at gmail.com>
+> wrote:
+> > >>
+> > >> On Fri, 15 Jul 2022 11:25:32 -0400
+> > >> <avi.e.gross at gmail.com> wrote:
+> > >>
+> > >>> R normally delays evaluation so chunks of code are handed over
+> > >>> untouched to functions that often play with the text directly without
+> > >>> evaluating it until, perhaps, much later.
+> > >>
+> > >> Do they play with the text, or with the syntax tree after it went
+> > >> through the parser? While it's true that R saves the source text of
+> the
+> > >> functions for ease of debugging, it's not guaranteed that a given
+> > >> object will have source references, and typical NSE functions operate
+> > >> on language objects which are tree-like structures containing R
+> values,
+> > >> not source text.
+> > >>
+> > >> You are, of course, right that any changes to the syntax of the
+> > >> language must be carefully considered, but if anyone wants to play
+> with
+> > >> this idea, it can be implemented in a very simple manner:
+> > >>
+> > >> --- src/main/gram.y     (revision 82598)
+> > >> +++ src/main/gram.y     (working copy)
+> > >> @@ -2526,7 +2526,7 @@
+> > >>       YYTEXT_PUSH(c, yyp);
+> > >>       /* We don't care about other than ASCII digits */
+> > >>       while (isdigit(c = xxgetc()) || c == '.' || c == 'e' || c == 'E'
+> > >> -          || c == 'x' || c == 'X' || c == 'L')
+> > >> +          || c == 'x' || c == 'X' || c == 'L' || c == '_')
+> > >>       {
+> > >>          count++;
+> > >>          if (c == 'L') /* must be at the end.  Won't allow 1Le3 (at
+> present). */
+> > >> @@ -2533,6 +2533,9 @@
+> > >>          {   YYTEXT_PUSH(c, yyp);
+> > >>              break;
+> > >>          }
+> > >> +       if (c == '_') { /* allow an underscore anywhere inside the
+> literal */
+> > >> +           continue;
+> > >> +       }
+> > >>
+> > >>          if (c == 'x' || c == 'X') {
+> > >>              if (count > 2 || last != '0') break;  /* 0x must be
+> first */
+> > >>
+> > >> To an NSE function, the underscored literals are indistinguishable
+> from
+> > >> normal ones, because they don't see the literals:
+> > >>
+> > >> stopifnot(all.equal(\() 1000000, \() 1_000_000))
+> > >> f <- function(x, y) stopifnot(all.equal(substitute(x), substitute(y)))
+> > >> f(1e6, 1_000_000)
+> > >>
+> > >> Although it's true that the source references change as a result:
+> > >>
+> > >> lapply(
+> > >>   list(\() 1000000, \() 1_000_000),
+> > >>   \(.) as.character(getSrcref(.))
+> > >> )
+> > >> # [[1]]
+> > >> # [1] "\\() 1000000"
+> > >> #
+> > >> # [[2]]
+> > >> # [1] "\\() 1_000_000"
+> > >>
+> > >> This patch is somewhat simplistic: it allows both multiple underscores
+> > >> in succession and underscores at the end of the number literal. Perl
+> > >> does so too, but with a warning:
+> > >>
+> > >> perl -wE'say "true" if 1__000_ == 1000'
+> > >> # Misplaced _ in number at -e line 1.
+> > >> # Misplaced _ in number at -e line 1.
+> > >> # true
+> > >>
+> > >> --
+> > >> Best regards,
+> > >> Ivan
+> > >>
+> > >> ______________________________________________
+> > >> R-devel at r-project.org mailing list
+> > >> https://stat.ethz.ch/mailman/listinfo/r-devel
+> > >
+> > > ______________________________________________
+> > > R-devel at r-project.org mailing list
+> > > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From @vi@e@gross m@iii@g oii gm@ii@com  Fri Jul 15 23:05:13 2022
+From: @vi@e@gross m@iii@g oii gm@ii@com (@vi@e@gross m@iii@g oii gm@ii@com)
+Date: Fri, 15 Jul 2022 17:05:13 -0400
+Subject: [Rd] Feature Request: Allow Underscore Separated Numbers
+In-Reply-To: <20220715202131.3c34c81e@Tarkus>
+References: <CAMnDFaaev9wEcFjvy7mSPvEApcu2FbeGiVng8sTuDQQt33o7mA@mail.gmail.com>	<00d501d897e0$da0e5330$8e2af990$@gmail.com>	<1d949cb9-c59c-67db-73d3-09434190d0f0@gmail.com>	<00f201d897e5$5e152a60$1a3f7f20$@gmail.com>	<4b2912e60b134c2894f592fb8b3ce056@chu-rouen.fr>	<007301d8985f$205d9a70$6118cf50$@gmail.com>
+ <20220715202131.3c34c81e@Tarkus>
+Message-ID: <011701d8988e$93b7e4b0$bb27ae10$@gmail.com>
+
+Yes, Ivan, obviously someone can try out a change and check if it causes
+problems.
+
+And although I would think the majority of delayed execution eventually
+either is never invoked or is done as you describe using internal functions
+in trees, I suspect there exist some that do not.
+
+For example, I can write code in another mini-language I create that I will
+then analyze. What stops me from leaving quotes out from around a regular
+expression because I am going to read the text exactly as is and manipulate
+it, as long as the RE does not contain anything that keeps it from being
+accepted as an argument to a function, such as no commas. Inside I may have
+something like a pattern to  match a file name starting with anything then
+an underscore and then a digit or two and finally a file suffix. I would not
+want anything to parse that and remove the underscore that is part of a
+filename. The argument is meant to be atomic.
+
+Many things in the tidyverse do variations on delayed evaluation and some
+seem to be a piece at a time. An example would be how mutate() allows
+multiple clauses for new=f(old) where later lines use columns created in
+earlier lines that did not exist before and can only be used if the
+preceding part went well. I may be wrong on how it is done, but it strikes
+me as possible they read in the raw text till they match an end of some kind
+like a top-level comma or top level close-parenthesis. My GUESS is only then
+might they evaluate that chunk after substitutions or other ploys to use
+some namespace. Will a column name like evil__666__ survive?
+
+Again, I am not AGAINST any proposal but the people who have to pay the
+price in terms of needing to arrange or pay for development, documentation,
+testing and so on, are the ones needed to be convinced. My point is that in
+some ways R is a different kind of programming language than say python. I
+experimented briefly in python and note their implementation of this feature
+is fairly robust. I mean casting a string to an int works as expected as in:
+a= int("1" "_" "122") returns 1122.
+
+Be warned though that the current python implementation generates an error
+if you have two or more underscores in a row as in:
+
+a=1__1
+SyntaxError: invalid decimal literal
+a=1___1
+SyntaxError: invalid decimal literal
+
+And it does not tolerate one or more underscore at the end with the same
+error and really gets mad at an initial underscore like _1 where it asks if
+you mean "_" as a single underscore is not only a valid variable, as well as
+multiple consecutive underscores, but is often used as an I DON'T CARE in
+code like this, albeit any variable can be used as the last instance keeps
+the value:
+
+(_,_,a) = (1,2,3)
+_
+2
+a
+3
+
+(In the above, you are seeing commands and output alternating, if not
+clear.)
+
+And as it happens, half of python variable contain runs of underscores to
+the point where some say member functions like __name__  and __init__ are
+called dunder name and dunder init  as in double double underscore. And note
+that python is not that much younger than R/S and this feature was added
+fairly late in version 3.6, about 5 years ago, long after version 3.0 made
+many programs for version 2.x incompatible. 
+
+My point is not python but someone may want to see how the underscore in a
+number feature is actually implemented in any of the languages that now
+allow it and carefully document exactly in what circumstances it is allowed
+in R and also where, if anywhere, it differs from other such places.
+
+If it can be done with a very few localized changes, great. My objections
+about making regular expressions more complex  by needing to handle
+underscore likely are not a major obstacle as python supports those too.
+
+Luckily, my opinion is just my own as I have no direct stake in the outcome.
+I personally handle large numbers fine.
+
+Avi
+
+
+
+
+-----Original Message-----
+From: Ivan Krylov <krylov.r00t at gmail.com> 
+Sent: Friday, July 15, 2022 1:22 PM
+To: avi.e.gross at gmail.com
+Cc: r-devel at r-project.org
+Subject: Re: [Rd] Feature Request: Allow Underscore Separated Numbers
+
+On Fri, 15 Jul 2022 11:25:32 -0400
+<avi.e.gross at gmail.com> wrote:
+
+> R normally delays evaluation so chunks of code are handed over 
+> untouched to functions that often play with the text directly without 
+> evaluating it until, perhaps, much later.
+
+Do they play with the text, or with the syntax tree after it went through
+the parser? While it's true that R saves the source text of the functions
+for ease of debugging, it's not guaranteed that a given object will have
+source references, and typical NSE functions operate on language objects
+which are tree-like structures containing R values, not source text.
+
+You are, of course, right that any changes to the syntax of the language
+must be carefully considered, but if anyone wants to play with this idea, it
+can be implemented in a very simple manner:
+
+--- src/main/gram.y	(revision 82598)
++++ src/main/gram.y	(working copy)
+@@ -2526,7 +2526,7 @@
+     YYTEXT_PUSH(c, yyp);
+     /* We don't care about other than ASCII digits */
+     while (isdigit(c = xxgetc()) || c == '.' || c == 'e' || c == 'E'
+-	   || c == 'x' || c == 'X' || c == 'L')
++	   || c == 'x' || c == 'X' || c == 'L' || c == '_')
+     {
+ 	count++;
+ 	if (c == 'L') /* must be at the end.  Won't allow 1Le3 (at present).
+*/ @@ -2533,6 +2533,9 @@
+ 	{   YYTEXT_PUSH(c, yyp);
+ 	    break;
+ 	}
++	if (c == '_') { /* allow an underscore anywhere inside the literal
+*/
++	    continue;
++	}
+ 	
+ 	if (c == 'x' || c == 'X') {
+ 	    if (count > 2 || last != '0') break;  /* 0x must be first */
+
+To an NSE function, the underscored literals are indistinguishable from
+normal ones, because they don't see the literals:
+
+stopifnot(all.equal(\() 1000000, \() 1_000_000)) f <- function(x, y)
+stopifnot(all.equal(substitute(x), substitute(y))) f(1e6, 1_000_000)
+
+Although it's true that the source references change as a result:
+
+lapply(
+ list(\() 1000000, \() 1_000_000),
+ \(.) as.character(getSrcref(.))
+)
+# [[1]]
+# [1] "\\() 1000000"
+#
+# [[2]]
+# [1] "\\() 1_000_000"
+
+This patch is somewhat simplistic: it allows both multiple underscores in
+succession and underscores at the end of the number literal. Perl does so
+too, but with a warning:
+
+perl -wE'say "true" if 1__000_ == 1000'
+# Misplaced _ in number at -e line 1.
+# Misplaced _ in number at -e line 1.
+# true
+
+--
+Best regards,
+Ivan
+
+
