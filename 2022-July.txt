@@ -4468,3 +4468,250 @@ Best regards,
 Ivan
 
 
+From kry|ov@r00t @end|ng |rom gm@||@com  Sat Jul 16 11:24:07 2022
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Sat, 16 Jul 2022 12:24:07 +0300
+Subject: [Rd] Feature Request: Allow Underscore Separated Numbers
+In-Reply-To: <CAHqSRuQME43oYaprEnbTfVK-mPHVxY8G=rAw9-H4LOxw6azDzA@mail.gmail.com>
+References: <CAMnDFaaev9wEcFjvy7mSPvEApcu2FbeGiVng8sTuDQQt33o7mA@mail.gmail.com>
+ <00d501d897e0$da0e5330$8e2af990$@gmail.com>
+ <1d949cb9-c59c-67db-73d3-09434190d0f0@gmail.com>
+ <00f201d897e5$5e152a60$1a3f7f20$@gmail.com>
+ <4b2912e60b134c2894f592fb8b3ce056@chu-rouen.fr>
+ <007301d8985f$205d9a70$6118cf50$@gmail.com>
+ <20220715202131.3c34c81e@Tarkus>
+ <CAD6tx94kgTRYiHS6wkuk3hsFzyasp_5_tx5_Gz5Xhr5zDY-1cw@mail.gmail.com>
+ <88caf40b-fecd-30d5-48a5-42eb5ba9d0fd@gmail.com>
+ <CAD6tx96=Ypuu-xo6qAVf7roHsM=Nt=nQ5DE5qy_9p2Vk2UKpaA@mail.gmail.com>
+ <CAHqSRuQME43oYaprEnbTfVK-mPHVxY8G=rAw9-H4LOxw6azDzA@mail.gmail.com>
+Message-ID: <20220716122407.7a764f71@Tarkus>
+
+On Fri, 15 Jul 2022 12:34:24 -0700
+Bill Dunlap <williamwdunlap at gmail.com> wrote:
+
+> The token '._1' (period underscore digit) is currently parsed as a
+> symbol (name).  It would become a number if underscore were ignored
+> as in the first proposal.  The just-between-digits alternative would
+> avoid this change.
+
+Thanks for spotting this! Here's a patch that allows underscores
+only between digits and only inside the significand of a number:
+
+--- src/main/gram.y	(revision 82598)
++++ src/main/gram.y	(working copy)
+@@ -2526,7 +2526,7 @@
+     YYTEXT_PUSH(c, yyp);
+     /* We don't care about other than ASCII digits */
+     while (isdigit(c = xxgetc()) || c == '.' || c == 'e' || c == 'E'
+-	   || c == 'x' || c == 'X' || c == 'L')
++	   || c == 'x' || c == 'X' || c == 'L' || c == '_')
+     {
+ 	count++;
+ 	if (c == 'L') /* must be at the end.  Won't allow 1Le3 (at present). */
+@@ -2538,11 +2538,16 @@
+ 	    if (count > 2 || last != '0') break;  /* 0x must be first */
+ 	    YYTEXT_PUSH(c, yyp);
+ 	    while(isdigit(c = xxgetc()) || ('a' <= c && c <= 'f') ||
+-		  ('A' <= c && c <= 'F') || c == '.') {
++		  ('A' <= c && c <= 'F') || c == '.' || c == '_') {
+ 		if (c == '.') {
+ 		    if (seendot) return ERROR;
+ 		    seendot = 1;
+ 		}
++		if (c == '_') {
++		    /* disallow underscores following 0x or followed by non-digit */
++		    if (nd == 0 || typeofnext() >= 2) break;
++		    continue;
++		}
+ 		YYTEXT_PUSH(c, yyp);
+ 		nd++;
+ 	    }
+@@ -2588,6 +2593,11 @@
+ 		break;
+ 	    seendot = 1;
+ 	}
++	/* underscores in significand followed by a digit must be skipped */
++	if (c == '_') {
++	    if (seenexp || typeofnext() >= 2) break;
++	    continue;
++	}
+ 	YYTEXT_PUSH(c, yyp);
+ 	last = c;
+     }
+
+
+-- 
+Best regards,
+Ivan
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sat Jul 16 17:17:17 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sat, 16 Jul 2022 11:17:17 -0400
+Subject: [Rd] Feature Request: Allow Underscore Separated Numbers
+In-Reply-To: <20220716122407.7a764f71@Tarkus>
+References: <CAMnDFaaev9wEcFjvy7mSPvEApcu2FbeGiVng8sTuDQQt33o7mA@mail.gmail.com>
+ <00d501d897e0$da0e5330$8e2af990$@gmail.com>
+ <1d949cb9-c59c-67db-73d3-09434190d0f0@gmail.com>
+ <00f201d897e5$5e152a60$1a3f7f20$@gmail.com>
+ <4b2912e60b134c2894f592fb8b3ce056@chu-rouen.fr>
+ <007301d8985f$205d9a70$6118cf50$@gmail.com> <20220715202131.3c34c81e@Tarkus>
+ <CAD6tx94kgTRYiHS6wkuk3hsFzyasp_5_tx5_Gz5Xhr5zDY-1cw@mail.gmail.com>
+ <88caf40b-fecd-30d5-48a5-42eb5ba9d0fd@gmail.com>
+ <CAD6tx96=Ypuu-xo6qAVf7roHsM=Nt=nQ5DE5qy_9p2Vk2UKpaA@mail.gmail.com>
+ <CAHqSRuQME43oYaprEnbTfVK-mPHVxY8G=rAw9-H4LOxw6azDzA@mail.gmail.com>
+ <20220716122407.7a764f71@Tarkus>
+Message-ID: <a0558822-581b-ced4-17f8-f4cd9ad7d0b3@gmail.com>
+
+On 16/07/2022 5:24 a.m., Ivan Krylov wrote:
+> On Fri, 15 Jul 2022 12:34:24 -0700
+> Bill Dunlap <williamwdunlap at gmail.com> wrote:
+> 
+>> The token '._1' (period underscore digit) is currently parsed as a
+>> symbol (name).  It would become a number if underscore were ignored
+>> as in the first proposal.  The just-between-digits alternative would
+>> avoid this change.
+> 
+> Thanks for spotting this! Here's a patch that allows underscores
+> only between digits and only inside the significand of a number:
+
+I think there's an issue with hex values.  For example:
+
+ > 0xa_2
+[1] 162
+ > 0x2_a
+Error: unexpected input in "0x2_"
+
+So "a" counts as a digit in 0xa_2, but not as a digit in 0x2_a.
+
+Duncan Murdoch
+
+
+> 
+> --- src/main/gram.y	(revision 82598)
+> +++ src/main/gram.y	(working copy)
+> @@ -2526,7 +2526,7 @@
+>       YYTEXT_PUSH(c, yyp);
+>       /* We don't care about other than ASCII digits */
+>       while (isdigit(c = xxgetc()) || c == '.' || c == 'e' || c == 'E'
+> -	   || c == 'x' || c == 'X' || c == 'L')
+> +	   || c == 'x' || c == 'X' || c == 'L' || c == '_')
+>       {
+>   	count++;
+>   	if (c == 'L') /* must be at the end.  Won't allow 1Le3 (at present). */
+> @@ -2538,11 +2538,16 @@
+>   	    if (count > 2 || last != '0') break;  /* 0x must be first */
+>   	    YYTEXT_PUSH(c, yyp);
+>   	    while(isdigit(c = xxgetc()) || ('a' <= c && c <= 'f') ||
+> -		  ('A' <= c && c <= 'F') || c == '.') {
+> +		  ('A' <= c && c <= 'F') || c == '.' || c == '_') {
+>   		if (c == '.') {
+>   		    if (seendot) return ERROR;
+>   		    seendot = 1;
+>   		}
+> +		if (c == '_') {
+> +		    /* disallow underscores following 0x or followed by non-digit */
+> +		    if (nd == 0 || typeofnext() >= 2) break;
+> +		    continue;
+> +		}
+>   		YYTEXT_PUSH(c, yyp);
+>   		nd++;
+>   	    }
+> @@ -2588,6 +2593,11 @@
+>   		break;
+>   	    seendot = 1;
+>   	}
+> +	/* underscores in significand followed by a digit must be skipped */
+> +	if (c == '_') {
+> +	    if (seenexp || typeofnext() >= 2) break;
+> +	    continue;
+> +	}
+>   	YYTEXT_PUSH(c, yyp);
+>   	last = c;
+>       }
+> 
+>
+
+
+From ru|pb@rr@d@@ @end|ng |rom @@po@pt  Sat Jul 16 17:25:44 2022
+From: ru|pb@rr@d@@ @end|ng |rom @@po@pt (Rui Barradas)
+Date: Sat, 16 Jul 2022 16:25:44 +0100
+Subject: [Rd] Warning with new placeholder piped to data.frame extractors
+ `[` and `[[`.
+Message-ID: <2defedc0-ff0f-fa65-778b-f86a9e595c3c@sapo.pt>
+
+Hello,
+
+When piping to any of `[.data.frame` or `[[.data.frame`, the placeholder 
+in mandatory.
+
+
+df1 <- data.frame(y = 1:10, f = rep(c("a", "b"), each = 5))
+
+aggregate(y ~ f, df1, mean) |> `[`('y')
+# Error: function '[' not supported in RHS call of a pipe
+
+aggregate(y ~ f, df1, mean) |> `[[`('y')
+# Error: function '[' not supported in RHS call of a pipe
+
+
+
+But if used it throws a warning.
+
+
+
+aggregate(y ~ f, df1, mean) |> `[`(x = _, 'y')
+#  Warning in `[.data.frame`(x = aggregate(y ~ f, df1, mean), "y"): 
+named arguments
+#  other than 'drop' are discouraged
+#    y
+#  1 3
+#  2 8
+
+aggregate(y ~ f, df1, mean) |> `[[`(x = _, 'y')
+#  Warning in `[[.data.frame`(x = aggregate(y ~ f, df1, mean), "y"): named
+#  arguments other than 'exact' are discouraged
+#  [1] 3 8
+
+
+
+Hasn't this become inconsistent behavior?
+More than merely right, the named argument is mandatory, it shouldn't 
+give warnings.
+
+Hope this helps,
+
+Rui Barradas
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sun Jul 17 00:19:06 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sat, 16 Jul 2022 18:19:06 -0400
+Subject: [Rd] Feature Request: Allow Underscore Separated Numbers
+In-Reply-To: <46a8f42d-7489-1228-f9e4-6368e15660a6@gmail.com>
+References: <CAMnDFaaev9wEcFjvy7mSPvEApcu2FbeGiVng8sTuDQQt33o7mA@mail.gmail.com>
+ <46a8f42d-7489-1228-f9e4-6368e15660a6@gmail.com>
+Message-ID: <387f633b-2de0-7554-9254-395bb48a64b4@gmail.com>
+
+So far I would say we've had some good contributions on this thread. 
+Ivan's suggested patches show that the change isn't completely trivial, 
+but is doable.
+
+However, we haven't had any input from an R Core member, so I consider 
+the proposal to be essentially dead.
+
+If an R Core member decides to resurrect it, here's what I'd suggest is 
+still needed:
+
+  - a formal definition of where the separator may occur, and a 
+justificaton for that choice, and comparison to other languages.
+
+  - patches to documentation for the changes.  These include the manuals 
+and the ?NumericConstants help topic, and probably others.
+
+  - tests to add to "R CMD check" for packages to see if the new syntax 
+is being used without specifying that "R >= 4.3.0" is a requirement.
+
+Duncan Murdoch
+
+
