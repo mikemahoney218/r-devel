@@ -4715,3 +4715,101 @@ is being used without specifying that "R >= 4.3.0" is a requirement.
 Duncan Murdoch
 
 
+From kry|ov@r00t @end|ng |rom gm@||@com  Sun Jul 17 08:57:22 2022
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Sun, 17 Jul 2022 09:57:22 +0300
+Subject: [Rd] Feature Request: Allow Underscore Separated Numbers
+In-Reply-To: <a0558822-581b-ced4-17f8-f4cd9ad7d0b3@gmail.com>
+References: <CAMnDFaaev9wEcFjvy7mSPvEApcu2FbeGiVng8sTuDQQt33o7mA@mail.gmail.com>
+ <00d501d897e0$da0e5330$8e2af990$@gmail.com>
+ <1d949cb9-c59c-67db-73d3-09434190d0f0@gmail.com>
+ <00f201d897e5$5e152a60$1a3f7f20$@gmail.com>
+ <4b2912e60b134c2894f592fb8b3ce056@chu-rouen.fr>
+ <007301d8985f$205d9a70$6118cf50$@gmail.com>
+ <20220715202131.3c34c81e@Tarkus>
+ <CAD6tx94kgTRYiHS6wkuk3hsFzyasp_5_tx5_Gz5Xhr5zDY-1cw@mail.gmail.com>
+ <88caf40b-fecd-30d5-48a5-42eb5ba9d0fd@gmail.com>
+ <CAD6tx96=Ypuu-xo6qAVf7roHsM=Nt=nQ5DE5qy_9p2Vk2UKpaA@mail.gmail.com>
+ <CAHqSRuQME43oYaprEnbTfVK-mPHVxY8G=rAw9-H4LOxw6azDzA@mail.gmail.com>
+ <20220716122407.7a764f71@Tarkus>
+ <a0558822-581b-ced4-17f8-f4cd9ad7d0b3@gmail.com>
+Message-ID: <20220717095722.39a4f988@trisector>
+
+On Sat, 16 Jul 2022 11:17:17 -0400
+Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+
+> I think there's an issue with hex values.  For example:
+> 
+>  > 0xa_2  
+> [1] 162
+>  > 0x2_a  
+> Error: unexpected input in "0x2_"
+
+You're right, thanks! Should have checked for hex-digits when in
+hex-literal mode.
+
+One last try because I don't want to leave a bug I had introduced
+myself, but as you say in your other message, this is both incomplete
+without tests and documentation and effectively dead unless an R Core
+member picks the whole proposal up:
+
+--- src/main/gram.y	(revision 82598)
++++ src/main/gram.y	(working copy)
+@@ -2091,7 +2091,9 @@
+     int k, c;
+ 
+     c = xxgetc();
+-    if (isdigit(c)) k = 1; else k = 2;
++    if (isdigit(c)) k = 1;
++    else if (('a' <= c && c <= 'f') || ('A' <= c && c <= 'F')) k = 2;
++    else k = 3;
+     xxungetc(c);
+     return k;
+ }
+@@ -2526,7 +2528,7 @@
+     YYTEXT_PUSH(c, yyp);
+     /* We don't care about other than ASCII digits */
+     while (isdigit(c = xxgetc()) || c == '.' || c == 'e' || c == 'E'
+-	   || c == 'x' || c == 'X' || c == 'L')
++	   || c == 'x' || c == 'X' || c == 'L' || c == '_')
+     {
+ 	count++;
+ 	if (c == 'L') /* must be at the end.  Won't allow 1Le3 (at present). */
+@@ -2538,11 +2540,16 @@
+ 	    if (count > 2 || last != '0') break;  /* 0x must be first */
+ 	    YYTEXT_PUSH(c, yyp);
+ 	    while(isdigit(c = xxgetc()) || ('a' <= c && c <= 'f') ||
+-		  ('A' <= c && c <= 'F') || c == '.') {
++		  ('A' <= c && c <= 'F') || c == '.' || c == '_') {
+ 		if (c == '.') {
+ 		    if (seendot) return ERROR;
+ 		    seendot = 1;
+ 		}
++		if (c == '_') {
++		    /* disallow underscores following 0x or followed by non-hexdigit */
++		    if (nd == 0 || typeofnext() >= 3) break;
++		    continue;
++		}
+ 		YYTEXT_PUSH(c, yyp);
+ 		nd++;
+ 	    }
+@@ -2588,6 +2595,11 @@
+ 		break;
+ 	    seendot = 1;
+ 	}
++	/* underscores in significand followed by a digit must be skipped */
++	if (c == '_') {
++	    if (seenexp || typeofnext() >= 2) break;
++	    continue;
++	}
+ 	YYTEXT_PUSH(c, yyp);
+ 	last = c;
+     }
+
+I won't be sending any more unsolicited patches for this proposal.
+
+-- 
+Best regards,
+Ivan
+
+
