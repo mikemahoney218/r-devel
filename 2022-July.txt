@@ -4813,3 +4813,643 @@ Best regards,
 Ivan
 
 
+From @vr@h@m@@d|er @end|ng |rom gm@||@com  Mon Jul 18 19:14:57 2022
+From: @vr@h@m@@d|er @end|ng |rom gm@||@com (Avraham Adler)
+Date: Mon, 18 Jul 2022 20:14:57 +0300
+Subject: [Rd] R-Devel (82603) still passing "fno-optimize-sibling-calls" on
+ Windows
+Message-ID: <CAL6gwnK+=m8wP_ehJXmxuhb_EfUX5MX9pjjpweXH-8Az7iF4rA@mail.gmail.com>
+
+Hello.
+
+According to my understanding of the changes in R-devel, the flag
+-fno-optimize-sibling-calls should no longer be forced when compiling
+R. Yet, as I compile R, revision 82603, from source on Windows
+(Skylake-X server) I see the flag being passed (example below). Is
+this different for Windows than for Unix? The changes header seems to
+be its own and not under the "Installation on Unix-Alike" header.
+
+Thank you,
+
+Avi
+
+Excerpt:
+making Lapack.d from Lapack.c
+gfortran  -O3 -march=native -pipe -fno-optimize-sibling-calls -flto
+-ffat-lto-objects -fuse-linker-plugin -ffloat-store -c dlamch.f -o
+dlamch.o
+gfortran  -O3 -march=native -pipe -fno-optimize-sibling-calls -flto
+-ffat-lto-objects -fuse-linker-plugin  -c dlapack.f -o dlapack.o
+gfortran  -O3 -march=native -pipe -fno-optimize-sibling-calls -flto
+-ffat-lto-objects -fuse-linker-plugin  -c cmplx.f -o cmplx.o
+gfortran  -O3 -march=native -pipe -fno-optimize-sibling-calls -flto
+-ffat-lto-objects -fuse-linker-plugin  -c la_constants.f90 -o
+la_constants.o
+gfortran  -O3 -march=native -pipe -fno-optimize-sibling-calls -flto
+-ffat-lto-objects -fuse-linker-plugin  -c dlartg.f90 -o dlartg.o
+gfortran  -O3 -march=native -pipe -fno-optimize-sibling-calls -flto
+-ffat-lto-objects -fuse-linker-plugin  -c la_xisnan.f90 -o la_xisnan.o
+gfortran  -O3 -march=native -pipe -fno-optimize-sibling-calls -flto
+-ffat-lto-objects -fuse-linker-plugin  -c dlassq.f90 -o dlassq.o
+gfortran  -O3 -march=native -pipe -fno-optimize-sibling-calls -flto
+-ffat-lto-objects -fuse-linker-plugin  -c zlartg.f90 -o zlartg.o
+gfortran  -O3 -march=native -pipe -fno-optimize-sibling-calls -flto
+-ffat-lto-objects -fuse-linker-plugin  -c zlassq.f90 -o zlassq.o
+
+
+From tdhock5 @end|ng |rom gm@||@com  Mon Jul 18 20:06:46 2022
+From: tdhock5 @end|ng |rom gm@||@com (Toby Hocking)
+Date: Mon, 18 Jul 2022 11:06:46 -0700
+Subject: [Rd] 
+ Warning with new placeholder piped to data.frame extractors
+ `[` and `[[`.
+In-Reply-To: <2defedc0-ff0f-fa65-778b-f86a9e595c3c@sapo.pt>
+References: <2defedc0-ff0f-fa65-778b-f86a9e595c3c@sapo.pt>
+Message-ID: <CALK03d3QJ_eszOyPGr3vyKMPTcDznriSG1z_ZntCXDoZSc098g@mail.gmail.com>
+
+Is the intent is to encourage the user to do something simpler like...
+aggregate(y ~ f, df1, mean)$y
+aggregate(y ~ f, df1, mean)["y"]
+aggregate(y ~ f, df1, mean)[["y"]]
+??
+
+On Sat, Jul 16, 2022 at 8:27 AM Rui Barradas <ruipbarradas at sapo.pt> wrote:
+
+> Hello,
+>
+> When piping to any of `[.data.frame` or `[[.data.frame`, the placeholder
+> in mandatory.
+>
+>
+> df1 <- data.frame(y = 1:10, f = rep(c("a", "b"), each = 5))
+>
+> aggregate(y ~ f, df1, mean) |> `[`('y')
+> # Error: function '[' not supported in RHS call of a pipe
+>
+> aggregate(y ~ f, df1, mean) |> `[[`('y')
+> # Error: function '[' not supported in RHS call of a pipe
+>
+>
+>
+> But if used it throws a warning.
+>
+>
+>
+> aggregate(y ~ f, df1, mean) |> `[`(x = _, 'y')
+> #  Warning in `[.data.frame`(x = aggregate(y ~ f, df1, mean), "y"):
+> named arguments
+> #  other than 'drop' are discouraged
+> #    y
+> #  1 3
+> #  2 8
+>
+> aggregate(y ~ f, df1, mean) |> `[[`(x = _, 'y')
+> #  Warning in `[[.data.frame`(x = aggregate(y ~ f, df1, mean), "y"): named
+> #  arguments other than 'exact' are discouraged
+> #  [1] 3 8
+>
+>
+>
+> Hasn't this become inconsistent behavior?
+> More than merely right, the named argument is mandatory, it shouldn't
+> give warnings.
+>
+> Hope this helps,
+>
+> Rui Barradas
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From g@bembecker @end|ng |rom gm@||@com  Mon Jul 18 21:48:23 2022
+From: g@bembecker @end|ng |rom gm@||@com (Gabriel Becker)
+Date: Mon, 18 Jul 2022 12:48:23 -0700
+Subject: [Rd] 
+ Warning with new placeholder piped to data.frame extractors
+ `[` and `[[`.
+In-Reply-To: <CALK03d3QJ_eszOyPGr3vyKMPTcDznriSG1z_ZntCXDoZSc098g@mail.gmail.com>
+References: <2defedc0-ff0f-fa65-778b-f86a9e595c3c@sapo.pt>
+ <CALK03d3QJ_eszOyPGr3vyKMPTcDznriSG1z_ZntCXDoZSc098g@mail.gmail.com>
+Message-ID: <CAD4oTHFncY=uTk=LST0vDD9UX7qApoPxy6TrXZnx-ojUZdEZpQ@mail.gmail.com>
+
+It looks to me like the 'bug' here seems to be that
+
+aggregate(y ~ f, df1, mean) |> `[`(x = _, 'y')
+
+
+does not throw the same error as
+
+aggregate(y ~ f, df1, mean) |> `[`('y')
+
+
+Since the latter seems pretty clear that the intent is that `[` is
+disallowed on the RHS of the pipe by design.
+
+~G
+
+
+On Mon, Jul 18, 2022 at 11:07 AM Toby Hocking <tdhock5 at gmail.com> wrote:
+
+> Is the intent is to encourage the user to do something simpler like...
+> aggregate(y ~ f, df1, mean)$y
+> aggregate(y ~ f, df1, mean)["y"]
+> aggregate(y ~ f, df1, mean)[["y"]]
+> ??
+>
+> On Sat, Jul 16, 2022 at 8:27 AM Rui Barradas <ruipbarradas at sapo.pt> wrote:
+>
+> > Hello,
+> >
+> > When piping to any of `[.data.frame` or `[[.data.frame`, the placeholder
+> > in mandatory.
+> >
+> >
+> > df1 <- data.frame(y = 1:10, f = rep(c("a", "b"), each = 5))
+> >
+> > aggregate(y ~ f, df1, mean) |> `[`('y')
+> > # Error: function '[' not supported in RHS call of a pipe
+> >
+> > aggregate(y ~ f, df1, mean) |> `[[`('y')
+> > # Error: function '[' not supported in RHS call of a pipe
+> >
+> >
+> >
+> > But if used it throws a warning.
+> >
+> >
+> >
+> > aggregate(y ~ f, df1, mean) |> `[`(x = _, 'y')
+> > #  Warning in `[.data.frame`(x = aggregate(y ~ f, df1, mean), "y"):
+> > named arguments
+> > #  other than 'drop' are discouraged
+> > #    y
+> > #  1 3
+> > #  2 8
+> >
+> > aggregate(y ~ f, df1, mean) |> `[[`(x = _, 'y')
+> > #  Warning in `[[.data.frame`(x = aggregate(y ~ f, df1, mean), "y"):
+> named
+> > #  arguments other than 'exact' are discouraged
+> > #  [1] 3 8
+> >
+> >
+> >
+> > Hasn't this become inconsistent behavior?
+> > More than merely right, the named argument is mandatory, it shouldn't
+> > give warnings.
+> >
+> > Hope this helps,
+> >
+> > Rui Barradas
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From ru|pb@rr@d@@ @end|ng |rom @@po@pt  Mon Jul 18 21:51:43 2022
+From: ru|pb@rr@d@@ @end|ng |rom @@po@pt (Rui Barradas)
+Date: Mon, 18 Jul 2022 20:51:43 +0100
+Subject: [Rd] 
+ Warning with new placeholder piped to data.frame extractors
+ `[` and `[[`.
+In-Reply-To: <CALK03d3QJ_eszOyPGr3vyKMPTcDznriSG1z_ZntCXDoZSc098g@mail.gmail.com>
+References: <2defedc0-ff0f-fa65-778b-f86a9e595c3c@sapo.pt>
+ <CALK03d3QJ_eszOyPGr3vyKMPTcDznriSG1z_ZntCXDoZSc098g@mail.gmail.com>
+Message-ID: <13f8d427-a258-71eb-0275-ed732025a2e9@sapo.pt>
+
+Hello,
+
+In the OP I had forgotten the sessionInfo().
+
+Thanks for the feed back but I don't think this answers to the question, 
+after all the pipe operator was introduced in R 4.2.0 not because it 
+should be used discouraged.
+
+What it seems to me is that its introduction is causing a problem in 
+other functions, the data.frame extractors. And only in two of them `[` 
+and `[[`. They both have arguments x, i, j and it's these arguments that 
+are not meant to be named.
+
+But *after* the pipe argument x *must* be named. The warning is 
+inconsistent with the new obligation.
+
+The other extractor, `$.data.frame`, is not indexed and the pipe runs 
+without a warning. Once again, it is not obvious that a warning message like
+
+
+named arguments other than 'drop/exact' are discouraged
+
+
+doesn't include x. As a matter of fact, `$`'s first argument would be 
+implicitly included in the messages were they thrown, which is not the 
+case. (This last sentence is confusing but its intent clear?)
+
+
+
+df1 <- data.frame(y = 1:10, f = rep(c("a", "b"), each = 5))
+
+aggregate(y ~ f, df1, mean) |> `$`('y')
+# Error: function '$' not supported in RHS call of a pipe
+
+aggregate(y ~ f, df1, mean) |> `$`(x = _, 'y')
+# [1] 3 8
+
+
+sessionInfo()
+R version 4.2.1 (2022-06-23 ucrt)
+Platform: x86_64-w64-mingw32/x64 (64-bit)
+Running under: Windows 10 x64 (build 22000)
+
+Matrix products: default
+
+locale:
+[1] LC_COLLATE=Portuguese_Portugal.utf8  LC_CTYPE=Portuguese_Portugal.utf8
+[3] LC_MONETARY=Portuguese_Portugal.utf8 LC_NUMERIC=C
+[5] LC_TIME=Portuguese_Portugal.utf8
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base
+
+loaded via a namespace (and not attached):
+[1] compiler_4.2.1
+
+
+Hope this helps,
+
+Rui Barradas
+
+
+
+?s 19:06 de 18/07/2022, Toby Hocking escreveu:
+> Is the intent is to encourage the user to do something simpler like...
+> aggregate(y ~ f, df1, mean)$y
+> aggregate(y ~ f, df1, mean)["y"]
+> aggregate(y ~ f, df1, mean)[["y"]]
+> ??
+> 
+> On Sat, Jul 16, 2022 at 8:27 AM Rui Barradas <ruipbarradas at sapo.pt> wrote:
+> 
+>> Hello,
+>>
+>> When piping to any of `[.data.frame` or `[[.data.frame`, the placeholder
+>> in mandatory.
+>>
+>>
+>> df1 <- data.frame(y = 1:10, f = rep(c("a", "b"), each = 5))
+>>
+>> aggregate(y ~ f, df1, mean) |> `[`('y')
+>> # Error: function '[' not supported in RHS call of a pipe
+>>
+>> aggregate(y ~ f, df1, mean) |> `[[`('y')
+>> # Error: function '[' not supported in RHS call of a pipe
+>>
+>>
+>>
+>> But if used it throws a warning.
+>>
+>>
+>>
+>> aggregate(y ~ f, df1, mean) |> `[`(x = _, 'y')
+>> #  Warning in `[.data.frame`(x = aggregate(y ~ f, df1, mean), "y"):
+>> named arguments
+>> #  other than 'drop' are discouraged
+>> #    y
+>> #  1 3
+>> #  2 8
+>>
+>> aggregate(y ~ f, df1, mean) |> `[[`(x = _, 'y')
+>> #  Warning in `[[.data.frame`(x = aggregate(y ~ f, df1, mean), "y"): named
+>> #  arguments other than 'exact' are discouraged
+>> #  [1] 3 8
+>>
+>>
+>>
+>> Hasn't this become inconsistent behavior?
+>> More than merely right, the named argument is mandatory, it shouldn't
+>> give warnings.
+>>
+>> Hope this helps,
+>>
+>> Rui Barradas
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Mon Jul 18 22:06:45 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Mon, 18 Jul 2022 16:06:45 -0400
+Subject: [Rd] 
+ Warning with new placeholder piped to data.frame extractors
+ `[` and `[[`.
+In-Reply-To: <CAD4oTHFncY=uTk=LST0vDD9UX7qApoPxy6TrXZnx-ojUZdEZpQ@mail.gmail.com>
+References: <2defedc0-ff0f-fa65-778b-f86a9e595c3c@sapo.pt>
+ <CALK03d3QJ_eszOyPGr3vyKMPTcDznriSG1z_ZntCXDoZSc098g@mail.gmail.com>
+ <CAD4oTHFncY=uTk=LST0vDD9UX7qApoPxy6TrXZnx-ojUZdEZpQ@mail.gmail.com>
+Message-ID: <826f93cb-4286-2906-80a7-dd830406d820@gmail.com>
+
+The code from gram.y that handles this looks like this in R-devel:
+
+         /* allow top-level placeholder */
+         for (SEXP a = CDR(rhs); a != R_NilValue; a = CDR(a))
+             if (CAR(a) == R_PlaceholderToken) {
+                 if (TAG(a) == R_NilValue)
+                     raiseParseError("placeholderNotNamed", rhs,
+                                     NO_VALUE, NULL, lloc_rhs,
+                             _("pipe placeholder can only be used as a 
+named argument (%s:%d:%d)"));
+                 checkTooManyPlaceholders(rhs, CDR(a), lloc_rhs);
+                 SETCAR(a, lhs);
+                 return rhs;
+             }
+
+         check_rhs(rhs, lloc_rhs);
+
+The "check_rhs" function is the one that complains about using `[` as a 
+function on the right hand side.  So it is never run when there's a 
+placeholder found.  Not sure if this is intentional or not.
+
+You can see more context here: 
+https://github.com/wch/r-source/blob/0ece3677bc1c4a1c76ecbcff62424d72d742d492/src/main/gram.y#L1248 
+.
+
+Duncan Murdoch
+
+
+
+On 18/07/2022 3:48 p.m., Gabriel Becker wrote:
+> It looks to me like the 'bug' here seems to be that
+> 
+> aggregate(y ~ f, df1, mean) |> `[`(x = _, 'y')
+> 
+> 
+> does not throw the same error as
+> 
+> aggregate(y ~ f, df1, mean) |> `[`('y')
+> 
+> 
+> Since the latter seems pretty clear that the intent is that `[` is
+> disallowed on the RHS of the pipe by design.
+> 
+> ~G
+> 
+> 
+> On Mon, Jul 18, 2022 at 11:07 AM Toby Hocking <tdhock5 at gmail.com> wrote:
+> 
+>> Is the intent is to encourage the user to do something simpler like...
+>> aggregate(y ~ f, df1, mean)$y
+>> aggregate(y ~ f, df1, mean)["y"]
+>> aggregate(y ~ f, df1, mean)[["y"]]
+>> ??
+>>
+>> On Sat, Jul 16, 2022 at 8:27 AM Rui Barradas <ruipbarradas at sapo.pt> wrote:
+>>
+>>> Hello,
+>>>
+>>> When piping to any of `[.data.frame` or `[[.data.frame`, the placeholder
+>>> in mandatory.
+>>>
+>>>
+>>> df1 <- data.frame(y = 1:10, f = rep(c("a", "b"), each = 5))
+>>>
+>>> aggregate(y ~ f, df1, mean) |> `[`('y')
+>>> # Error: function '[' not supported in RHS call of a pipe
+>>>
+>>> aggregate(y ~ f, df1, mean) |> `[[`('y')
+>>> # Error: function '[' not supported in RHS call of a pipe
+>>>
+>>>
+>>>
+>>> But if used it throws a warning.
+>>>
+>>>
+>>>
+>>> aggregate(y ~ f, df1, mean) |> `[`(x = _, 'y')
+>>> #  Warning in `[.data.frame`(x = aggregate(y ~ f, df1, mean), "y"):
+>>> named arguments
+>>> #  other than 'drop' are discouraged
+>>> #    y
+>>> #  1 3
+>>> #  2 8
+>>>
+>>> aggregate(y ~ f, df1, mean) |> `[[`(x = _, 'y')
+>>> #  Warning in `[[.data.frame`(x = aggregate(y ~ f, df1, mean), "y"):
+>> named
+>>> #  arguments other than 'exact' are discouraged
+>>> #  [1] 3 8
+>>>
+>>>
+>>>
+>>> Hasn't this become inconsistent behavior?
+>>> More than merely right, the named argument is mandatory, it shouldn't
+>>> give warnings.
+>>>
+>>> Hope this helps,
+>>>
+>>> Rui Barradas
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>
+>>
+>>          [[alternative HTML version deleted]]
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Mon Jul 18 22:39:22 2022
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Mon, 18 Jul 2022 22:39:22 +0200
+Subject: [Rd] 
+ R-Devel (82603) still passing "fno-optimize-sibling-calls" on
+ Windows
+In-Reply-To: <CAL6gwnK+=m8wP_ehJXmxuhb_EfUX5MX9pjjpweXH-8Az7iF4rA@mail.gmail.com>
+References: <CAL6gwnK+=m8wP_ehJXmxuhb_EfUX5MX9pjjpweXH-8Az7iF4rA@mail.gmail.com>
+Message-ID: <c9b62248-a5de-7dce-a8b5-8c79dd294922@gmail.com>
+
+
+On 7/18/22 19:14, Avraham Adler wrote:
+> Hello.
+>
+> According to my understanding of the changes in R-devel, the flag
+> -fno-optimize-sibling-calls should no longer be forced when compiling
+> R. Yet, as I compile R, revision 82603, from source on Windows
+> (Skylake-X server) I see the flag being passed (example below). Is
+> this different for Windows than for Unix? The changes header seems to
+> be its own and not under the "Installation on Unix-Alike" header.
+>
+> Thank you,
+>
+> Avi
+
+Hi Avi,
+
+yes, thanks for reminding me, I will remove that in the Windows make 
+files (in about a week or so). There is no need to be more careful on 
+Windows than Unix regarding this (actually a bit on the contrary, as 
+most users use the same compiler). Feel free to remove that already in 
+your builds.
+
+Tomas
+
+> Excerpt:
+> making Lapack.d from Lapack.c
+> gfortran  -O3 -march=native -pipe -fno-optimize-sibling-calls -flto
+> -ffat-lto-objects -fuse-linker-plugin -ffloat-store -c dlamch.f -o
+> dlamch.o
+> gfortran  -O3 -march=native -pipe -fno-optimize-sibling-calls -flto
+> -ffat-lto-objects -fuse-linker-plugin  -c dlapack.f -o dlapack.o
+> gfortran  -O3 -march=native -pipe -fno-optimize-sibling-calls -flto
+> -ffat-lto-objects -fuse-linker-plugin  -c cmplx.f -o cmplx.o
+> gfortran  -O3 -march=native -pipe -fno-optimize-sibling-calls -flto
+> -ffat-lto-objects -fuse-linker-plugin  -c la_constants.f90 -o
+> la_constants.o
+> gfortran  -O3 -march=native -pipe -fno-optimize-sibling-calls -flto
+> -ffat-lto-objects -fuse-linker-plugin  -c dlartg.f90 -o dlartg.o
+> gfortran  -O3 -march=native -pipe -fno-optimize-sibling-calls -flto
+> -ffat-lto-objects -fuse-linker-plugin  -c la_xisnan.f90 -o la_xisnan.o
+> gfortran  -O3 -march=native -pipe -fno-optimize-sibling-calls -flto
+> -ffat-lto-objects -fuse-linker-plugin  -c dlassq.f90 -o dlassq.o
+> gfortran  -O3 -march=native -pipe -fno-optimize-sibling-calls -flto
+> -ffat-lto-objects -fuse-linker-plugin  -c zlartg.f90 -o zlartg.o
+> gfortran  -O3 -march=native -pipe -fno-optimize-sibling-calls -flto
+> -ffat-lto-objects -fuse-linker-plugin  -c zlassq.f90 -o zlassq.o
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Tue Jul 19 00:44:16 2022
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Mon, 18 Jul 2022 17:44:16 -0500 (CDT)
+Subject: [Rd] 
+ [External] Warning with new placeholder piped to data.frame
+ extractors `[` and `[[`.
+In-Reply-To: <2defedc0-ff0f-fa65-778b-f86a9e595c3c@sapo.pt>
+References: <2defedc0-ff0f-fa65-778b-f86a9e595c3c@sapo.pt>
+Message-ID: <e2f5ae1f-d45a-e356-2736-5b2d52fe33e@uiowa.edu>
+
+On Sat, 16 Jul 2022, Rui Barradas wrote:
+
+> Hello,
+>
+> When piping to any of `[.data.frame` or `[[.data.frame`, the placeholder in 
+> mandatory.
+>
+>
+> df1 <- data.frame(y = 1:10, f = rep(c("a", "b"), each = 5))
+>
+> aggregate(y ~ f, df1, mean) |> `[`('y')
+> # Error: function '[' not supported in RHS call of a pipe
+>
+> aggregate(y ~ f, df1, mean) |> `[[`('y')
+> # Error: function '[' not supported in RHS call of a pipe
+>
+>
+>
+> But if used it throws a warning.
+>
+>
+>
+> aggregate(y ~ f, df1, mean) |> `[`(x = _, 'y')
+> #  Warning in `[.data.frame`(x = aggregate(y ~ f, df1, mean), "y"): named 
+> arguments
+> #  other than 'drop' are discouraged
+> #    y
+> #  1 3
+> #  2 8
+>
+> aggregate(y ~ f, df1, mean) |> `[[`(x = _, 'y')
+> #  Warning in `[[.data.frame`(x = aggregate(y ~ f, df1, mean), "y"): named
+> #  arguments other than 'exact' are discouraged
+> #  [1] 3 8
+>
+
+The pipe syntax requirs that the placeolder be used as a named
+argument.  If you do that, then the syntax is legal and parses
+successfully.
+
+> Hasn't this become inconsistent behavior?
+> More than merely right, the named argument is mandatory, it shouldn't give 
+> warnings.
+
+Any R function can decide whether it wants to allow explicitly named
+arguments.  Disallowing or discouraging using explicitly named
+arguments requires some work and is usually not a good idea. In the
+case of the data.frame mechods for [ and [[ the decision was made to
+discourage using named arguments other than 'exact'. This seems to
+have been to allow a more an expedient way to implement these
+functions. This could be revisited, but I doubt is is worth the effort.
+
+For me the main reason for using pipes is to make code more
+readable. Using `[` and such constructs is not furthering that
+cause. When I use pipes I am almost always using tidyverse
+features, so I have dpyr::pull available, which is more readable,
+to me at least. Arguably, base R could have a similar function,
+but again I doubt this would be a good investment of time.
+
+An option that we have experimented with is to allow the placeholder
+at the head of an extraction chain. This is supported in the
+experimental branch at
+https://svn.r-project.org/R/branches/R-syntax. So for example:
+
+     > mtcars |> _$cyl[1]
+     [1] 6
+
+This may make it into R-devel for the next release, but it still needs
+more testing.
+
+Best,
+
+luke
+
+>
+> Hope this helps,
+>
+> Rui Barradas
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+
+
