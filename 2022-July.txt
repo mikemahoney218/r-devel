@@ -8447,3 +8447,321 @@ Thanks!
 -Ezra
 
 
+From Roger@B|v@nd @end|ng |rom nhh@no  Sat Jul 30 13:27:27 2022
+From: Roger@B|v@nd @end|ng |rom nhh@no (Roger Bivand)
+Date: Sat, 30 Jul 2022 13:27:27 +0200 (CEST)
+Subject: [Rd] foreign::read.dbf fails to parse dbf properly
+In-Reply-To: <mailman.52795.5.1659175202.20002.r-devel@r-project.org>
+References: <mailman.52795.5.1659175202.20002.r-devel@r-project.org>
+Message-ID: <431c9d2b-b1c4-5f87-feae-611484e5c0fe@reclus2.nhh.no>
+
+On Sat, 30 Jul 2022, r-devel-request at r-project.org wrote:
+
+>
+> Dear R developers,
+>
+> tl;dr I've been trying to read foxpro dbf files with
+> foreign::read.dbf(), they weren't being read properly, I patched the
+> foreign package to make it work, now what?
+>
+> Long version:
+> I recently encountered unexpected behavior attempting to read dbf files
+> using foreign::read.dbf() from here:
+>
+> https://eur02.safelinks.protection.outlook.com/?url=https%3A%2F%2Fforms.ferc.gov%2Ff1allyears%2Ff1_2020.zip&amp;data=05%7C01%7CRoger.Bivand%40nhh.no%7C898bc868ceb14a50bef308da72127f0a%7C33a15b2f849941998d56f20b5aa91af2%7C0%7C0%7C637947721632932545%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&amp;sdata=kQ8NhGxrgL4H0X3XsJPEoCAnEZIcmvwdEkUbepJupgE%3D&amp;reserved=0
+
+As you may have seen in the code or the help page, the first port from the 
+then version of shapelib: https://github.com/OSGeo/shapelib was made by 
+Nicholas Lewin-Koh 20 years ago. The code is largely unchanged since then.
+
+What is your OS and R version?
+
+Reading F1_15.DBF (Fedora 36, locally built R 4.2.1), I see:
+
+> summary(F1_15.DBF)
+  RESPONDENT      REPORT_YEA     SPPLMNT_NU     ROW_NUMBER       ROW_SEQ
+  \xc2   :  350   \xe4\a:25774   NA's:25774   U      :  874   U      :  874
+  \001   :  248                               C      :  864   C      :  864
+  \002   :  208                               T      :  846   T      :  846
+  x      :  206                               \004   :  845   \004   :  845
+  \x85   :  197                               \002   :  840   \002   :  840
+  (Other):24363                               (Other):20813   (Other):20813
+  NA's   :  202                               NA's   :  692   NA's   :  692
+...
+
+which is why another problem may be encoding since R 4.2 on Windows 
+(UCRT).
+
+The help page does say:
+
+"The DBF format is documented but not much adhered to.  There is is
+no guarantee this will read all DBF files."
+
+and:
+
+      'read.dbf' is based on C code from <http://shapelib.maptools.org/>
+      which implements the 'XBASE' specification.  It can convert fields
+      of type '"L"' (logical), '"N"' and '"F"' (numeric and float) and
+      '"D"' (dates): all other field types are read as-is as character
+      vectors.  A numeric field is read as an R integer vector if it is
+      encoded to have no decimals, otherwise as a numeric vector.
+      However, if the numbers are too large to fit into an integer
+      vector, it is changed to numeric.  Note that is possible to read
+      integers that cannot be represented exactly even as doubles: this
+      sometimes occurs if IDs are incorrectly coded as numeric.
+
+So pre-converting seems easier than retro-fitting, given the time since 
+the function was first published. Libre Office seems to see 40, and 
+writes 40 in a more accessible way, which can be read by read.dbf().
+
+Using a program from GDAL (locally built 3.5.1, with its bundled shapelib, 
+on Fedora 36 UTF-8 locale ), https://gdal.org/programs/ogr2ogr.html,
+
+ogr2ogr -f CSV F1_15.csv F1_15.DBF
+Warning 1: One or several characters couldn't be converted correctly from 
+CP1252 to UTF-8.  This warning will not be emitted anymore
+
+and "(" not 40. So it doesn't seem that updating the shapelib files in 
+foreign would help.
+
+
+In addition, there is an error under options("warn"=2L) in:
+
+F1_EMAIL.DBF
+Error in read.dbf(i) :
+   (converted from warning) value |0| found in logical field
+
+and possibly others which do not seem to relate to the field definition 
+problem you identified.
+
+Roger
+
+>
+> unzipped, in UPLOADERS/FORM1/working/F1_15.DBF - and as a note, this is
+> a foxpro database. I would expect the first row of the first column to
+> be 40, instead I am getting "(" (realizing that "(" has a decimal ascii
+> value of 40). The xbase docs indicate that this is a field of type "I"
+> which is a 4-byte integer unique to foxpro, and it doesn't look like
+> this case is contemplated by read.dbf()
+>
+> I made some modifications to Rdbfread.c and dbfopen.c in the foreign
+> package (version 0.8-82) to add specific handling for field type "I".
+>
+> I'm not current set up to contribute directly, I don't have SVN access.
+>
+> 1. Is this patch of general interest? I'm weighing in the development
+> guidelines:
+>  - DO NOT fix exotic bugs that haven't bugged anyone
+>  - DO make small enhancements if they are badly needed
+> and I feel like this is maybe a bit of an exotic lack-of-feature
+> (wouldn't call it a bug), and I have no idea if this is badly needed
+> (by anybody, other than myself)
+>
+> 2. if of general interest, how can I get set up with SVN credentials
+> for R-packages?
+>
+> Thanks!
+> -Ezra
+>
+>
+>
+>
+> ------------------------------
+>
+> Subject: Digest Footer
+>
+> _______________________________________________
+> R-devel at r-project.org mailing list  DIGESTED
+> https://eur02.safelinks.protection.outlook.com/?url=https%3A%2F%2Fstat.ethz.ch%2Fmailman%2Flistinfo%2Fr-devel&amp;data=05%7C01%7CRoger.Bivand%40nhh.no%7C898bc868ceb14a50bef308da72127f0a%7C33a15b2f849941998d56f20b5aa91af2%7C0%7C0%7C637947721632932545%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&amp;sdata=k1kdMDHIQJRYAKm1HVWiP9SvsxEDtP9JpF3r08HoGxU%3D&amp;reserved=0
+>
+>
+> ------------------------------
+>
+> End of R-devel Digest, Vol 233, Issue 17
+> ****************************************
+>
+
+-- 
+Roger Bivand
+Emeritus Professor
+Department of Economics, Norwegian School of Economics,
+Postboks 3490 Ytre Sandviken, 5045 Bergen, Norway.
+e-mail: Roger.Bivand at nhh.no
+https://orcid.org/0000-0003-2392-6140
+https://scholar.google.no/citations?user=AWeghB0AAAAJ&hl=en
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sat Jul 30 14:17:25 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sat, 30 Jul 2022 08:17:25 -0400
+Subject: [Rd] foreign::read.dbf fails to parse dbf properly
+In-Reply-To: <7006ecf15d44d9552de794e37b0838e38783f2bc.camel@landtucker.com>
+References: <7006ecf15d44d9552de794e37b0838e38783f2bc.camel@landtucker.com>
+Message-ID: <7c9da46f-3b77-149b-552f-109a57fa742c@gmail.com>
+
+On 29/07/2022 4:52 p.m., Ezra Tucker wrote:
+> Dear R developers,
+> 
+> tl;dr I've been trying to read foxpro dbf files with
+> foreign::read.dbf(), they weren't being read properly, I patched the
+> foreign package to make it work, now what?
+> 
+> Long version:
+> I recently encountered unexpected behavior attempting to read dbf files
+> using foreign::read.dbf() from here:
+> 
+> https://forms.ferc.gov/f1allyears/f1_2020.zip
+> 
+> unzipped, in UPLOADERS/FORM1/working/F1_15.DBF - and as a note, this is
+> a foxpro database. I would expect the first row of the first column to
+> be 40, instead I am getting "(" (realizing that "(" has a decimal ascii
+> value of 40). The xbase docs indicate that this is a field of type "I"
+> which is a 4-byte integer unique to foxpro, and it doesn't look like
+> this case is contemplated by read.dbf()
+> 
+> I made some modifications to Rdbfread.c and dbfopen.c in the foreign
+> package (version 0.8-82) to add specific handling for field type "I".
+> 
+> I'm not current set up to contribute directly, I don't have SVN access.
+> 
+> 1. Is this patch of general interest? I'm weighing in the development
+> guidelines:
+>    - DO NOT fix exotic bugs that haven't bugged anyone
+>    - DO make small enhancements if they are badly needed
+> and I feel like this is maybe a bit of an exotic lack-of-feature
+> (wouldn't call it a bug), and I have no idea if this is badly needed
+> (by anybody, other than myself)
+> 
+> 2. if of general interest, how can I get set up with SVN credentials
+> for R-packages?
+
+Roger addressed your first question.  I'll give some information about 
+the second one.
+
+You should automatically have read permission on the R-packages 
+repository, as with most R svn repositories.
+
+I think to get write permission, you'd need to be invited to join R 
+Core, or to be a maintainer of the package.
+
+The more common way to have changes accepted is to post them to the 
+bugs.r-project.org web site.  See https://www.r-project.org/bugs.html 
+for more details on how to get an account set up there so you can post 
+things.
+
+Duncan Murdoch
+
+
+From ezr@ @end|ng |rom |@ndtucker@com  Sat Jul 30 19:36:17 2022
+From: ezr@ @end|ng |rom |@ndtucker@com (Ezra Tucker)
+Date: Sat, 30 Jul 2022 13:36:17 -0400
+Subject: [Rd] foreign::read.dbf fails to parse dbf properly
+In-Reply-To: <7c9da46f-3b77-149b-552f-109a57fa742c@gmail.com>
+References: <7006ecf15d44d9552de794e37b0838e38783f2bc.camel@landtucker.com>
+ <7c9da46f-3b77-149b-552f-109a57fa742c@gmail.com>
+Message-ID: <55fea8946de292f5d1dd083ec6e0682797e1e01d.camel@landtucker.com>
+
+Thank you all for your thoughts, I'll definitely submit my bug report
+and patch there.
+
+With respect to the data themselves and the data formats, in my
+research I came across this document:
+http://www.manmrk.net/tutorials/database/xbase/data_types.html
+as a helpful reference
+
+Forgot to mention, attempted all this on
+R version 4.2.1 (2022-06-23)
+Platform: x86_64-pc-linux-gnu (64-bit)
+Running under: Fedora Linux 36 (Workstation Edition)
+
+and also on a Windows 10 machine running R version 4.2.1 with UCRT.
+
+To Andre's and Roger's points, great minds- I did exactly the same
+things, opening the dbf files in LibreOffice (works perfectly, so does
+the soffice command line tool), also tried converting to csv using
+ogr2ogr, and got EXACTLY the same problem as I'm seeing in R.
+
+dbfopen.c says it's derived from Shapelib, documentation here:
+http://shapelib.maptools.org/dbf_api.html
+stating that DBFGetNativeFieldType() has support for C, D, F, N, L and
+M data types, and if ogr2ogr uses the same source code from shapelib,
+makes sense to me why it would interpret these values the same way.
+
+I'll note really quickly that if this were a simple matter of
+converting the ASCII, this wouldn't be an issue but certain characters
+(mostly the control characters, backspace, delete, and a few others)
+prevented me from accurately reconstructing all the original data once
+they were loaded into R.
+
+-Ezra
+
+On Sat, 2022-07-30 at 08:17 -0400, Duncan Murdoch wrote:
+> On 29/07/2022 4:52 p.m., Ezra Tucker wrote:
+> > Dear R developers,
+> > 
+> > tl;dr I've been trying to read foxpro dbf files with
+> > foreign::read.dbf(), they weren't being read properly, I patched
+> > the
+> > foreign package to make it work, now what?
+> > 
+> > Long version:
+> > I recently encountered unexpected behavior attempting to read dbf
+> > files
+> > using foreign::read.dbf() from here:
+> > 
+> > https://forms.ferc.gov/f1allyears/f1_2020.zip
+> > 
+> > unzipped, in UPLOADERS/FORM1/working/F1_15.DBF - and as a note,
+> > this is
+> > a foxpro database. I would expect the first row of the first column
+> > to
+> > be 40, instead I am getting "(" (realizing that "(" has a decimal
+> > ascii
+> > value of 40). The xbase docs indicate that this is a field of type
+> > "I"
+> > which is a 4-byte integer unique to foxpro, and it doesn't look
+> > like
+> > this case is contemplated by read.dbf()
+> > 
+> > I made some modifications to Rdbfread.c and dbfopen.c in the
+> > foreign
+> > package (version 0.8-82) to add specific handling for field type
+> > "I".
+> > 
+> > I'm not current set up to contribute directly, I don't have SVN
+> > access.
+> > 
+> > 1. Is this patch of general interest? I'm weighing in the
+> > development
+> > guidelines:
+> > ?? - DO NOT fix exotic bugs that haven't bugged anyone
+> > ?? - DO make small enhancements if they are badly needed
+> > and I feel like this is maybe a bit of an exotic lack-of-feature
+> > (wouldn't call it a bug), and I have no idea if this is badly
+> > needed
+> > (by anybody, other than myself)
+> > 
+> > 2. if of general interest, how can I get set up with SVN
+> > credentials
+> > for R-packages?
+> 
+> Roger addressed your first question.? I'll give some information
+> about 
+> the second one.
+> 
+> You should automatically have read permission on the R-packages 
+> repository, as with most R svn repositories.
+> 
+> I think to get write permission, you'd need to be invited to join R 
+> Core, or to be a maintainer of the package.
+> 
+> The more common way to have changes accepted is to post them to the 
+> bugs.r-project.org web site.? See https://www.r-
+> project.org/bugs.html?
+> for more details on how to get an account set up there so you can
+> post 
+> things.
+> 
+> Duncan Murdoch
+
+
