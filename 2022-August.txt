@@ -108,3 +108,65 @@ Martin Maechler
 ETH Zurich  and  R Core team
 
 
+From @|ex@nder@keth @end|ng |rom |venturegroup@com  Wed Aug  3 10:44:55 2022
+From: @|ex@nder@keth @end|ng |rom |venturegroup@com (Alexander Keth)
+Date: Wed, 3 Aug 2022 10:44:55 +0200 (CEST)
+Subject: [Rd] Display lines of code from the top-level script or subscript
+ in non-interactive R Session with Rprof
+Message-ID: <1822065500.11275024.1659516295206@zm-relay01>
+
+Hello there,
+
+
+I am running R in a production environment. My goal is to profile all production jobs, which are run in non interactive R sessions via Rscript, in the form job-xyz ran for xxx amount of time and spend yyy seconds with code execution of line # (for every line of code). In general the R code is run with a main script which calls various subscripts. The jobs make heays use of external packages (e.g. dplyr, DBI, data.table and so on).
+
+I re-installed all packages with --with-keep.source. Subscripts are sourced in the main-script via eval(parse("path/to/subscript.R")) to enable line-profiling with Rprof. The call to Rprof is Rprof("rprof.out", line.profiling = TRUE, memory.profiling = TRUE).
+
+
+Unfotunately, the majority of the code relies on heavy package use (e.g. dplyr, data.table and so on). Thus most of the code lines in Rprof refer to the source-code within those packages and not the 'top-level' source code in the main-script or the subscripts. So far the only solution I came up with is to scrape the Rprof output using the profile package (https://github.com/r-prof/profile), extract the top-level call stack function calls (remove top level eval calls before) and auto-magically match the function calls with the function calls performed in the main-script and subscripts. However, this process is obviously not perfect and very error prone...
+
+
+Is there any better way to do things?
+
+
+Cheers,
+Alex
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Wed Aug  3 13:06:16 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Wed, 3 Aug 2022 07:06:16 -0400
+Subject: [Rd] 
+ Display lines of code from the top-level script or subscript
+ in non-interactive R Session with Rprof
+In-Reply-To: <1822065500.11275024.1659516295206@zm-relay01>
+References: <1822065500.11275024.1659516295206@zm-relay01>
+Message-ID: <2489b597-5af5-9db6-e5e0-66a8071fd540@gmail.com>
+
+On 03/08/2022 4:44 a.m., Alexander Keth via R-devel wrote:
+> Hello there,
+> 
+> 
+> I am running R in a production environment. My goal is to profile all production jobs, which are run in non interactive R sessions via Rscript, in the form job-xyz ran for xxx amount of time and spend yyy seconds with code execution of line # (for every line of code). In general the R code is run with a main script which calls various subscripts. The jobs make heays use of external packages (e.g. dplyr, DBI, data.table and so on).
+> 
+> I re-installed all packages with --with-keep.source. Subscripts are sourced in the main-script via eval(parse("path/to/subscript.R")) to enable line-profiling with Rprof. The call to Rprof is Rprof("rprof.out", line.profiling = TRUE, memory.profiling = TRUE).
+> 
+> 
+> Unfotunately, the majority of the code relies on heavy package use (e.g. dplyr, data.table and so on). Thus most of the code lines in Rprof refer to the source-code within those packages and not the 'top-level' source code in the main-script or the subscripts. So far the only solution I came up with is to scrape the Rprof output using the profile package (https://github.com/r-prof/profile), extract the top-level call stack function calls (remove top level eval calls before) and auto-magically match the function calls with the function calls performed in the main-script and subscripts. However, this process is obviously not perfect and very error prone...
+> 
+> 
+> Is there any better way to do things?
+
+I think reinstalling uninteresting packages --with-keep-source was a 
+mistake.  If you use the standard builds of those, and only keep source 
+in your own code, most of the detail will come from there.
+
+I'm not familiar with the profile package, but the utils::summaryRprof() 
+function with `lines = "show"` will give a display that concentrates on 
+the timing by line in the code that has source references. I think from 
+your description you want to look at the "by.total" table, but maybe you 
+want the "by.line" table.
+
+Duncan Murdoch
+
+
