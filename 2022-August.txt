@@ -529,3 +529,105 @@ On Tue, Aug 9, 2022 at 11:26 AM Davis Vaughan <davis at rstudio.com> wrote:
 	[[alternative HTML version deleted]]
 
 
+From therne@u @end|ng |rom m@yo@edu  Sat Aug 13 13:20:28 2022
+From: therne@u @end|ng |rom m@yo@edu (Therneau, Terry M., Ph.D.)
+Date: Sat, 13 Aug 2022 06:20:28 -0500
+Subject: [Rd] makepredictcall
+Message-ID: <ff6a6b$ieem7q@ironport10.mayo.edu>
+
+I'm trying to better understand makepredictcall.? The method for ns() starts with the 
+following very cryptic comment and line of code:
+ ??? ## check must work correctly when call is a symbol, both for quote(ns) and quote(t1):
+ ??? if(as.character(call)[1L] == "ns" || (is.call(call) && identical(eval(call[[1L]]), 
+ns))) {
+
+The phrase "t1" appears no where else in the src/library/splines/R, and there is nothing 
+relevant in stats/R either? (t1 gets used as a temp variable in 2 subfunctions).
+So, what is the purpose of this line of code?
+
+I can see that if a user typed?? zed <- ns, then used 'zed' in their call, that the right 
+hand clause would then be true but not the left; but why worry about that case?
+
+Terry T.
+
+ ?PS (The help file isn't very helpful for creating such a method BTW.? It tells why you 
+should make one, and what happens if you get it right, but nothing on how.)
+
+-- 
+Terry M Therneau, PhD
+Department of Quantitative Health Sciences
+Mayo Clinic
+therneau at mayo.edu
+
+"TERR-ree THUR-noh"
+
+	[[alternative HTML version deleted]]
+
+
+From bbo|ker @end|ng |rom gm@||@com  Sat Aug 13 18:52:21 2022
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Sat, 13 Aug 2022 12:52:21 -0400
+Subject: [Rd] makepredictcall
+In-Reply-To: <ff6a6b$ieem7q@ironport10.mayo.edu>
+References: <ff6a6b$ieem7q@ironport10.mayo.edu>
+Message-ID: <e23ade4f-1acb-480e-02b9-9a441b686563@gmail.com>
+
+   Well, going to git blame (too lazy to remember how to do it in svn) 
+finds this commit
+
+https://github.com/wch/r-source/commit/4c800c6f3dd61a07c763af744f08b6f411b1f877
+
+with the commit message " c74663 failed for symbol [example(censboot, 
+package="boot")] => be more careful"
+
+  Going to ?boot::censboot and searching for predict() finds this fragment:
+
+   t1 <- ns(d$thickness, df=4)
+   cox <- coxph(Surv(d$time, d$status == 1) ~ t1+strata(d$ulcer))
+   ind <- !duplicated(d$thickness)
+   u <- d$thickness[!ind]
+   eta <- cox$linear.predictors[!ind]
+   sp <- smooth.spline(u, eta, df=20)
+   th <- seq(from = 0.25, to = 10, by = 0.25)
+   predict(sp, th)$y
+
+which is exactly the use case that you identified, with "t1" as the 
+culprit. (It's definitely confusing that "t1" is called out in the code 
+comments, with no obvious referent ...)
+
+  It has long been my opinion that the machinery of makepredictcall is 
+poorly documented (but of course I haven't done my part and submitted 
+documentation patches for consideration ...)
+
+   cheers
+    Ben Bolker
+
+
+
+On 8/13/22 7:20 AM, Therneau, Terry M., Ph.D. via R-devel wrote:
+> I'm trying to better understand makepredictcall.? The method for ns() starts with the
+> following very cryptic comment and line of code:
+>   ??? ## check must work correctly when call is a symbol, both for quote(ns) and quote(t1):
+>   ??? if(as.character(call)[1L] == "ns" || (is.call(call) && identical(eval(call[[1L]]),
+> ns))) {
+> 
+> The phrase "t1" appears no where else in the src/library/splines/R, and there is nothing
+> relevant in stats/R either? (t1 gets used as a temp variable in 2 subfunctions).
+> So, what is the purpose of this line of code?
+> 
+> I can see that if a user typed?? zed <- ns, then used 'zed' in their call, that the right
+> hand clause would then be true but not the left; but why worry about that case?
+> 
+> Terry T.
+> 
+>   ?PS (The help file isn't very helpful for creating such a method BTW.? It tells why you
+> should make one, and what happens if you get it right, but nothing on how.)
+> 
+
+-- 
+Dr. Benjamin Bolker
+Professor, Mathematics & Statistics and Biology, McMaster University
+Director, School of Computational Science and Engineering
+Graduate chair, Mathematics & Statistics
+
+
