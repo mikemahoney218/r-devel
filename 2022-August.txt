@@ -925,3 +925,125 @@ r-devel at r-project.org>:
 	[[alternative HTML version deleted]]
 
 
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Wed Aug 17 20:45:08 2022
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Wed, 17 Aug 2022 20:45:08 +0200
+Subject: [Rd] Should `as.difftime()` convert integer input to double?
+In-Reply-To: <CABzLhzxpDqKpw2AbKDgWosEgjSJiZ7aj-RfSmKZu79zwTWkv_w@mail.gmail.com>
+References: <CABzLhzys2eihd7MuvKuFZyBCkjzA+shdM1H0R=r1a1mQ_5CMnw@mail.gmail.com>
+ <CAHqSRuS=c9TvbCKqwqB9GcGHVek5O9djgN0yJXzb9GpdfEvEJg@mail.gmail.com>
+ <25337.9228.597346.199307@hornik.net>
+ <CABzLhzxpDqKpw2AbKDgWosEgjSJiZ7aj-RfSmKZu79zwTWkv_w@mail.gmail.com>
+Message-ID: <25341.14132.127258.47561@hornik.net>
+
+>>>>> Davis Vaughan writes:
+
+> Kurt,
+> Thanks so much! Do you think `as.difftime()` should retain names? With your
+> patch, I don't *think* this will retain names anymore:
+
+> # This is the released behavior
+> names(as.difftime(c(x=1), units = "secs"))
+> #> [1] "x"
+
+Thanks.  Changed now with c82723.
+
+Best
+-k
+
+> -Davis
+
+> On Sun, Aug 14, 2022 at 12:34 PM Kurt Hornik <Kurt.Hornik at wu.ac.at> wrote:
+
+>> >>>>> Bill Dunlap writes:
+>> 
+>> Thanks: fixed now in the trunk with c82716.
+>> 
+>> Best
+>> -k
+>> 
+>> > Forcing difftime's payload to be numeric would avoid anomalies like
+>> >> as.difftime(123456789L, units="secs") * 100L
+>> > Time difference of NA secs
+>> > Warning message:
+>> > In e2 * unclass(e1) : NAs produced by integer overflow
+>> >> as.difftime(123456789, units="secs") * 100L
+>> > Time difference of 12345678900 secs
+>> 
+>> > Note that there are packages (e.g., fst, a serialization package) which
+>> can
+>> > (in C++ code) understand and create difftimes with integer payloads, so
+>> you
+>> > may have trouble completely getting rid of such things.
+>> 
+>> > -Bill
+>> 
+>> > On Tue, Aug 9, 2022 at 11:26 AM Davis Vaughan <davis at rstudio.com> wrote:
+>> 
+>> >> Hi all,
+>> >>
+>> >> Currently, `as.difftime()` with an integer input will produce a difftime
+>> >> object that internally is built on an integer vector, i.e.:
+>> >>
+>> >> x <- as.difftime(1L, units = "secs")
+>> >> typeof(x)
+>> >> #> [1] "integer"
+>> >>
+>> >> x <- as.difftime(1, units = "secs")
+>> >> typeof(x)
+>> >> #> [1] "double"
+>> >>
+>> >> I feel like difftime objects should always be built on *double* vectors.
+>> >> There are a few reasons I feel like this should be true:
+>> >>
+>> >> - There is an `as.double.difftime()` method, but no
+>> `as.integer.difftime()`
+>> >> method, which implies something about what the underlying storage type
+>> is
+>> >> assumed to be.
+>> >>
+>> >> - AFAIK, there is no other way to produce a difftime object with integer
+>> >> storage using the exposed API (aside from abusing the internal
+>> .difftime()
+>> >> helper). Even `.Date(1L) - .Date(1L)` produces a difftime with double
+>> >> storage.
+>> >>
+>> >> - `seq.Date()` used to be able to produce dates with integer storage,
+>> but
+>> >> as of recently even that edge case has been altered to always produce
+>> dates
+>> >> with double storage. So a change to also force difftime to have double
+>> >> storage would feel consistent with that.
+>> >>
+>> >>
+>> https://github.com/wch/r-source/commit/0762ee983813c4df9b93f6b5ee52c910dcd3ab39
+>> >>
+>> >> It looks like a patch to `as.difftime()` would be fairly straightforward
+>> >> (i.e. ensuring that integer input is coerced to double), so I'd be
+>> happy to
+>> >> attempt one if someone else agrees that this should be changed.
+>> >>
+>> >> Thanks,
+>> >> Davis
+>> >>
+>> >> [[alternative HTML version deleted]]
+>> >>
+>> >> ______________________________________________
+>> >> R-devel at r-project.org mailing list
+>> >> https://stat.ethz.ch/mailman/listinfo/r-devel
+>> >>
+>> 
+>> >       [[alternative HTML version deleted]]
+>> 
+>> > ______________________________________________
+>> > R-devel at r-project.org mailing list
+>> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>> 
+
+> 	[[alternative HTML version deleted]]
+
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
