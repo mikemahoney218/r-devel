@@ -1151,3 +1151,262 @@ Am 25.08.22 um 04:51 schrieb Michael Chirico via R-devel:
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From ch|r|com @end|ng |rom goog|e@com  Fri Aug 26 05:19:20 2022
+From: ch|r|com @end|ng |rom goog|e@com (Michael Chirico)
+Date: Thu, 25 Aug 2022 20:19:20 -0700
+Subject: [Rd] simplify2array assumes non-NA dim() -- base or method bug?
+In-Reply-To: <e6e40631-2692-d68a-d136-6ca5a7424ea5@fau.de>
+References: <CAD7Bkx_+EQ5YoJoQQwUn2gzGvBxQQ29w8nQhtJjNAz6_f0MqEQ@mail.gmail.com>
+ <e6e40631-2692-d68a-d136-6ca5a7424ea5@fau.de>
+Message-ID: <CAD7Bkx_mR5qX+pEei4wzjaSogGd-Mb5jz-TWYYLa_owDjENPuA@mail.gmail.com>
+
+Does this somewhat contradict the requirement that dimensions are non-missing?
+
+ncol(table(letters))
+# [1] NA
+
+On the other hand,
+
+dim(table(letters))
+# [1] 26
+
+Maybe that's a bug for the ncol() method of table?
+
+On Thu, Aug 25, 2022 at 2:55 AM Sebastian Meyer <seb.meyer at fau.de> wrote:
+>
+> Hmm. I think I haven't seen NA dims in base R before. R-lang says
+>
+> > The 'dim' attribute is used to implement arrays.  The content of
+> > the array is stored in a vector in column-major order and the 'dim'
+> > attribute is a vector of integers specifying the respective extents of
+> > the array.  R ensures that the length of the vector is the product of
+> > the lengths of the dimensions.
+>
+> And R-intro says:
+>
+> > A dimension vector is a vector of non-negative integers.
+>
+> I understand "vector of [non-negative] integers" as excluding NA_integer_.
+>
+> Correspondingly:
+>
+> > a <- 1
+> > dim(a) <- NA_integer_
+>
+> Error in dim(a) <- NA_integer_ : the dims contain missing values
+>
+> > matrix(1, NA_integer_)
+>
+> Error in matrix(1, NA_integer_) : invalid 'nrow' value (too large or NA)
+>
+> > array(1, NA_integer_)
+>
+> Error in array(1, NA_integer_) : negative length vectors are not allowed
+>
+> There must be many more examples where non-NULL dim() is assumed to
+> not contain missing values.
+>
+> simplify2array() aligns with that specification and only needs to check
+> for numeric (non-NULL) dims at this point and not also !anyNA(c.dim).
+> So my take is that there is no bug.
+>
+> Best regards,
+>
+>         Sebastian Meyer
+>
+>
+> Am 25.08.22 um 04:51 schrieb Michael Chirico via R-devel:
+> > If any component of the dim() returned as c.dim here[1] are missing,
+> > simplify2array() errors inscrutably (specifically, because the last &&
+> > condition is missing):
+> >
+> > Error in if (higher && length(c.dim <- unique(lapply(x, dim))) == 1 &&  :
+> >    missing value where TRUE/FALSE needed
+> >
+> > At root here is that dim.tbl_lazy ({dbplyr} package method [2]) very
+> > intentionally neglects to count the # of rows in the result -- the
+> > whole point of a lazy table is to avoid calculating full queries
+> > unless specifically requested, so the # of rows is left as missing,
+> > i.e., there _is_ a quantity of rows, but the exact number is not
+> > known.
+> >
+> > That seems to me like a proper usage of NA, and hence this is a
+> > simplify2array() bug, but I am curious other thoughts here before
+> > attempting a patch.
+> >
+> > [1] https://github.com/r-devel/r-svn/blob/2d4f8c283d53ff2c98d92c7b77b11e652297742c/src/library/base/R/sapply.R#L46-L48
+> > [2] https://github.com/tidyverse/dbplyr/blob/36b146e36d6d9af215dc48e60862d4b807b9e606/R/tbl-lazy.R#L45-L47
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From ru|pb@rr@d@@ @end|ng |rom @@po@pt  Fri Aug 26 06:24:10 2022
+From: ru|pb@rr@d@@ @end|ng |rom @@po@pt (Rui Barradas)
+Date: Fri, 26 Aug 2022 05:24:10 +0100
+Subject: [Rd] simplify2array assumes non-NA dim() -- base or method bug?
+In-Reply-To: <CAD7Bkx_mR5qX+pEei4wzjaSogGd-Mb5jz-TWYYLa_owDjENPuA@mail.gmail.com>
+References: <CAD7Bkx_+EQ5YoJoQQwUn2gzGvBxQQ29w8nQhtJjNAz6_f0MqEQ@mail.gmail.com>
+ <e6e40631-2692-d68a-d136-6ca5a7424ea5@fau.de>
+ <CAD7Bkx_mR5qX+pEei4wzjaSogGd-Mb5jz-TWYYLa_owDjENPuA@mail.gmail.com>
+Message-ID: <a79f8b58-b894-2060-efeb-4faa91cf919b@sapo.pt>
+
+Hello,
+
+I don't think it's a bug in ncol.
+nrow and ncol are not generic, they are defined simply as
+
+nrow <- function(x) dim(x)[1L]
+ncol <- function(x) dim(x)[2L]
+
+Checking:
+
+nrow
+#function (x)
+#dim(x)[1L]
+#<bytecode: 0x000001c3e2863c78>
+#<environment: namespace:base>
+
+ncol
+#function (x)
+#dim(x)[2L]
+#<bytecode: 0x000001c3e1f8c030>
+#<environment: namespace:base>
+
+
+Since dim(table(letters)) returns a length 1 vector, nrow returns that 
+value and ncol's return is the expected behavior of subsetting past the 
+vector length.
+
+dim(table(letters))  # length 1
+# [1] 26
+
+nrow(table(letters))  # works as expected
+# [1] 26
+
+ncol(table(letters))  # works as expected
+# [1] NA
+
+
+Hope this helps,
+
+Rui Barradas
+
+
+
+
+?s 04:19 de 26/08/2022, Michael Chirico via R-devel escreveu:
+> Does this somewhat contradict the requirement that dimensions are non-missing?
+> 
+> ncol(table(letters))
+> # [1] NA
+> 
+> On the other hand,
+> 
+> dim(table(letters))
+> # [1] 26
+> 
+> Maybe that's a bug for the ncol() method of table?
+> 
+> On Thu, Aug 25, 2022 at 2:55 AM Sebastian Meyer <seb.meyer at fau.de> wrote:
+>>
+>> Hmm. I think I haven't seen NA dims in base R before. R-lang says
+>>
+>>> The 'dim' attribute is used to implement arrays.  The content of
+>>> the array is stored in a vector in column-major order and the 'dim'
+>>> attribute is a vector of integers specifying the respective extents of
+>>> the array.  R ensures that the length of the vector is the product of
+>>> the lengths of the dimensions.
+>>
+>> And R-intro says:
+>>
+>>> A dimension vector is a vector of non-negative integers.
+>>
+>> I understand "vector of [non-negative] integers" as excluding NA_integer_.
+>>
+>> Correspondingly:
+>>
+>>> a <- 1
+>>> dim(a) <- NA_integer_
+>>
+>> Error in dim(a) <- NA_integer_ : the dims contain missing values
+>>
+>>> matrix(1, NA_integer_)
+>>
+>> Error in matrix(1, NA_integer_) : invalid 'nrow' value (too large or NA)
+>>
+>>> array(1, NA_integer_)
+>>
+>> Error in array(1, NA_integer_) : negative length vectors are not allowed
+>>
+>> There must be many more examples where non-NULL dim() is assumed to
+>> not contain missing values.
+>>
+>> simplify2array() aligns with that specification and only needs to check
+>> for numeric (non-NULL) dims at this point and not also !anyNA(c.dim).
+>> So my take is that there is no bug.
+>>
+>> Best regards,
+>>
+>>          Sebastian Meyer
+>>
+>>
+>> Am 25.08.22 um 04:51 schrieb Michael Chirico via R-devel:
+>>> If any component of the dim() returned as c.dim here[1] are missing,
+>>> simplify2array() errors inscrutably (specifically, because the last &&
+>>> condition is missing):
+>>>
+>>> Error in if (higher && length(c.dim <- unique(lapply(x, dim))) == 1 &&  :
+>>>     missing value where TRUE/FALSE needed
+>>>
+>>> At root here is that dim.tbl_lazy ({dbplyr} package method [2]) very
+>>> intentionally neglects to count the # of rows in the result -- the
+>>> whole point of a lazy table is to avoid calculating full queries
+>>> unless specifically requested, so the # of rows is left as missing,
+>>> i.e., there _is_ a quantity of rows, but the exact number is not
+>>> known.
+>>>
+>>> That seems to me like a proper usage of NA, and hence this is a
+>>> simplify2array() bug, but I am curious other thoughts here before
+>>> attempting a patch.
+>>>
+>>> [1] https://github.com/r-devel/r-svn/blob/2d4f8c283d53ff2c98d92c7b77b11e652297742c/src/library/base/R/sapply.R#L46-L48
+>>> [2] https://github.com/tidyverse/dbplyr/blob/36b146e36d6d9af215dc48e60862d4b807b9e606/R/tbl-lazy.R#L45-L47
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From edd @end|ng |rom deb|@n@org  Fri Aug 26 15:44:07 2022
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Fri, 26 Aug 2022 08:44:07 -0500
+Subject: [Rd] simplify2array assumes non-NA dim() -- base or method bug?
+In-Reply-To: <a79f8b58-b894-2060-efeb-4faa91cf919b@sapo.pt>
+References: <CAD7Bkx_+EQ5YoJoQQwUn2gzGvBxQQ29w8nQhtJjNAz6_f0MqEQ@mail.gmail.com>
+ <e6e40631-2692-d68a-d136-6ca5a7424ea5@fau.de>
+ <CAD7Bkx_mR5qX+pEei4wzjaSogGd-Mb5jz-TWYYLa_owDjENPuA@mail.gmail.com>
+ <a79f8b58-b894-2060-efeb-4faa91cf919b@sapo.pt>
+Message-ID: <25352.52775.484635.785729@rob.eddelbuettel.com>
+
+
+Also NROW() and NCOL() exist for situations where two dimensions are assumed
+or preferred and dim() needs a little help:
+
+> NROW(table(letters))
+[1] 26
+> NCOL(table(letters))
+[1] 1
+>
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
