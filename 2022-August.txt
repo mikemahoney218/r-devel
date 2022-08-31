@@ -1868,3 +1868,115 @@ Simon
 > 
 
 
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue Aug 30 18:33:45 2022
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 30 Aug 2022 18:33:45 +0200
+Subject: [Rd] 
+ Mismatch between the Rconsole file and the RGui Configuration editor
+In-Reply-To: <618ec587-0a54-22d5-2bea-f3b0eb403701@infolink.com.br>
+References: <e486d67c-e8b6-2707-3f3d-94894653be54@infolink.com.br>
+ <618ec587-0a54-22d5-2bea-f3b0eb403701@infolink.com.br>
+Message-ID: <16d98892-54fa-da20-543e-3a6c6c9a8fd6@gmail.com>
+
+
+On 8/27/22 20:46, Paulo Barata wrote:
+>
+> To the R developers,
+>
+> In R version 4.2.1 (2022-06-23 ucrt), and also in R version 4.2.1 
+> Patched (2022-08-24 r82762 ucrt), something strange is happening with 
+> the GUI Preferences x Rconsole file. I open the GUI Preferences (RGui 
+> Configuration editor), and I define the number of console rows and 
+> columns, the I click Apply and then I Save the Preferences to the 
+> Rconsole file (which is in the Documents folders of my Windows 10 Pro) 
+> -- I overwrite the existing Rconsole file. Then I close R.
+>
+> When I open R again, there is always a mismatch between the number of 
+> console rows and columns correctly recorded in the Rconsole file and 
+> the numbers actually shown in the RGui Configuration editor.
+
+Dear Paulo,
+
+thanks for the report. It is now fixed in R-devel 82776 (it would be 
+nice if you could confirm the problem is fixed for you on your system).
+
+You have run into an old bug in GraphApp, a library used by Rgui. The 
+part saving and restoring the preferences works fine, but the problem 
+occurs on R startup when creating a new console window. Rgui computes 
+the client size of the window based on the preferred number of rows and 
+columns and asks GraphApp to create such window. GraphApp uses its 
+internal code (probably it pre-dates AdjustWindowRect) to compute the 
+screen size of the window, so including the title bar, scroll bars, etc, 
+and then asks Windows to create the window. Rgui then checks the actual 
+client size of the created window and updates the number of rows and 
+columns based on that - which is also the number you then see in the 
+preferences editor. Ideally/normally it should be the same as what was 
+given initially, e.g. via Rconsole.
+
+However, the computation in GraphApp didn't work quite right, it didn't 
+account for the scrollbars. And the reason was that it assumed a canvas 
+(CanvasSize bit was set on the window flags). That bit was set by 
+accident, because GraphApp by accident used the same bit number for 
+CanvasSize and UseUnicode. The UseUnicode bit is set in Rgui when 
+running in a multi-byte locale, so for you and many others probably only 
+since R 4.2. I've changed GraphApp to use a different bit.
+
+Thanks for testing Rgui and reporting problems.
+
+Best
+Tomas
+
+>
+> If this list allows attachments, the attached PNG image shows the 
+> mismatch between the Rconsole file and the RGui Configuration editor, 
+> just after opening R version 4.2.1 (2022-06-23 ucrt).
+>
+> Windows 10 Pro for Workstations
+> Version 21H2
+> Installed on 23/?08/?2022
+> OS build 19044.1889
+> Processor Intel(R) Xeon(R) W-1350 @ 3.30GHz? 3.31 GHz
+> Installed RAM 64.0 GB (63.7 GB usable)
+>
+>
+> R version 4.2.1 (2022-06-23 ucrt) -- "Funny-Looking Kid"
+> Copyright (C) 2022 The R Foundation for Statistical Computing
+> Platform: x86_64-w64-mingw32/x64 (64-bit)
+>
+> ?> Sys.info()
+> ?????????? sysname?????????? release?????????? version nodename
+> ???????? "Windows"????????? "10 x64"???? "build 19044" "XXXXXXXXXXXXXXX"
+> ?????????? machine???????????? login????????????? user effective_user
+> ????????? "x86-64"?????????? "XXXXX???????? "XXXXX" "XXXXX"
+> ?> win.version()
+> [1] "Windows 10 x64 (build 19044)"
+>
+> ?> .Platform
+> $OS.type
+> [1] "windows"
+> $file.sep
+> [1] "/"
+> $dynlib.ext
+> [1] ".dll"
+> $GUI
+> [1] "Rgui"
+> $endian
+> [1] "little"
+> $pkgType
+> [1] "win.binary"
+> $path.sep
+> [1] ";"
+> $r_arch
+> [1] "x64"
+>
+> Thank you. Regards,
+>
+> Paulo Barata
+>
+> (Rio de Janeiro - Brazil)
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
