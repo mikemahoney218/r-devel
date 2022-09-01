@@ -1980,3 +1980,516 @@ Tomas
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From pb @end|ng |rom |n|o||nk@com@br  Wed Aug 31 17:58:33 2022
+From: pb @end|ng |rom |n|o||nk@com@br (Paulo Barata)
+Date: Wed, 31 Aug 2022 12:58:33 -0300
+Subject: [Rd] 
+ Mismatch between the Rconsole file and the RGui Configuration editor
+In-Reply-To: <16d98892-54fa-da20-543e-3a6c6c9a8fd6@gmail.com>
+References: <e486d67c-e8b6-2707-3f3d-94894653be54@infolink.com.br>
+ <618ec587-0a54-22d5-2bea-f3b0eb403701@infolink.com.br>
+ <16d98892-54fa-da20-543e-3a6c6c9a8fd6@gmail.com>
+Message-ID: <c7330739-651b-0bdf-83c2-413f5a4cabeb@infolink.com.br>
+
+Dear Tomas,
+
+Thank you for your attention and for the detailed explanation about the 
+issue with the R Gui.
+
+As you have indicated, I tested R version 4.2.1 Patched (2022-08-30 
+r82776 ucrt), which I downloaded today. Unfortunately, the mismatch 
+between the Rconsole file and the GUI preferences continues to happen 
+here on my computer.
+
+Even if I delete the Rconsole file from the Documents folder in Windows 
+and save a new Rconsole file, there is that mismatch.
+
+It seems that the GUI editor (and the actual size of the R worspace) is 
+always a bit smaller that what is recorded in the Rconsole file, that 
+is, a bit smaller than what I specified for rows and columns. For 
+instance, if I specified 37 rows and 112 columns, this is what is 
+recorded in the Rconsole file, but when I open R and go to the Gui 
+editor, I find 36 rows and 110 columns, and the workspace is clearly 
+different from my specifications.
+
+I use Windows 10 Pro for Workstations, version 21H2, installed on 
+23/?August/?2022, build 19044.1889 (this is the latest update for 
+Windows 10).
+
+As I said before, of course the mismatch does not prevent me of using R, 
+this could be said to be just a nuisance. But I think that no mismatch 
+should be happening.
+
+Thank you once again.
+
+Best regards,
+
+Paulo
+
+----------------------------------------------------------
+
+On 30/08/2022 13:33, Tomas Kalibera wrote:
+> 
+> On 8/27/22 20:46, Paulo Barata wrote:
+>>
+>> To the R developers,
+>>
+>> In R version 4.2.1 (2022-06-23 ucrt), and also in R version 4.2.1 
+>> Patched (2022-08-24 r82762 ucrt), something strange is happening with 
+>> the GUI Preferences x Rconsole file. I open the GUI Preferences (RGui 
+>> Configuration editor), and I define the number of console rows and 
+>> columns, the I click Apply and then I Save the Preferences to the 
+>> Rconsole file (which is in the Documents folders of my Windows 10 Pro) 
+>> -- I overwrite the existing Rconsole file. Then I close R.
+>>
+>> When I open R again, there is always a mismatch between the number of 
+>> console rows and columns correctly recorded in the Rconsole file and 
+>> the numbers actually shown in the RGui Configuration editor.
+> 
+> Dear Paulo,
+> 
+> thanks for the report. It is now fixed in R-devel 82776 (it would be 
+> nice if you could confirm the problem is fixed for you on your system).
+> 
+> You have run into an old bug in GraphApp, a library used by Rgui. The 
+> part saving and restoring the preferences works fine, but the problem 
+> occurs on R startup when creating a new console window. Rgui computes 
+> the client size of the window based on the preferred number of rows and 
+> columns and asks GraphApp to create such window. GraphApp uses its 
+> internal code (probably it pre-dates AdjustWindowRect) to compute the 
+> screen size of the window, so including the title bar, scroll bars, etc, 
+> and then asks Windows to create the window. Rgui then checks the actual 
+> client size of the created window and updates the number of rows and 
+> columns based on that - which is also the number you then see in the 
+> preferences editor. Ideally/normally it should be the same as what was 
+> given initially, e.g. via Rconsole.
+> 
+> However, the computation in GraphApp didn't work quite right, it didn't 
+> account for the scrollbars. And the reason was that it assumed a canvas 
+> (CanvasSize bit was set on the window flags). That bit was set by 
+> accident, because GraphApp by accident used the same bit number for 
+> CanvasSize and UseUnicode. The UseUnicode bit is set in Rgui when 
+> running in a multi-byte locale, so for you and many others probably only 
+> since R 4.2. I've changed GraphApp to use a different bit.
+> 
+> Thanks for testing Rgui and reporting problems.
+> 
+> Best
+> Tomas
+> 
+>>
+>> If this list allows attachments, the attached PNG image shows the 
+>> mismatch between the Rconsole file and the RGui Configuration editor, 
+>> just after opening R version 4.2.1 (2022-06-23 ucrt).
+>>
+>> Windows 10 Pro for Workstations
+>> Version 21H2
+>> Installed on 23/?08/?2022
+>> OS build 19044.1889
+>> Processor Intel(R) Xeon(R) W-1350 @ 3.30GHz? 3.31 GHz
+>> Installed RAM 64.0 GB (63.7 GB usable)
+>>
+>>
+>> R version 4.2.1 (2022-06-23 ucrt) -- "Funny-Looking Kid"
+>> Copyright (C) 2022 The R Foundation for Statistical Computing
+>> Platform: x86_64-w64-mingw32/x64 (64-bit)
+>>
+>> ?> Sys.info()
+>> ?????????? sysname?????????? release?????????? version nodename
+>> ???????? "Windows"????????? "10 x64"???? "build 19044" "XXXXXXXXXXXXXXX"
+>> ?????????? machine???????????? login????????????? user effective_user
+>> ????????? "x86-64"?????????? "XXXXX???????? "XXXXX" "XXXXX"
+>> ?> win.version()
+>> [1] "Windows 10 x64 (build 19044)"
+>>
+>> ?> .Platform
+>> $OS.type
+>> [1] "windows"
+>> $file.sep
+>> [1] "/"
+>> $dynlib.ext
+>> [1] ".dll"
+>> $GUI
+>> [1] "Rgui"
+>> $endian
+>> [1] "little"
+>> $pkgType
+>> [1] "win.binary"
+>> $path.sep
+>> [1] ";"
+>> $r_arch
+>> [1] "x64"
+>>
+>> Thank you. Regards,
+>>
+>> Paulo Barata
+>>
+>> (Rio de Janeiro - Brazil)
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From pb @end|ng |rom |n|o||nk@com@br  Wed Aug 31 18:08:02 2022
+From: pb @end|ng |rom |n|o||nk@com@br (Paulo Barata)
+Date: Wed, 31 Aug 2022 13:08:02 -0300
+Subject: [Rd] 
+ Mismatch between the Rconsole file and the RGui Configuration editor
+In-Reply-To: <c7330739-651b-0bdf-83c2-413f5a4cabeb@infolink.com.br>
+References: <e486d67c-e8b6-2707-3f3d-94894653be54@infolink.com.br>
+ <618ec587-0a54-22d5-2bea-f3b0eb403701@infolink.com.br>
+ <16d98892-54fa-da20-543e-3a6c6c9a8fd6@gmail.com>
+ <c7330739-651b-0bdf-83c2-413f5a4cabeb@infolink.com.br>
+Message-ID: <c7cf26d7-c1aa-a70b-a6ec-a9c8a9aac6cf@infolink.com.br>
+
+Dear Tomas,
+
+I am sorry, my fault. I see now that you said R-devel 82776, not R 
+patched 82776.
+
+Yes, the problem is fixed in R-devel 82776 --- this is R Under 
+development (unstable) (2022-08-30 r82776 ucrt). There is no more the 
+mismatch between the Rconsole file and the GUI editor. It is all right now.
+
+My apologies again. Thank you for your attention.
+
+Best regards,
+
+Paulo
+
+----------------------------------------------------------
+
+On 31/08/2022 12:58, Paulo Barata wrote:
+> Dear Tomas,
+> 
+> Thank you for your attention and for the detailed explanation about the 
+> issue with the R Gui.
+> 
+> As you have indicated, I tested R version 4.2.1 Patched (2022-08-30 
+> r82776 ucrt), which I downloaded today. Unfortunately, the mismatch 
+> between the Rconsole file and the GUI preferences continues to happen 
+> here on my computer.
+> 
+> Even if I delete the Rconsole file from the Documents folder in Windows 
+> and save a new Rconsole file, there is that mismatch.
+> 
+> It seems that the GUI editor (and the actual size of the R worspace) is 
+> always a bit smaller that what is recorded in the Rconsole file, that 
+> is, a bit smaller than what I specified for rows and columns. For 
+> instance, if I specified 37 rows and 112 columns, this is what is 
+> recorded in the Rconsole file, but when I open R and go to the Gui 
+> editor, I find 36 rows and 110 columns, and the workspace is clearly 
+> different from my specifications.
+> 
+> I use Windows 10 Pro for Workstations, version 21H2, installed on 
+> 23/?August/?2022, build 19044.1889 (this is the latest update for 
+> Windows 10).
+> 
+> As I said before, of course the mismatch does not prevent me of using R, 
+> this could be said to be just a nuisance. But I think that no mismatch 
+> should be happening.
+> 
+> Thank you once again.
+> 
+> Best regards,
+> 
+> Paulo
+> 
+> ----------------------------------------------------------
+> 
+> On 30/08/2022 13:33, Tomas Kalibera wrote:
+>>
+>> On 8/27/22 20:46, Paulo Barata wrote:
+>>>
+>>> To the R developers,
+>>>
+>>> In R version 4.2.1 (2022-06-23 ucrt), and also in R version 4.2.1 
+>>> Patched (2022-08-24 r82762 ucrt), something strange is happening with 
+>>> the GUI Preferences x Rconsole file. I open the GUI Preferences (RGui 
+>>> Configuration editor), and I define the number of console rows and 
+>>> columns, the I click Apply and then I Save the Preferences to the 
+>>> Rconsole file (which is in the Documents folders of my Windows 10 
+>>> Pro) -- I overwrite the existing Rconsole file. Then I close R.
+>>>
+>>> When I open R again, there is always a mismatch between the number of 
+>>> console rows and columns correctly recorded in the Rconsole file and 
+>>> the numbers actually shown in the RGui Configuration editor.
+>>
+>> Dear Paulo,
+>>
+>> thanks for the report. It is now fixed in R-devel 82776 (it would be 
+>> nice if you could confirm the problem is fixed for you on your system).
+>>
+>> You have run into an old bug in GraphApp, a library used by Rgui. The 
+>> part saving and restoring the preferences works fine, but the problem 
+>> occurs on R startup when creating a new console window. Rgui computes 
+>> the client size of the window based on the preferred number of rows 
+>> and columns and asks GraphApp to create such window. GraphApp uses its 
+>> internal code (probably it pre-dates AdjustWindowRect) to compute the 
+>> screen size of the window, so including the title bar, scroll bars, 
+>> etc, and then asks Windows to create the window. Rgui then checks the 
+>> actual client size of the created window and updates the number of 
+>> rows and columns based on that - which is also the number you then see 
+>> in the preferences editor. Ideally/normally it should be the same as 
+>> what was given initially, e.g. via Rconsole.
+>>
+>> However, the computation in GraphApp didn't work quite right, it 
+>> didn't account for the scrollbars. And the reason was that it assumed 
+>> a canvas (CanvasSize bit was set on the window flags). That bit was 
+>> set by accident, because GraphApp by accident used the same bit number 
+>> for CanvasSize and UseUnicode. The UseUnicode bit is set in Rgui when 
+>> running in a multi-byte locale, so for you and many others probably 
+>> only since R 4.2. I've changed GraphApp to use a different bit.
+>>
+>> Thanks for testing Rgui and reporting problems.
+>>
+>> Best
+>> Tomas
+>>
+>>>
+>>> If this list allows attachments, the attached PNG image shows the 
+>>> mismatch between the Rconsole file and the RGui Configuration editor, 
+>>> just after opening R version 4.2.1 (2022-06-23 ucrt).
+>>>
+>>> Windows 10 Pro for Workstations
+>>> Version 21H2
+>>> Installed on 23/?08/?2022
+>>> OS build 19044.1889
+>>> Processor Intel(R) Xeon(R) W-1350 @ 3.30GHz? 3.31 GHz
+>>> Installed RAM 64.0 GB (63.7 GB usable)
+>>>
+>>>
+>>> R version 4.2.1 (2022-06-23 ucrt) -- "Funny-Looking Kid"
+>>> Copyright (C) 2022 The R Foundation for Statistical Computing
+>>> Platform: x86_64-w64-mingw32/x64 (64-bit)
+>>>
+>>> ?> Sys.info()
+>>> ?????????? sysname?????????? release?????????? version nodename
+>>> ???????? "Windows"????????? "10 x64"???? "build 19044" "XXXXXXXXXXXXXXX"
+>>> ?????????? machine???????????? login????????????? user effective_user
+>>> ????????? "x86-64"?????????? "XXXXX???????? "XXXXX" "XXXXX"
+>>> ?> win.version()
+>>> [1] "Windows 10 x64 (build 19044)"
+>>>
+>>> ?> .Platform
+>>> $OS.type
+>>> [1] "windows"
+>>> $file.sep
+>>> [1] "/"
+>>> $dynlib.ext
+>>> [1] ".dll"
+>>> $GUI
+>>> [1] "Rgui"
+>>> $endian
+>>> [1] "little"
+>>> $pkgType
+>>> [1] "win.binary"
+>>> $path.sep
+>>> [1] ";"
+>>> $r_arch
+>>> [1] "x64"
+>>>
+>>> Thank you. Regards,
+>>>
+>>> Paulo Barata
+>>>
+>>> (Rio de Janeiro - Brazil)
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Wed Aug 31 18:09:40 2022
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Wed, 31 Aug 2022 18:09:40 +0200
+Subject: [Rd] 
+ Mismatch between the Rconsole file and the RGui Configuration editor
+In-Reply-To: <c7cf26d7-c1aa-a70b-a6ec-a9c8a9aac6cf@infolink.com.br>
+References: <e486d67c-e8b6-2707-3f3d-94894653be54@infolink.com.br>
+ <618ec587-0a54-22d5-2bea-f3b0eb403701@infolink.com.br>
+ <16d98892-54fa-da20-543e-3a6c6c9a8fd6@gmail.com>
+ <c7330739-651b-0bdf-83c2-413f5a4cabeb@infolink.com.br>
+ <c7cf26d7-c1aa-a70b-a6ec-a9c8a9aac6cf@infolink.com.br>
+Message-ID: <5695a2bb-1908-a775-aba4-21412475dcbf@gmail.com>
+
+
+On 8/31/22 18:08, Paulo Barata wrote:
+> Dear Tomas,
+>
+> I am sorry, my fault. I see now that you said R-devel 82776, not R 
+> patched 82776.
+>
+> Yes, the problem is fixed in R-devel 82776 --- this is R Under 
+> development (unstable) (2022-08-30 r82776 ucrt). There is no more the 
+> mismatch between the Rconsole file and the GUI editor. It is all right 
+> now.
+>
+> My apologies again. Thank you for your attention.
+
+No problem, thanks a lot for confirming it works. I will port to R-patched.
+
+Best
+Tomas
+
+>
+> Best regards,
+>
+> Paulo
+>
+> ----------------------------------------------------------
+>
+> On 31/08/2022 12:58, Paulo Barata wrote:
+>> Dear Tomas,
+>>
+>> Thank you for your attention and for the detailed explanation about 
+>> the issue with the R Gui.
+>>
+>> As you have indicated, I tested R version 4.2.1 Patched (2022-08-30 
+>> r82776 ucrt), which I downloaded today. Unfortunately, the mismatch 
+>> between the Rconsole file and the GUI preferences continues to happen 
+>> here on my computer.
+>>
+>> Even if I delete the Rconsole file from the Documents folder in 
+>> Windows and save a new Rconsole file, there is that mismatch.
+>>
+>> It seems that the GUI editor (and the actual size of the R worspace) 
+>> is always a bit smaller that what is recorded in the Rconsole file, 
+>> that is, a bit smaller than what I specified for rows and columns. 
+>> For instance, if I specified 37 rows and 112 columns, this is what is 
+>> recorded in the Rconsole file, but when I open R and go to the Gui 
+>> editor, I find 36 rows and 110 columns, and the workspace is clearly 
+>> different from my specifications.
+>>
+>> I use Windows 10 Pro for Workstations, version 21H2, installed on 
+>> 23/?August/?2022, build 19044.1889 (this is the latest update for 
+>> Windows 10).
+>>
+>> As I said before, of course the mismatch does not prevent me of using 
+>> R, this could be said to be just a nuisance. But I think that no 
+>> mismatch should be happening.
+>>
+>> Thank you once again.
+>>
+>> Best regards,
+>>
+>> Paulo
+>>
+>> ----------------------------------------------------------
+>>
+>> On 30/08/2022 13:33, Tomas Kalibera wrote:
+>>>
+>>> On 8/27/22 20:46, Paulo Barata wrote:
+>>>>
+>>>> To the R developers,
+>>>>
+>>>> In R version 4.2.1 (2022-06-23 ucrt), and also in R version 4.2.1 
+>>>> Patched (2022-08-24 r82762 ucrt), something strange is happening 
+>>>> with the GUI Preferences x Rconsole file. I open the GUI 
+>>>> Preferences (RGui Configuration editor), and I define the number of 
+>>>> console rows and columns, the I click Apply and then I Save the 
+>>>> Preferences to the Rconsole file (which is in the Documents folders 
+>>>> of my Windows 10 Pro) -- I overwrite the existing Rconsole file. 
+>>>> Then I close R.
+>>>>
+>>>> When I open R again, there is always a mismatch between the number 
+>>>> of console rows and columns correctly recorded in the Rconsole file 
+>>>> and the numbers actually shown in the RGui Configuration editor.
+>>>
+>>> Dear Paulo,
+>>>
+>>> thanks for the report. It is now fixed in R-devel 82776 (it would be 
+>>> nice if you could confirm the problem is fixed for you on your system).
+>>>
+>>> You have run into an old bug in GraphApp, a library used by Rgui. 
+>>> The part saving and restoring the preferences works fine, but the 
+>>> problem occurs on R startup when creating a new console window. Rgui 
+>>> computes the client size of the window based on the preferred number 
+>>> of rows and columns and asks GraphApp to create such window. 
+>>> GraphApp uses its internal code (probably it pre-dates 
+>>> AdjustWindowRect) to compute the screen size of the window, so 
+>>> including the title bar, scroll bars, etc, and then asks Windows to 
+>>> create the window. Rgui then checks the actual client size of the 
+>>> created window and updates the number of rows and columns based on 
+>>> that - which is also the number you then see in the preferences 
+>>> editor. Ideally/normally it should be the same as what was given 
+>>> initially, e.g. via Rconsole.
+>>>
+>>> However, the computation in GraphApp didn't work quite right, it 
+>>> didn't account for the scrollbars. And the reason was that it 
+>>> assumed a canvas (CanvasSize bit was set on the window flags). That 
+>>> bit was set by accident, because GraphApp by accident used the same 
+>>> bit number for CanvasSize and UseUnicode. The UseUnicode bit is set 
+>>> in Rgui when running in a multi-byte locale, so for you and many 
+>>> others probably only since R 4.2. I've changed GraphApp to use a 
+>>> different bit.
+>>>
+>>> Thanks for testing Rgui and reporting problems.
+>>>
+>>> Best
+>>> Tomas
+>>>
+>>>>
+>>>> If this list allows attachments, the attached PNG image shows the 
+>>>> mismatch between the Rconsole file and the RGui Configuration 
+>>>> editor, just after opening R version 4.2.1 (2022-06-23 ucrt).
+>>>>
+>>>> Windows 10 Pro for Workstations
+>>>> Version 21H2
+>>>> Installed on 23/?08/?2022
+>>>> OS build 19044.1889
+>>>> Processor Intel(R) Xeon(R) W-1350 @ 3.30GHz? 3.31 GHz
+>>>> Installed RAM 64.0 GB (63.7 GB usable)
+>>>>
+>>>>
+>>>> R version 4.2.1 (2022-06-23 ucrt) -- "Funny-Looking Kid"
+>>>> Copyright (C) 2022 The R Foundation for Statistical Computing
+>>>> Platform: x86_64-w64-mingw32/x64 (64-bit)
+>>>>
+>>>> ?> Sys.info()
+>>>> ?????????? sysname?????????? release?????????? version nodename
+>>>> ???????? "Windows"????????? "10 x64"???? "build 19044" 
+>>>> "XXXXXXXXXXXXXXX"
+>>>> ?????????? machine???????????? login????????????? user effective_user
+>>>> ????????? "x86-64"?????????? "XXXXX???????? "XXXXX" "XXXXX"
+>>>> ?> win.version()
+>>>> [1] "Windows 10 x64 (build 19044)"
+>>>>
+>>>> ?> .Platform
+>>>> $OS.type
+>>>> [1] "windows"
+>>>> $file.sep
+>>>> [1] "/"
+>>>> $dynlib.ext
+>>>> [1] ".dll"
+>>>> $GUI
+>>>> [1] "Rgui"
+>>>> $endian
+>>>> [1] "little"
+>>>> $pkgType
+>>>> [1] "win.binary"
+>>>> $path.sep
+>>>> [1] ";"
+>>>> $r_arch
+>>>> [1] "x64"
+>>>>
+>>>> Thank you. Regards,
+>>>>
+>>>> Paulo Barata
+>>>>
+>>>> (Rio de Janeiro - Brazil)
+>>>>
+>>>> ______________________________________________
+>>>> R-devel at r-project.org mailing list
+>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
