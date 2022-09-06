@@ -336,3 +336,124 @@ An embedded and charset-unspecified text was scrubbed...
 Name: patch.diff
 URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20220902/7e17c4be/attachment.ksh>
 
+From wo||g@ng@v|echtb@uer @end|ng |rom m@@@tr|chtun|ver@|ty@n|  Mon Sep  5 15:36:30 2022
+From: wo||g@ng@v|echtb@uer @end|ng |rom m@@@tr|chtun|ver@|ty@n| (Viechtbauer, Wolfgang (NP))
+Date: Mon, 5 Sep 2022 13:36:30 +0000
+Subject: [Rd] Passing a call as label to text() works differently when the
+ call involves paste() vs paste0()
+Message-ID: <d6a1ccfe0082445b8f74a32f1e511e48@UM-MAIL3214.unimaas.nl>
+
+Hi all,
+
+Maybe a bit of an esoteric observation, but the second one doesn't work properly:
+
+x <- 2
+plot(NA, xlim=c(0,1), ylim=c(0,1))
+text(0.5, 0.55, bquote(paste("x =", .(x))))
+text(0.5, 0.45, bquote(paste0("x = ", .(x))))
+
+Note that this has nothing to do in particular with bquote(). This is the same issue:
+
+plot(NA, xlim=c(0,1), ylim=c(0,1))
+text(0.5, 0.55, as.call(list(quote(paste), "x =", 2)))
+text(0.5, 0.45, as.call(list(quote(paste0), "x = ", 2)))
+
+I had a look at C_text in plot.c, but couldn't figure out why the second one is treated differently.
+
+Best,
+Wolfgang
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Mon Sep  5 15:49:19 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Mon, 5 Sep 2022 09:49:19 -0400
+Subject: [Rd] 
+ Passing a call as label to text() works differently when the
+ call involves paste() vs paste0()
+In-Reply-To: <d6a1ccfe0082445b8f74a32f1e511e48@UM-MAIL3214.unimaas.nl>
+References: <d6a1ccfe0082445b8f74a32f1e511e48@UM-MAIL3214.unimaas.nl>
+Message-ID: <1b8e2e6d-60ae-c7a1-b3ab-9e146d17c1b8@gmail.com>
+
+On 05/09/2022 9:36 a.m., Viechtbauer, Wolfgang (NP) wrote:
+> Hi all,
+> 
+> Maybe a bit of an esoteric observation, but the second one doesn't work properly:
+> 
+> x <- 2
+> plot(NA, xlim=c(0,1), ylim=c(0,1))
+> text(0.5, 0.55, bquote(paste("x =", .(x))))
+> text(0.5, 0.45, bquote(paste0("x = ", .(x))))
+> 
+> Note that this has nothing to do in particular with bquote(). This is the same issue:
+> 
+> plot(NA, xlim=c(0,1), ylim=c(0,1))
+> text(0.5, 0.55, as.call(list(quote(paste), "x =", 2)))
+> text(0.5, 0.45, as.call(list(quote(paste0), "x = ", 2)))
+> 
+> I had a look at C_text in plot.c, but couldn't figure out why the second one is treated differently.
+
+You're using plotmath code, which is documented in ?plotmath.
+
+It doesn't execute paste(), it just uses that name for a similar 
+operation.  There's no operation named paste0(), so that doesn't work.
+
+The paste() operation doesn't add space, so it's more like paste0() in 
+any case.
+
+Duncan Murdoch
+
+
+From wo||g@ng@v|echtb@uer @end|ng |rom m@@@tr|chtun|ver@|ty@n|  Mon Sep  5 15:59:56 2022
+From: wo||g@ng@v|echtb@uer @end|ng |rom m@@@tr|chtun|ver@|ty@n| (Viechtbauer, Wolfgang (NP))
+Date: Mon, 5 Sep 2022 13:59:56 +0000
+Subject: [Rd] 
+ Passing a call as label to text() works differently when the
+ call involves paste() vs paste0()
+In-Reply-To: <1b8e2e6d-60ae-c7a1-b3ab-9e146d17c1b8@gmail.com>
+References: <d6a1ccfe0082445b8f74a32f1e511e48@UM-MAIL3214.unimaas.nl>
+ <1b8e2e6d-60ae-c7a1-b3ab-9e146d17c1b8@gmail.com>
+Message-ID: <ca3458a0b3374fd8ae3ec59e611e0a7e@UM-MAIL3214.unimaas.nl>
+
+Got it, thanks!
+
+Best,
+Wolfgang
+
+>-----Original Message-----
+>From: Duncan Murdoch [mailto:murdoch.duncan at gmail.com]
+>Sent: Monday, 05 September, 2022 15:49
+>To: Viechtbauer, Wolfgang (NP); R-devel at r-project.org
+>Subject: Re: [Rd] Passing a call as label to text() works differently when the
+>call involves paste() vs paste0()
+>
+>On 05/09/2022 9:36 a.m., Viechtbauer, Wolfgang (NP) wrote:
+>> Hi all,
+>>
+>> Maybe a bit of an esoteric observation, but the second one doesn't work
+>properly:
+>>
+>> x <- 2
+>> plot(NA, xlim=c(0,1), ylim=c(0,1))
+>> text(0.5, 0.55, bquote(paste("x =", .(x))))
+>> text(0.5, 0.45, bquote(paste0("x = ", .(x))))
+>>
+>> Note that this has nothing to do in particular with bquote(). This is the same
+>issue:
+>>
+>> plot(NA, xlim=c(0,1), ylim=c(0,1))
+>> text(0.5, 0.55, as.call(list(quote(paste), "x =", 2)))
+>> text(0.5, 0.45, as.call(list(quote(paste0), "x = ", 2)))
+>>
+>> I had a look at C_text in plot.c, but couldn't figure out why the second one is
+>treated differently.
+>
+>You're using plotmath code, which is documented in ?plotmath.
+>
+>It doesn't execute paste(), it just uses that name for a similar
+>operation.  There's no operation named paste0(), so that doesn't work.
+>
+>The paste() operation doesn't add space, so it's more like paste0() in
+>any case.
+>
+>Duncan Murdoch
+
