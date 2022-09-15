@@ -893,3 +893,1013 @@ On Mon, 12 Sept 2022 at 09:57, Maxim Nazarov
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Tue Sep 13 14:02:04 2022
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Tue, 13 Sep 2022 14:02:04 +0200
+Subject: [Rd] Duplicated mirrors on available packages
+In-Reply-To: <CADbDLZn2ok6omoboz1cfgcsf-YfkesrNCkvq_EZFJZQ9Tv4EDg@mail.gmail.com>
+References: <CADbDLZmXY5133qb89vo05eww1VbtkOsUVaeXLzkJo-zRW+SGPw@mail.gmail.com>
+ <0102018330eb2f22-5b6669be-b3fa-4ebf-a1dd-8a8cee8efbc3-000000@eu-west-1.amazonses.com>
+ <CADbDLZn2ok6omoboz1cfgcsf-YfkesrNCkvq_EZFJZQ9Tv4EDg@mail.gmail.com>
+Message-ID: <25376.28988.687109.926647@hornik.net>
+
+>>>>> Colin Gillespie writes:
+
+> The use case came from the rig application
+> (https://github.com/r-lib/rig). Rig (I think) inserts the RStudio
+> package manager into the list of repos. This can cause duplication in
+> repos, hence the current issue.
+> Now that I know the reason, I can work around it.
+
+Thanks for reporting this issue.  I just changed available.packages() a
+la
+
+-    for(repos in contriburl) {
++    for(repos in unique(contriburl)) {
+
+which avoids the full duplication.
+
+Best
+-k
+
+> On Mon, 12 Sept 2022 at 09:57, Maxim Nazarov
+> <maxim.nazarov at openanalytics.eu> wrote:
+>> 
+>> If you profile the second run, you will see that the majority of the time is spent in the `tools:::.remove_stale_dups` function, which loops over all duplicated packages - so all packages in that case.
+>> One improvement I could think of is to replace the first line of that function
+>> pkgs <- ap[, "Package"]
+>> with
+>> pkgs <- ap[!duplicated(ap[, c("Package", "Version")]), "Package"]
+>> which would help in your example, but the function might still run longer if there are many packages with different versions present, so there maybe even better optimizations.
+>> 
+>> Stating the obvious here, but since we don't know your 'real' use case, adding a `unique` call to the `repos` argument of the `available.packages` would achieve a similar improvement without any modifications needed from `tools`.
+>> 
+>> Kind regards,
+>> Maxim Nazarov
+>> 
+>> ----- Original Message -----
+>> From: "Colin Gillespie" <csgillespie at gmail.com>
+>> To: "r-devel" <r-devel at r-project.org>
+>> Sent: Friday, September 9, 2022 7:33:09 PM
+>> Subject: [Rd] Duplicated mirrors on available packages
+>> 
+>> Hi
+>> 
+>> When there are duplicated repos, available.packages() takes
+>> significantly longer to run.
+>> 
+>> For example
+>> 
+>> mirror = "https://cloud.r-project.org/"
+>> system.time(available.packages(repos = mirror))
+>> #   user  system elapsed
+>> # 1.054   0.031   1.245
+>> system.time(available.packages(repos = c(mirror, mirror)))
+>> #   user  system elapsed
+>> # 22.389   0.037  22.429
+>> 
+>> Best wishes,
+>> 
+>> Colin
+>> 
+>> 
+>> > sessionInfo()
+>> R version 4.2.0 (2022-04-22)
+>> Platform: x86_64-pc-linux-gnu (64-bit)
+>> Running under: Ubuntu 22.04.1 LTS
+>> 
+>> Matrix products: default
+>> BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3
+>> LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblasp-r0.3.20.so
+>> 
+>> locale:
+>> [1] LC_CTYPE=en_GB.UTF-8       LC_NUMERIC=C
+>> [3] LC_TIME=en_GB.UTF-8        LC_COLLATE=en_GB.UTF-8
+>> [5] LC_MONETARY=en_GB.UTF-8    LC_MESSAGES=en_GB.UTF-8
+>> [7] LC_PAPER=en_GB.UTF-8       LC_NAME=C
+>> [9] LC_ADDRESS=C               LC_TELEPHONE=C
+>> [11] LC_MEASUREMENT=en_GB.UTF-8 LC_IDENTIFICATION=C
+>> 
+>> attached base packages:
+>> [1] stats     graphics  grDevices utils     datasets  methods   base
+>> 
+>> loaded via a namespace (and not attached):
+>> [1] compiler_4.2.0 tools_4.2.0
+>> 
+>> 
+>> Dr Colin Gillespie
+>> https://twitter.com/csgillespie
+>> 
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From j@g@nmn2 @end|ng |rom gm@||@com  Tue Sep 13 23:45:13 2022
+From: j@g@nmn2 @end|ng |rom gm@||@com (Mikael Jagan)
+Date: Tue, 13 Sep 2022 17:45:13 -0400
+Subject: [Rd] Should package version requirements assume installation from
+ sources?
+Message-ID: <b3e53fa9-b0e0-a8c8-147a-c1c56348f3e9@gmail.com>
+
+[Arguably also appropriate for R-package-devel, but posted to R-devel
+     as the discussion is aimed primarily at "experts" ... ]
+
+We, the authors of Matrix, have encountered a somewhat subtle issue
+induced by caching of S4 classes and methods in package namespaces.
+
+The namespaces of three reverse dependent packages (SeuratObject, conText,
+mcmcsae) cache the formal definition of our virtual class Matrix (and some
+subclasses).  For example:
+
+ > ns <- asNamespace("SeuratObject")
+ > grep("^[.]__C__.*Matrix$", names(ns), value = TRUE)
+[1] ".__C__dMatrix"       ".__C__compMatrix"    ".__C__AnyMatrix"
+[4] ".__C__generalMatrix" ".__C__CsparseMatrix" ".__C__sparseMatrix"
+[7] ".__C__dsparseMatrix" ".__C__Matrix"
+
+The cached definition (which includes a _validity method_) is obtained from
+the version of Matrix available when the reverse dependent package was built
+from sources.  For example, if SeuratObject was built under Matrix 1.4-1,
+then we get:
+
+ > getValidity(ns$.__C__Matrix)
+function (object)
+{
+     if (!isTRUE(r <- .Call(Dim_validate, object, "Matrix")))
+         r
+     else .Call(dimNames_validate, object)
+}
+<bytecode: 0x11e7ca508>
+<environment: namespace:Matrix>
+
+whereas if SeuratObject was built under Matrix >= 1.5-0, then we get:
+
+ > getValidity(ns$.__C__Matrix)
+function (object)
+.Call(Matrix_validate, object)
+<bytecode: 0x107dc1698>
+<environment: namespace:Matrix>
+
+There are two "questions" here:
+
+1.  The symbol 'Matrix_validate' is not defined until Matrix 1.5-0.
+     Is it necessary, for this reason alone, for SeuratObject to have
+     'Imports: Matrix (>= 1.5-0)'?  Or can SeuratObject continue using
+     'Imports: Matrix (>= 1.3-3)', at the risk of errors like
+
+     > Error: object 'Matrix_validate' not found
+
+     (as already seen here: https://stackoverflow.com/questions/73700130)?
+
+     Note that this error would not occur for anyone installing SeuratObject
+     from sources, unless they decide to _downgrade_ Matrix after doing so.
+     Hence this primarily concerns Windows and macOS where R users would
+     typically install a binary built by CRAN (i.e., not on their system).
+
+     We are aware that package TMB tests in .onLoad() that the current Matrix
+     version is equal to or greater than the version available at build time,
+     thus avoiding a "strict" version requirement, but do not want this practice
+     to spread ...
+
+2.  For how long should Matrix retain the superceded 'Dim_validate' and
+     'dimNames_validate', in order to ensure that "stale" cached validity
+     methods continue to work?
+
+We hope that this discussion will highlight the potential ramifications
+of importing classes and methods from other packages, and having one's
+classes and methods imported _by_ other packages, especially for version
+requirements.
+
+Mikael, Martin, and Doug
+
+
+From hp@ge@@on@g|thub @end|ng |rom gm@||@com  Wed Sep 14 01:11:54 2022
+From: hp@ge@@on@g|thub @end|ng |rom gm@||@com (=?UTF-8?B?SGVydsOpIFBhZ8Oocw==?=)
+Date: Tue, 13 Sep 2022 16:11:54 -0700
+Subject: [Rd] 
+ Should package version requirements assume installation from
+ sources?
+In-Reply-To: <b3e53fa9-b0e0-a8c8-147a-c1c56348f3e9@gmail.com>
+References: <b3e53fa9-b0e0-a8c8-147a-c1c56348f3e9@gmail.com>
+Message-ID: <07ec1390-3e67-82cf-09b4-6668db099c31@gmail.com>
+
+FWIW this happens all the time in Bioconductor, where S4 is used very 
+intensively, when we make that kind of change to a core infrastructure 
+package. Then a bunch of Windows and Mac binary packages need to be 
+rebuilt because they contain cached stuff that is now out-of-sync with 
+the new state of affairs. The way we deal with this is by bumping the 
+version numbers of all the affected packages. This triggers automatic 
+rebuilt and propagation of the new binaries.
+
+Note that these problems also affect packages that were already 
+installed on the user machines _prior_ to the changes to the upstream 
+package. Because the caching we are talking about is actually in the 
+package installation folder (and the fact that it ends up in the 
+binaries is just a consequence of that). So even on a system where 
+packages are installed from source, the affected packages need to be 
+reinstalled. Bumping the version numbers of all the affected packages 
+also solves that.
+
+I don't see how this could be handled or mitigated via package requirements.
+
+Best,
+
+H.
+
+
+On 13/09/2022 14:45, Mikael Jagan wrote:
+> [Arguably also appropriate for R-package-devel, but posted to R-devel
+> ??? as the discussion is aimed primarily at "experts" ... ]
+>
+> We, the authors of Matrix, have encountered a somewhat subtle issue
+> induced by caching of S4 classes and methods in package namespaces.
+>
+> The namespaces of three reverse dependent packages (SeuratObject, 
+> conText,
+> mcmcsae) cache the formal definition of our virtual class Matrix (and 
+> some
+> subclasses).? For example:
+>
+> > ns <- asNamespace("SeuratObject")
+> > grep("^[.]__C__.*Matrix$", names(ns), value = TRUE)
+> [1] ".__C__dMatrix"?????? ".__C__compMatrix"??? ".__C__AnyMatrix"
+> [4] ".__C__generalMatrix" ".__C__CsparseMatrix" ".__C__sparseMatrix"
+> [7] ".__C__dsparseMatrix" ".__C__Matrix"
+>
+> The cached definition (which includes a _validity method_) is obtained 
+> from
+> the version of Matrix available when the reverse dependent package was 
+> built
+> from sources.? For example, if SeuratObject was built under Matrix 1.4-1,
+> then we get:
+>
+> > getValidity(ns$.__C__Matrix)
+> function (object)
+> {
+> ??? if (!isTRUE(r <- .Call(Dim_validate, object, "Matrix")))
+> ??????? r
+> ??? else .Call(dimNames_validate, object)
+> }
+> <bytecode: 0x11e7ca508>
+> <environment: namespace:Matrix>
+>
+> whereas if SeuratObject was built under Matrix >= 1.5-0, then we get:
+>
+> > getValidity(ns$.__C__Matrix)
+> function (object)
+> .Call(Matrix_validate, object)
+> <bytecode: 0x107dc1698>
+> <environment: namespace:Matrix>
+>
+> There are two "questions" here:
+>
+> 1.? The symbol 'Matrix_validate' is not defined until Matrix 1.5-0.
+> ??? Is it necessary, for this reason alone, for SeuratObject to have
+> ??? 'Imports: Matrix (>= 1.5-0)'?? Or can SeuratObject continue using
+> ??? 'Imports: Matrix (>= 1.3-3)', at the risk of errors like
+>
+> ??? > Error: object 'Matrix_validate' not found
+>
+> ??? (as already seen here: https://stackoverflow.com/questions/73700130)?
+>
+> ??? Note that this error would not occur for anyone installing 
+> SeuratObject
+> ??? from sources, unless they decide to _downgrade_ Matrix after doing 
+> so.
+> ??? Hence this primarily concerns Windows and macOS where R users would
+> ??? typically install a binary built by CRAN (i.e., not on their system).
+>
+> ??? We are aware that package TMB tests in .onLoad() that the current 
+> Matrix
+> ??? version is equal to or greater than the version available at build 
+> time,
+> ??? thus avoiding a "strict" version requirement, but do not want this 
+> practice
+> ??? to spread ...
+>
+> 2.? For how long should Matrix retain the superceded 'Dim_validate' and
+> ??? 'dimNames_validate', in order to ensure that "stale" cached validity
+> ??? methods continue to work?
+>
+> We hope that this discussion will highlight the potential ramifications
+> of importing classes and methods from other packages, and having one's
+> classes and methods imported _by_ other packages, especially for version
+> requirements.
+>
+> Mikael, Martin, and Doug
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Herv? Pag?s
+
+Bioconductor Core Team
+hpages.on.github at gmail.com
+
+
+From bbo|ker @end|ng |rom gm@||@com  Wed Sep 14 02:31:33 2022
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Tue, 13 Sep 2022 20:31:33 -0400
+Subject: [Rd] 
+ Should package version requirements assume installation from
+ sources?
+In-Reply-To: <07ec1390-3e67-82cf-09b4-6668db099c31@gmail.com>
+References: <b3e53fa9-b0e0-a8c8-147a-c1c56348f3e9@gmail.com>
+ <07ec1390-3e67-82cf-09b4-6668db099c31@gmail.com>
+Message-ID: <70bacfe0-58f2-c656-3a91-061901f4a3f8@gmail.com>
+
+   Interesting.
+
+   How is the version number bumping communicated back to package 
+maintainers? Or is there a rule like "third digit-blocks of package 
+versions are reserved for Bioconductor modifications" ?
+
+On 2022-09-13 7:11 p.m., Herv? Pag?s wrote:
+> FWIW this happens all the time in Bioconductor, where S4 is used very 
+> intensively, when we make that kind of change to a core infrastructure 
+> package. Then a bunch of Windows and Mac binary packages need to be 
+> rebuilt because they contain cached stuff that is now out-of-sync with 
+> the new state of affairs. The way we deal with this is by bumping the 
+> version numbers of all the affected packages. This triggers automatic 
+> rebuilt and propagation of the new binaries.
+> 
+> Note that these problems also affect packages that were already 
+> installed on the user machines _prior_ to the changes to the upstream 
+> package. Because the caching we are talking about is actually in the 
+> package installation folder (and the fact that it ends up in the 
+> binaries is just a consequence of that). So even on a system where 
+> packages are installed from source, the affected packages need to be 
+> reinstalled. Bumping the version numbers of all the affected packages 
+> also solves that.
+> 
+> I don't see how this could be handled or mitigated via package 
+> requirements.
+> 
+> Best,
+> 
+> H.
+> 
+> 
+> On 13/09/2022 14:45, Mikael Jagan wrote:
+>> [Arguably also appropriate for R-package-devel, but posted to R-devel
+>> ??? as the discussion is aimed primarily at "experts" ... ]
+>>
+>> We, the authors of Matrix, have encountered a somewhat subtle issue
+>> induced by caching of S4 classes and methods in package namespaces.
+>>
+>> The namespaces of three reverse dependent packages (SeuratObject, 
+>> conText,
+>> mcmcsae) cache the formal definition of our virtual class Matrix (and 
+>> some
+>> subclasses).? For example:
+>>
+>> > ns <- asNamespace("SeuratObject")
+>> > grep("^[.]__C__.*Matrix$", names(ns), value = TRUE)
+>> [1] ".__C__dMatrix"?????? ".__C__compMatrix"??? ".__C__AnyMatrix"
+>> [4] ".__C__generalMatrix" ".__C__CsparseMatrix" ".__C__sparseMatrix"
+>> [7] ".__C__dsparseMatrix" ".__C__Matrix"
+>>
+>> The cached definition (which includes a _validity method_) is obtained 
+>> from
+>> the version of Matrix available when the reverse dependent package was 
+>> built
+>> from sources.? For example, if SeuratObject was built under Matrix 1.4-1,
+>> then we get:
+>>
+>> > getValidity(ns$.__C__Matrix)
+>> function (object)
+>> {
+>> ??? if (!isTRUE(r <- .Call(Dim_validate, object, "Matrix")))
+>> ??????? r
+>> ??? else .Call(dimNames_validate, object)
+>> }
+>> <bytecode: 0x11e7ca508>
+>> <environment: namespace:Matrix>
+>>
+>> whereas if SeuratObject was built under Matrix >= 1.5-0, then we get:
+>>
+>> > getValidity(ns$.__C__Matrix)
+>> function (object)
+>> .Call(Matrix_validate, object)
+>> <bytecode: 0x107dc1698>
+>> <environment: namespace:Matrix>
+>>
+>> There are two "questions" here:
+>>
+>> 1.? The symbol 'Matrix_validate' is not defined until Matrix 1.5-0.
+>> ??? Is it necessary, for this reason alone, for SeuratObject to have
+>> ??? 'Imports: Matrix (>= 1.5-0)'?? Or can SeuratObject continue using
+>> ??? 'Imports: Matrix (>= 1.3-3)', at the risk of errors like
+>>
+>> ??? > Error: object 'Matrix_validate' not found
+>>
+>> ??? (as already seen here: https://stackoverflow.com/questions/73700130)?
+>>
+>> ??? Note that this error would not occur for anyone installing 
+>> SeuratObject
+>> ??? from sources, unless they decide to _downgrade_ Matrix after doing 
+>> so.
+>> ??? Hence this primarily concerns Windows and macOS where R users would
+>> ??? typically install a binary built by CRAN (i.e., not on their system).
+>>
+>> ??? We are aware that package TMB tests in .onLoad() that the current 
+>> Matrix
+>> ??? version is equal to or greater than the version available at build 
+>> time,
+>> ??? thus avoiding a "strict" version requirement, but do not want this 
+>> practice
+>> ??? to spread ...
+>>
+>> 2.? For how long should Matrix retain the superceded 'Dim_validate' and
+>> ??? 'dimNames_validate', in order to ensure that "stale" cached validity
+>> ??? methods continue to work?
+>>
+>> We hope that this discussion will highlight the potential ramifications
+>> of importing classes and methods from other packages, and having one's
+>> classes and methods imported _by_ other packages, especially for version
+>> requirements.
+>>
+>> Mikael, Martin, and Doug
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+-- 
+Dr. Benjamin Bolker
+Professor, Mathematics & Statistics and Biology, McMaster University
+Director, School of Computational Science and Engineering
+(Acting) Graduate chair, Mathematics & Statistics
+ > E-mail is sent at my convenience; I don't expect replies outside of 
+working hours.
+
+
+From edd @end|ng |rom deb|@n@org  Wed Sep 14 03:16:32 2022
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Tue, 13 Sep 2022 20:16:32 -0500
+Subject: [Rd] 
+ Should package version requirements assume installation from
+ sources?
+In-Reply-To: <07ec1390-3e67-82cf-09b4-6668db099c31@gmail.com>
+References: <b3e53fa9-b0e0-a8c8-147a-c1c56348f3e9@gmail.com>
+ <07ec1390-3e67-82cf-09b4-6668db099c31@gmail.com>
+Message-ID: <25377.11120.322288.57005@rob.eddelbuettel.com>
+
+
+On 13 September 2022 at 16:11, Herv? Pag?s wrote:
+| FWIW this happens all the time in Bioconductor, where S4 is used very 
+| intensively, when we make that kind of change to a core infrastructure 
+| package. Then a bunch of Windows and Mac binary packages need to be 
+| rebuilt because they contain cached stuff that is now out-of-sync with 
+| the new state of affairs. The way we deal with this is by bumping the 
+| version numbers of all the affected packages. This triggers automatic 
+| rebuilt and propagation of the new binaries.
+
+When you control the whole repo, and release it in batch, you can rebuild and
+increment versions (more on that below).
+
+| Note that these problems also affect packages that were already 
+| installed on the user machines _prior_ to the changes to the upstream 
+| package. Because the caching we are talking about is actually in the 
+| package installation folder (and the fact that it ends up in the 
+| binaries is just a consequence of that). So even on a system where 
+| packages are installed from source, the affected packages need to be 
+| reinstalled. Bumping the version numbers of all the affected packages 
+| also solves that.
+| 
+| I don't see how this could be handled or mitigated via package requirements.
+
+R uses a bunch of elements from the Debian package graph, namely
+
+ Depends/Imports,
+ Recommends,
+ Suggests 
+ Enhances (even if rarely used)
+
+We may need to think about _the other direction_ via
+
+ Breaks
+
+where here, in Mikael's case, we could possibly say that Matrix: has a
+Breaks: on the current (known, built with previous Matrix) packages
+SeuratObject, conText, mcmcsae (each with a <= set to their current CRAN
+version).  This would ensure that when Matrix updates, those packages also
+update.
+
+But it gets trickier because Debian can differentiate between an (upstream
+source version), say, Matrix 1.5-1 _and its build versions_, say 1.5-1-1 so
+the breakage would be of 1.5-1-1 but resolved by a new binary 1.5-1-2 which
+sorts higher.  We don't have that, so maybe we cannot do the Breaks with
+proper ordering. BioConductor can because of how it releases, CRAN cannot as
+it does alter version numbers, only Maintainers do.
+
+So maybe we need a few field in DESCRIPTION to tag 'RecommendedRebuilds'?
+Or maybe CRAN would get a right to do an incremental release, so say 'my'
+digest 0.6.29 would become 0.6.29.1 ?  But how to communicate this _in
+general_ back to Maintainers?
+
+Obviousy for binary packages we can cover this at the repo level, and CRAN
+generally does but there are also 'from source' users out we should cover
+here. So in short that is an open issue with no clear solution.
+
+And all of this would of course require new and changed tooling.  As we often
+maybe this too is something best tried first at package level via opt-in
+alternatives to the functions in base package tools and utils.
+
+Dirk
+
+| Best,
+| 
+| H.
+| 
+| 
+| On 13/09/2022 14:45, Mikael Jagan wrote:
+| > [Arguably also appropriate for R-package-devel, but posted to R-devel
+| > ??? as the discussion is aimed primarily at "experts" ... ]
+| >
+| > We, the authors of Matrix, have encountered a somewhat subtle issue
+| > induced by caching of S4 classes and methods in package namespaces.
+| >
+| > The namespaces of three reverse dependent packages (SeuratObject, 
+| > conText,
+| > mcmcsae) cache the formal definition of our virtual class Matrix (and 
+| > some
+| > subclasses).? For example:
+| >
+| > > ns <- asNamespace("SeuratObject")
+| > > grep("^[.]__C__.*Matrix$", names(ns), value = TRUE)
+| > [1] ".__C__dMatrix"?????? ".__C__compMatrix"??? ".__C__AnyMatrix"
+| > [4] ".__C__generalMatrix" ".__C__CsparseMatrix" ".__C__sparseMatrix"
+| > [7] ".__C__dsparseMatrix" ".__C__Matrix"
+| >
+| > The cached definition (which includes a _validity method_) is obtained 
+| > from
+| > the version of Matrix available when the reverse dependent package was 
+| > built
+| > from sources.? For example, if SeuratObject was built under Matrix 1.4-1,
+| > then we get:
+| >
+| > > getValidity(ns$.__C__Matrix)
+| > function (object)
+| > {
+| > ??? if (!isTRUE(r <- .Call(Dim_validate, object, "Matrix")))
+| > ??????? r
+| > ??? else .Call(dimNames_validate, object)
+| > }
+| > <bytecode: 0x11e7ca508>
+| > <environment: namespace:Matrix>
+| >
+| > whereas if SeuratObject was built under Matrix >= 1.5-0, then we get:
+| >
+| > > getValidity(ns$.__C__Matrix)
+| > function (object)
+| > .Call(Matrix_validate, object)
+| > <bytecode: 0x107dc1698>
+| > <environment: namespace:Matrix>
+| >
+| > There are two "questions" here:
+| >
+| > 1.? The symbol 'Matrix_validate' is not defined until Matrix 1.5-0.
+| > ??? Is it necessary, for this reason alone, for SeuratObject to have
+| > ??? 'Imports: Matrix (>= 1.5-0)'?? Or can SeuratObject continue using
+| > ??? 'Imports: Matrix (>= 1.3-3)', at the risk of errors like
+| >
+| > ??? > Error: object 'Matrix_validate' not found
+| >
+| > ??? (as already seen here: https://stackoverflow.com/questions/73700130)?
+| >
+| > ??? Note that this error would not occur for anyone installing 
+| > SeuratObject
+| > ??? from sources, unless they decide to _downgrade_ Matrix after doing 
+| > so.
+| > ??? Hence this primarily concerns Windows and macOS where R users would
+| > ??? typically install a binary built by CRAN (i.e., not on their system).
+| >
+| > ??? We are aware that package TMB tests in .onLoad() that the current 
+| > Matrix
+| > ??? version is equal to or greater than the version available at build 
+| > time,
+| > ??? thus avoiding a "strict" version requirement, but do not want this 
+| > practice
+| > ??? to spread ...
+| >
+| > 2.? For how long should Matrix retain the superceded 'Dim_validate' and
+| > ??? 'dimNames_validate', in order to ensure that "stale" cached validity
+| > ??? methods continue to work?
+| >
+| > We hope that this discussion will highlight the potential ramifications
+| > of importing classes and methods from other packages, and having one's
+| > classes and methods imported _by_ other packages, especially for version
+| > requirements.
+| >
+| > Mikael, Martin, and Doug
+| >
+| > ______________________________________________
+| > R-devel at r-project.org mailing list
+| > https://stat.ethz.ch/mailman/listinfo/r-devel
+| 
+| -- 
+| Herv? Pag?s
+| 
+| Bioconductor Core Team
+| hpages.on.github at gmail.com
+| 
+| ______________________________________________
+| R-devel at r-project.org mailing list
+| https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Wed Sep 14 03:27:44 2022
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Wed, 14 Sep 2022 13:27:44 +1200
+Subject: [Rd] 
+ Should package version requirements assume installation from
+ sources?
+In-Reply-To: <b3e53fa9-b0e0-a8c8-147a-c1c56348f3e9@gmail.com>
+References: <b3e53fa9-b0e0-a8c8-147a-c1c56348f3e9@gmail.com>
+Message-ID: <030E9435-8D03-4BC5-9461-5247D18703A0@R-project.org>
+
+Mikael,
+
+first about the macOS part of the issue: the first step is that you can tell me and I can trigger a full re-build. For performance reasons the macOS build system does not do full reverse builds, because they take too long as small updates in popular packages can trigger large portions of CRAN needing a re-build - in most cases with no benefit.
+
+Now, that still only addresses one part where the users can upgrade to re-built versions __if they are aware__. However, they would have to know and do it explicitly, because a regular update.packages() would not re-install such reverse-dependent packages since their version has not changed. Therefore I would strongly suggest making sure that updates are backward-compatible, because there is simply no way around that problem as users have no way of knowing that an upgrade of Matrix requires re-installation of many other packages. In fact for Matrix I would argue that such breaking changes should only be allowed with major R release since at that point all packages have to be reinstalled by definition anyway.  So to answer your second part of the question: until next major (=annual) release.
+
+Note that this problem can exist in both directions - even if you upgrade Matrix, if a dependent package is build against newer Matrix __but does not require the newer version__ then the user doesn't know that the installed version is incompatible, so you have to guard in both directions.
+
+Cheers,
+Simon
+
+
+> On 14/09/2022, at 9:45 AM, Mikael Jagan <jaganmn2 at gmail.com> wrote:
+> 
+> [Arguably also appropriate for R-package-devel, but posted to R-devel
+>    as the discussion is aimed primarily at "experts" ... ]
+> 
+> We, the authors of Matrix, have encountered a somewhat subtle issue
+> induced by caching of S4 classes and methods in package namespaces.
+> 
+> The namespaces of three reverse dependent packages (SeuratObject, conText,
+> mcmcsae) cache the formal definition of our virtual class Matrix (and some
+> subclasses).  For example:
+> 
+> > ns <- asNamespace("SeuratObject")
+> > grep("^[.]__C__.*Matrix$", names(ns), value = TRUE)
+> [1] ".__C__dMatrix"       ".__C__compMatrix"    ".__C__AnyMatrix"
+> [4] ".__C__generalMatrix" ".__C__CsparseMatrix" ".__C__sparseMatrix"
+> [7] ".__C__dsparseMatrix" ".__C__Matrix"
+> 
+> The cached definition (which includes a _validity method_) is obtained from
+> the version of Matrix available when the reverse dependent package was built
+> from sources.  For example, if SeuratObject was built under Matrix 1.4-1,
+> then we get:
+> 
+> > getValidity(ns$.__C__Matrix)
+> function (object)
+> {
+>    if (!isTRUE(r <- .Call(Dim_validate, object, "Matrix")))
+>        r
+>    else .Call(dimNames_validate, object)
+> }
+> <bytecode: 0x11e7ca508>
+> <environment: namespace:Matrix>
+> 
+> whereas if SeuratObject was built under Matrix >= 1.5-0, then we get:
+> 
+> > getValidity(ns$.__C__Matrix)
+> function (object)
+> .Call(Matrix_validate, object)
+> <bytecode: 0x107dc1698>
+> <environment: namespace:Matrix>
+> 
+> There are two "questions" here:
+> 
+> 1.  The symbol 'Matrix_validate' is not defined until Matrix 1.5-0.
+>    Is it necessary, for this reason alone, for SeuratObject to have
+>    'Imports: Matrix (>= 1.5-0)'?  Or can SeuratObject continue using
+>    'Imports: Matrix (>= 1.3-3)', at the risk of errors like
+> 
+>    > Error: object 'Matrix_validate' not found
+> 
+>    (as already seen here: https://stackoverflow.com/questions/73700130)?
+> 
+>    Note that this error would not occur for anyone installing SeuratObject
+>    from sources, unless they decide to _downgrade_ Matrix after doing so.
+>    Hence this primarily concerns Windows and macOS where R users would
+>    typically install a binary built by CRAN (i.e., not on their system).
+> 
+>    We are aware that package TMB tests in .onLoad() that the current Matrix
+>    version is equal to or greater than the version available at build time,
+>    thus avoiding a "strict" version requirement, but do not want this practice
+>    to spread ...
+> 
+> 2.  For how long should Matrix retain the superceded 'Dim_validate' and
+>    'dimNames_validate', in order to ensure that "stale" cached validity
+>    methods continue to work?
+> 
+> We hope that this discussion will highlight the potential ramifications
+> of importing classes and methods from other packages, and having one's
+> classes and methods imported _by_ other packages, especially for version
+> requirements.
+> 
+> Mikael, Martin, and Doug
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Wed Sep 14 12:04:04 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Wed, 14 Sep 2022 06:04:04 -0400
+Subject: [Rd] 
+ Should package version requirements assume installation from
+ sources?
+In-Reply-To: <b3e53fa9-b0e0-a8c8-147a-c1c56348f3e9@gmail.com>
+References: <b3e53fa9-b0e0-a8c8-147a-c1c56348f3e9@gmail.com>
+Message-ID: <bf1ca8d1-37f9-6ec1-59d3-692f0fb563ba@gmail.com>
+
+On 13/09/2022 5:45 p.m., Mikael Jagan wrote:
+> [Arguably also appropriate for R-package-devel, but posted to R-devel
+>       as the discussion is aimed primarily at "experts" ... ]
+> 
+> We, the authors of Matrix, have encountered a somewhat subtle issue
+> induced by caching of S4 classes and methods in package namespaces.
+> 
+> The namespaces of three reverse dependent packages (SeuratObject, conText,
+> mcmcsae) cache the formal definition of our virtual class Matrix (and some
+> subclasses).  For example:
+> 
+>   > ns <- asNamespace("SeuratObject")
+>   > grep("^[.]__C__.*Matrix$", names(ns), value = TRUE)
+> [1] ".__C__dMatrix"       ".__C__compMatrix"    ".__C__AnyMatrix"
+> [4] ".__C__generalMatrix" ".__C__CsparseMatrix" ".__C__sparseMatrix"
+> [7] ".__C__dsparseMatrix" ".__C__Matrix"
+> 
+> The cached definition (which includes a _validity method_) is obtained from
+> the version of Matrix available when the reverse dependent package was built
+> from sources.  For example, if SeuratObject was built under Matrix 1.4-1,
+> then we get:
+> 
+>   > getValidity(ns$.__C__Matrix)
+> function (object)
+> {
+>       if (!isTRUE(r <- .Call(Dim_validate, object, "Matrix")))
+>           r
+>       else .Call(dimNames_validate, object)
+> }
+> <bytecode: 0x11e7ca508>
+> <environment: namespace:Matrix>
+> 
+> whereas if SeuratObject was built under Matrix >= 1.5-0, then we get:
+> 
+>   > getValidity(ns$.__C__Matrix)
+> function (object)
+> .Call(Matrix_validate, object)
+> <bytecode: 0x107dc1698>
+> <environment: namespace:Matrix>
+> 
+> There are two "questions" here:
+> 
+> 1.  The symbol 'Matrix_validate' is not defined until Matrix 1.5-0.
+>       Is it necessary, for this reason alone, for SeuratObject to have
+>       'Imports: Matrix (>= 1.5-0)'?  Or can SeuratObject continue using
+>       'Imports: Matrix (>= 1.3-3)', at the risk of errors like
+> 
+>       > Error: object 'Matrix_validate' not found
+> 
+>       (as already seen here: https://stackoverflow.com/questions/73700130)?
+> 
+>       Note that this error would not occur for anyone installing SeuratObject
+>       from sources, unless they decide to _downgrade_ Matrix after doing so.
+>       Hence this primarily concerns Windows and macOS where R users would
+>       typically install a binary built by CRAN (i.e., not on their system).
+> 
+>       We are aware that package TMB tests in .onLoad() that the current Matrix
+>       version is equal to or greater than the version available at build time,
+>       thus avoiding a "strict" version requirement, but do not want this practice
+>       to spread ...
+> 
+> 2.  For how long should Matrix retain the superceded 'Dim_validate' and
+>       'dimNames_validate', in order to ensure that "stale" cached validity
+>       methods continue to work?
+> 
+> We hope that this discussion will highlight the potential ramifications
+> of importing classes and methods from other packages, and having one's
+> classes and methods imported _by_ other packages, especially for version
+> requirements.
+
+This sounds like a bug or bad design in the S4 system, i.e. caching 
+things without a way to detect or update when the cache becomes stale.
+
+Is it really necessary to cache things as part of the binary package, or 
+could they be put in place when needed using lazy loading, getting a 
+copy from the loaded copy of Matrix?
+
+Duncan Murdoch
+
+
+From k@@perd@n|e|h@n@en @end|ng |rom gm@||@com  Wed Sep 14 15:16:25 2022
+From: k@@perd@n|e|h@n@en @end|ng |rom gm@||@com (Kasper Daniel Hansen)
+Date: Wed, 14 Sep 2022 09:16:25 -0400
+Subject: [Rd] 
+ Should package version requirements assume installation from
+ sources?
+In-Reply-To: <70bacfe0-58f2-c656-3a91-061901f4a3f8@gmail.com>
+References: <b3e53fa9-b0e0-a8c8-147a-c1c56348f3e9@gmail.com>
+ <07ec1390-3e67-82cf-09b4-6668db099c31@gmail.com>
+ <70bacfe0-58f2-c656-3a91-061901f4a3f8@gmail.com>
+Message-ID: <CAC2h7uuEhcdmip_RvBS6MeG6V+FixqWX9c5whq+L71C1sogX4g@mail.gmail.com>
+
+On Tue, Sep 13, 2022 at 8:31 PM Ben Bolker <bbolker at gmail.com> wrote:
+
+>    Interesting.
+>
+>    How is the version number bumping communicated back to package
+> maintainers? Or is there a rule like "third digit-blocks of package
+> versions are reserved for Bioconductor modifications" ?
+>
+
+In practice, when you have a package in Bioconductor, we set up a
+bioconductor git repository for the package, which is what is being used to
+build Bioc. So we have
+
+bioc git <- used for binary building
+optionally, package devel git repos (typically on github)
+
+If "we" (Bioconductor) can then choose to change things in the bioc git
+which is upstream of the package devel git. So when Herve changes things to
+basic S4 classes, when updating my packages, I pull those changes into my
+github repos and merge them.
+
+Regarding version numbers, the rule is that we have three digits x.y.z. We
+release Bioc bi-annually and say we release package at version 1.2.0 as
+part of Biocondctor 3.15. After release, we bump the version number for
+devel, so we create 1.3.0 which only exists in Bioc-devel. Then over time
+the developer bumps z as changes are made in devel. Then say we end up at
+1.3.17. At release time, this now gets made into 1.4.0.
+
+So we have potentially tons of version bumping where there is no change in
+code. This may sound chaotic, but it is being helped by the notion of a
+simultaneous release every 6 months. So most users only see 1.2.0 and 1.4.0
+(which could be identical but dependencies are likely to change). Once you
+understand it, it is a pretty good system IMO, since - for example - I can
+immediately see if a package is from devel (odd y) or release (even y). It
+does go againsts some people's arbitrary instincts regarding version
+numbering; here it also helps that these rules are essentially enforced
+across all packages.
+
+Best,
+Kasper
+
+
+
+>
+> On 2022-09-13 7:11 p.m., Herv? Pag?s wrote:
+> > FWIW this happens all the time in Bioconductor, where S4 is used very
+> > intensively, when we make that kind of change to a core infrastructure
+> > package. Then a bunch of Windows and Mac binary packages need to be
+> > rebuilt because they contain cached stuff that is now out-of-sync with
+> > the new state of affairs. The way we deal with this is by bumping the
+> > version numbers of all the affected packages. This triggers automatic
+> > rebuilt and propagation of the new binaries.
+> >
+> > Note that these problems also affect packages that were already
+> > installed on the user machines _prior_ to the changes to the upstream
+> > package. Because the caching we are talking about is actually in the
+> > package installation folder (and the fact that it ends up in the
+> > binaries is just a consequence of that). So even on a system where
+> > packages are installed from source, the affected packages need to be
+> > reinstalled. Bumping the version numbers of all the affected packages
+> > also solves that.
+> >
+> > I don't see how this could be handled or mitigated via package
+> > requirements.
+> >
+> > Best,
+> >
+> > H.
+> >
+> >
+> > On 13/09/2022 14:45, Mikael Jagan wrote:
+> >> [Arguably also appropriate for R-package-devel, but posted to R-devel
+> >>     as the discussion is aimed primarily at "experts" ... ]
+> >>
+> >> We, the authors of Matrix, have encountered a somewhat subtle issue
+> >> induced by caching of S4 classes and methods in package namespaces.
+> >>
+> >> The namespaces of three reverse dependent packages (SeuratObject,
+> >> conText,
+> >> mcmcsae) cache the formal definition of our virtual class Matrix (and
+> >> some
+> >> subclasses).  For example:
+> >>
+> >> > ns <- asNamespace("SeuratObject")
+> >> > grep("^[.]__C__.*Matrix$", names(ns), value = TRUE)
+> >> [1] ".__C__dMatrix"       ".__C__compMatrix"    ".__C__AnyMatrix"
+> >> [4] ".__C__generalMatrix" ".__C__CsparseMatrix" ".__C__sparseMatrix"
+> >> [7] ".__C__dsparseMatrix" ".__C__Matrix"
+> >>
+> >> The cached definition (which includes a _validity method_) is obtained
+> >> from
+> >> the version of Matrix available when the reverse dependent package was
+> >> built
+> >> from sources.  For example, if SeuratObject was built under Matrix
+> 1.4-1,
+> >> then we get:
+> >>
+> >> > getValidity(ns$.__C__Matrix)
+> >> function (object)
+> >> {
+> >>     if (!isTRUE(r <- .Call(Dim_validate, object, "Matrix")))
+> >>         r
+> >>     else .Call(dimNames_validate, object)
+> >> }
+> >> <bytecode: 0x11e7ca508>
+> >> <environment: namespace:Matrix>
+> >>
+> >> whereas if SeuratObject was built under Matrix >= 1.5-0, then we get:
+> >>
+> >> > getValidity(ns$.__C__Matrix)
+> >> function (object)
+> >> .Call(Matrix_validate, object)
+> >> <bytecode: 0x107dc1698>
+> >> <environment: namespace:Matrix>
+> >>
+> >> There are two "questions" here:
+> >>
+> >> 1.  The symbol 'Matrix_validate' is not defined until Matrix 1.5-0.
+> >>     Is it necessary, for this reason alone, for SeuratObject to have
+> >>     'Imports: Matrix (>= 1.5-0)'?  Or can SeuratObject continue using
+> >>     'Imports: Matrix (>= 1.3-3)', at the risk of errors like
+> >>
+> >>     > Error: object 'Matrix_validate' not found
+> >>
+> >>     (as already seen here: https://stackoverflow.com/questions/73700130
+> )?
+> >>
+> >>     Note that this error would not occur for anyone installing
+> >> SeuratObject
+> >>     from sources, unless they decide to _downgrade_ Matrix after doing
+> >> so.
+> >>     Hence this primarily concerns Windows and macOS where R users would
+> >>     typically install a binary built by CRAN (i.e., not on their
+> system).
+> >>
+> >>     We are aware that package TMB tests in .onLoad() that the current
+> >> Matrix
+> >>     version is equal to or greater than the version available at build
+> >> time,
+> >>     thus avoiding a "strict" version requirement, but do not want this
+> >> practice
+> >>     to spread ...
+> >>
+> >> 2.  For how long should Matrix retain the superceded 'Dim_validate' and
+> >>     'dimNames_validate', in order to ensure that "stale" cached validity
+> >>     methods continue to work?
+> >>
+> >> We hope that this discussion will highlight the potential ramifications
+> >> of importing classes and methods from other packages, and having one's
+> >> classes and methods imported _by_ other packages, especially for version
+> >> requirements.
+> >>
+> >> Mikael, Martin, and Doug
+> >>
+> >> ______________________________________________
+> >> R-devel at r-project.org mailing list
+> >> https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+>
+> --
+> Dr. Benjamin Bolker
+> Professor, Mathematics & Statistics and Biology, McMaster University
+> Director, School of Computational Science and Engineering
+> (Acting) Graduate chair, Mathematics & Statistics
+>  > E-mail is sent at my convenience; I don't expect replies outside of
+> working hours.
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+-- 
+Best,
+Kasper
+
+	[[alternative HTML version deleted]]
+
+
