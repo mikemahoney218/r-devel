@@ -1903,3 +1903,196 @@ Kasper
 	[[alternative HTML version deleted]]
 
 
+From g@bembecker @end|ng |rom gm@||@com  Thu Sep 15 20:11:52 2022
+From: g@bembecker @end|ng |rom gm@||@com (Gabriel Becker)
+Date: Thu, 15 Sep 2022 11:11:52 -0700
+Subject: [Rd] Respecting custom repositories files in interactive/batch R
+ sessions
+Message-ID: <CAD4oTHEoUDsL91EiwAOUYoNv0LkeucZFNUYPgLK3=3iOKwrFYw@mail.gmail.com>
+
+Hi all,
+
+A company I work with mirrors CRAN internally behind its firewall for
+security (and reproducibility/consistency/etc) reasons. In that case, we
+would like all R processes (across all the R CMD *, as well as interactive
+and batch sessions) to automatically hit our cran mirror instead of
+prompting the user to select a mirror or failing to contact CRAN at all
+(during check).
+
+I recently found out about the ${R_HOME}/etc/repositories file (after
+multiple years owning the R installations of a sizable corporate research
+outfit in my previous job).
+
+Contrary to my expectations, however, the CRAN entry found in the
+repositories file is not respected in interactive or batch sessions.
+
+With the value "https://fakeyfakeyfake" for the CRAN URL, I get this
+behavior in an interactive session in Rdevel built from trunk:
+
+R Under development (unstable) (2022-09-14 r82853) -- "Unsuffered
+Consequences"
+
+
+<snip>
+
+
+> available.packages()
+
+--- Please select a CRAN mirror for use in this session ---
+
+Secure CRAN mirrors
+
+
+ <snip>
+
+
+Selection: 0
+
+*Error in contrib.url(repos, type) : *
+
+*  trying to use CRAN without setting a mirror*
+
+> readLines(file.path(R.home(), "etc", "repositories"))
+
+ <snip>
+
+[11] "menu_name\tURL\tdefault\tsource\twin.binary\tmac.binary"
+
+
+[12] "CRAN\tCRAN\t\*"https://fakeyfakeyfake
+<https://fakeyfakeyfake>\"*\tTRUE\tTRUE\tTRUE\tTRUE"
+  <snip>
+
+
+R CMD check, on the other hand, *does* use it the entry in repositories out
+of the box:
+
+
+gabrielbecker$ Rdevel CMD check switchr_0.14.5.tar.gz
+
+[1]
+"/Users/gabrielbecker/local/Rdevelraw/R.framework/Versions/4.3/Resources/library"
+
+* using log directory ?/Users/gabrielbecker/gabe/checkedout/switchr.Rcheck?
+
+* using R Under development (unstable) (2022-09-14 r82853)
+
+* using platform: x86_64-apple-darwin21.5.0 (64-bit)
+
+* using session charset: UTF-8
+
+* checking for file ?switchr/DESCRIPTION? ... OK
+
+* checking extension type ... Package
+
+* this is package ?switchr? version ?0.14.5?
+
+* checking package namespace information ... OK
+
+* checking package dependencies ...Warning: unable to access index for
+repository https://fakeyfakeyfake/src/contrib:
+
+  cannot open URL 'https://fakeyfakeyfake/src/contrib/PACKAGES'
+
+
+This behavior is coming from the fact that the repos option is unilaterally
+set to c(CRAN = "@CRAN@") in utils::.onLoad
+
+
+I propose instead that this should be set to either a) the CRAN entry to
+the repository file, or even better imho, b) the set of all repos marked as
+default in the repositories file, with a caveat that its set to @CRAN@ in
+the case there is no cran entry, though comments around the source code in
+tools suggest other things will break in that case anyway.
+
+The default value of the repositories file has @CRAN@ for the cran entry,
+and cran is the only repo marked as default, so this preserves the existing
+behavior in what I assume to be the overwhelming majority of cases where
+the repositories file is either not custom, or is only appended to .
+
+I have a patch which does option (b) (and can easily be adapted to option
+(a)) that I will submit to bugzilla after any discussion here.
+
+Also, as a separate issue, I strongly feel that the R administration manual
+section about repositories be updated to more clearly describe behavior and
+best practices around setting the repos R will look in. I will develop a
+patch for that separately once I see whether one of the above changes is
+likely to go in or not (as I don't want to write it twice).
+
+For completeness, I know that we could put a setRepositories call in the
+the site Rprofile, but I have to admit I don't really understand why this
+should be necessary.
+
+Thoughts?
+~G
+
+	[[alternative HTML version deleted]]
+
+
+From edd @end|ng |rom deb|@n@org  Thu Sep 15 20:31:47 2022
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Thu, 15 Sep 2022 13:31:47 -0500
+Subject: [Rd] 
+ Respecting custom repositories files in interactive/batch R sessions
+In-Reply-To: <CAD4oTHEoUDsL91EiwAOUYoNv0LkeucZFNUYPgLK3=3iOKwrFYw@mail.gmail.com>
+References: <CAD4oTHEoUDsL91EiwAOUYoNv0LkeucZFNUYPgLK3=3iOKwrFYw@mail.gmail.com>
+Message-ID: <25379.28563.847469.688038@rob.eddelbuettel.com>
+
+
+I may be missing something here but aren't you overcomplicating things?  One
+can avoid the repetitive dialog by setting   options(repos)   accordingly,
+and I have long done so.  The Debian (and hence Ubuntu and other derivatives)
+package does so via the Rprofile.site I ship.  See e.g. here
+
+ https://sources.debian.org/src/r-base/4.2.1-2/debian/Rprofile.site/
+
+I have used the same mechanism to point to intra-company repositories, easily
+a decade or so ago. I had no problems with R CMD check of in-house packages
+using this.
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Thu Sep 15 21:33:48 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Thu, 15 Sep 2022 15:33:48 -0400
+Subject: [Rd] Time to drop globalenv() from searches in package code?
+Message-ID: <0bc42d07-d897-2807-0da2-eab959d35a2a@gmail.com>
+
+The author of this Stackoverflow question 
+https://stackoverflow.com/q/73722496/2554330 got confused because a typo 
+in his code didn't trigger an error in normal circumstances, but it did 
+when he ran his code in pkgdown.
+
+The typo was to use "x" in a test, when the local variable was named 
+".x".  There was no "x" defined locally or in the package or its 
+imports, so the search got all the way to the global environment and 
+found one.  (The very confusing part for this user was that it found the 
+right variable.)
+
+This author had suppressed the "R CMD check" check for use of global 
+variables.  Obviously he shouldn't have done that, but he's working with 
+tidyverse NSE, and that causes so many false positives that it is 
+somewhat understandable he would suppress one too many.
+
+The pkgdown simulation of code in examples doesn't do perfect mimicry of 
+running it at top level; the fake global environment never makes it onto 
+the search list.  Some might call this a bug, but I'd call it the right 
+search strategy.
+
+My suggestion is that the search for variables in package code should 
+never get to globalenv().  The chain of environments should stop after 
+handling the imports.  (Probably base package functions should also be 
+implicitly imported, but nothing else.)
+
+I suspect this change would reveal errors in lots of packages, but the 
+number of legitimate uses of the current search strategy has got to be 
+pretty small nowadays, since we've been getting warnings for years about 
+implicit imports from other standard packages.
+
+Duncan Murdoch
+
+
