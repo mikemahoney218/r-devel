@@ -2096,3 +2096,1002 @@ implicit imports from other standard packages.
 Duncan Murdoch
 
 
+From g@bembecker @end|ng |rom gm@||@com  Fri Sep 16 06:51:57 2022
+From: g@bembecker @end|ng |rom gm@||@com (Gabriel Becker)
+Date: Thu, 15 Sep 2022 21:51:57 -0700
+Subject: [Rd] 
+ Respecting custom repositories files in interactive/batch R sessions
+In-Reply-To: <25379.28563.847469.688038@rob.eddelbuettel.com>
+References: <CAD4oTHEoUDsL91EiwAOUYoNv0LkeucZFNUYPgLK3=3iOKwrFYw@mail.gmail.com>
+ <25379.28563.847469.688038@rob.eddelbuettel.com>
+Message-ID: <CAD4oTHG062PARBAkXXMAW-weYG-4nN3ahQuXw-SqrFEXmGaHag@mail.gmail.com>
+
+Hi Dirk,
+
+So there's a couple of things going on. First off you're correct that that
+works generally. There are a couple of reasons that made it not. The first
+is a bug/design error in Rstudio which is causing the R_PROFILE to not be
+adhered to when you build there. I will be filing a bug regarding that with
+them, as I know that is irrelevant to this list.  There was some indication
+that even raw R CMD check running via an R studio server installation was
+missing the profile, but that ended up being spurious upon deeper testing.
+
+That said, I do think that there is a case to be made for the ability to
+modify what repositories R knows about at a more fundamental level than
+setting options in a site profile, and that is, ostensibly, what the
+repositories file machinery does. I understand it was intended initially
+and is currently only (?) used for the windows repository gui menu and
+related setRepositories function, but I still think there is some value in
+extending it in the ways I described.
+
+One major difference is that in this case, even when run with --vanilla,
+administrators would still be in control of which repositories users hit
+(by default only, of course, but there is still value in that).
+
+Best,
+~G
+
+On Thu, Sep 15, 2022 at 11:31 AM Dirk Eddelbuettel <edd at debian.org> wrote:
+
+>
+> I may be missing something here but aren't you overcomplicating things?
+> One
+> can avoid the repetitive dialog by setting   options(repos)   accordingly,
+> and I have long done so.  The Debian (and hence Ubuntu and other
+> derivatives)
+> package does so via the Rprofile.site I ship.  See e.g. here
+>
+>  https://sources.debian.org/src/r-base/4.2.1-2/debian/Rprofile.site/
+>
+> I have used the same mechanism to point to intra-company repositories,
+> easily
+> a decade or so ago. I had no problems with R CMD check of in-house packages
+> using this.
+>
+> Dirk
+>
+> --
+> dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+>
+
+	[[alternative HTML version deleted]]
+
+
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Fri Sep 16 09:57:28 2022
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Fri, 16 Sep 2022 09:57:28 +0200
+Subject: [Rd] 
+ Respecting custom repositories files in interactive/batch R sessions
+In-Reply-To: <CAD4oTHG062PARBAkXXMAW-weYG-4nN3ahQuXw-SqrFEXmGaHag@mail.gmail.com>
+References: <CAD4oTHEoUDsL91EiwAOUYoNv0LkeucZFNUYPgLK3=3iOKwrFYw@mail.gmail.com>
+ <25379.28563.847469.688038@rob.eddelbuettel.com>
+ <CAD4oTHG062PARBAkXXMAW-weYG-4nN3ahQuXw-SqrFEXmGaHag@mail.gmail.com>
+Message-ID: <25380.11368.261722.143011@hornik.net>
+
+>>>>> Gabriel Becker writes:
+
+Friends,
+
+I always keep forgetting how these things currently/precisely work, but
+I guess the principle is that utils:::.onLoad() does
+
+  options(repos = c(CRAN = "@CRAN@"))
+
+unless the repos option was already set (in the user or site profiles).
+As the latter are not used when checking, the check code in tools takes
+advantage of the repositories file mechanism, see ? setRepositories:
+
+     The default list of known repositories is stored in the file
+     ?R_HOME/etc/repositories?.  That file can be edited for a site, or
+     a user can have a personal copy in the file pointed to by the
+     environment variable ?R_REPOSITORIES?, or if this is unset or does
+     not exist, in ?HOME/.R/repositories?, which will take precedence.
+
+which also points to Startup etc).
+
+I guess one could teach utils:::.onLoad() to use the user/site
+repositories setting instead of the hard-wired CRAN = @CRAN@?  Afaict,
+that would make no difference if the repositories file was not
+configured, and provide the configured setting in case repos was not set
+in the user/site profile ...
+
+Best
+-k
+
+
+> Hi Dirk,
+> So there's a couple of things going on. First off you're correct that that
+> works generally. There are a couple of reasons that made it not. The first
+> is a bug/design error in Rstudio which is causing the R_PROFILE to not be
+> adhered to when you build there. I will be filing a bug regarding that with
+> them, as I know that is irrelevant to this list.  There was some indication
+> that even raw R CMD check running via an R studio server installation was
+> missing the profile, but that ended up being spurious upon deeper testing.
+
+> That said, I do think that there is a case to be made for the ability to
+> modify what repositories R knows about at a more fundamental level than
+> setting options in a site profile, and that is, ostensibly, what the
+> repositories file machinery does. I understand it was intended initially
+> and is currently only (?) used for the windows repository gui menu and
+> related setRepositories function, but I still think there is some value in
+> extending it in the ways I described.
+
+> One major difference is that in this case, even when run with --vanilla,
+> administrators would still be in control of which repositories users hit
+> (by default only, of course, but there is still value in that).
+
+> Best,
+> ~G
+
+> On Thu, Sep 15, 2022 at 11:31 AM Dirk Eddelbuettel <edd at debian.org> wrote:
+
+>> 
+>> I may be missing something here but aren't you overcomplicating things?
+>> One
+>> can avoid the repetitive dialog by setting   options(repos)   accordingly,
+>> and I have long done so.  The Debian (and hence Ubuntu and other
+>> derivatives)
+>> package does so via the Rprofile.site I ship.  See e.g. here
+>> 
+>> https://sources.debian.org/src/r-base/4.2.1-2/debian/Rprofile.site/
+>> 
+>> I have used the same mechanism to point to intra-company repositories,
+>> easily
+>> a decade or so ago. I had no problems with R CMD check of in-house packages
+>> using this.
+>> 
+>> Dirk
+>> 
+>> --
+>> dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+>> 
+
+> 	[[alternative HTML version deleted]]
+
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From ru|pb@rr@d@@ @end|ng |rom @@po@pt  Fri Sep 16 16:33:14 2022
+From: ru|pb@rr@d@@ @end|ng |rom @@po@pt (Rui Barradas)
+Date: Fri, 16 Sep 2022 15:33:14 +0100
+Subject: [Rd] Parser bug? A comma too much.
+Message-ID: <45b7f223-fefb-7004-f8b7-f4c5a09dde6e@sapo.pt>
+
+Hello,
+
+Why doesn't the comma throw an error?
+
+
+plot(1:5,)    # works, no complaints
+
+
+Shouldn't this be considered a bug? I would expect the parser to at 
+least give a warning.
+
+
+sessionInfo()
+R version 4.2.1 (2022-06-23 ucrt)
+Platform: x86_64-w64-mingw32/x64 (64-bit)
+Running under: Windows 10 x64 (build 22000)
+
+Matrix products: default
+
+locale:
+[1] LC_COLLATE=Portuguese_Portugal.utf8 
+LC_CTYPE=Portuguese_Portugal.utf8
+[3] LC_MONETARY=Portuguese_Portugal.utf8 LC_NUMERIC=C 
+
+[5] LC_TIME=Portuguese_Portugal.utf8
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base
+
+loaded via a namespace (and not attached):
+[1] compiler_4.2.1
+
+
+Rui Barradas
+
+
+From @vr@h@m@@d|er @end|ng |rom gm@||@com  Fri Sep 16 16:39:50 2022
+From: @vr@h@m@@d|er @end|ng |rom gm@||@com (Avraham Adler)
+Date: Fri, 16 Sep 2022 14:39:50 +0000
+Subject: [Rd] Parser bug? A comma too much.
+In-Reply-To: <45b7f223-fefb-7004-f8b7-f4c5a09dde6e@sapo.pt>
+References: <45b7f223-fefb-7004-f8b7-f4c5a09dde6e@sapo.pt>
+Message-ID: <CAL6gwn+a7uX3fSRALfgpJDGftr79o7x0Xwid_Oq7mr0VYzSRcg@mail.gmail.com>
+
+That may actually be the case for EVERY default plot, if I understand
+correctly. The default S# plot is defined as
+
+## Default S3 method:
+plot(x, y = NULL, type = "p",  xlim = NULL, ylim = NULL,
+     log = "", main = NULL, sub = NULL, xlab = NULL, ylab = NULL,
+     ann = par("ann"), axes = TRUE, frame.plot = axes,
+     panel.first = NULL, panel.last = NULL, asp = NA,
+     xgap.axis = NA, ygap.axis = NA,
+     ...)
+
+By putting in the comma, unless I am mistaken, you are effectively
+saying the second element is NULL, which is how it's naturally
+defined.
+
+Thanks,
+
+Avi
+
+On Fri, Sep 16, 2022 at 2:33 PM Rui Barradas <ruipbarradas at sapo.pt> wrote:
+>
+> Hello,
+>
+> Why doesn't the comma throw an error?
+>
+>
+> plot(1:5,)    # works, no complaints
+>
+>
+> Shouldn't this be considered a bug? I would expect the parser to at
+> least give a warning.
+>
+>
+> sessionInfo()
+> R version 4.2.1 (2022-06-23 ucrt)
+> Platform: x86_64-w64-mingw32/x64 (64-bit)
+> Running under: Windows 10 x64 (build 22000)
+>
+> Matrix products: default
+>
+> locale:
+> [1] LC_COLLATE=Portuguese_Portugal.utf8
+> LC_CTYPE=Portuguese_Portugal.utf8
+> [3] LC_MONETARY=Portuguese_Portugal.utf8 LC_NUMERIC=C
+>
+> [5] LC_TIME=Portuguese_Portugal.utf8
+>
+> attached base packages:
+> [1] stats     graphics  grDevices utils     datasets  methods   base
+>
+> loaded via a namespace (and not attached):
+> [1] compiler_4.2.1
+>
+>
+> Rui Barradas
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From w||||@mwdun|@p @end|ng |rom gm@||@com  Fri Sep 16 16:45:48 2022
+From: w||||@mwdun|@p @end|ng |rom gm@||@com (Bill Dunlap)
+Date: Fri, 16 Sep 2022 07:45:48 -0700
+Subject: [Rd] Parser bug? A comma too much.
+In-Reply-To: <CAL6gwn+a7uX3fSRALfgpJDGftr79o7x0Xwid_Oq7mr0VYzSRcg@mail.gmail.com>
+References: <45b7f223-fefb-7004-f8b7-f4c5a09dde6e@sapo.pt>
+ <CAL6gwn+a7uX3fSRALfgpJDGftr79o7x0Xwid_Oq7mr0VYzSRcg@mail.gmail.com>
+Message-ID: <CAHqSRuRKb+LfPLvJX8SzSRoFQonOenCGp3yvQbNePtL4DrxxXA@mail.gmail.com>
+
+> By putting in the comma, unless I am mistaken, you are effectively
+> saying the second element is NULL, which is how it's naturally
+> defined.
+
+No, in f(x,) the second argument is missing, not NULL.
+
+-Bill
+
+On Fri, Sep 16, 2022 at 7:43 AM Avraham Adler <avraham.adler at gmail.com>
+wrote:
+
+> That may actually be the case for EVERY default plot, if I understand
+> correctly. The default S# plot is defined as
+>
+> ## Default S3 method:
+> plot(x, y = NULL, type = "p",  xlim = NULL, ylim = NULL,
+>      log = "", main = NULL, sub = NULL, xlab = NULL, ylab = NULL,
+>      ann = par("ann"), axes = TRUE, frame.plot = axes,
+>      panel.first = NULL, panel.last = NULL, asp = NA,
+>      xgap.axis = NA, ygap.axis = NA,
+>      ...)
+>
+> By putting in the comma, unless I am mistaken, you are effectively
+> saying the second element is NULL, which is how it's naturally
+> defined.
+>
+> Thanks,
+>
+> Avi
+>
+> On Fri, Sep 16, 2022 at 2:33 PM Rui Barradas <ruipbarradas at sapo.pt> wrote:
+> >
+> > Hello,
+> >
+> > Why doesn't the comma throw an error?
+> >
+> >
+> > plot(1:5,)    # works, no complaints
+> >
+> >
+> > Shouldn't this be considered a bug? I would expect the parser to at
+> > least give a warning.
+> >
+> >
+> > sessionInfo()
+> > R version 4.2.1 (2022-06-23 ucrt)
+> > Platform: x86_64-w64-mingw32/x64 (64-bit)
+> > Running under: Windows 10 x64 (build 22000)
+> >
+> > Matrix products: default
+> >
+> > locale:
+> > [1] LC_COLLATE=Portuguese_Portugal.utf8
+> > LC_CTYPE=Portuguese_Portugal.utf8
+> > [3] LC_MONETARY=Portuguese_Portugal.utf8 LC_NUMERIC=C
+> >
+> > [5] LC_TIME=Portuguese_Portugal.utf8
+> >
+> > attached base packages:
+> > [1] stats     graphics  grDevices utils     datasets  methods   base
+> >
+> > loaded via a namespace (and not attached):
+> > [1] compiler_4.2.1
+> >
+> >
+> > Rui Barradas
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Fri Sep 16 16:48:52 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Fri, 16 Sep 2022 10:48:52 -0400
+Subject: [Rd] Parser bug? A comma too much.
+In-Reply-To: <45b7f223-fefb-7004-f8b7-f4c5a09dde6e@sapo.pt>
+References: <45b7f223-fefb-7004-f8b7-f4c5a09dde6e@sapo.pt>
+Message-ID: <a8a33e23-5e7d-72cc-31ce-4a0ee8a858dc@gmail.com>
+
+On 16/09/2022 10:33 a.m., Rui Barradas wrote:
+> Hello,
+> 
+> Why doesn't the comma throw an error?
+> 
+> 
+> plot(1:5,)    # works, no complaints
+
+That says the second argument is missing.
+
+You need this to enter missing arguments with positional matching, e.g.
+
+f(a, , b)
+
+sets the second argument of f() to missing, but the third is set to b.
+
+Duncan Murdoch
+
+> 
+> 
+> Shouldn't this be considered a bug? I would expect the parser to at
+> least give a warning.
+> 
+> 
+> sessionInfo()
+> R version 4.2.1 (2022-06-23 ucrt)
+> Platform: x86_64-w64-mingw32/x64 (64-bit)
+> Running under: Windows 10 x64 (build 22000)
+> 
+> Matrix products: default
+> 
+> locale:
+> [1] LC_COLLATE=Portuguese_Portugal.utf8
+> LC_CTYPE=Portuguese_Portugal.utf8
+> [3] LC_MONETARY=Portuguese_Portugal.utf8 LC_NUMERIC=C
+> 
+> [5] LC_TIME=Portuguese_Portugal.utf8
+> 
+> attached base packages:
+> [1] stats     graphics  grDevices utils     datasets  methods   base
+> 
+> loaded via a namespace (and not attached):
+> [1] compiler_4.2.1
+> 
+> 
+> Rui Barradas
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From net|kj@ @end|ng |rom gm@||@com  Fri Sep 16 16:50:48 2022
+From: net|kj@ @end|ng |rom gm@||@com (=?UTF-8?Q?Jan_Net=C3=ADk?=)
+Date: Fri, 16 Sep 2022 16:50:48 +0200
+Subject: [Rd] sessionInfo() errors when an attached package is removed from
+ the library
+Message-ID: <CA+6hu7cW_+wrZd3jOW9gZky0SN=otFNqocE1BU-hvQuY8vUksQ@mail.gmail.com>
+
+Hello everyone,
+
+I noticed that sessionInfo() results in an error when you remove a package
+from the library that was previously attached:
+
+library(xyz)
+> remove.packages("xyz")
+> #> Removing package from
+> '/Library/Frameworks/R.framework/Versions/4.2-arm64/Resources/library'
+> #> (as 'lib' is unspecified)
+> sessionInfo()
+> #> Warning in FUN(X[[i]], ...): DESCRIPTION file of package 'xyz' is
+> #> missing or broken
+> #> Error in x$Priority: $ operator is invalid for atomic vectors
+
+
+If it was only loaded, only "loaded via a namespace" section fails to print
+with the same error message.
+
+Notice that this is not an issue for the {sessioninfo} package that only
+warns you in a friendly way that the particular package was removed from
+the library, without any errors.
+
+The problem occurs when sessionInfo calls packageDescription on each
+package on the search path.
+
+Best,
+Jan
+
+	[[alternative HTML version deleted]]
+
+
+From ru|pb@rr@d@@ @end|ng |rom @@po@pt  Fri Sep 16 16:56:29 2022
+From: ru|pb@rr@d@@ @end|ng |rom @@po@pt (Rui Barradas)
+Date: Fri, 16 Sep 2022 15:56:29 +0100
+Subject: [Rd] Parser bug? A comma too much.
+In-Reply-To: <a8a33e23-5e7d-72cc-31ce-4a0ee8a858dc@gmail.com>
+References: <45b7f223-fefb-7004-f8b7-f4c5a09dde6e@sapo.pt>
+ <a8a33e23-5e7d-72cc-31ce-4a0ee8a858dc@gmail.com>
+Message-ID: <4d907ef7-d4f4-6b98-d4f7-5042d0fddd89@sapo.pt>
+
+Hello,
+
+Duncan is right, his example convince me. With a function like `[` it's 
+frequent to have the second argument missing.
+
+So, no error. Thanks to Avraham, Bill and Duncan.
+
+Hope this helps,
+
+Rui Barradas
+
+
+?s 15:48 de 16/09/2022, Duncan Murdoch escreveu:
+> On 16/09/2022 10:33 a.m., Rui Barradas wrote:
+>> Hello,
+>>
+>> Why doesn't the comma throw an error?
+>>
+>>
+>> plot(1:5,)??? # works, no complaints
+> 
+> That says the second argument is missing.
+> 
+> You need this to enter missing arguments with positional matching, e.g.
+> 
+> f(a, , b)
+> 
+> sets the second argument of f() to missing, but the third is set to b.
+> 
+> Duncan Murdoch
+> 
+>>
+>>
+>> Shouldn't this be considered a bug? I would expect the parser to at
+>> least give a warning.
+>>
+>>
+>> sessionInfo()
+>> R version 4.2.1 (2022-06-23 ucrt)
+>> Platform: x86_64-w64-mingw32/x64 (64-bit)
+>> Running under: Windows 10 x64 (build 22000)
+>>
+>> Matrix products: default
+>>
+>> locale:
+>> [1] LC_COLLATE=Portuguese_Portugal.utf8
+>> LC_CTYPE=Portuguese_Portugal.utf8
+>> [3] LC_MONETARY=Portuguese_Portugal.utf8 LC_NUMERIC=C
+>>
+>> [5] LC_TIME=Portuguese_Portugal.utf8
+>>
+>> attached base packages:
+>> [1] stats???? graphics? grDevices utils???? datasets? methods?? base
+>>
+>> loaded via a namespace (and not attached):
+>> [1] compiler_4.2.1
+>>
+>>
+>> Rui Barradas
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From pd@|gd @end|ng |rom gm@||@com  Fri Sep 16 17:00:06 2022
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Fri, 16 Sep 2022 17:00:06 +0200
+Subject: [Rd] Parser bug? A comma too much.
+In-Reply-To: <45b7f223-fefb-7004-f8b7-f4c5a09dde6e@sapo.pt>
+References: <45b7f223-fefb-7004-f8b7-f4c5a09dde6e@sapo.pt>
+Message-ID: <74AC5439-218C-4F87-9490-BF645BD835AB@gmail.com>
+
+As a general matter, empty arguments are allowed and are used meaningfully in some contexts, notably A[i,], which is syntactic sugarcoating of "["(A,i,).
+
+I.e., these are different:
+
+> "["(Sigma,2,) # 2nd row
+[1] 0.077 0.168
+> "["(Sigma,2) # 2nd element
+[1] 0.077
+
+
+It is somewhat rare to have an empty last argument, intermediate ones are more common:
+
+> seq(0,1,,5)
+[1] 0.00 0.25 0.50 0.75 1.00
+
+-pd
+
+
+> On 16 Sep 2022, at 16:33 , Rui Barradas <ruipbarradas at sapo.pt> wrote:
+> 
+> Hello,
+> 
+> Why doesn't the comma throw an error?
+> 
+> 
+> plot(1:5,)    # works, no complaints
+> 
+> 
+> Shouldn't this be considered a bug? I would expect the parser to at least give a warning.
+> 
+> 
+> sessionInfo()
+> R version 4.2.1 (2022-06-23 ucrt)
+> Platform: x86_64-w64-mingw32/x64 (64-bit)
+> Running under: Windows 10 x64 (build 22000)
+> 
+> Matrix products: default
+> 
+> locale:
+> [1] LC_COLLATE=Portuguese_Portugal.utf8 LC_CTYPE=Portuguese_Portugal.utf8
+> [3] LC_MONETARY=Portuguese_Portugal.utf8 LC_NUMERIC=C 
+> [5] LC_TIME=Portuguese_Portugal.utf8
+> 
+> attached base packages:
+> [1] stats     graphics  grDevices utils     datasets  methods   base
+> 
+> loaded via a namespace (and not attached):
+> [1] compiler_4.2.1
+> 
+> 
+> Rui Barradas
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From g@bembecker @end|ng |rom gm@||@com  Fri Sep 16 18:04:40 2022
+From: g@bembecker @end|ng |rom gm@||@com (Gabriel Becker)
+Date: Fri, 16 Sep 2022 09:04:40 -0700
+Subject: [Rd] 
+ Respecting custom repositories files in interactive/batch R sessions
+In-Reply-To: <25380.11368.261722.143011@hornik.net>
+References: <CAD4oTHEoUDsL91EiwAOUYoNv0LkeucZFNUYPgLK3=3iOKwrFYw@mail.gmail.com>
+ <25379.28563.847469.688038@rob.eddelbuettel.com>
+ <CAD4oTHG062PARBAkXXMAW-weYG-4nN3ahQuXw-SqrFEXmGaHag@mail.gmail.com>
+ <25380.11368.261722.143011@hornik.net>
+Message-ID: <CAD4oTHHWtfud3sQLyD_xpPKeX0B8vM4LFs2+SMPu_7hs1Swx+g@mail.gmail.com>
+
+Hi Kurt,
+
+Thanks.
+
+On Fri, Sep 16, 2022 at 12:57 AM Kurt Hornik <Kurt.Hornik at wu.ac.at> wrote:
+
+> >>>>> Gabriel Becker writes:
+>
+> Friends,
+>
+> I always keep forgetting how these things currently/precisely work, but
+> I guess the principle is that utils:::.onLoad() does
+>
+>   options(repos = c(CRAN = "@CRAN@"))
+>
+> unless the repos option was already set (in the user or site profiles).
+> As the latter are not used when checking, the check code in tools takes
+> advantage of the repositories file mechanism, see ? setRepositories:
+>
+>      The default list of known repositories is stored in the file
+>      ?R_HOME/etc/repositories?.  That file can be edited for a site, or
+>      a user can have a personal copy in the file pointed to by the
+>      environment variable ?R_REPOSITORIES?, or if this is unset or does
+>      not exist, in ?HOME/.R/repositories?, which will take precedence.
+>
+> which also points to Startup etc).
+>
+
+Yes this is exactly what happens.
+
+
+>
+> I guess one could teach utils:::.onLoad() to use the user/site
+> repositories setting instead of the hard-wired CRAN = @CRAN@?  Afaict,
+> that would make no difference if the repositories file was not
+> configured, and provide the configured setting in case repos was not set
+> in the user/site profile ...
+>
+
+Precisely, that is my proposal. I have a patch which does this and passes
+make check-devel for me (there is some slight technical gotchas because
+tools::get_repositories calls utils::read.delim which isn't available yet
+during utils::onLoad execution), but I have a workaround for that that
+works.
+
+If the consensus is that this is a good idea I'm more than happy to submit
+the patch, along with an update to the admin manual reflecting the change
+(either together or as separate issues).
+
+Best,
+~G
+
+
+
+>
+> Best
+> -k
+>
+>
+> > Hi Dirk,
+> > So there's a couple of things going on. First off you're correct that
+> that
+> > works generally. There are a couple of reasons that made it not. The
+> first
+> > is a bug/design error in Rstudio which is causing the R_PROFILE to not be
+> > adhered to when you build there. I will be filing a bug regarding that
+> with
+> > them, as I know that is irrelevant to this list.  There was some
+> indication
+> > that even raw R CMD check running via an R studio server installation was
+> > missing the profile, but that ended up being spurious upon deeper
+> testing.
+>
+> > That said, I do think that there is a case to be made for the ability to
+> > modify what repositories R knows about at a more fundamental level than
+> > setting options in a site profile, and that is, ostensibly, what the
+> > repositories file machinery does. I understand it was intended initially
+> > and is currently only (?) used for the windows repository gui menu and
+> > related setRepositories function, but I still think there is some value
+> in
+> > extending it in the ways I described.
+>
+> > One major difference is that in this case, even when run with --vanilla,
+> > administrators would still be in control of which repositories users hit
+> > (by default only, of course, but there is still value in that).
+>
+> > Best,
+> > ~G
+>
+> > On Thu, Sep 15, 2022 at 11:31 AM Dirk Eddelbuettel <edd at debian.org>
+> wrote:
+>
+> >>
+> >> I may be missing something here but aren't you overcomplicating things?
+> >> One
+> >> can avoid the repetitive dialog by setting   options(repos)
+>  accordingly,
+> >> and I have long done so.  The Debian (and hence Ubuntu and other
+> >> derivatives)
+> >> package does so via the Rprofile.site I ship.  See e.g. here
+> >>
+> >> https://sources.debian.org/src/r-base/4.2.1-2/debian/Rprofile.site/
+> >>
+> >> I have used the same mechanism to point to intra-company repositories,
+> >> easily
+> >> a decade or so ago. I had no problems with R CMD check of in-house
+> packages
+> >> using this.
+> >>
+> >> Dirk
+> >>
+> >> --
+> >> dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+> >>
+>
+> >       [[alternative HTML version deleted]]
+>
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Fri Sep 16 18:46:47 2022
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Fri, 16 Sep 2022 18:46:47 +0200
+Subject: [Rd] 
+ Respecting custom repositories files in interactive/batch R sessions
+In-Reply-To: <CAD4oTHHWtfud3sQLyD_xpPKeX0B8vM4LFs2+SMPu_7hs1Swx+g@mail.gmail.com>
+References: <CAD4oTHEoUDsL91EiwAOUYoNv0LkeucZFNUYPgLK3=3iOKwrFYw@mail.gmail.com>
+ <25379.28563.847469.688038@rob.eddelbuettel.com>
+ <CAD4oTHG062PARBAkXXMAW-weYG-4nN3ahQuXw-SqrFEXmGaHag@mail.gmail.com>
+ <25380.11368.261722.143011@hornik.net>
+ <CAD4oTHHWtfud3sQLyD_xpPKeX0B8vM4LFs2+SMPu_7hs1Swx+g@mail.gmail.com>
+Message-ID: <25380.43127.613727.443942@hornik.net>
+
+>>>>> Gabriel Becker writes:
+
+Thanks.  Perhaps submit your patch via R-bugs?
+
+(I would have hoped we can simply use tools:::.get_repositories() right
+away ...)
+
+Best
+-k
+
+> Hi Kurt,
+> Thanks.
+
+> On Fri, Sep 16, 2022 at 12:57 AM Kurt Hornik <Kurt.Hornik at wu.ac.at> wrote:
+
+>> >>>>> Gabriel Becker writes:
+>> 
+>> Friends,
+>> 
+>> I always keep forgetting how these things currently/precisely work, but
+>> I guess the principle is that utils:::.onLoad() does
+>> 
+>> options(repos = c(CRAN = "@CRAN@"))
+>> 
+>> unless the repos option was already set (in the user or site profiles).
+>> As the latter are not used when checking, the check code in tools takes
+>> advantage of the repositories file mechanism, see ? setRepositories:
+>> 
+>> The default list of known repositories is stored in the file
+>> ?R_HOME/etc/repositories?.  That file can be edited for a site, or
+>> a user can have a personal copy in the file pointed to by the
+>> environment variable ?R_REPOSITORIES?, or if this is unset or does
+>> not exist, in ?HOME/.R/repositories?, which will take precedence.
+>> 
+>> which also points to Startup etc).
+>> 
+
+> Yes this is exactly what happens.
+
+
+>> 
+>> I guess one could teach utils:::.onLoad() to use the user/site
+>> repositories setting instead of the hard-wired CRAN = @CRAN@?  Afaict,
+>> that would make no difference if the repositories file was not
+>> configured, and provide the configured setting in case repos was not set
+>> in the user/site profile ...
+>> 
+
+> Precisely, that is my proposal. I have a patch which does this and passes
+> make check-devel for me (there is some slight technical gotchas because
+> tools::get_repositories calls utils::read.delim which isn't available yet
+> during utils::onLoad execution), but I have a workaround for that that
+> works.
+
+> If the consensus is that this is a good idea I'm more than happy to submit
+> the patch, along with an update to the admin manual reflecting the change
+> (either together or as separate issues).
+
+> Best,
+> ~G
+
+
+
+>> 
+>> Best
+>> -k
+>> 
+>> 
+>> > Hi Dirk,
+>> > So there's a couple of things going on. First off you're correct that
+>> that
+>> > works generally. There are a couple of reasons that made it not. The
+>> first
+>> > is a bug/design error in Rstudio which is causing the R_PROFILE to not be
+>> > adhered to when you build there. I will be filing a bug regarding that
+>> with
+>> > them, as I know that is irrelevant to this list.  There was some
+>> indication
+>> > that even raw R CMD check running via an R studio server installation was
+>> > missing the profile, but that ended up being spurious upon deeper
+>> testing.
+>> 
+>> > That said, I do think that there is a case to be made for the ability to
+>> > modify what repositories R knows about at a more fundamental level than
+>> > setting options in a site profile, and that is, ostensibly, what the
+>> > repositories file machinery does. I understand it was intended initially
+>> > and is currently only (?) used for the windows repository gui menu and
+>> > related setRepositories function, but I still think there is some value
+>> in
+>> > extending it in the ways I described.
+>> 
+>> > One major difference is that in this case, even when run with --vanilla,
+>> > administrators would still be in control of which repositories users hit
+>> > (by default only, of course, but there is still value in that).
+>> 
+>> > Best,
+>> > ~G
+>> 
+>> > On Thu, Sep 15, 2022 at 11:31 AM Dirk Eddelbuettel <edd at debian.org>
+>> wrote:
+>> 
+>> >>
+>> >> I may be missing something here but aren't you overcomplicating things?
+>> >> One
+>> >> can avoid the repetitive dialog by setting   options(repos)
+>> accordingly,
+>> >> and I have long done so.  The Debian (and hence Ubuntu and other
+>> >> derivatives)
+>> >> package does so via the Rprofile.site I ship.  See e.g. here
+>> >>
+>> >> https://sources.debian.org/src/r-base/4.2.1-2/debian/Rprofile.site/
+>> >>
+>> >> I have used the same mechanism to point to intra-company repositories,
+>> >> easily
+>> >> a decade or so ago. I had no problems with R CMD check of in-house
+>> packages
+>> >> using this.
+>> >>
+>> >> Dirk
+>> >>
+>> >> --
+>> >> dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+>> >>
+>> 
+>> >       [[alternative HTML version deleted]]
+>> 
+>> > ______________________________________________
+>> > R-devel at r-project.org mailing list
+>> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>> 
+
+> 	[[alternative HTML version deleted]]
+
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Fri Sep 16 21:36:59 2022
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Fri, 16 Sep 2022 14:36:59 -0500 (CDT)
+Subject: [Rd] 
+ [External] Time to drop globalenv() from searches in package code?
+In-Reply-To: <0bc42d07-d897-2807-0da2-eab959d35a2a@gmail.com>
+References: <0bc42d07-d897-2807-0da2-eab959d35a2a@gmail.com>
+Message-ID: <bec8c037-aa79-14f3-bf78-239528dac757@uiowa.edu>
+
+On Thu, 15 Sep 2022, Duncan Murdoch wrote:
+
+> The author of this Stackoverflow question 
+> https://stackoverflow.com/q/73722496/2554330 got confused because a typo in 
+> his code didn't trigger an error in normal circumstances, but it did when he 
+> ran his code in pkgdown.
+>
+> The typo was to use "x" in a test, when the local variable was named ".x". 
+> There was no "x" defined locally or in the package or its imports, so the 
+> search got all the way to the global environment and found one.  (The very 
+> confusing part for this user was that it found the right variable.)
+>
+> This author had suppressed the "R CMD check" check for use of global 
+> variables.  Obviously he shouldn't have done that, but he's working with 
+> tidyverse NSE, and that causes so many false positives that it is somewhat 
+> understandable he would suppress one too many.
+>
+> The pkgdown simulation of code in examples doesn't do perfect mimicry of 
+> running it at top level; the fake global environment never makes it onto the 
+> search list.  Some might call this a bug, but I'd call it the right search 
+> strategy.
+>
+> My suggestion is that the search for variables in package code should never 
+> get to globalenv().  The chain of environments should stop after handling the 
+> imports.  (Probably base package functions should also be implicitly 
+> imported, but nothing else.)
+>
+
+This was considered and discussed when I added namespaces. Basically
+it would mean making the parent of the base namespace environment be
+the empty environment instead of the global environment. As a design
+this is cleaner, and it would be a one-line change in eval.c.  But
+there were technical reasons this was not a viable option at the time,
+also a few political reasons. The technical reasons mostly had to do
+with S3 dispatch.
+
+Changes over the years, mostly from work Kurt has done, to S3 dispatch
+for methods defined and registered in packages might make this more
+viable in principle, but there would still be a lot of existing code
+that would stop working. For example, 'make check' with the one-line
+change fails in a base example that defines an S3 method. It might be
+possible to fiddle with the dispatch to keep most of that code
+working, but I suspect that would be a lot of work. Seeing what it
+would take to get 'make check' to succeed would be a first step if
+anyone wants to take a crack at it.
+
+> I suspect this change would reveal errors in lots of packages, but the number 
+> of legitimate uses of the current search strategy has got to be pretty small 
+> nowadays, since we've been getting warnings for years about implicit imports 
+> from other standard packages.
+
+Your definition of 'legitimate' is probably quite similar to mine, but
+there is likely to be a small but vocal minority with very different
+views :-).
+
+Best,
+
+luke
+
+> Duncan Murdoch
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+
+
+From g@bembecker @end|ng |rom gm@||@com  Sat Sep 17 01:53:52 2022
+From: g@bembecker @end|ng |rom gm@||@com (Gabriel Becker)
+Date: Fri, 16 Sep 2022 16:53:52 -0700
+Subject: [Rd] 
+ Respecting custom repositories files in interactive/batch R sessions
+In-Reply-To: <25380.43127.613727.443942@hornik.net>
+References: <CAD4oTHEoUDsL91EiwAOUYoNv0LkeucZFNUYPgLK3=3iOKwrFYw@mail.gmail.com>
+ <25379.28563.847469.688038@rob.eddelbuettel.com>
+ <CAD4oTHG062PARBAkXXMAW-weYG-4nN3ahQuXw-SqrFEXmGaHag@mail.gmail.com>
+ <25380.11368.261722.143011@hornik.net>
+ <CAD4oTHHWtfud3sQLyD_xpPKeX0B8vM4LFs2+SMPu_7hs1Swx+g@mail.gmail.com>
+ <25380.43127.613727.443942@hornik.net>
+Message-ID: <CAD4oTHEyb+hbcXxFottxwhC_+jO3Sj-tvVOSHFohujfVdMTaiA@mail.gmail.com>
+
+Hi Kurt,
+
+Thanks, submitted as https://bugs.r-project.org/show_bug.cgi?id=18405
+
+~G
+
+	[[alternative HTML version deleted]]
+
+
