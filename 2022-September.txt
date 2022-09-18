@@ -3095,3 +3095,249 @@ Thanks, submitted as https://bugs.r-project.org/show_bug.cgi?id=18405
 	[[alternative HTML version deleted]]
 
 
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Sat Sep 17 11:13:13 2022
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Sat, 17 Sep 2022 11:13:13 +0200
+Subject: [Rd] 
+ [External] Time to drop globalenv() from searches in package code?
+In-Reply-To: <bec8c037-aa79-14f3-bf78-239528dac757@uiowa.edu>
+References: <0bc42d07-d897-2807-0da2-eab959d35a2a@gmail.com>
+ <bec8c037-aa79-14f3-bf78-239528dac757@uiowa.edu>
+Message-ID: <25381.36777.795591.36433@hornik.net>
+
+>>>>> luke-tierney  writes:
+
+> On Thu, 15 Sep 2022, Duncan Murdoch wrote:
+>> The author of this Stackoverflow question 
+>> https://stackoverflow.com/q/73722496/2554330 got confused because a typo in 
+>> his code didn't trigger an error in normal circumstances, but it did when he 
+>> ran his code in pkgdown.
+>> 
+>> The typo was to use "x" in a test, when the local variable was named ".x". 
+>> There was no "x" defined locally or in the package or its imports, so the 
+>> search got all the way to the global environment and found one.  (The very 
+>> confusing part for this user was that it found the right variable.)
+>> 
+>> This author had suppressed the "R CMD check" check for use of global 
+>> variables.  Obviously he shouldn't have done that, but he's working with 
+>> tidyverse NSE, and that causes so many false positives that it is somewhat 
+>> understandable he would suppress one too many.
+>> 
+>> The pkgdown simulation of code in examples doesn't do perfect mimicry of 
+>> running it at top level; the fake global environment never makes it onto the 
+>> search list.  Some might call this a bug, but I'd call it the right search 
+>> strategy.
+>> 
+>> My suggestion is that the search for variables in package code should never 
+>> get to globalenv().  The chain of environments should stop after handling the 
+>> imports.  (Probably base package functions should also be implicitly 
+>> imported, but nothing else.)
+>> 
+
+> This was considered and discussed when I added namespaces. Basically
+> it would mean making the parent of the base namespace environment be
+> the empty environment instead of the global environment. As a design
+> this is cleaner, and it would be a one-line change in eval.c.  But
+> there were technical reasons this was not a viable option at the time,
+> also a few political reasons. The technical reasons mostly had to do
+> with S3 dispatch.
+
+> Changes over the years, mostly from work Kurt has done, to S3 dispatch
+> for methods defined and registered in packages might make this more
+> viable in principle, but there would still be a lot of existing code
+> that would stop working. For example, 'make check' with the one-line
+> change fails in a base example that defines an S3 method. It might be
+> possible to fiddle with the dispatch to keep most of that code
+> working, but I suspect that would be a lot of work. Seeing what it
+> would take to get 'make check' to succeed would be a first step if
+> anyone wants to take a crack at it.
+
+Luke,
+
+Can you please share the one-line change so that I can take a closer
+look?
+
+Best
+-k
+
+>> I suspect this change would reveal errors in lots of packages, but the number 
+>> of legitimate uses of the current search strategy has got to be pretty small 
+>> nowadays, since we've been getting warnings for years about implicit imports 
+>> from other standard packages.
+
+> Your definition of 'legitimate' is probably quite similar to mine, but
+> there is likely to be a small but vocal minority with very different
+> views :-).
+
+> Best,
+
+> luke
+
+>> Duncan Murdoch
+>> 
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>> 
+
+> -- 
+> Luke Tierney
+> Ralph E. Wareham Professor of Mathematical Sciences
+> University of Iowa                  Phone:             319-335-3386
+> Department of Statistics and        Fax:               319-335-3017
+>     Actuarial Science
+> 241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+> Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Sat Sep 17 22:24:02 2022
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Sat, 17 Sep 2022 15:24:02 -0500 (CDT)
+Subject: [Rd] 
+ [External] Time to drop globalenv() from searches in package code?
+In-Reply-To: <25381.36777.795591.36433@hornik.net>
+References: <0bc42d07-d897-2807-0da2-eab959d35a2a@gmail.com>
+ <bec8c037-aa79-14f3-bf78-239528dac757@uiowa.edu>
+ <25381.36777.795591.36433@hornik.net>
+Message-ID: <aea3c2f-5d61-b73-2ced-724fb8e94da@uiowa.edu>
+
+On Sat, 17 Sep 2022, Kurt Hornik wrote:
+
+>>>>>> luke-tierney  writes:
+>
+>> On Thu, 15 Sep 2022, Duncan Murdoch wrote:
+>>> The author of this Stackoverflow question
+>>> https://stackoverflow.com/q/73722496/2554330 got confused because a typo in
+>>> his code didn't trigger an error in normal circumstances, but it did when he
+>>> ran his code in pkgdown.
+>>>
+>>> The typo was to use "x" in a test, when the local variable was named ".x".
+>>> There was no "x" defined locally or in the package or its imports, so the
+>>> search got all the way to the global environment and found one.  (The very
+>>> confusing part for this user was that it found the right variable.)
+>>>
+>>> This author had suppressed the "R CMD check" check for use of global
+>>> variables.  Obviously he shouldn't have done that, but he's working with
+>>> tidyverse NSE, and that causes so many false positives that it is somewhat
+>>> understandable he would suppress one too many.
+>>>
+>>> The pkgdown simulation of code in examples doesn't do perfect mimicry of
+>>> running it at top level; the fake global environment never makes it onto the
+>>> search list.  Some might call this a bug, but I'd call it the right search
+>>> strategy.
+>>>
+>>> My suggestion is that the search for variables in package code should never
+>>> get to globalenv().  The chain of environments should stop after handling the
+>>> imports.  (Probably base package functions should also be implicitly
+>>> imported, but nothing else.)
+>>>
+>
+>> This was considered and discussed when I added namespaces. Basically
+>> it would mean making the parent of the base namespace environment be
+>> the empty environment instead of the global environment. As a design
+>> this is cleaner, and it would be a one-line change in eval.c.  But
+>> there were technical reasons this was not a viable option at the time,
+>> also a few political reasons. The technical reasons mostly had to do
+>> with S3 dispatch.
+>
+>> Changes over the years, mostly from work Kurt has done, to S3 dispatch
+>> for methods defined and registered in packages might make this more
+>> viable in principle, but there would still be a lot of existing code
+>> that would stop working. For example, 'make check' with the one-line
+>> change fails in a base example that defines an S3 method. It might be
+>> possible to fiddle with the dispatch to keep most of that code
+>> working, but I suspect that would be a lot of work. Seeing what it
+>> would take to get 'make check' to succeed would be a first step if
+>> anyone wants to take a crack at it.
+>
+> Luke,
+>
+> Can you please share the one-line change so that I can take a closer
+> look?
+
+Index: src/main/envir.c
+===================================================================
+--- src/main/envir.c    (revision 82861)
++++ src/main/envir.c    (working copy)
+@@ -683,7 +683,7 @@
+      R_GlobalCachePreserve = CONS(R_GlobalCache, R_NilValue);
+      R_PreserveObject(R_GlobalCachePreserve);
+  #endif
+-    R_BaseNamespace = NewEnvironment(R_NilValue, R_NilValue, R_GlobalEnv);
++    R_BaseNamespace = NewEnvironment(R_NilValue, R_NilValue, R_EmptyEnv);
+      R_PreserveObject(R_BaseNamespace);
+      SET_SYMVALUE(install(".BaseNamespaceEnv"), R_BaseNamespace);
+      R_BaseNamespaceName = ScalarString(mkChar("base"));
+
+-----
+
+For S3 the dispatch will have to be changed to explicitly search
+.GlobalEnv and parents after the namespace if we don't want to break
+too much.
+
+Another idiom that will be broken is
+
+if (require("foo"))
+    bar(...)
+
+with bar exported from foo. I don't know if that is already warned
+about.  Moving away from this is arguably good in principle but also
+probably fairly disruptive. We might need to add some cleaner
+use-if-available mechanism, or maybe just adjust some checking code.
+
+Best,
+
+luke
+
+>
+> Best
+> -k
+>
+>>> I suspect this change would reveal errors in lots of packages, but the number
+>>> of legitimate uses of the current search strategy has got to be pretty small
+>>> nowadays, since we've been getting warnings for years about implicit imports
+>>> from other standard packages.
+>
+>> Your definition of 'legitimate' is probably quite similar to mine, but
+>> there is likely to be a small but vocal minority with very different
+>> views :-).
+>
+>> Best,
+>
+>> luke
+>
+>>> Duncan Murdoch
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>
+>
+>> --
+>> Luke Tierney
+>> Ralph E. Wareham Professor of Mathematical Sciences
+>> University of Iowa                  Phone:             319-335-3386
+>> Department of Statistics and        Fax:               319-335-3017
+>>     Actuarial Science
+>> 241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+>> Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+
+
