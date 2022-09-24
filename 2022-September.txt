@@ -4121,3 +4121,984 @@ Tomas
 >> https://apc01.safelinks.protection.outlook.com/?url=https%3A%2F%2Fstat.ethz.ch%2Fmailman%2Flistinfo%2Fr-devel&amp;data=05%7C01%7CA.J.Godfrey%40massey.ac.nz%7C3e0ccf59e1204914ed8d08da9cb6e77e%7C388728e1bbd0437898dcf8682e644300%7C1%7C0%7C637994606638298455%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&amp;sdata=rkn809t40%2BbzwxC%2BVUkQcna4SkaoupyZG%2F1ZMgCw%2BGE%3D&amp;reserved=0
 
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Fri Sep 23 09:46:34 2022
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Fri, 23 Sep 2022 09:46:34 +0200
+Subject: [Rd] Date method of as.POSIXct does not respect tz
+In-Reply-To: <4892f293-b399-45eb-1ee8-ea05afd8365b@thuenen.de>
+References: <65932fa5-535d-19e4-2a70-7a6ffd10dfa4@thuenen.de>
+ <23293.49665.770796.423446@stat.math.ethz.ch>
+ <4892f293-b399-45eb-1ee8-ea05afd8365b@thuenen.de>
+Message-ID: <25389.25690.643428.329556@stat.math.ethz.ch>
+
+>>>>> Roland Fu? 
+>>>>>     on Tue, 20 Sep 2022 09:25:52 +0200 writes:
+
+    > Hello, May I follow up on this? Has it fallen through the
+    > cracks or were there considerations against passing `tz`
+    > to `.POSIXct`?
+
+    > Regards,
+    > Roland
+
+Hmm...  I don't remember  even though I had replied positively
+to your question in May 2018.
+
+PROS (for allowing 'tz') to be passed to
+----   as.POSIXct.Date()  and hence ideally also to as.POSIXlt.Date() 
+
+1) as.POSIXct() and as.POSIXlt()   all show with a 'tz' argument
+  on the help page, and hence for consistency users should
+  really expect  that 'tz = ".."'  also works in these two cases:
+
+  Usage:
+
+     as.POSIXct(x, tz = "", ...)
+     as.POSIXlt(x, tz = "", ...)
+     
+     ## S3 method for class 'character'
+     as.POSIXlt(x, tz = "", format,
+                tryFormats = c("%Y-%m-%d %H:%M:%OS",
+                               "%Y/%m/%d %H:%M:%OS",
+                               "%Y-%m-%d %H:%M",
+                               "%Y/%m/%d %H:%M",
+                               "%Y-%m-%d",
+                               "%Y/%m/%d"),
+                optional = FALSE, ...)
+     ## Default S3 method:
+     as.POSIXlt(x, tz = "",
+                optional = FALSE, ...)
+     ## S3 method for class 'numeric'
+     as.POSIXlt(x, tz = "", origin, ...)
+
+
+2) It is easy to be implemented for  as.POSIXct()   as you found
+   already in 2018.
+
+
+CONS:
+-----
+
+3) The 'Details:' section on the help page,
+   end of 1st paragraph says
+
+     Dates without times are treated as being at midnight UTC.
+
+   So the current hardwired behavior is documented.
+
+4a) For  as.POSIXlt.Date()  to allow passing 'tz' needs changes
+   in the C code,  i.e., is considerable more work than for the as.POSIXct(),
+   (or actually just post-processing in the R code, much less work)
+
+4b) Only changing the behavior for as.POSIXct()  but not for as.POSIXlt()
+    is also an inconsistency.
+
+
+My personal inclination would still be to do the change,
+by giving most weight to  '1)' above.
+
+What do other experienced R developers think ?
+
+Martin
+
+
+    > Am 17.05.2018 um 19:55 schrieb Martin Maechler:
+    >>>>>>> Roland Fu? on Wed, 16 May 2018 17:21:07 +0200
+    >>>>>>> writes:
+    >> > R 3.5.0 Is it intended that the Date method of
+    >> as.POSIXct > does not respect the tz parameter? I suggest
+    >> changing > as.POSIXct.Date
+    >> 
+    >> which is
+    >> 
+    >> function (x, ...) .POSIXct(unclass(x) * 86400)
+    >> 
+    >> > to this:
+    >> 
+    >> function (x, tz = "", ...)  .POSIXct(unclass(x) * 86400,
+    >> tz = tz)
+    >> 
+    >> or rather just forward the '...', i.e., use
+    >> 
+    >> function (x, ...) .POSIXct(unclass(x) * 86400, ...)
+    >> 
+    >> ??
+    >> 
+    >> > Currently, the best workaround seems to be using the >
+    >> character method if one doesn't want the default timezone
+    >> > (which is often an annoying DST timezone).
+    >> 
+    >> > This came up on Stack Overflow: >
+    >> https://stackoverflow.com/q/50373340/1412059
+    >> 
+    >> > --
+    >> > Roland
+    >> 
+    >> Thank you Roland for your notice (and the help on SO).
+    >> 
+    >> Best, Martin
+
+    > -- 
+    > Dr. Roland Fu?
+
+    > Th?nen-Institut f?r Agrarklimaschutz/ Th?nen Institute of
+    > Climate-Smart Agriculture
+
+    > Bundesallee 65 D-38116 Braunschweig, Germany
+
+    > Tel.: ++49 531 596 2627 Fax: ++49 531 596 2699 Email:
+    > roland.fuss at thuenen.de
+
+    > Arbeitsgruppe "Emissionsberichterstattung"/ Working group
+    > "Emission Inventories" Email:
+    > emissionsinventare at thuenen.de
+
+    > Das Johann Heinrich von Th?nen-Institut,
+    > Bundesforschungsinstitut f?r L?ndliche R?ume, Wald und
+    > Fischerei ? kurz: Th?nen-Institut ? besteht aus 15
+    > Fachinstituten, die in den Bereichen ?konomie, ?kologie
+    > und Technologie forschen und die Politik beraten.
+
+    > The Johann Heinrich von Th?nen Institute, Federal Research
+    > Institute for Rural Areas, Forestry and Fisheries ? Th?nen
+    > Institute in brief ? consists of 15 specialized institutes
+    > that carry out research and provide policy advice in the
+    > fields of economy, ecology and technology.
+
+
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Fri Sep 23 09:57:49 2022
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Fri, 23 Sep 2022 09:57:49 +0200
+Subject: [Rd] Date method of as.POSIXct does not respect tz
+In-Reply-To: <25389.25690.643428.329556@stat.math.ethz.ch>
+References: <65932fa5-535d-19e4-2a70-7a6ffd10dfa4@thuenen.de>
+ <23293.49665.770796.423446@stat.math.ethz.ch>
+ <4892f293-b399-45eb-1ee8-ea05afd8365b@thuenen.de>
+ <25389.25690.643428.329556@stat.math.ethz.ch>
+Message-ID: <25389.26365.938007.477851@hornik.net>
+
+>>>>> Martin Maechler writes:
+
+Currently in R-devel,
+
+R> as.POSIXlt.Date
+function (x, ...) 
+{
+    if (any((y <- unclass(x)) > .Machine$integer.max, na.rm = TRUE)) 
+        as.POSIXlt(.POSIXct(y * 86400), tz = "UTC")
+    else .Internal(Date2POSIXlt(x))
+}
+
+R> as.POSIXct.Date
+function (x, ...) 
+.POSIXct(unclass(x) * 86400)
+
+Adding tz to the latter is easy, and the former could do the if() part
+also with a given tz without needing to change the .Internal?
+
+Best
+-k
+
+>>>>> Roland Fu? 
+>>>>>     on Tue, 20 Sep 2022 09:25:52 +0200 writes:
+
+>> Hello, May I follow up on this? Has it fallen through the
+>> cracks or were there considerations against passing `tz`
+>> to `.POSIXct`?
+
+>> Regards,
+>> Roland
+
+> Hmm...  I don't remember  even though I had replied positively
+> to your question in May 2018.
+
+> PROS (for allowing 'tz') to be passed to
+> ----   as.POSIXct.Date()  and hence ideally also to as.POSIXlt.Date() 
+
+> 1) as.POSIXct() and as.POSIXlt()   all show with a 'tz' argument
+>   on the help page, and hence for consistency users should
+>   really expect  that 'tz = ".."'  also works in these two cases:
+
+>   Usage:
+
+>      as.POSIXct(x, tz = "", ...)
+>      as.POSIXlt(x, tz = "", ...)
+     
+>      ## S3 method for class 'character'
+>      as.POSIXlt(x, tz = "", format,
+>                 tryFormats = c("%Y-%m-%d %H:%M:%OS",
+>                                "%Y/%m/%d %H:%M:%OS",
+>                                "%Y-%m-%d %H:%M",
+>                                "%Y/%m/%d %H:%M",
+>                                "%Y-%m-%d",
+>                                "%Y/%m/%d"),
+>                 optional = FALSE, ...)
+>      ## Default S3 method:
+>      as.POSIXlt(x, tz = "",
+>                 optional = FALSE, ...)
+>      ## S3 method for class 'numeric'
+>      as.POSIXlt(x, tz = "", origin, ...)
+
+
+> 2) It is easy to be implemented for  as.POSIXct()   as you found
+>    already in 2018.
+
+
+> CONS:
+> -----
+
+> 3) The 'Details:' section on the help page,
+>    end of 1st paragraph says
+
+>      Dates without times are treated as being at midnight UTC.
+
+>    So the current hardwired behavior is documented.
+
+> 4a) For  as.POSIXlt.Date()  to allow passing 'tz' needs changes
+>    in the C code,  i.e., is considerable more work than for the as.POSIXct(),
+>    (or actually just post-processing in the R code, much less work)
+
+> 4b) Only changing the behavior for as.POSIXct()  but not for as.POSIXlt()
+>     is also an inconsistency.
+
+
+> My personal inclination would still be to do the change,
+> by giving most weight to  '1)' above.
+
+> What do other experienced R developers think ?
+
+> Martin
+
+
+>> Am 17.05.2018 um 19:55 schrieb Martin Maechler:
+>>>>>>>> Roland Fu? on Wed, 16 May 2018 17:21:07 +0200
+>>>>>>>> writes:
+>>> > R 3.5.0 Is it intended that the Date method of
+>>> as.POSIXct > does not respect the tz parameter? I suggest
+>>> changing > as.POSIXct.Date
+>>> 
+>>> which is
+>>> 
+>>> function (x, ...) .POSIXct(unclass(x) * 86400)
+>>> 
+>>> > to this:
+>>> 
+>>> function (x, tz = "", ...)  .POSIXct(unclass(x) * 86400,
+>>> tz = tz)
+>>> 
+>>> or rather just forward the '...', i.e., use
+>>> 
+>>> function (x, ...) .POSIXct(unclass(x) * 86400, ...)
+>>> 
+>>> ??
+>>> 
+>>> > Currently, the best workaround seems to be using the >
+>>> character method if one doesn't want the default timezone
+>>> > (which is often an annoying DST timezone).
+>>> 
+>>> > This came up on Stack Overflow: >
+>>> https://stackoverflow.com/q/50373340/1412059
+>>> 
+>>> > --
+>>> > Roland
+>>> 
+>>> Thank you Roland for your notice (and the help on SO).
+>>> 
+>>> Best, Martin
+
+>> -- 
+>> Dr. Roland Fu?
+
+>> Th?nen-Institut f?r Agrarklimaschutz/ Th?nen Institute of
+>> Climate-Smart Agriculture
+
+>> Bundesallee 65 D-38116 Braunschweig, Germany
+
+>> Tel.: ++49 531 596 2627 Fax: ++49 531 596 2699 Email:
+>> roland.fuss at thuenen.de
+
+>> Arbeitsgruppe "Emissionsberichterstattung"/ Working group
+>> "Emission Inventories" Email:
+>> emissionsinventare at thuenen.de
+
+>> Das Johann Heinrich von Th?nen-Institut,
+>> Bundesforschungsinstitut f?r L?ndliche R?ume, Wald und
+>> Fischerei ? kurz: Th?nen-Institut ? besteht aus 15
+>> Fachinstituten, die in den Bereichen ?konomie, ?kologie
+>> und Technologie forschen und die Politik beraten.
+
+>> The Johann Heinrich von Th?nen Institute, Federal Research
+>> Institute for Rural Areas, Forestry and Fisheries ? Th?nen
+>> Institute in brief ? consists of 15 specialized institutes
+>> that carry out research and provide policy advice in the
+>> fields of economy, ecology and technology.
+
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From A@J@God|rey @end|ng |rom m@@@ey@@c@nz  Thu Sep 22 23:13:04 2022
+From: A@J@God|rey @end|ng |rom m@@@ey@@c@nz (Jonathan Godfrey)
+Date: Thu, 22 Sep 2022 21:13:04 +0000
+Subject: [Rd] Problem with accessibility in R 4.2.0 and 4.2.1.
+In-Reply-To: <F5D1FEDE-78E8-4FD1-952A-E1C34456E485@gmail.com>
+References: <88b4bd63-0ec3-626b-1fa3-148f1419a8a3@dim.uchile.cl>
+ <F5D1FEDE-78E8-4FD1-952A-E1C34456E485@gmail.com>
+Message-ID: <MEAPR01MB382950638C09F8D8A2BCBF45934E9@MEAPR01MB3829.ausprd01.prod.outlook.com>
+
+Hello all,
+
+I can confirm Andrew's assessment of the situation for screen reader users (both JAWS and NVDA) for R GUI version 4.2.1; I don't intend to go back and verify how/when the problem first arose though.
+
+The situation is not new, or at least the same experience was evident well before now. When I started using R around 2005/6, the experience we now see today was how I found the GUI then. I investigated the terminal which was a huge success and never looked back.
+
+I tracked how the R GUI was going because my students would be using it, and at some stage, the way the GUI cursor behaved changed. If I recall correctly, the physical appearance of the cursor also altered at the same time. I still update versions regularly to stay one step of my students (all sighted) but because no one uses the R GUI, my efforts to trace its behaviour have been dwindling over the last five or so years. I don't need to check the RStudio behaviour because I can't, my colleagues are doing so, and I know it won't change for blind people anytime soon.
+
+The terminal has behaved consistently all that time. It has some minor differences between JAWS and NVDA, but the user knows what their screen reader is doing so the differences have relatively minor impact. It remains how I use R and therefore what I recommend for other blind users. N.B. I also strongly recommend R markdown files over R scripts.
+
+The experience in the GUI was human dependent, with the choice of screen reader and the skill level of the users with their screen reader both having an impact on the overall user experience. For many years, NVDA users were better off in the GUI than in the terminal, while most JAWS users were happier in the terminal. It has been fairly fluid though so my advice has been to try, using the existing skills and screen reader, but to be prepared to revert to the terminal fairly quickly.
+
+Minor variations in the interactions of R GUI and the various screen readers mean the difference between JAWS and NVDA were very similar prior to v4.2.0 to the extent that I would say the experience had converged quite nicely.
+
+RStudio has not made any significant progress in making its IDE more accessible, and I fear that it never will. I have tested other front ends and none have yet met accessibility standards. The problem with most of the front ends is that they are using development toolkits (such as QT) that do not speak with screen readers straight out of the box. I mentioned this in my R Journal article back in 2013.
+
+I fear that the development toolkit problem is what compromises accessibility of R GUI too. In a discussion I had with Duncan at UseR 2015, it was obvious to me that nothing  intentional had been done to the R GUI to improve my initial experience to the situation Andrew has been enjoying. For that reason, I suspect that there is room for something different in the background, as against any explicit action taken by the R developments, which have (unfortunately) taken us backwards.
+
+Andrew: I am confident you can move to the terminal without requiring help, but grabbing the latest development version of BrailleR off GitHub will give you some functions that will save a bit of effort. We might arrange a voice call next week for an ongoing discussion.
+
+Tomas: I'm not able to help with your suggestion, mainly because I don't understand the nuts and bolts of it. I do believe though that the cursor focus is a critical factor, but that the cursor being used by the screen reader software is different to the cursor being used by the sighted users. When I switch from the active cursor to the screen readers' review mode, the screen readers both take me back to the top left of the window under the menu bar. Has anything changed in the visual appearance of the cursor from v4.1.3 to v4.2.0? I ask because it is the symptom.
+
+Peter: Thank you very much for actively bringing me into this thread. I don't know why I hadn't seen Andrew's first message given I get other list traffic.
+
+Jonathan
+
+
+-----Original Message-----
+From: peter dalgaard <pdalgd at gmail.com> 
+Sent: Friday, 23 September 2022 4:24 am
+To: Andrew Hart <ahart at dim.uchile.cl>
+Cc: R-devel at r-project.org; Tomas Kalibera <tomas.kalibera at gmail.com>; Jonathan Godfrey <A.J.Godfrey at massey.ac.nz>
+Subject: Re: [Rd] Problem with accessibility in R 4.2.0 and 4.2.1.
+
+Tomas Kalibera has related that he has some scars from fighting with some unexpected interactions between UTF-8 and the GraphApp library that is used for RGui and I think he said that screen readers were involved. I wouldn't be surprised if this is a leftover issue. (This is obviously a kind of issue that non-blind users don't "see" :-) ).
+
+Would it work for you to use the terminal application (the "DOS box", or whatever it is called these days) until the issue gets fixed?
+
+In general, I would expect your go-to guy for blindness-related issues to be Jonathon Godfrey (cc'ed). Perhaps he can offer some advice.
+
+-pd
+ 
+
+> On 22 Sep 2022, at 15:48 , Andrew Hart via R-devel <r-devel at r-project.org> wrote:
+> 
+> Hi. I'm having an issue with R 4.2.1 on Windows but I'm not sure if this is the right place to ask about it. If it's not, I'm hoping someone can point me in the right direction.
+> 
+> I'm blind and have been using R for about 11 years now. The base build available on CRAN is quite accessible and works pretty well with screen-reading software such as JAWS for Windows and NVDA. R-studio is not accessible which appears to have something to do with the version of QT it uses, but that's not relevant as I don't use it.
+> 
+> Recently I installed R 4.2.1 (I tend to upgrade two or three times a year and this time I was jumping from R 4.1.2 to 4.2.1).
+> However, I've encountered a serious problem which makes the latest version more or less unusable for doing any kind of serious work.
+> The issue is that the screen-reading software is unable to locate the R cursor and behaves as though the cursor is near the top left of the R application window. Practically, this means I can't tell what characters I'm passing over when cursoring left and right, nor can I hear what character is being deleted when the backspace is pressed. Most importantly, I can't tell where the insertion point is. This is a major regression in the ability to work with and edit the command line in the R console. There are ways of actually viewing the command line but the way I work is frequently calling up a previous command and making a change so as to not have to type the whole command again.
+> 
+> I Went and installed R 4.1.3 and R 4.2.0 in an attempt to find out exactly when things went awry and the issue first appeared in R 4.2.0.
+> Looking through the release notes, the only things mentioned that seem likely to be relevant are the following:
+> 
+> * R uses a new 64-bit Tcl/Tk bundle. The previous 32-bit/64-bit bundle had a different layout and can no longer be used.
+> 
+> and
+> 
+> * R uses UTF-8 as the native encoding on recent Windows systems (at least Windows 10 version 1903, Windows Server 2022 or Windows Server 1903). As a part
+> of this change, R uses UCRT as the C runtime. UCRT should be installed manually on systems older than Windows 10 or Windows Server 2016 before installing
+> R.
+> 
+> I can't really see how changing to utf-8 as the native encoding would produce the behaviour I'm seeing, so I am guessing that the change in TCL/TK might be the culprit.
+> 
+> I'm hoping that someone will be able to help shed some light on what's going on here.
+> 
+> Thanks a lot,
+> Andrew.
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://apc01.safelinks.protection.outlook.com/?url=https%3A%2F%2Fstat.ethz.ch%2Fmailman%2Flistinfo%2Fr-devel&amp;data=05%7C01%7CA.J.Godfrey%40massey.ac.nz%7C3e0ccf59e1204914ed8d08da9cb6e77e%7C388728e1bbd0437898dcf8682e644300%7C1%7C0%7C637994606638298455%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&amp;sdata=rkn809t40%2BbzwxC%2BVUkQcna4SkaoupyZG%2F1ZMgCw%2BGE%3D&amp;reserved=0
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Fri Sep 23 11:04:12 2022
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Fri, 23 Sep 2022 11:04:12 +0200
+Subject: [Rd] Date method of as.POSIXct does not respect tz
+In-Reply-To: <25389.26365.938007.477851@hornik.net>
+References: <65932fa5-535d-19e4-2a70-7a6ffd10dfa4@thuenen.de>
+ <23293.49665.770796.423446@stat.math.ethz.ch>
+ <4892f293-b399-45eb-1ee8-ea05afd8365b@thuenen.de>
+ <25389.25690.643428.329556@stat.math.ethz.ch>
+ <25389.26365.938007.477851@hornik.net>
+Message-ID: <25389.30348.53955.824968@stat.math.ethz.ch>
+
+>>>>> Kurt Hornik 
+>>>>>     on Fri, 23 Sep 2022 09:57:49 +0200 writes:
+
+>>>>> Martin Maechler writes:
+
+    > Currently in R-devel,
+
+    R> as.POSIXlt.Date
+    > function (x, ...) 
+    > {
+    >    if (any((y <- unclass(x)) > .Machine$integer.max, na.rm = TRUE)) 
+    >         as.POSIXlt(.POSIXct(y * 86400), tz = "UTC")
+    >    else .Internal(Date2POSIXlt(x))
+    > }
+
+    R> as.POSIXct.Date
+    > function (x, ...) 
+    > .POSIXct(unclass(x) * 86400)
+
+    > Adding tz to the latter is easy, and the former could do the if() part
+    > also with a given tz without needing to change the .Internal?
+
+Genau!  Even more elegantly than I first thought when I wrote
+"post-processing":
+
+The following even adds internal consistency inside as.POSIXlt.Date() :
+
+as.POSIXlt.Date <- function(x, tz = "UTC", ...) {
+    as.POSIXlt(if(any((y <- unclass(x)) > .Machine$integer.max, na.rm = TRUE))
+                   .POSIXct(y * 86400)
+               else
+                   .Internal(Date2POSIXlt(x))
+             , tz = tz)
+}
+
+because now, tz is even *formally* treated the same in both
+cases (whereas previously it only appeared visually in one case).
+
+So probably, another reason to go there.
+Note that I also think we'd keep the    tz = "UTZ"
+default argument, even when the
+other  as.POSIX[cl]t() methods have 'tz = ""'
+
+
+
+>>>>> Roland Fu? 
+>>>>>     on Tue, 20 Sep 2022 09:25:52 +0200 writes:
+
+    >>> Hello, May I follow up on this? Has it fallen through the
+    >>> cracks or were there considerations against passing `tz`
+    >>> to `.POSIXct`?
+
+    >>> Regards,
+    >>> Roland
+
+    >> Hmm...  I don't remember  even though I had replied positively
+    >> to your question in May 2018.
+
+    >> PROS (for allowing 'tz') to be passed to
+    >> ----   as.POSIXct.Date()  and hence ideally also to as.POSIXlt.Date() 
+
+    >> 1) as.POSIXct() and as.POSIXlt()   all show with a 'tz' argument
+    >> on the help page, and hence for consistency users should
+    >> really expect  that 'tz = ".."'  also works in these two cases:
+
+    >> Usage:
+
+    >> as.POSIXct(x, tz = "", ...)
+    >> as.POSIXlt(x, tz = "", ...)
+     
+    >> ## S3 method for class 'character'
+    >> as.POSIXlt(x, tz = "", format,
+    >> tryFormats = c("%Y-%m-%d %H:%M:%OS",
+    >> "%Y/%m/%d %H:%M:%OS",
+    >> "%Y-%m-%d %H:%M",
+    >> "%Y/%m/%d %H:%M",
+    >> "%Y-%m-%d",
+    >> "%Y/%m/%d"),
+    >> optional = FALSE, ...)
+    >> ## Default S3 method:
+    >> as.POSIXlt(x, tz = "",
+    >> optional = FALSE, ...)
+    >> ## S3 method for class 'numeric'
+    >> as.POSIXlt(x, tz = "", origin, ...)
+
+
+    >> 2) It is easy to be implemented for  as.POSIXct()   as you found
+    >> already in 2018.
+
+
+    >> CONS:
+    >> -----
+
+    >> 3) The 'Details:' section on the help page,
+    >> end of 1st paragraph says
+
+    >> Dates without times are treated as being at midnight UTC.
+
+    >> So the current hardwired behavior is documented.
+
+    >> 4a) For  as.POSIXlt.Date()  to allow passing 'tz' needs changes
+    >> in the C code,  i.e., is considerable more work than for the as.POSIXct(),
+    >> (or actually just post-processing in the R code, much less work)
+
+    >> 4b) Only changing the behavior for as.POSIXct()  but not for as.POSIXlt()
+    >> is also an inconsistency.
+
+
+    >> My personal inclination would still be to do the change,
+    >> by giving most weight to  '1)' above.
+
+    >> What do other experienced R developers think ?
+
+    >> Martin
+
+
+    >>> Am 17.05.2018 um 19:55 schrieb Martin Maechler:
+    >>>>>>>>> Roland Fu? on Wed, 16 May 2018 17:21:07 +0200
+    >>>>>>>>> writes:
+    >>>> > R 3.5.0 Is it intended that the Date method of
+    >>>> as.POSIXct > does not respect the tz parameter? I suggest
+    >>>> changing > as.POSIXct.Date
+    >>>> 
+    >>>> which is
+    >>>> 
+    >>>> function (x, ...) .POSIXct(unclass(x) * 86400)
+    >>>> 
+    >>>> > to this:
+    >>>> 
+    >>>> function (x, tz = "", ...)  .POSIXct(unclass(x) * 86400,
+    >>>> tz = tz)
+    >>>> 
+    >>>> or rather just forward the '...', i.e., use
+    >>>> 
+    >>>> function (x, ...) .POSIXct(unclass(x) * 86400, ...)
+    >>>> 
+    >>>> ??
+    >>>> 
+    >>>> > Currently, the best workaround seems to be using the >
+    >>>> character method if one doesn't want the default timezone
+    >>>> > (which is often an annoying DST timezone).
+    >>>> 
+    >>>> > This came up on Stack Overflow: >
+    >>>> https://stackoverflow.com/q/50373340/1412059
+    >>>> 
+    >>>> > --
+    >>>> > Roland
+    >>>> 
+    >>>> Thank you Roland for your notice (and the help on SO).
+    >>>> 
+    >>>> Best, Martin
+
+    >>> -- 
+    >>> Dr. Roland Fu?
+
+    >>> Th?nen-Institut f?r Agrarklimaschutz/ Th?nen Institute of
+    >>> Climate-Smart Agriculture
+
+    >>> Bundesallee 65 D-38116 Braunschweig, Germany
+
+    >>> Tel.: ++49 531 596 2627 Fax: ++49 531 596 2699 Email:
+    >>> roland.fuss at thuenen.de
+
+    >>> Arbeitsgruppe "Emissionsberichterstattung"/ Working group
+    >>> "Emission Inventories" Email:
+    >>> emissionsinventare at thuenen.de
+
+    >>> Das Johann Heinrich von Th?nen-Institut,
+    >>> Bundesforschungsinstitut f?r L?ndliche R?ume, Wald und
+    >>> Fischerei ? kurz: Th?nen-Institut ? besteht aus 15
+    >>> Fachinstituten, die in den Bereichen ?konomie, ?kologie
+    >>> und Technologie forschen und die Politik beraten.
+
+    >>> The Johann Heinrich von Th?nen Institute, Federal Research
+    >>> Institute for Rural Areas, Forestry and Fisheries ? Th?nen
+    >>> Institute in brief ? consists of 15 specialized institutes
+    >>> that carry out research and provide policy advice in the
+    >>> fields of economy, ecology and technology.
+
+    >> ______________________________________________
+    >> R-devel at r-project.org mailing list
+    >> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Fri Sep 23 11:54:57 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Fri, 23 Sep 2022 05:54:57 -0400
+Subject: [Rd] 
+ Should package version requirements assume installation from
+ sources?
+In-Reply-To: <bf1ca8d1-37f9-6ec1-59d3-692f0fb563ba@gmail.com>
+References: <b3e53fa9-b0e0-a8c8-147a-c1c56348f3e9@gmail.com>
+ <bf1ca8d1-37f9-6ec1-59d3-692f0fb563ba@gmail.com>
+Message-ID: <60965ee5-ab64-98a9-eb1d-f6a46b7b5d86@gmail.com>
+
+This issue may be the culprit in an obscure bug that's been reported on 
+R-package-devel:  see 
+https://stat.ethz.ch/pipermail/r-package-devel/2022q3/008481.html.  It 
+appears that some ggplot2 version 3.4.0 code is being run even though 
+3.3.6 is the version on CRAN, and 3.3.6 is *also* being run in the same 
+check session.
+
+Duncan Murdoch
+
+On 14/09/2022 6:04 a.m., Duncan Murdoch wrote:
+> On 13/09/2022 5:45 p.m., Mikael Jagan wrote:
+>> [Arguably also appropriate for R-package-devel, but posted to R-devel
+>>        as the discussion is aimed primarily at "experts" ... ]
+>>
+>> We, the authors of Matrix, have encountered a somewhat subtle issue
+>> induced by caching of S4 classes and methods in package namespaces.
+>>
+>> The namespaces of three reverse dependent packages (SeuratObject, conText,
+>> mcmcsae) cache the formal definition of our virtual class Matrix (and some
+>> subclasses).  For example:
+>>
+>>    > ns <- asNamespace("SeuratObject")
+>>    > grep("^[.]__C__.*Matrix$", names(ns), value = TRUE)
+>> [1] ".__C__dMatrix"       ".__C__compMatrix"    ".__C__AnyMatrix"
+>> [4] ".__C__generalMatrix" ".__C__CsparseMatrix" ".__C__sparseMatrix"
+>> [7] ".__C__dsparseMatrix" ".__C__Matrix"
+>>
+>> The cached definition (which includes a _validity method_) is obtained from
+>> the version of Matrix available when the reverse dependent package was built
+>> from sources.  For example, if SeuratObject was built under Matrix 1.4-1,
+>> then we get:
+>>
+>>    > getValidity(ns$.__C__Matrix)
+>> function (object)
+>> {
+>>        if (!isTRUE(r <- .Call(Dim_validate, object, "Matrix")))
+>>            r
+>>        else .Call(dimNames_validate, object)
+>> }
+>> <bytecode: 0x11e7ca508>
+>> <environment: namespace:Matrix>
+>>
+>> whereas if SeuratObject was built under Matrix >= 1.5-0, then we get:
+>>
+>>    > getValidity(ns$.__C__Matrix)
+>> function (object)
+>> .Call(Matrix_validate, object)
+>> <bytecode: 0x107dc1698>
+>> <environment: namespace:Matrix>
+>>
+>> There are two "questions" here:
+>>
+>> 1.  The symbol 'Matrix_validate' is not defined until Matrix 1.5-0.
+>>        Is it necessary, for this reason alone, for SeuratObject to have
+>>        'Imports: Matrix (>= 1.5-0)'?  Or can SeuratObject continue using
+>>        'Imports: Matrix (>= 1.3-3)', at the risk of errors like
+>>
+>>        > Error: object 'Matrix_validate' not found
+>>
+>>        (as already seen here: https://stackoverflow.com/questions/73700130)?
+>>
+>>        Note that this error would not occur for anyone installing SeuratObject
+>>        from sources, unless they decide to _downgrade_ Matrix after doing so.
+>>        Hence this primarily concerns Windows and macOS where R users would
+>>        typically install a binary built by CRAN (i.e., not on their system).
+>>
+>>        We are aware that package TMB tests in .onLoad() that the current Matrix
+>>        version is equal to or greater than the version available at build time,
+>>        thus avoiding a "strict" version requirement, but do not want this practice
+>>        to spread ...
+>>
+>> 2.  For how long should Matrix retain the superceded 'Dim_validate' and
+>>        'dimNames_validate', in order to ensure that "stale" cached validity
+>>        methods continue to work?
+>>
+>> We hope that this discussion will highlight the potential ramifications
+>> of importing classes and methods from other packages, and having one's
+>> classes and methods imported _by_ other packages, especially for version
+>> requirements.
+> 
+> This sounds like a bug or bad design in the S4 system, i.e. caching
+> things without a way to detect or update when the cache becomes stale.
+> 
+> Is it really necessary to cache things as part of the binary package, or
+> could they be put in place when needed using lazy loading, getting a
+> copy from the loaded copy of Matrix?
+> 
+> Duncan Murdoch
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Fri Sep 23 12:09:14 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Fri, 23 Sep 2022 06:09:14 -0400
+Subject: [Rd] 
+ Should package version requirements assume installation from
+ sources?
+In-Reply-To: <60965ee5-ab64-98a9-eb1d-f6a46b7b5d86@gmail.com>
+References: <b3e53fa9-b0e0-a8c8-147a-c1c56348f3e9@gmail.com>
+ <bf1ca8d1-37f9-6ec1-59d3-692f0fb563ba@gmail.com>
+ <60965ee5-ab64-98a9-eb1d-f6a46b7b5d86@gmail.com>
+Message-ID: <cc77b4f4-10ca-04ac-6dac-5de2f70eb5e9@gmail.com>
+
+No, it looks as though this is an unrelated bit of caching being done by 
+rstan.  During startup, it saves some ggplot defaults in an internal 
+environment ".rstanvis_defaults"; that captured the ggplot2 3.3.6 
+defaults, which caused problems when being run under ggplot2 3.4.0.
+
+Duncan Murdoch
+
+On 23/09/2022 5:54 a.m., Duncan Murdoch wrote:
+> This issue may be the culprit in an obscure bug that's been reported on
+> R-package-devel:  see
+> https://stat.ethz.ch/pipermail/r-package-devel/2022q3/008481.html.  It
+> appears that some ggplot2 version 3.4.0 code is being run even though
+> 3.3.6 is the version on CRAN, and 3.3.6 is *also* being run in the same
+> check session.
+> 
+> Duncan Murdoch
+> 
+> On 14/09/2022 6:04 a.m., Duncan Murdoch wrote:
+>> On 13/09/2022 5:45 p.m., Mikael Jagan wrote:
+>>> [Arguably also appropriate for R-package-devel, but posted to R-devel
+>>>         as the discussion is aimed primarily at "experts" ... ]
+>>>
+>>> We, the authors of Matrix, have encountered a somewhat subtle issue
+>>> induced by caching of S4 classes and methods in package namespaces.
+>>>
+>>> The namespaces of three reverse dependent packages (SeuratObject, conText,
+>>> mcmcsae) cache the formal definition of our virtual class Matrix (and some
+>>> subclasses).  For example:
+>>>
+>>>     > ns <- asNamespace("SeuratObject")
+>>>     > grep("^[.]__C__.*Matrix$", names(ns), value = TRUE)
+>>> [1] ".__C__dMatrix"       ".__C__compMatrix"    ".__C__AnyMatrix"
+>>> [4] ".__C__generalMatrix" ".__C__CsparseMatrix" ".__C__sparseMatrix"
+>>> [7] ".__C__dsparseMatrix" ".__C__Matrix"
+>>>
+>>> The cached definition (which includes a _validity method_) is obtained from
+>>> the version of Matrix available when the reverse dependent package was built
+>>> from sources.  For example, if SeuratObject was built under Matrix 1.4-1,
+>>> then we get:
+>>>
+>>>     > getValidity(ns$.__C__Matrix)
+>>> function (object)
+>>> {
+>>>         if (!isTRUE(r <- .Call(Dim_validate, object, "Matrix")))
+>>>             r
+>>>         else .Call(dimNames_validate, object)
+>>> }
+>>> <bytecode: 0x11e7ca508>
+>>> <environment: namespace:Matrix>
+>>>
+>>> whereas if SeuratObject was built under Matrix >= 1.5-0, then we get:
+>>>
+>>>     > getValidity(ns$.__C__Matrix)
+>>> function (object)
+>>> .Call(Matrix_validate, object)
+>>> <bytecode: 0x107dc1698>
+>>> <environment: namespace:Matrix>
+>>>
+>>> There are two "questions" here:
+>>>
+>>> 1.  The symbol 'Matrix_validate' is not defined until Matrix 1.5-0.
+>>>         Is it necessary, for this reason alone, for SeuratObject to have
+>>>         'Imports: Matrix (>= 1.5-0)'?  Or can SeuratObject continue using
+>>>         'Imports: Matrix (>= 1.3-3)', at the risk of errors like
+>>>
+>>>         > Error: object 'Matrix_validate' not found
+>>>
+>>>         (as already seen here: https://stackoverflow.com/questions/73700130)?
+>>>
+>>>         Note that this error would not occur for anyone installing SeuratObject
+>>>         from sources, unless they decide to _downgrade_ Matrix after doing so.
+>>>         Hence this primarily concerns Windows and macOS where R users would
+>>>         typically install a binary built by CRAN (i.e., not on their system).
+>>>
+>>>         We are aware that package TMB tests in .onLoad() that the current Matrix
+>>>         version is equal to or greater than the version available at build time,
+>>>         thus avoiding a "strict" version requirement, but do not want this practice
+>>>         to spread ...
+>>>
+>>> 2.  For how long should Matrix retain the superceded 'Dim_validate' and
+>>>         'dimNames_validate', in order to ensure that "stale" cached validity
+>>>         methods continue to work?
+>>>
+>>> We hope that this discussion will highlight the potential ramifications
+>>> of importing classes and methods from other packages, and having one's
+>>> classes and methods imported _by_ other packages, especially for version
+>>> requirements.
+>>
+>> This sounds like a bug or bad design in the S4 system, i.e. caching
+>> things without a way to detect or update when the cache becomes stale.
+>>
+>> Is it really necessary to cache things as part of the binary package, or
+>> could they be put in place when needed using lazy loading, getting a
+>> copy from the loaded copy of Matrix?
+>>
+>> Duncan Murdoch
+>
+
+
+From |uc@r @end|ng |rom |edor@project@org  Fri Sep 23 17:22:49 2022
+From: |uc@r @end|ng |rom |edor@project@org (=?UTF-8?Q?I=C3=B1aki_Ucar?=)
+Date: Fri, 23 Sep 2022 17:22:49 +0200
+Subject: [Rd] Proposal to limit Internet access during package load
+Message-ID: <CALEXWq11fOZ9E4bbDY1=JKah+hADBLeAvO1ddfq1VQB0cav9cg@mail.gmail.com>
+
+Hi all,
+
+I'd like to open this debate here, because IMO this is a big issue.
+Many packages do this for various reasons, some more legitimate than
+others, but I think that this shouldn't be allowed, because it
+basically means that installation fails in a machine without Internet
+access (which happens e.g. in Linux distro builders for security
+reasons).
+
+Now, what if connection is suppressed during package load? There are
+basically three use cases out there:
+
+(1) The package requires additional files for the installation (e.g.
+the source code of an external library) that cannot be bundled into
+the package due to CRAN restrictions (size).
+(2) The package requires additional files for using it (e.g.,
+datasets, a JAR...) that cannot be bundled into the package due to
+CRAN restrictions (size).
+(3) Other spurious reasons (e.g. the maintainer decided that package
+load was a good place to check an online service availability, etc.).
+
+Again IMO, (3) shouldn't be allowed in any case; (2) should be a
+separate function that the user actively calls to download the files,
+and those files should be placed into the user dir, and (3) is the
+only legitimate use, but then other mechanism should be provided to
+avoid connections during package load.
+
+My proposal to support (3) would be to add a new field in the
+DESCRIPTION, "Additional_sources", which would be a comma separated
+list of additional resources to download during R CMD INSTALL. Those
+sources would be downloaded by R CMD INSTALL if not provided via an
+option (to support offline installations), and would be placed in a
+predefined place for the package to find and configure them (via an
+environment variable or in a predefined subdirectory).
+
+This proposal has several advantages. Apart from the obvious one
+(Internet access during package load can be limited without losing
+current functionalities), it gives more visibility to the resources
+that packages are using during the installation phase, and thus makes
+those installations more reproducible and more secure.
+
+Best,
+-- 
+I?aki ?car
+
+
+From |uc@r @end|ng |rom |edor@project@org  Fri Sep 23 17:29:26 2022
+From: |uc@r @end|ng |rom |edor@project@org (=?UTF-8?Q?I=C3=B1aki_Ucar?=)
+Date: Fri, 23 Sep 2022 17:29:26 +0200
+Subject: [Rd] Proposal to limit Internet access during package load
+In-Reply-To: <CALEXWq11fOZ9E4bbDY1=JKah+hADBLeAvO1ddfq1VQB0cav9cg@mail.gmail.com>
+References: <CALEXWq11fOZ9E4bbDY1=JKah+hADBLeAvO1ddfq1VQB0cav9cg@mail.gmail.com>
+Message-ID: <CALEXWq3w4o+19j7N25wkzj3Wafn-ACHXJr8vV3+MH35g3jqB-A@mail.gmail.com>
+
+On Fri, 23 Sept 2022 at 17:22, I?aki Ucar <iucar at fedoraproject.org> wrote:
+>
+> [snip]
+> Now, what if connection is suppressed during package load? There are
+> basically three use cases out there:
+>
+> (1) The package requires additional files for the installation (e.g.
+> the source code of an external library) that cannot be bundled into
+> the package due to CRAN restrictions (size).
+> (2) The package requires additional files for using it (e.g.,
+> datasets, a JAR...) that cannot be bundled into the package due to
+> CRAN restrictions (size).
+> (3) Other spurious reasons (e.g. the maintainer decided that package
+> load was a good place to check an online service availability, etc.).
+>
+> Again IMO, (3) shouldn't be allowed in any case; (2) should be a
+> separate function that the user actively calls to download the files,
+> and those files should be placed into the user dir, and (3) is the
+> only legitimate use, but then other mechanism should be provided to
+> avoid connections during package load.
+> [snip]
+
+I meant "(1) is the only legitimate use" above.
+
+-- 
+I?aki ?car
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Sat Sep 24 01:55:18 2022
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Sat, 24 Sep 2022 11:55:18 +1200
+Subject: [Rd] Proposal to limit Internet access during package load
+In-Reply-To: <CALEXWq11fOZ9E4bbDY1=JKah+hADBLeAvO1ddfq1VQB0cav9cg@mail.gmail.com>
+References: <CALEXWq11fOZ9E4bbDY1=JKah+hADBLeAvO1ddfq1VQB0cav9cg@mail.gmail.com>
+Message-ID: <40BA324E-14E5-4EEA-8B50-951617DE0675@R-project.org>
+
+I?aki,
+
+I fully agree, this a very common issue since vast majority of server deployments I have encountered don't allow internet access. In practice this means that such packages are effectively banned.
+
+I would argue that not even (1) or (2) are really an issue, because in fact the CRAN policy doesn't impose any absolute limits on size, it only states that the package should be "of minimum necessary size" which means it shouldn't waste space. If there is no way to reduce the size without impacting functionality, it's perfectly fine.
+
+That said, there are exceptions such as very large datasets (e.g., as distributed by Bioconductor) which are orders of magnitude larger than what is sustainable. I agree that it would be nice to have a mechanism for specifying such sources. So yes, I like the idea, but I'd like to see more real use cases to justify the effort.
+
+The issue with any online downloads, though, is that there is no guarantee of availability - which is real issue for reproducibility. So one could argue that if such external sources are required then they should be on a well-defined, independent, permanent storage such as Zenodo. This could be a matter of policy as opposed to the technical side above which would be adding such support to R CMD INSTALL.
+
+Cheers,
+Simon
+
+
+> On Sep 24, 2022, at 3:22 AM, I?aki Ucar <iucar at fedoraproject.org> wrote:
+> 
+> Hi all,
+> 
+> I'd like to open this debate here, because IMO this is a big issue.
+> Many packages do this for various reasons, some more legitimate than
+> others, but I think that this shouldn't be allowed, because it
+> basically means that installation fails in a machine without Internet
+> access (which happens e.g. in Linux distro builders for security
+> reasons).
+> 
+> Now, what if connection is suppressed during package load? There are
+> basically three use cases out there:
+> 
+> (1) The package requires additional files for the installation (e.g.
+> the source code of an external library) that cannot be bundled into
+> the package due to CRAN restrictions (size).
+> (2) The package requires additional files for using it (e.g.,
+> datasets, a JAR...) that cannot be bundled into the package due to
+> CRAN restrictions (size).
+> (3) Other spurious reasons (e.g. the maintainer decided that package
+> load was a good place to check an online service availability, etc.).
+> 
+> Again IMO, (3) shouldn't be allowed in any case; (2) should be a
+> separate function that the user actively calls to download the files,
+> and those files should be placed into the user dir, and (3) is the
+> only legitimate use, but then other mechanism should be provided to
+> avoid connections during package load.
+> 
+> My proposal to support (3) would be to add a new field in the
+> DESCRIPTION, "Additional_sources", which would be a comma separated
+> list of additional resources to download during R CMD INSTALL. Those
+> sources would be downloaded by R CMD INSTALL if not provided via an
+> option (to support offline installations), and would be placed in a
+> predefined place for the package to find and configure them (via an
+> environment variable or in a predefined subdirectory).
+> 
+> This proposal has several advantages. Apart from the obvious one
+> (Internet access during package load can be limited without losing
+> current functionalities), it gives more visibility to the resources
+> that packages are using during the installation phase, and thus makes
+> those installations more reproducible and more secure.
+> 
+> Best,
+> -- 
+> I?aki ?car
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
