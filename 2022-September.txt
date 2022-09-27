@@ -5621,3 +5621,1853 @@ via the list.  It's a good patch, I hope Andre does post there.
 Duncan Murdoch
 
 
+From Andre@G||||bert @end|ng |rom chu-rouen@|r  Mon Sep 26 09:54:56 2022
+From: Andre@G||||bert @end|ng |rom chu-rouen@|r (GILLIBERT, Andre)
+Date: Mon, 26 Sep 2022 07:54:56 +0000
+Subject: [Rd] Better 'undefined columns' error for data.frame
+In-Reply-To: <9bc96a78-45a9-7f10-f03a-8e90cdf62206@gmail.com>
+References: <99227c5557ca497d8dc601407b2592e9@chu-rouen.fr>
+ <57f080ce-b4b0-b7eb-7d54-631c86f1dcc5@gmail.com>
+ <e8d8fcfaa2374271b23573694c137c44@chu-rouen.fr>
+ <25392.41590.490440.844269@rob.eddelbuettel.com>,
+ <9bc96a78-45a9-7f10-f03a-8e90cdf62206@gmail.com>
+Message-ID: <3e19d8324583458d8c3cfd1b0b5fa194@chu-rouen.fr>
+
+
+
+Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+>
+>
+> On 25/09/2022 2:48 p.m., Dirk Eddelbuettel wrote:
+> >
+> > Andre,
+> >
+> > On 25 September 2022 at 18:09, GILLIBERT, Andre wrote:
+> > | Please, find the patch attached, based on the latest R SVN trunk code.
+> >
+> > Well the mailing list software tends to drop attachments.  There is a reason
+> > all these emails suggest to use bugs.r-project.org.
+> >
+>
+> I was named in the posting, so I saw the patch file, my copy didn't come
+> via the list.  It's a good patch, I hope Andre does post there.
+>
+> Duncan Murdoch
+
+Thank you.
+I reported an "enhancement" #18409 at https://bugs.r-project.org/show_bug.cgi?id=18409
+I took in account your suggestions to improve error messages.
+
+I choosed to provide different messages for character and logical/numeric indices, but this increases the code size, the number of code paths and the number of translations to perform.
+If you have suggestions to improve the patch, I am open to comments and ideas.
+
+--
+Sincerely
+Andre GILLIBERT
+
+	[[alternative HTML version deleted]]
+
+
+From @|gm@p| @end|ng |rom po@teo@net  Sun Sep 25 23:27:38 2022
+From: @|gm@p| @end|ng |rom po@teo@net (Panagiotis Skintzos)
+Date: Sun, 25 Sep 2022 21:27:38 +0000
+Subject: [Rd] Question about grid.group compositing operators in cairo
+Message-ID: <0eaac5fb-b749-1470-c2a7-9f2f8215ace9@posteo.net>
+
+Hello,
+
+I'm trying to update ggiraph package in graphic engine v15 (currently we 
+support up to v14).
+
+I've implemented the group operators and when I compare the outputs of 
+ggiraph::dsvg with the outputs of svg/png, I noticed some weird results.
+
+Specifically, some operators in cairo (in, out, dest.in, dest.atop) give 
+strange output, when any source element in the group has a stroke color 
+defined.
+
+I attach three example images, where two stroked rectangles are used as 
+source (right) and destination (left).
+
+cairo.over.png shows the result of the over operator in cairo
+
+cairo.in.png shows the result of the in operator in cairo
+
+dsvg.in.png shows the result of the in operator in dsvg
+
+
+You can see the difference between cairo.in.png and dsvg.in.png. I found 
+out why I get different results:
+
+In dsvg implementation there is one drawing operation: Draw the source 
+element, as whole (fill and stroke) over the destination element (using 
+feComposite filter)
+
+In cairo implementation though there are two operations: Apply the fill 
+on source and draw over the destination and then apply the stroke and 
+draw over the result of the previous operation.
+
+I'm not sure if this is intentional or not. Shouldn't the source element 
+being drawn first as whole (fill and stroke with over operator) and then 
+apply the group operator and draw it over the destination? It would seem 
+more logical that way.
+
+
+Thanks,
+
+Panagiotis
+
+
+-------------- next part --------------
+A non-text attachment was scrubbed...
+Name: cairo.over.png
+Type: image/png
+Size: 4485 bytes
+Desc: not available
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20220925/6fb655c2/attachment.png>
+
+-------------- next part --------------
+A non-text attachment was scrubbed...
+Name: cairo.in.png
+Type: image/png
+Size: 8773 bytes
+Desc: not available
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20220925/6fb655c2/attachment-0001.png>
+
+-------------- next part --------------
+A non-text attachment was scrubbed...
+Name: dsvg.in.png
+Type: image/png
+Size: 9638 bytes
+Desc: not available
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20220925/6fb655c2/attachment-0002.png>
+
+From |uc@r @end|ng |rom |edor@project@org  Mon Sep 26 21:25:56 2022
+From: |uc@r @end|ng |rom |edor@project@org (=?UTF-8?Q?I=C3=B1aki_Ucar?=)
+Date: Mon, 26 Sep 2022 21:25:56 +0200
+Subject: [Rd] Proposal to limit Internet access during package load
+In-Reply-To: <40BA324E-14E5-4EEA-8B50-951617DE0675@R-project.org>
+References: <CALEXWq11fOZ9E4bbDY1=JKah+hADBLeAvO1ddfq1VQB0cav9cg@mail.gmail.com>
+ <40BA324E-14E5-4EEA-8B50-951617DE0675@R-project.org>
+Message-ID: <CALEXWq13piwUazHc-rH7bKFvpydurak0QcO1HhxVQg8aF=4KgQ@mail.gmail.com>
+
+On Sat, 24 Sept 2022 at 01:55, Simon Urbanek
+<simon.urbanek at r-project.org> wrote:
+>
+> I?aki,
+>
+> I fully agree, this a very common issue since vast majority of server deployments I have encountered don't allow internet access. In practice this means that such packages are effectively banned.
+>
+> I would argue that not even (1) or (2) are really an issue, because in fact the CRAN policy doesn't impose any absolute limits on size, it only states that the package should be "of minimum necessary size" which means it shouldn't waste space. If there is no way to reduce the size without impacting functionality, it's perfectly fine.
+
+"Packages should be of the minimum necessary size" is subject to
+interpretation. And in practice, there is an issue with e.g. packages
+that "bundle" big third-party libraries. There are also packages that
+require downloading precompiled code, JARs... at installation time.
+
+> That said, there are exceptions such as very large datasets (e.g., as distributed by Bioconductor) which are orders of magnitude larger than what is sustainable. I agree that it would be nice to have a mechanism for specifying such sources. So yes, I like the idea, but I'd like to see more real use cases to justify the effort.
+
+"More real use cases" like in "more use cases" or like in "the
+previous ones are not real ones"? :)
+
+> The issue with any online downloads, though, is that there is no guarantee of availability - which is real issue for reproducibility. So one could argue that if such external sources are required then they should be on a well-defined, independent, permanent storage such as Zenodo. This could be a matter of policy as opposed to the technical side above which would be adding such support to R CMD INSTALL.
+
+Not necessarily. If the package declares the additional sources in the
+DESCRIPTION (probably with hashes), that's a big improvement over the
+current state of things, in which basically we don't know what the
+package tries download, then it may fail, and finally there's no
+guarantee that it's what the author intended in the first place.
+
+But on top of this, R could add a CMD to download those, and then some
+lookaside storage could be used on CRAN. This is e.g. how RPM
+packaging works: the spec declares all the sources, they are
+downloaded once, hashed and stored in a lookaside cache. Then package
+building doesn't need general Internet connectivity, just access to
+the cache.
+
+I?aki
+
+>
+> Cheers,
+> Simon
+>
+>
+> > On Sep 24, 2022, at 3:22 AM, I?aki Ucar <iucar at fedoraproject.org> wrote:
+> >
+> > Hi all,
+> >
+> > I'd like to open this debate here, because IMO this is a big issue.
+> > Many packages do this for various reasons, some more legitimate than
+> > others, but I think that this shouldn't be allowed, because it
+> > basically means that installation fails in a machine without Internet
+> > access (which happens e.g. in Linux distro builders for security
+> > reasons).
+> >
+> > Now, what if connection is suppressed during package load? There are
+> > basically three use cases out there:
+> >
+> > (1) The package requires additional files for the installation (e.g.
+> > the source code of an external library) that cannot be bundled into
+> > the package due to CRAN restrictions (size).
+> > (2) The package requires additional files for using it (e.g.,
+> > datasets, a JAR...) that cannot be bundled into the package due to
+> > CRAN restrictions (size).
+> > (3) Other spurious reasons (e.g. the maintainer decided that package
+> > load was a good place to check an online service availability, etc.).
+> >
+> > Again IMO, (3) shouldn't be allowed in any case; (2) should be a
+> > separate function that the user actively calls to download the files,
+> > and those files should be placed into the user dir, and (3) is the
+> > only legitimate use, but then other mechanism should be provided to
+> > avoid connections during package load.
+> >
+> > My proposal to support (3) would be to add a new field in the
+> > DESCRIPTION, "Additional_sources", which would be a comma separated
+> > list of additional resources to download during R CMD INSTALL. Those
+> > sources would be downloaded by R CMD INSTALL if not provided via an
+> > option (to support offline installations), and would be placed in a
+> > predefined place for the package to find and configure them (via an
+> > environment variable or in a predefined subdirectory).
+> >
+> > This proposal has several advantages. Apart from the obvious one
+> > (Internet access during package load can be limited without losing
+> > current functionalities), it gives more visibility to the resources
+> > that packages are using during the installation phase, and thus makes
+> > those installations more reproducible and more secure.
+> >
+> > Best,
+> > --
+> > I?aki ?car
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+>
+
+
+-- 
+I?aki ?car
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Mon Sep 26 21:49:43 2022
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Tue, 27 Sep 2022 08:49:43 +1300
+Subject: [Rd] Proposal to limit Internet access during package load
+In-Reply-To: <CALEXWq13piwUazHc-rH7bKFvpydurak0QcO1HhxVQg8aF=4KgQ@mail.gmail.com>
+References: <CALEXWq11fOZ9E4bbDY1=JKah+hADBLeAvO1ddfq1VQB0cav9cg@mail.gmail.com>
+ <40BA324E-14E5-4EEA-8B50-951617DE0675@R-project.org>
+ <CALEXWq13piwUazHc-rH7bKFvpydurak0QcO1HhxVQg8aF=4KgQ@mail.gmail.com>
+Message-ID: <6B6EB764-7DBC-4D5F-A47A-1ADADE1927A8@R-project.org>
+
+
+
+> On Sep 27, 2022, at 8:25 AM, I?aki Ucar <iucar at fedoraproject.org> wrote:
+> 
+> On Sat, 24 Sept 2022 at 01:55, Simon Urbanek
+> <simon.urbanek at r-project.org> wrote:
+>> 
+>> I?aki,
+>> 
+>> I fully agree, this a very common issue since vast majority of server deployments I have encountered don't allow internet access. In practice this means that such packages are effectively banned.
+>> 
+>> I would argue that not even (1) or (2) are really an issue, because in fact the CRAN policy doesn't impose any absolute limits on size, it only states that the package should be "of minimum necessary size" which means it shouldn't waste space. If there is no way to reduce the size without impacting functionality, it's perfectly fine.
+> 
+> "Packages should be of the minimum necessary size" is subject to
+> interpretation. And in practice, there is an issue with e.g. packages
+> that "bundle" big third-party libraries. There are also packages that
+> require downloading precompiled code, JARs... at installation time.
+> 
+
+JARs are part of the package, so that's a valid use, no question there, that's how Java packages do this already.
+
+Downloading pre-compiled binaries is something that shouldn't be done and a whole can of worms (since those are not sources and it *is* specific to the platform, os etc.) that is entirely separate, but worth a separate discussion. So I still don't see any use cases for actual sources. I do see a need for better specification of external dependencies which are not part of the package such that those can be satisfied automatically - but that's not the problem you asked about.
+
+
+>> That said, there are exceptions such as very large datasets (e.g., as distributed by Bioconductor) which are orders of magnitude larger than what is sustainable. I agree that it would be nice to have a mechanism for specifying such sources. So yes, I like the idea, but I'd like to see more real use cases to justify the effort.
+> 
+> "More real use cases" like in "more use cases" or like in "the
+> previous ones are not real ones"? :)
+> 
+>> The issue with any online downloads, though, is that there is no guarantee of availability - which is real issue for reproducibility. So one could argue that if such external sources are required then they should be on a well-defined, independent, permanent storage such as Zenodo. This could be a matter of policy as opposed to the technical side above which would be adding such support to R CMD INSTALL.
+> 
+> Not necessarily. If the package declares the additional sources in the
+> DESCRIPTION (probably with hashes), that's a big improvement over the
+> current state of things, in which basically we don't know what the
+> package tries download, then it may fail, and finally there's no
+> guarantee that it's what the author intended in the first place.
+> 
+> But on top of this, R could add a CMD to download those, and then some
+> lookaside storage could be used on CRAN. This is e.g. how RPM
+> packaging works: the spec declares all the sources, they are
+> downloaded once, hashed and stored in a lookaside cache. Then package
+> building doesn't need general Internet connectivity, just access to
+> the cache.
+> 
+
+Sure, I fully agree that it would be a good first step, but I'm still waiting for examples ;).
+
+Cheers,
+Simon
+
+
+> I?aki
+> 
+>> 
+>> Cheers,
+>> Simon
+>> 
+>> 
+>>> On Sep 24, 2022, at 3:22 AM, I?aki Ucar <iucar at fedoraproject.org> wrote:
+>>> 
+>>> Hi all,
+>>> 
+>>> I'd like to open this debate here, because IMO this is a big issue.
+>>> Many packages do this for various reasons, some more legitimate than
+>>> others, but I think that this shouldn't be allowed, because it
+>>> basically means that installation fails in a machine without Internet
+>>> access (which happens e.g. in Linux distro builders for security
+>>> reasons).
+>>> 
+>>> Now, what if connection is suppressed during package load? There are
+>>> basically three use cases out there:
+>>> 
+>>> (1) The package requires additional files for the installation (e.g.
+>>> the source code of an external library) that cannot be bundled into
+>>> the package due to CRAN restrictions (size).
+>>> (2) The package requires additional files for using it (e.g.,
+>>> datasets, a JAR...) that cannot be bundled into the package due to
+>>> CRAN restrictions (size).
+>>> (3) Other spurious reasons (e.g. the maintainer decided that package
+>>> load was a good place to check an online service availability, etc.).
+>>> 
+>>> Again IMO, (3) shouldn't be allowed in any case; (2) should be a
+>>> separate function that the user actively calls to download the files,
+>>> and those files should be placed into the user dir, and (3) is the
+>>> only legitimate use, but then other mechanism should be provided to
+>>> avoid connections during package load.
+>>> 
+>>> My proposal to support (3) would be to add a new field in the
+>>> DESCRIPTION, "Additional_sources", which would be a comma separated
+>>> list of additional resources to download during R CMD INSTALL. Those
+>>> sources would be downloaded by R CMD INSTALL if not provided via an
+>>> option (to support offline installations), and would be placed in a
+>>> predefined place for the package to find and configure them (via an
+>>> environment variable or in a predefined subdirectory).
+>>> 
+>>> This proposal has several advantages. Apart from the obvious one
+>>> (Internet access during package load can be limited without losing
+>>> current functionalities), it gives more visibility to the resources
+>>> that packages are using during the installation phase, and thus makes
+>>> those installations more reproducible and more secure.
+>>> 
+>>> Best,
+>>> --
+>>> I?aki ?car
+>>> 
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>> 
+>> 
+> 
+> 
+> -- 
+> I?aki ?car
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
+From p@u| @end|ng |rom @t@t@@uck|@nd@@c@nz  Mon Sep 26 21:50:35 2022
+From: p@u| @end|ng |rom @t@t@@uck|@nd@@c@nz (Paul Murrell)
+Date: Tue, 27 Sep 2022 08:50:35 +1300
+Subject: [Rd] Question about grid.group compositing operators in cairo
+In-Reply-To: <0eaac5fb-b749-1470-c2a7-9f2f8215ace9@posteo.net>
+References: <0eaac5fb-b749-1470-c2a7-9f2f8215ace9@posteo.net>
+Message-ID: <c3debb04-04b8-90e8-2315-392105cd9db6@stat.auckland.ac.nz>
+
+Hi
+
+Thanks for the report.  It certainly sounds like I have done something 
+stupid :)  For my debugging and testing could you please share the R 
+code from your tests ?  Thanks!
+
+Paul
+
+On 26/09/22 10:27, Panagiotis Skintzos wrote:
+> Hello,
+> 
+> I'm trying to update ggiraph package in graphic engine v15 (currently we 
+> support up to v14).
+> 
+> I've implemented the group operators and when I compare the outputs of 
+> ggiraph::dsvg with the outputs of svg/png, I noticed some weird results.
+> 
+> Specifically, some operators in cairo (in, out, dest.in, dest.atop) give 
+> strange output, when any source element in the group has a stroke color 
+> defined.
+> 
+> I attach three example images, where two stroked rectangles are used as 
+> source (right) and destination (left).
+> 
+> cairo.over.png shows the result of the over operator in cairo
+> 
+> cairo.in.png shows the result of the in operator in cairo
+> 
+> dsvg.in.png shows the result of the in operator in dsvg
+> 
+> 
+> You can see the difference between cairo.in.png and dsvg.in.png. I found 
+> out why I get different results:
+> 
+> In dsvg implementation there is one drawing operation: Draw the source 
+> element, as whole (fill and stroke) over the destination element (using 
+> feComposite filter)
+> 
+> In cairo implementation though there are two operations: Apply the fill 
+> on source and draw over the destination and then apply the stroke and 
+> draw over the result of the previous operation.
+> 
+> I'm not sure if this is intentional or not. Shouldn't the source element 
+> being drawn first as whole (fill and stroke with over operator) and then 
+> apply the group operator and draw it over the destination? It would seem 
+> more logical that way.
+> 
+> 
+> Thanks,
+> 
+> Panagiotis
+> 
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Dr Paul Murrell
+Te Kura Tatauranga | Department of Statistics
+Waipapa Taumata Rau | The University of Auckland
+Private Bag 92019, Auckland 1142, New Zealand
+64 9 3737599 x85392
+paul at stat.auckland.ac.nz
+www.stat.auckland.ac.nz/~paul/
+
+
+From g@bembecker @end|ng |rom gm@||@com  Mon Sep 26 22:02:33 2022
+From: g@bembecker @end|ng |rom gm@||@com (Gabriel Becker)
+Date: Mon, 26 Sep 2022 13:02:33 -0700
+Subject: [Rd] Proposal to limit Internet access during package load
+In-Reply-To: <6B6EB764-7DBC-4D5F-A47A-1ADADE1927A8@R-project.org>
+References: <CALEXWq11fOZ9E4bbDY1=JKah+hADBLeAvO1ddfq1VQB0cav9cg@mail.gmail.com>
+ <40BA324E-14E5-4EEA-8B50-951617DE0675@R-project.org>
+ <CALEXWq13piwUazHc-rH7bKFvpydurak0QcO1HhxVQg8aF=4KgQ@mail.gmail.com>
+ <6B6EB764-7DBC-4D5F-A47A-1ADADE1927A8@R-project.org>
+Message-ID: <CAD4oTHFd20rot+ePE69dy-TAHP4iS2D2okdRHwqNb14Y1dDy_w@mail.gmail.com>
+
+Hi Simon,
+
+The example of this I'm aware of that is most popular and widely used "in
+the wild" is the stringi package (which is a dep of the widely used stringr
+pkg) whose configure file downloads the ICU Data Library (icudt).
+
+See https://github.com/gagolews/stringi/blob/master/configure#L5412
+
+Note it does have some sort of workaround in place for non-internet-capable
+build machines, but it is external (the build in question fails without the
+workaround already explicitly performed).
+
+Best,
+~G
+
+
+
+On Mon, Sep 26, 2022 at 12:50 PM Simon Urbanek <simon.urbanek at r-project.org>
+wrote:
+
+>
+>
+> > On Sep 27, 2022, at 8:25 AM, I?aki Ucar <iucar at fedoraproject.org> wrote:
+> >
+> > On Sat, 24 Sept 2022 at 01:55, Simon Urbanek
+> > <simon.urbanek at r-project.org> wrote:
+> >>
+> >> I?aki,
+> >>
+> >> I fully agree, this a very common issue since vast majority of server
+> deployments I have encountered don't allow internet access. In practice
+> this means that such packages are effectively banned.
+> >>
+> >> I would argue that not even (1) or (2) are really an issue, because in
+> fact the CRAN policy doesn't impose any absolute limits on size, it only
+> states that the package should be "of minimum necessary size" which means
+> it shouldn't waste space. If there is no way to reduce the size without
+> impacting functionality, it's perfectly fine.
+> >
+> > "Packages should be of the minimum necessary size" is subject to
+> > interpretation. And in practice, there is an issue with e.g. packages
+> > that "bundle" big third-party libraries. There are also packages that
+> > require downloading precompiled code, JARs... at installation time.
+> >
+>
+> JARs are part of the package, so that's a valid use, no question there,
+> that's how Java packages do this already.
+>
+> Downloading pre-compiled binaries is something that shouldn't be done and
+> a whole can of worms (since those are not sources and it *is* specific to
+> the platform, os etc.) that is entirely separate, but worth a separate
+> discussion. So I still don't see any use cases for actual sources. I do see
+> a need for better specification of external dependencies which are not part
+> of the package such that those can be satisfied automatically - but that's
+> not the problem you asked about.
+>
+>
+> >> That said, there are exceptions such as very large datasets (e.g., as
+> distributed by Bioconductor) which are orders of magnitude larger than what
+> is sustainable. I agree that it would be nice to have a mechanism for
+> specifying such sources. So yes, I like the idea, but I'd like to see more
+> real use cases to justify the effort.
+> >
+> > "More real use cases" like in "more use cases" or like in "the
+> > previous ones are not real ones"? :)
+> >
+> >> The issue with any online downloads, though, is that there is no
+> guarantee of availability - which is real issue for reproducibility. So one
+> could argue that if such external sources are required then they should be
+> on a well-defined, independent, permanent storage such as Zenodo. This
+> could be a matter of policy as opposed to the technical side above which
+> would be adding such support to R CMD INSTALL.
+> >
+> > Not necessarily. If the package declares the additional sources in the
+> > DESCRIPTION (probably with hashes), that's a big improvement over the
+> > current state of things, in which basically we don't know what the
+> > package tries download, then it may fail, and finally there's no
+> > guarantee that it's what the author intended in the first place.
+> >
+> > But on top of this, R could add a CMD to download those, and then some
+> > lookaside storage could be used on CRAN. This is e.g. how RPM
+> > packaging works: the spec declares all the sources, they are
+> > downloaded once, hashed and stored in a lookaside cache. Then package
+> > building doesn't need general Internet connectivity, just access to
+> > the cache.
+> >
+>
+> Sure, I fully agree that it would be a good first step, but I'm still
+> waiting for examples ;).
+>
+> Cheers,
+> Simon
+>
+>
+> > I?aki
+> >
+> >>
+> >> Cheers,
+> >> Simon
+> >>
+> >>
+> >>> On Sep 24, 2022, at 3:22 AM, I?aki Ucar <iucar at fedoraproject.org>
+> wrote:
+> >>>
+> >>> Hi all,
+> >>>
+> >>> I'd like to open this debate here, because IMO this is a big issue.
+> >>> Many packages do this for various reasons, some more legitimate than
+> >>> others, but I think that this shouldn't be allowed, because it
+> >>> basically means that installation fails in a machine without Internet
+> >>> access (which happens e.g. in Linux distro builders for security
+> >>> reasons).
+> >>>
+> >>> Now, what if connection is suppressed during package load? There are
+> >>> basically three use cases out there:
+> >>>
+> >>> (1) The package requires additional files for the installation (e.g.
+> >>> the source code of an external library) that cannot be bundled into
+> >>> the package due to CRAN restrictions (size).
+> >>> (2) The package requires additional files for using it (e.g.,
+> >>> datasets, a JAR...) that cannot be bundled into the package due to
+> >>> CRAN restrictions (size).
+> >>> (3) Other spurious reasons (e.g. the maintainer decided that package
+> >>> load was a good place to check an online service availability, etc.).
+> >>>
+> >>> Again IMO, (3) shouldn't be allowed in any case; (2) should be a
+> >>> separate function that the user actively calls to download the files,
+> >>> and those files should be placed into the user dir, and (3) is the
+> >>> only legitimate use, but then other mechanism should be provided to
+> >>> avoid connections during package load.
+> >>>
+> >>> My proposal to support (3) would be to add a new field in the
+> >>> DESCRIPTION, "Additional_sources", which would be a comma separated
+> >>> list of additional resources to download during R CMD INSTALL. Those
+> >>> sources would be downloaded by R CMD INSTALL if not provided via an
+> >>> option (to support offline installations), and would be placed in a
+> >>> predefined place for the package to find and configure them (via an
+> >>> environment variable or in a predefined subdirectory).
+> >>>
+> >>> This proposal has several advantages. Apart from the obvious one
+> >>> (Internet access during package load can be limited without losing
+> >>> current functionalities), it gives more visibility to the resources
+> >>> that packages are using during the installation phase, and thus makes
+> >>> those installations more reproducible and more secure.
+> >>>
+> >>> Best,
+> >>> --
+> >>> I?aki ?car
+> >>>
+> >>> ______________________________________________
+> >>> R-devel at r-project.org mailing list
+> >>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> >>>
+> >>
+> >
+> >
+> > --
+> > I?aki ?car
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From |uc@r @end|ng |rom |edor@project@org  Mon Sep 26 22:41:38 2022
+From: |uc@r @end|ng |rom |edor@project@org (=?UTF-8?Q?I=C3=B1aki_Ucar?=)
+Date: Mon, 26 Sep 2022 22:41:38 +0200
+Subject: [Rd] Proposal to limit Internet access during package load
+In-Reply-To: <6B6EB764-7DBC-4D5F-A47A-1ADADE1927A8@R-project.org>
+References: <CALEXWq11fOZ9E4bbDY1=JKah+hADBLeAvO1ddfq1VQB0cav9cg@mail.gmail.com>
+ <40BA324E-14E5-4EEA-8B50-951617DE0675@R-project.org>
+ <CALEXWq13piwUazHc-rH7bKFvpydurak0QcO1HhxVQg8aF=4KgQ@mail.gmail.com>
+ <6B6EB764-7DBC-4D5F-A47A-1ADADE1927A8@R-project.org>
+Message-ID: <CALEXWq0BOHSc7Z+kgz6zMUq=voYDhjrc=n69NpVeg6czTWga-w@mail.gmail.com>
+
+On Mon, 26 Sept 2022 at 21:50, Simon Urbanek
+<simon.urbanek at r-project.org> wrote:
+>
+> [snip]
+> Sure, I fully agree that it would be a good first step, but I'm still waiting for examples ;).
+
+Oh, you want me to actually name specific packages? I thought that
+this was a well-established fact from your initial statement "I fully
+agree, this a very common issue [...]", so I preferred to avoid
+pointing fingers.
+
+But of course you can start by taking a look at [1], where all
+packages marked as "internet" or "cargo" are downloading stuff at
+install time. There are some others that are too important to get rid
+of, so I just build them with an Internet connection from time to
+time. Or have them patched to avoid such downloads.
+
+And others have been fixed after me opening an issue when a package
+blows up when I try to build an RPM with it. But this is like playing
+cat and mouse if this is not enforced somehow.
+
+[1] https://github.com/Enchufa2/cran2copr/blob/master/excl-no-sysreqs.txt
+
+-- 
+I?aki ?car
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Mon Sep 26 22:59:31 2022
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Tue, 27 Sep 2022 09:59:31 +1300
+Subject: [Rd] Proposal to limit Internet access during package load
+In-Reply-To: <CAD4oTHFd20rot+ePE69dy-TAHP4iS2D2okdRHwqNb14Y1dDy_w@mail.gmail.com>
+References: <CALEXWq11fOZ9E4bbDY1=JKah+hADBLeAvO1ddfq1VQB0cav9cg@mail.gmail.com>
+ <40BA324E-14E5-4EEA-8B50-951617DE0675@R-project.org>
+ <CALEXWq13piwUazHc-rH7bKFvpydurak0QcO1HhxVQg8aF=4KgQ@mail.gmail.com>
+ <6B6EB764-7DBC-4D5F-A47A-1ADADE1927A8@R-project.org>
+ <CAD4oTHFd20rot+ePE69dy-TAHP4iS2D2okdRHwqNb14Y1dDy_w@mail.gmail.com>
+Message-ID: <87F58834-CC53-4322-82DD-BD7FFE1CE842@R-project.org>
+
+Gabe,
+
+that's a great example how **not** to do it and why it is such a bad idea. icu4c is a system library, so it is generally available and it already includes the data in the system library, so embedding data from an outdated version is generally bad. I'm not sure why it should be needed in the first place, since icu actually tries to avoid the need for external files, so I'd say this would be ideally fixed in stringi.
+
+That said, if you want to cache static data from the system library, that is an option, but should be done at build time from the system (no internet needed) - it is a common practice - have a look at sf (and other packages that copy projections data from PROJ). So, yes, that's a good argument for disallowing downloads to detect such issues in packages.
+
+Cheers,
+Simon
+
+
+
+> On 27/09/2022, at 9:02 AM, Gabriel Becker <gabembecker at gmail.com> wrote:
+> 
+> Hi Simon,
+> 
+> The example of this I'm aware of that is most popular and widely used "in the wild" is the stringi package (which is a dep of the widely used stringr pkg) whose configure file downloads the ICU Data Library (icudt).
+> 
+> See https://github.com/gagolews/stringi/blob/master/configure#L5412
+> 
+> Note it does have some sort of workaround in place for non-internet-capable build machines, but it is external (the build in question fails without the workaround already explicitly performed).
+> 
+> Best,
+> ~G
+> 
+> 
+> 
+> On Mon, Sep 26, 2022 at 12:50 PM Simon Urbanek <simon.urbanek at r-project.org> wrote:
+> 
+> 
+> > On Sep 27, 2022, at 8:25 AM, I?aki Ucar <iucar at fedoraproject.org> wrote:
+> > 
+> > On Sat, 24 Sept 2022 at 01:55, Simon Urbanek
+> > <simon.urbanek at r-project.org> wrote:
+> >> 
+> >> I?aki,
+> >> 
+> >> I fully agree, this a very common issue since vast majority of server deployments I have encountered don't allow internet access. In practice this means that such packages are effectively banned.
+> >> 
+> >> I would argue that not even (1) or (2) are really an issue, because in fact the CRAN policy doesn't impose any absolute limits on size, it only states that the package should be "of minimum necessary size" which means it shouldn't waste space. If there is no way to reduce the size without impacting functionality, it's perfectly fine.
+> > 
+> > "Packages should be of the minimum necessary size" is subject to
+> > interpretation. And in practice, there is an issue with e.g. packages
+> > that "bundle" big third-party libraries. There are also packages that
+> > require downloading precompiled code, JARs... at installation time.
+> > 
+> 
+> JARs are part of the package, so that's a valid use, no question there, that's how Java packages do this already.
+> 
+> Downloading pre-compiled binaries is something that shouldn't be done and a whole can of worms (since those are not sources and it *is* specific to the platform, os etc.) that is entirely separate, but worth a separate discussion. So I still don't see any use cases for actual sources. I do see a need for better specification of external dependencies which are not part of the package such that those can be satisfied automatically - but that's not the problem you asked about.
+> 
+> 
+> >> That said, there are exceptions such as very large datasets (e.g., as distributed by Bioconductor) which are orders of magnitude larger than what is sustainable. I agree that it would be nice to have a mechanism for specifying such sources. So yes, I like the idea, but I'd like to see more real use cases to justify the effort.
+> > 
+> > "More real use cases" like in "more use cases" or like in "the
+> > previous ones are not real ones"? :)
+> > 
+> >> The issue with any online downloads, though, is that there is no guarantee of availability - which is real issue for reproducibility. So one could argue that if such external sources are required then they should be on a well-defined, independent, permanent storage such as Zenodo. This could be a matter of policy as opposed to the technical side above which would be adding such support to R CMD INSTALL.
+> > 
+> > Not necessarily. If the package declares the additional sources in the
+> > DESCRIPTION (probably with hashes), that's a big improvement over the
+> > current state of things, in which basically we don't know what the
+> > package tries download, then it may fail, and finally there's no
+> > guarantee that it's what the author intended in the first place.
+> > 
+> > But on top of this, R could add a CMD to download those, and then some
+> > lookaside storage could be used on CRAN. This is e.g. how RPM
+> > packaging works: the spec declares all the sources, they are
+> > downloaded once, hashed and stored in a lookaside cache. Then package
+> > building doesn't need general Internet connectivity, just access to
+> > the cache.
+> > 
+> 
+> Sure, I fully agree that it would be a good first step, but I'm still waiting for examples ;).
+> 
+> Cheers,
+> Simon
+> 
+> 
+> > I?aki
+> > 
+> >> 
+> >> Cheers,
+> >> Simon
+> >> 
+> >> 
+> >>> On Sep 24, 2022, at 3:22 AM, I?aki Ucar <iucar at fedoraproject.org> wrote:
+> >>> 
+> >>> Hi all,
+> >>> 
+> >>> I'd like to open this debate here, because IMO this is a big issue.
+> >>> Many packages do this for various reasons, some more legitimate than
+> >>> others, but I think that this shouldn't be allowed, because it
+> >>> basically means that installation fails in a machine without Internet
+> >>> access (which happens e.g. in Linux distro builders for security
+> >>> reasons).
+> >>> 
+> >>> Now, what if connection is suppressed during package load? There are
+> >>> basically three use cases out there:
+> >>> 
+> >>> (1) The package requires additional files for the installation (e.g.
+> >>> the source code of an external library) that cannot be bundled into
+> >>> the package due to CRAN restrictions (size).
+> >>> (2) The package requires additional files for using it (e.g.,
+> >>> datasets, a JAR...) that cannot be bundled into the package due to
+> >>> CRAN restrictions (size).
+> >>> (3) Other spurious reasons (e.g. the maintainer decided that package
+> >>> load was a good place to check an online service availability, etc.).
+> >>> 
+> >>> Again IMO, (3) shouldn't be allowed in any case; (2) should be a
+> >>> separate function that the user actively calls to download the files,
+> >>> and those files should be placed into the user dir, and (3) is the
+> >>> only legitimate use, but then other mechanism should be provided to
+> >>> avoid connections during package load.
+> >>> 
+> >>> My proposal to support (3) would be to add a new field in the
+> >>> DESCRIPTION, "Additional_sources", which would be a comma separated
+> >>> list of additional resources to download during R CMD INSTALL. Those
+> >>> sources would be downloaded by R CMD INSTALL if not provided via an
+> >>> option (to support offline installations), and would be placed in a
+> >>> predefined place for the package to find and configure them (via an
+> >>> environment variable or in a predefined subdirectory).
+> >>> 
+> >>> This proposal has several advantages. Apart from the obvious one
+> >>> (Internet access during package load can be limited without losing
+> >>> current functionalities), it gives more visibility to the resources
+> >>> that packages are using during the installation phase, and thus makes
+> >>> those installations more reproducible and more secure.
+> >>> 
+> >>> Best,
+> >>> --
+> >>> I?aki ?car
+> >>> 
+> >>> ______________________________________________
+> >>> R-devel at r-project.org mailing list
+> >>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> >>> 
+> >> 
+> > 
+> > 
+> > -- 
+> > I?aki ?car
+> > 
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+> > 
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Mon Sep 26 23:07:36 2022
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Tue, 27 Sep 2022 10:07:36 +1300
+Subject: [Rd] Proposal to limit Internet access during package load
+In-Reply-To: <CALEXWq13piwUazHc-rH7bKFvpydurak0QcO1HhxVQg8aF=4KgQ@mail.gmail.com>
+References: <CALEXWq11fOZ9E4bbDY1=JKah+hADBLeAvO1ddfq1VQB0cav9cg@mail.gmail.com>
+ <40BA324E-14E5-4EEA-8B50-951617DE0675@R-project.org>
+ <CALEXWq13piwUazHc-rH7bKFvpydurak0QcO1HhxVQg8aF=4KgQ@mail.gmail.com>
+Message-ID: <2FB306BE-3785-4F30-877A-9B9A9FDD12DC@R-project.org>
+
+I?aki,
+
+I'm not sure I understand - system dependencies are an entirely different topic and I would argue a far more important one (very happy to start a discussion about that), but that has nothing to do with declaring downloads. I assumed your question was about large files in packages which packages avoid to ship and download instead so declaring them would be useful. And for that, the obvious answer is they shouldn't do that - if a package needs a file to run, it should include it. So an easy solution is to disallow it.
+
+But so far all examples where just (ab)use of downloads for binary dependencies which is an entirely different issue that needs a different solution (in a naive way declaring such dependencies, but we know it's not that simple - and download URLs don't help there).
+
+Cheers,
+Simon
+
+
+> On 27/09/2022, at 8:25 AM,  Ucar <iucar at fedoraproject.org> wrote:
+> 
+> On Sat, 24 Sept 2022 at 01:55, Simon Urbanek
+> <simon.urbanek at r-project.org> wrote:
+>> 
+>> I?aki,
+>> 
+>> I fully agree, this a very common issue since vast majority of server deployments I have encountered don't allow internet access. In practice this means that such packages are effectively banned.
+>> 
+>> I would argue that not even (1) or (2) are really an issue, because in fact the CRAN policy doesn't impose any absolute limits on size, it only states that the package should be "of minimum necessary size" which means it shouldn't waste space. If there is no way to reduce the size without impacting functionality, it's perfectly fine.
+> 
+> "Packages should be of the minimum necessary size" is subject to
+> interpretation. And in practice, there is an issue with e.g. packages
+> that "bundle" big third-party libraries. There are also packages that
+> require downloading precompiled code, JARs... at installation time.
+> 
+>> That said, there are exceptions such as very large datasets (e.g., as distributed by Bioconductor) which are orders of magnitude larger than what is sustainable. I agree that it would be nice to have a mechanism for specifying such sources. So yes, I like the idea, but I'd like to see more real use cases to justify the effort.
+> 
+> "More real use cases" like in "more use cases" or like in "the
+> previous ones are not real ones"? :)
+> 
+>> The issue with any online downloads, though, is that there is no guarantee of availability - which is real issue for reproducibility. So one could argue that if such external sources are required then they should be on a well-defined, independent, permanent storage such as Zenodo. This could be a matter of policy as opposed to the technical side above which would be adding such support to R CMD INSTALL.
+> 
+> Not necessarily. If the package declares the additional sources in the
+> DESCRIPTION (probably with hashes), that's a big improvement over the
+> current state of things, in which basically we don't know what the
+> package tries download, then it may fail, and finally there's no
+> guarantee that it's what the author intended in the first place.
+> 
+> But on top of this, R could add a CMD to download those, and then some
+> lookaside storage could be used on CRAN. This is e.g. how RPM
+> packaging works: the spec declares all the sources, they are
+> downloaded once, hashed and stored in a lookaside cache. Then package
+> building doesn't need general Internet connectivity, just access to
+> the cache.
+> 
+> I?aki
+> 
+>> 
+>> Cheers,
+>> Simon
+>> 
+>> 
+>>> On Sep 24, 2022, at 3:22 AM, I?aki Ucar <iucar at fedoraproject.org> wrote:
+>>> 
+>>> Hi all,
+>>> 
+>>> I'd like to open this debate here, because IMO this is a big issue.
+>>> Many packages do this for various reasons, some more legitimate than
+>>> others, but I think that this shouldn't be allowed, because it
+>>> basically means that installation fails in a machine without Internet
+>>> access (which happens e.g. in Linux distro builders for security
+>>> reasons).
+>>> 
+>>> Now, what if connection is suppressed during package load? There are
+>>> basically three use cases out there:
+>>> 
+>>> (1) The package requires additional files for the installation (e.g.
+>>> the source code of an external library) that cannot be bundled into
+>>> the package due to CRAN restrictions (size).
+>>> (2) The package requires additional files for using it (e.g.,
+>>> datasets, a JAR...) that cannot be bundled into the package due to
+>>> CRAN restrictions (size).
+>>> (3) Other spurious reasons (e.g. the maintainer decided that package
+>>> load was a good place to check an online service availability, etc.).
+>>> 
+>>> Again IMO, (3) shouldn't be allowed in any case; (2) should be a
+>>> separate function that the user actively calls to download the files,
+>>> and those files should be placed into the user dir, and (3) is the
+>>> only legitimate use, but then other mechanism should be provided to
+>>> avoid connections during package load.
+>>> 
+>>> My proposal to support (3) would be to add a new field in the
+>>> DESCRIPTION, "Additional_sources", which would be a comma separated
+>>> list of additional resources to download during R CMD INSTALL. Those
+>>> sources would be downloaded by R CMD INSTALL if not provided via an
+>>> option (to support offline installations), and would be placed in a
+>>> predefined place for the package to find and configure them (via an
+>>> environment variable or in a predefined subdirectory).
+>>> 
+>>> This proposal has several advantages. Apart from the obvious one
+>>> (Internet access during package load can be limited without losing
+>>> current functionalities), it gives more visibility to the resources
+>>> that packages are using during the installation phase, and thus makes
+>>> those installations more reproducible and more secure.
+>>> 
+>>> Best,
+>>> --
+>>> I?aki ?car
+>>> 
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>> 
+>> 
+> 
+> 
+> -- 
+> I?aki ?car
+
+
+From |uc@r @end|ng |rom |edor@project@org  Mon Sep 26 23:21:59 2022
+From: |uc@r @end|ng |rom |edor@project@org (=?UTF-8?Q?I=C3=B1aki_Ucar?=)
+Date: Mon, 26 Sep 2022 23:21:59 +0200
+Subject: [Rd] Proposal to limit Internet access during package load
+In-Reply-To: <2FB306BE-3785-4F30-877A-9B9A9FDD12DC@R-project.org>
+References: <CALEXWq11fOZ9E4bbDY1=JKah+hADBLeAvO1ddfq1VQB0cav9cg@mail.gmail.com>
+ <40BA324E-14E5-4EEA-8B50-951617DE0675@R-project.org>
+ <CALEXWq13piwUazHc-rH7bKFvpydurak0QcO1HhxVQg8aF=4KgQ@mail.gmail.com>
+ <2FB306BE-3785-4F30-877A-9B9A9FDD12DC@R-project.org>
+Message-ID: <CALEXWq1etgQDeox9Hn2PchMh058wtmcPOBXZrtORP4dJLEZSMw@mail.gmail.com>
+
+On Mon, 26 Sept 2022 at 23:07, Simon Urbanek
+<simon.urbanek at r-project.org> wrote:
+>
+> I?aki,
+>
+> I'm not sure I understand - system dependencies are an entirely different topic and I would argue a far more important one (very happy to start a discussion about that), but that has nothing to do with declaring downloads. I assumed your question was about large files in packages which packages avoid to ship and download instead so declaring them would be useful.
+
+Exactly. Maybe there's a misunderstanding, because I didn't talk about
+system dependencies (alas there are packages that try to download
+things that are declared as system dependencies, as Gabe noted). :)
+
+> And for that, the obvious answer is they shouldn't do that - if a package needs a file to run, it should include it. So an easy solution is to disallow it.
+
+Then we completely agree. My proposal about declaring additional
+sources was because, given that so many packages do this, I thought
+that I would find a strong opposition to this. But if R Core / CRAN is
+ok with just limiting net access at install time, then that's perfect
+to me. :)
+
+I?aki
+
+> But so far all examples where just (ab)use of downloads for binary dependencies which is an entirely different issue that needs a different solution (in a naive way declaring such dependencies, but we know it's not that simple - and download URLs don't help there).
+>
+> Cheers,
+> Simon
+>
+>
+> > On 27/09/2022, at 8:25 AM,  Ucar <iucar at fedoraproject.org> wrote:
+> >
+> > On Sat, 24 Sept 2022 at 01:55, Simon Urbanek
+> > <simon.urbanek at r-project.org> wrote:
+> >>
+> >> I?aki,
+> >>
+> >> I fully agree, this a very common issue since vast majority of server deployments I have encountered don't allow internet access. In practice this means that such packages are effectively banned.
+> >>
+> >> I would argue that not even (1) or (2) are really an issue, because in fact the CRAN policy doesn't impose any absolute limits on size, it only states that the package should be "of minimum necessary size" which means it shouldn't waste space. If there is no way to reduce the size without impacting functionality, it's perfectly fine.
+> >
+> > "Packages should be of the minimum necessary size" is subject to
+> > interpretation. And in practice, there is an issue with e.g. packages
+> > that "bundle" big third-party libraries. There are also packages that
+> > require downloading precompiled code, JARs... at installation time.
+> >
+> >> That said, there are exceptions such as very large datasets (e.g., as distributed by Bioconductor) which are orders of magnitude larger than what is sustainable. I agree that it would be nice to have a mechanism for specifying such sources. So yes, I like the idea, but I'd like to see more real use cases to justify the effort.
+> >
+> > "More real use cases" like in "more use cases" or like in "the
+> > previous ones are not real ones"? :)
+> >
+> >> The issue with any online downloads, though, is that there is no guarantee of availability - which is real issue for reproducibility. So one could argue that if such external sources are required then they should be on a well-defined, independent, permanent storage such as Zenodo. This could be a matter of policy as opposed to the technical side above which would be adding such support to R CMD INSTALL.
+> >
+> > Not necessarily. If the package declares the additional sources in the
+> > DESCRIPTION (probably with hashes), that's a big improvement over the
+> > current state of things, in which basically we don't know what the
+> > package tries download, then it may fail, and finally there's no
+> > guarantee that it's what the author intended in the first place.
+> >
+> > But on top of this, R could add a CMD to download those, and then some
+> > lookaside storage could be used on CRAN. This is e.g. how RPM
+> > packaging works: the spec declares all the sources, they are
+> > downloaded once, hashed and stored in a lookaside cache. Then package
+> > building doesn't need general Internet connectivity, just access to
+> > the cache.
+> >
+> > I?aki
+> >
+> >>
+> >> Cheers,
+> >> Simon
+> >>
+> >>
+> >>> On Sep 24, 2022, at 3:22 AM, I?aki Ucar <iucar at fedoraproject.org> wrote:
+> >>>
+> >>> Hi all,
+> >>>
+> >>> I'd like to open this debate here, because IMO this is a big issue.
+> >>> Many packages do this for various reasons, some more legitimate than
+> >>> others, but I think that this shouldn't be allowed, because it
+> >>> basically means that installation fails in a machine without Internet
+> >>> access (which happens e.g. in Linux distro builders for security
+> >>> reasons).
+> >>>
+> >>> Now, what if connection is suppressed during package load? There are
+> >>> basically three use cases out there:
+> >>>
+> >>> (1) The package requires additional files for the installation (e.g.
+> >>> the source code of an external library) that cannot be bundled into
+> >>> the package due to CRAN restrictions (size).
+> >>> (2) The package requires additional files for using it (e.g.,
+> >>> datasets, a JAR...) that cannot be bundled into the package due to
+> >>> CRAN restrictions (size).
+> >>> (3) Other spurious reasons (e.g. the maintainer decided that package
+> >>> load was a good place to check an online service availability, etc.).
+> >>>
+> >>> Again IMO, (3) shouldn't be allowed in any case; (2) should be a
+> >>> separate function that the user actively calls to download the files,
+> >>> and those files should be placed into the user dir, and (3) is the
+> >>> only legitimate use, but then other mechanism should be provided to
+> >>> avoid connections during package load.
+> >>>
+> >>> My proposal to support (3) would be to add a new field in the
+> >>> DESCRIPTION, "Additional_sources", which would be a comma separated
+> >>> list of additional resources to download during R CMD INSTALL. Those
+> >>> sources would be downloaded by R CMD INSTALL if not provided via an
+> >>> option (to support offline installations), and would be placed in a
+> >>> predefined place for the package to find and configure them (via an
+> >>> environment variable or in a predefined subdirectory).
+> >>>
+> >>> This proposal has several advantages. Apart from the obvious one
+> >>> (Internet access during package load can be limited without losing
+> >>> current functionalities), it gives more visibility to the resources
+> >>> that packages are using during the installation phase, and thus makes
+> >>> those installations more reproducible and more secure.
+> >>>
+> >>> Best,
+> >>> --
+> >>> I?aki ?car
+> >>>
+> >>> ______________________________________________
+> >>> R-devel at r-project.org mailing list
+> >>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> >>>
+> >>
+> >
+> >
+> > --
+> > I?aki ?car
+>
+
+
+-- 
+I?aki ?car
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Mon Sep 26 23:32:51 2022
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Tue, 27 Sep 2022 10:32:51 +1300
+Subject: [Rd] Proposal to limit Internet access during package load
+In-Reply-To: <CALEXWq1etgQDeox9Hn2PchMh058wtmcPOBXZrtORP4dJLEZSMw@mail.gmail.com>
+References: <CALEXWq11fOZ9E4bbDY1=JKah+hADBLeAvO1ddfq1VQB0cav9cg@mail.gmail.com>
+ <40BA324E-14E5-4EEA-8B50-951617DE0675@R-project.org>
+ <CALEXWq13piwUazHc-rH7bKFvpydurak0QcO1HhxVQg8aF=4KgQ@mail.gmail.com>
+ <2FB306BE-3785-4F30-877A-9B9A9FDD12DC@R-project.org>
+ <CALEXWq1etgQDeox9Hn2PchMh058wtmcPOBXZrtORP4dJLEZSMw@mail.gmail.com>
+Message-ID: <25CF0E01-962E-46CA-9E6A-F25B6A15701E@R-project.org>
+
+
+
+> On 27/09/2022, at 10:21 AM, I?aki Ucar <iucar at fedoraproject.org> wrote:
+> 
+> On Mon, 26 Sept 2022 at 23:07, Simon Urbanek
+> <simon.urbanek at r-project.org> wrote:
+>> 
+>> I?aki,
+>> 
+>> I'm not sure I understand - system dependencies are an entirely different topic and I would argue a far more important one (very happy to start a discussion about that), but that has nothing to do with declaring downloads. I assumed your question was about large files in packages which packages avoid to ship and download instead so declaring them would be useful.
+> 
+> Exactly. Maybe there's a misunderstanding, because I didn't talk about system dependencies (alas there are packages that try to download things that are declared as system dependencies, as Gabe noted). :)
+> 
+
+
+Ok, understood. I would like to tackle those as well, but let's start that conversation in a few weeks when I have a lot more time.
+
+
+>> And for that, the obvious answer is they shouldn't do that - if a package needs a file to run, it should include it. So an easy solution is to disallow it.
+> 
+> Then we completely agree. My proposal about declaring additional sources was because, given that so many packages do this, I thought that I would find a strong opposition to this. But if R Core / CRAN is ok with just limiting net access at install time, then that's perfect to me. :)
+> 
+
+Yes we do agree :). I started looking at your list, and so far those seem simply bugs or design deficiencies in the packages (and outright policy violations). I think the only reason they exist is that it doesn't get detected in CRAN incoming, it's certainly not intentional.
+
+Cheers,
+Simon
+
+
+> I?aki
+> 
+>> But so far all examples where just (ab)use of downloads for binary dependencies which is an entirely different issue that needs a different solution (in a naive way declaring such dependencies, but we know it's not that simple - and download URLs don't help there).
+>> 
+>> Cheers,
+>> Simon
+>> 
+>> 
+>>> On 27/09/2022, at 8:25 AM,  Ucar <iucar at fedoraproject.org> wrote:
+>>> 
+>>> On Sat, 24 Sept 2022 at 01:55, Simon Urbanek
+>>> <simon.urbanek at r-project.org> wrote:
+>>>> 
+>>>> I?aki,
+>>>> 
+>>>> I fully agree, this a very common issue since vast majority of server deployments I have encountered don't allow internet access. In practice this means that such packages are effectively banned.
+>>>> 
+>>>> I would argue that not even (1) or (2) are really an issue, because in fact the CRAN policy doesn't impose any absolute limits on size, it only states that the package should be "of minimum necessary size" which means it shouldn't waste space. If there is no way to reduce the size without impacting functionality, it's perfectly fine.
+>>> 
+>>> "Packages should be of the minimum necessary size" is subject to
+>>> interpretation. And in practice, there is an issue with e.g. packages
+>>> that "bundle" big third-party libraries. There are also packages that
+>>> require downloading precompiled code, JARs... at installation time.
+>>> 
+>>>> That said, there are exceptions such as very large datasets (e.g., as distributed by Bioconductor) which are orders of magnitude larger than what is sustainable. I agree that it would be nice to have a mechanism for specifying such sources. So yes, I like the idea, but I'd like to see more real use cases to justify the effort.
+>>> 
+>>> "More real use cases" like in "more use cases" or like in "the
+>>> previous ones are not real ones"? :)
+>>> 
+>>>> The issue with any online downloads, though, is that there is no guarantee of availability - which is real issue for reproducibility. So one could argue that if such external sources are required then they should be on a well-defined, independent, permanent storage such as Zenodo. This could be a matter of policy as opposed to the technical side above which would be adding such support to R CMD INSTALL.
+>>> 
+>>> Not necessarily. If the package declares the additional sources in the
+>>> DESCRIPTION (probably with hashes), that's a big improvement over the
+>>> current state of things, in which basically we don't know what the
+>>> package tries download, then it may fail, and finally there's no
+>>> guarantee that it's what the author intended in the first place.
+>>> 
+>>> But on top of this, R could add a CMD to download those, and then some
+>>> lookaside storage could be used on CRAN. This is e.g. how RPM
+>>> packaging works: the spec declares all the sources, they are
+>>> downloaded once, hashed and stored in a lookaside cache. Then package
+>>> building doesn't need general Internet connectivity, just access to
+>>> the cache.
+>>> 
+>>> I?aki
+>>> 
+>>>> 
+>>>> Cheers,
+>>>> Simon
+>>>> 
+>>>> 
+>>>>> On Sep 24, 2022, at 3:22 AM, I?aki Ucar <iucar at fedoraproject.org> wrote:
+>>>>> 
+>>>>> Hi all,
+>>>>> 
+>>>>> I'd like to open this debate here, because IMO this is a big issue.
+>>>>> Many packages do this for various reasons, some more legitimate than
+>>>>> others, but I think that this shouldn't be allowed, because it
+>>>>> basically means that installation fails in a machine without Internet
+>>>>> access (which happens e.g. in Linux distro builders for security
+>>>>> reasons).
+>>>>> 
+>>>>> Now, what if connection is suppressed during package load? There are
+>>>>> basically three use cases out there:
+>>>>> 
+>>>>> (1) The package requires additional files for the installation (e.g.
+>>>>> the source code of an external library) that cannot be bundled into
+>>>>> the package due to CRAN restrictions (size).
+>>>>> (2) The package requires additional files for using it (e.g.,
+>>>>> datasets, a JAR...) that cannot be bundled into the package due to
+>>>>> CRAN restrictions (size).
+>>>>> (3) Other spurious reasons (e.g. the maintainer decided that package
+>>>>> load was a good place to check an online service availability, etc.).
+>>>>> 
+>>>>> Again IMO, (3) shouldn't be allowed in any case; (2) should be a
+>>>>> separate function that the user actively calls to download the files,
+>>>>> and those files should be placed into the user dir, and (3) is the
+>>>>> only legitimate use, but then other mechanism should be provided to
+>>>>> avoid connections during package load.
+>>>>> 
+>>>>> My proposal to support (3) would be to add a new field in the
+>>>>> DESCRIPTION, "Additional_sources", which would be a comma separated
+>>>>> list of additional resources to download during R CMD INSTALL. Those
+>>>>> sources would be downloaded by R CMD INSTALL if not provided via an
+>>>>> option (to support offline installations), and would be placed in a
+>>>>> predefined place for the package to find and configure them (via an
+>>>>> environment variable or in a predefined subdirectory).
+>>>>> 
+>>>>> This proposal has several advantages. Apart from the obvious one
+>>>>> (Internet access during package load can be limited without losing
+>>>>> current functionalities), it gives more visibility to the resources
+>>>>> that packages are using during the installation phase, and thus makes
+>>>>> those installations more reproducible and more secure.
+>>>>> 
+>>>>> Best,
+>>>>> --
+>>>>> I?aki ?car
+>>>>> 
+>>>>> ______________________________________________
+>>>>> R-devel at r-project.org mailing list
+>>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>>> 
+>>>> 
+>>> 
+>>> 
+>>> --
+>>> I?aki ?car
+>> 
+> 
+> 
+> -- 
+> I?aki ?car
+> 
+
+
+From g@bembecker @end|ng |rom gm@||@com  Tue Sep 27 00:02:08 2022
+From: g@bembecker @end|ng |rom gm@||@com (Gabriel Becker)
+Date: Mon, 26 Sep 2022 15:02:08 -0700
+Subject: [Rd] Proposal to limit Internet access during package load
+In-Reply-To: <25CF0E01-962E-46CA-9E6A-F25B6A15701E@R-project.org>
+References: <CALEXWq11fOZ9E4bbDY1=JKah+hADBLeAvO1ddfq1VQB0cav9cg@mail.gmail.com>
+ <40BA324E-14E5-4EEA-8B50-951617DE0675@R-project.org>
+ <CALEXWq13piwUazHc-rH7bKFvpydurak0QcO1HhxVQg8aF=4KgQ@mail.gmail.com>
+ <2FB306BE-3785-4F30-877A-9B9A9FDD12DC@R-project.org>
+ <CALEXWq1etgQDeox9Hn2PchMh058wtmcPOBXZrtORP4dJLEZSMw@mail.gmail.com>
+ <25CF0E01-962E-46CA-9E6A-F25B6A15701E@R-project.org>
+Message-ID: <CAD4oTHHVuhQoUeA=JVeHDrqW1sMWGQkUBVOzWR9EQzR6cxrXYg@mail.gmail.com>
+
+For the record, the only things switchr (my package) is doing internet wise
+should be hitting the bioconductor config file (
+http://bioconductor.org/config.yaml) so that it knows the things it need to
+know about Bioc repos/versions/etc (at load time, actually, not install
+time, but since install does a test load, those are essentially the same).
+
+I have fallback behavior for when the file can't be read, so there
+shouldn't be any actual build breakages/install breakages I don't think,
+but the check does happen.
+
+Advice on what to do for the above use case that is better practice is
+welcome.
+
+~G
+
+On Mon, Sep 26, 2022 at 2:40 PM Simon Urbanek <simon.urbanek at r-project.org>
+wrote:
+
+>
+>
+> > On 27/09/2022, at 10:21 AM, I?aki Ucar <iucar at fedoraproject.org> wrote:
+> >
+> > On Mon, 26 Sept 2022 at 23:07, Simon Urbanek
+> > <simon.urbanek at r-project.org> wrote:
+> >>
+> >> I?aki,
+> >>
+> >> I'm not sure I understand - system dependencies are an entirely
+> different topic and I would argue a far more important one (very happy to
+> start a discussion about that), but that has nothing to do with declaring
+> downloads. I assumed your question was about large files in packages which
+> packages avoid to ship and download instead so declaring them would be
+> useful.
+> >
+> > Exactly. Maybe there's a misunderstanding, because I didn't talk about
+> system dependencies (alas there are packages that try to download things
+> that are declared as system dependencies, as Gabe noted). :)
+> >
+>
+>
+> Ok, understood. I would like to tackle those as well, but let's start that
+> conversation in a few weeks when I have a lot more time.
+>
+>
+> >> And for that, the obvious answer is they shouldn't do that - if a
+> package needs a file to run, it should include it. So an easy solution is
+> to disallow it.
+> >
+> > Then we completely agree. My proposal about declaring additional sources
+> was because, given that so many packages do this, I thought that I would
+> find a strong opposition to this. But if R Core / CRAN is ok with just
+> limiting net access at install time, then that's perfect to me. :)
+> >
+>
+> Yes we do agree :). I started looking at your list, and so far those seem
+> simply bugs or design deficiencies in the packages (and outright policy
+> violations). I think the only reason they exist is that it doesn't get
+> detected in CRAN incoming, it's certainly not intentional.
+>
+> Cheers,
+> Simon
+>
+>
+> > I?aki
+> >
+> >> But so far all examples where just (ab)use of downloads for binary
+> dependencies which is an entirely different issue that needs a different
+> solution (in a naive way declaring such dependencies, but we know it's not
+> that simple - and download URLs don't help there).
+> >>
+> >> Cheers,
+> >> Simon
+> >>
+> >>
+> >>> On 27/09/2022, at 8:25 AM,  Ucar <iucar at fedoraproject.org> wrote:
+> >>>
+> >>> On Sat, 24 Sept 2022 at 01:55, Simon Urbanek
+> >>> <simon.urbanek at r-project.org> wrote:
+> >>>>
+> >>>> I?aki,
+> >>>>
+> >>>> I fully agree, this a very common issue since vast majority of server
+> deployments I have encountered don't allow internet access. In practice
+> this means that such packages are effectively banned.
+> >>>>
+> >>>> I would argue that not even (1) or (2) are really an issue, because
+> in fact the CRAN policy doesn't impose any absolute limits on size, it only
+> states that the package should be "of minimum necessary size" which means
+> it shouldn't waste space. If there is no way to reduce the size without
+> impacting functionality, it's perfectly fine.
+> >>>
+> >>> "Packages should be of the minimum necessary size" is subject to
+> >>> interpretation. And in practice, there is an issue with e.g. packages
+> >>> that "bundle" big third-party libraries. There are also packages that
+> >>> require downloading precompiled code, JARs... at installation time.
+> >>>
+> >>>> That said, there are exceptions such as very large datasets (e.g., as
+> distributed by Bioconductor) which are orders of magnitude larger than what
+> is sustainable. I agree that it would be nice to have a mechanism for
+> specifying such sources. So yes, I like the idea, but I'd like to see more
+> real use cases to justify the effort.
+> >>>
+> >>> "More real use cases" like in "more use cases" or like in "the
+> >>> previous ones are not real ones"? :)
+> >>>
+> >>>> The issue with any online downloads, though, is that there is no
+> guarantee of availability - which is real issue for reproducibility. So one
+> could argue that if such external sources are required then they should be
+> on a well-defined, independent, permanent storage such as Zenodo. This
+> could be a matter of policy as opposed to the technical side above which
+> would be adding such support to R CMD INSTALL.
+> >>>
+> >>> Not necessarily. If the package declares the additional sources in the
+> >>> DESCRIPTION (probably with hashes), that's a big improvement over the
+> >>> current state of things, in which basically we don't know what the
+> >>> package tries download, then it may fail, and finally there's no
+> >>> guarantee that it's what the author intended in the first place.
+> >>>
+> >>> But on top of this, R could add a CMD to download those, and then some
+> >>> lookaside storage could be used on CRAN. This is e.g. how RPM
+> >>> packaging works: the spec declares all the sources, they are
+> >>> downloaded once, hashed and stored in a lookaside cache. Then package
+> >>> building doesn't need general Internet connectivity, just access to
+> >>> the cache.
+> >>>
+> >>> I?aki
+> >>>
+> >>>>
+> >>>> Cheers,
+> >>>> Simon
+> >>>>
+> >>>>
+> >>>>> On Sep 24, 2022, at 3:22 AM, I?aki Ucar <iucar at fedoraproject.org>
+> wrote:
+> >>>>>
+> >>>>> Hi all,
+> >>>>>
+> >>>>> I'd like to open this debate here, because IMO this is a big issue.
+> >>>>> Many packages do this for various reasons, some more legitimate than
+> >>>>> others, but I think that this shouldn't be allowed, because it
+> >>>>> basically means that installation fails in a machine without Internet
+> >>>>> access (which happens e.g. in Linux distro builders for security
+> >>>>> reasons).
+> >>>>>
+> >>>>> Now, what if connection is suppressed during package load? There are
+> >>>>> basically three use cases out there:
+> >>>>>
+> >>>>> (1) The package requires additional files for the installation (e.g.
+> >>>>> the source code of an external library) that cannot be bundled into
+> >>>>> the package due to CRAN restrictions (size).
+> >>>>> (2) The package requires additional files for using it (e.g.,
+> >>>>> datasets, a JAR...) that cannot be bundled into the package due to
+> >>>>> CRAN restrictions (size).
+> >>>>> (3) Other spurious reasons (e.g. the maintainer decided that package
+> >>>>> load was a good place to check an online service availability, etc.).
+> >>>>>
+> >>>>> Again IMO, (3) shouldn't be allowed in any case; (2) should be a
+> >>>>> separate function that the user actively calls to download the files,
+> >>>>> and those files should be placed into the user dir, and (3) is the
+> >>>>> only legitimate use, but then other mechanism should be provided to
+> >>>>> avoid connections during package load.
+> >>>>>
+> >>>>> My proposal to support (3) would be to add a new field in the
+> >>>>> DESCRIPTION, "Additional_sources", which would be a comma separated
+> >>>>> list of additional resources to download during R CMD INSTALL. Those
+> >>>>> sources would be downloaded by R CMD INSTALL if not provided via an
+> >>>>> option (to support offline installations), and would be placed in a
+> >>>>> predefined place for the package to find and configure them (via an
+> >>>>> environment variable or in a predefined subdirectory).
+> >>>>>
+> >>>>> This proposal has several advantages. Apart from the obvious one
+> >>>>> (Internet access during package load can be limited without losing
+> >>>>> current functionalities), it gives more visibility to the resources
+> >>>>> that packages are using during the installation phase, and thus makes
+> >>>>> those installations more reproducible and more secure.
+> >>>>>
+> >>>>> Best,
+> >>>>> --
+> >>>>> I?aki ?car
+> >>>>>
+> >>>>> ______________________________________________
+> >>>>> R-devel at r-project.org mailing list
+> >>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> >>>>>
+> >>>>
+> >>>
+> >>>
+> >>> --
+> >>> I?aki ?car
+> >>
+> >
+> >
+> > --
+> > I?aki ?car
+> >
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Tue Sep 27 00:11:25 2022
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Tue, 27 Sep 2022 11:11:25 +1300
+Subject: [Rd] Proposal to limit Internet access during package load
+In-Reply-To: <CAD4oTHHVuhQoUeA=JVeHDrqW1sMWGQkUBVOzWR9EQzR6cxrXYg@mail.gmail.com>
+References: <CALEXWq11fOZ9E4bbDY1=JKah+hADBLeAvO1ddfq1VQB0cav9cg@mail.gmail.com>
+ <40BA324E-14E5-4EEA-8B50-951617DE0675@R-project.org>
+ <CALEXWq13piwUazHc-rH7bKFvpydurak0QcO1HhxVQg8aF=4KgQ@mail.gmail.com>
+ <2FB306BE-3785-4F30-877A-9B9A9FDD12DC@R-project.org>
+ <CALEXWq1etgQDeox9Hn2PchMh058wtmcPOBXZrtORP4dJLEZSMw@mail.gmail.com>
+ <25CF0E01-962E-46CA-9E6A-F25B6A15701E@R-project.org>
+ <CAD4oTHHVuhQoUeA=JVeHDrqW1sMWGQkUBVOzWR9EQzR6cxrXYg@mail.gmail.com>
+Message-ID: <F14A6635-5B8F-48D5-8B4E-B42541DF4D0E@R-project.org>
+
+
+
+> On 27/09/2022, at 11:02 AM, Gabriel Becker <gabembecker at gmail.com> wrote:
+> 
+> For the record, the only things switchr (my package) is doing internet wise should be hitting the bioconductor config file (http://bioconductor.org/config.yaml) so that it knows the things it need to know about Bioc repos/versions/etc (at load time, actually, not install time, but since install does a test load, those are essentially the same).
+> 
+> I have fallback behavior for when the file can't be read, so there shouldn't be any actual build breakages/install breakages I don't think, but the check does happen.
+> 
+
+$ sandbox-exec -n no-network R CMD INSTALL switchr_0.14.5.tar.gz 
+[...]
+** testing if installed package can be loaded from final location
+Error in readLines(con) : 
+  cannot open the connection to 'http://bioconductor.org/config.yaml'
+Calls: <Anonymous> ... getBiocDevelVr -> getBiocYaml -> inet_handlers -> readLines
+Execution halted
+ERROR: loading failed
+
+So, yes, it does break. You should recover from the error and use a fall-back file that you ship.
+
+Cheers,
+Simon
+ 
+
+> Advice on what to do for the above use case that is better practice is welcome.
+> 
+> ~G
+> 
+> On Mon, Sep 26, 2022 at 2:40 PM Simon Urbanek <simon.urbanek at r-project.org> wrote:
+> 
+> 
+> > On 27/09/2022, at 10:21 AM, I?aki Ucar <iucar at fedoraproject.org> wrote:
+> > 
+> > On Mon, 26 Sept 2022 at 23:07, Simon Urbanek
+> > <simon.urbanek at r-project.org> wrote:
+> >> 
+> >> I?aki,
+> >> 
+> >> I'm not sure I understand - system dependencies are an entirely different topic and I would argue a far more important one (very happy to start a discussion about that), but that has nothing to do with declaring downloads. I assumed your question was about large files in packages which packages avoid to ship and download instead so declaring them would be useful.
+> > 
+> > Exactly. Maybe there's a misunderstanding, because I didn't talk about system dependencies (alas there are packages that try to download things that are declared as system dependencies, as Gabe noted). :)
+> > 
+> 
+> 
+> Ok, understood. I would like to tackle those as well, but let's start that conversation in a few weeks when I have a lot more time.
+> 
+> 
+> >> And for that, the obvious answer is they shouldn't do that - if a package needs a file to run, it should include it. So an easy solution is to disallow it.
+> > 
+> > Then we completely agree. My proposal about declaring additional sources was because, given that so many packages do this, I thought that I would find a strong opposition to this. But if R Core / CRAN is ok with just limiting net access at install time, then that's perfect to me. :)
+> > 
+> 
+> Yes we do agree :). I started looking at your list, and so far those seem simply bugs or design deficiencies in the packages (and outright policy violations). I think the only reason they exist is that it doesn't get detected in CRAN incoming, it's certainly not intentional.
+> 
+> Cheers,
+> Simon
+> 
+> 
+> > I?aki
+> > 
+> >> But so far all examples where just (ab)use of downloads for binary dependencies which is an entirely different issue that needs a different solution (in a naive way declaring such dependencies, but we know it's not that simple - and download URLs don't help there).
+> >> 
+> >> Cheers,
+> >> Simon
+> >> 
+> >> 
+> >>> On 27/09/2022, at 8:25 AM,  Ucar <iucar at fedoraproject.org> wrote:
+> >>> 
+> >>> On Sat, 24 Sept 2022 at 01:55, Simon Urbanek
+> >>> <simon.urbanek at r-project.org> wrote:
+> >>>> 
+> >>>> I?aki,
+> >>>> 
+> >>>> I fully agree, this a very common issue since vast majority of server deployments I have encountered don't allow internet access. In practice this means that such packages are effectively banned.
+> >>>> 
+> >>>> I would argue that not even (1) or (2) are really an issue, because in fact the CRAN policy doesn't impose any absolute limits on size, it only states that the package should be "of minimum necessary size" which means it shouldn't waste space. If there is no way to reduce the size without impacting functionality, it's perfectly fine.
+> >>> 
+> >>> "Packages should be of the minimum necessary size" is subject to
+> >>> interpretation. And in practice, there is an issue with e.g. packages
+> >>> that "bundle" big third-party libraries. There are also packages that
+> >>> require downloading precompiled code, JARs... at installation time.
+> >>> 
+> >>>> That said, there are exceptions such as very large datasets (e.g., as distributed by Bioconductor) which are orders of magnitude larger than what is sustainable. I agree that it would be nice to have a mechanism for specifying such sources. So yes, I like the idea, but I'd like to see more real use cases to justify the effort.
+> >>> 
+> >>> "More real use cases" like in "more use cases" or like in "the
+> >>> previous ones are not real ones"? :)
+> >>> 
+> >>>> The issue with any online downloads, though, is that there is no guarantee of availability - which is real issue for reproducibility. So one could argue that if such external sources are required then they should be on a well-defined, independent, permanent storage such as Zenodo. This could be a matter of policy as opposed to the technical side above which would be adding such support to R CMD INSTALL.
+> >>> 
+> >>> Not necessarily. If the package declares the additional sources in the
+> >>> DESCRIPTION (probably with hashes), that's a big improvement over the
+> >>> current state of things, in which basically we don't know what the
+> >>> package tries download, then it may fail, and finally there's no
+> >>> guarantee that it's what the author intended in the first place.
+> >>> 
+> >>> But on top of this, R could add a CMD to download those, and then some
+> >>> lookaside storage could be used on CRAN. This is e.g. how RPM
+> >>> packaging works: the spec declares all the sources, they are
+> >>> downloaded once, hashed and stored in a lookaside cache. Then package
+> >>> building doesn't need general Internet connectivity, just access to
+> >>> the cache.
+> >>> 
+> >>> I?aki
+> >>> 
+> >>>> 
+> >>>> Cheers,
+> >>>> Simon
+> >>>> 
+> >>>> 
+> >>>>> On Sep 24, 2022, at 3:22 AM, I?aki Ucar <iucar at fedoraproject.org> wrote:
+> >>>>> 
+> >>>>> Hi all,
+> >>>>> 
+> >>>>> I'd like to open this debate here, because IMO this is a big issue.
+> >>>>> Many packages do this for various reasons, some more legitimate than
+> >>>>> others, but I think that this shouldn't be allowed, because it
+> >>>>> basically means that installation fails in a machine without Internet
+> >>>>> access (which happens e.g. in Linux distro builders for security
+> >>>>> reasons).
+> >>>>> 
+> >>>>> Now, what if connection is suppressed during package load? There are
+> >>>>> basically three use cases out there:
+> >>>>> 
+> >>>>> (1) The package requires additional files for the installation (e.g.
+> >>>>> the source code of an external library) that cannot be bundled into
+> >>>>> the package due to CRAN restrictions (size).
+> >>>>> (2) The package requires additional files for using it (e.g.,
+> >>>>> datasets, a JAR...) that cannot be bundled into the package due to
+> >>>>> CRAN restrictions (size).
+> >>>>> (3) Other spurious reasons (e.g. the maintainer decided that package
+> >>>>> load was a good place to check an online service availability, etc.).
+> >>>>> 
+> >>>>> Again IMO, (3) shouldn't be allowed in any case; (2) should be a
+> >>>>> separate function that the user actively calls to download the files,
+> >>>>> and those files should be placed into the user dir, and (3) is the
+> >>>>> only legitimate use, but then other mechanism should be provided to
+> >>>>> avoid connections during package load.
+> >>>>> 
+> >>>>> My proposal to support (3) would be to add a new field in the
+> >>>>> DESCRIPTION, "Additional_sources", which would be a comma separated
+> >>>>> list of additional resources to download during R CMD INSTALL. Those
+> >>>>> sources would be downloaded by R CMD INSTALL if not provided via an
+> >>>>> option (to support offline installations), and would be placed in a
+> >>>>> predefined place for the package to find and configure them (via an
+> >>>>> environment variable or in a predefined subdirectory).
+> >>>>> 
+> >>>>> This proposal has several advantages. Apart from the obvious one
+> >>>>> (Internet access during package load can be limited without losing
+> >>>>> current functionalities), it gives more visibility to the resources
+> >>>>> that packages are using during the installation phase, and thus makes
+> >>>>> those installations more reproducible and more secure.
+> >>>>> 
+> >>>>> Best,
+> >>>>> --
+> >>>>> I?aki ?car
+> >>>>> 
+> >>>>> ______________________________________________
+> >>>>> R-devel at r-project.org mailing list
+> >>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> >>>>> 
+> >>>> 
+> >>> 
+> >>> 
+> >>> --
+> >>> I?aki ?car
+> >> 
+> > 
+> > 
+> > -- 
+> > I?aki ?car
+> > 
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Tue Sep 27 00:19:09 2022
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Tue, 27 Sep 2022 11:19:09 +1300
+Subject: [Rd] Proposal to limit Internet access during package load
+In-Reply-To: <F14A6635-5B8F-48D5-8B4E-B42541DF4D0E@R-project.org>
+References: <CALEXWq11fOZ9E4bbDY1=JKah+hADBLeAvO1ddfq1VQB0cav9cg@mail.gmail.com>
+ <40BA324E-14E5-4EEA-8B50-951617DE0675@R-project.org>
+ <CALEXWq13piwUazHc-rH7bKFvpydurak0QcO1HhxVQg8aF=4KgQ@mail.gmail.com>
+ <2FB306BE-3785-4F30-877A-9B9A9FDD12DC@R-project.org>
+ <CALEXWq1etgQDeox9Hn2PchMh058wtmcPOBXZrtORP4dJLEZSMw@mail.gmail.com>
+ <25CF0E01-962E-46CA-9E6A-F25B6A15701E@R-project.org>
+ <CAD4oTHHVuhQoUeA=JVeHDrqW1sMWGQkUBVOzWR9EQzR6cxrXYg@mail.gmail.com>
+ <F14A6635-5B8F-48D5-8B4E-B42541DF4D0E@R-project.org>
+Message-ID: <66552CD1-C165-49E9-BBA4-DE554E494B13@R-project.org>
+
+BTW: It is a good question whether packages that require internet access in order to function at all should be flagged as such so they can be removed from server installations. Let's say if a package provides an API for retrieving stock quotes online and it's all it does then perhaps it does make sense to exclude it. It would be pointless to appease the load check just to not be able to perform the function it was designed for...
+
+Cheers,
+Simon
+
+
+> On 27/09/2022, at 11:11 AM, Simon Urbanek <simon.urbanek at R-project.org> wrote:
+> 
+> 
+> 
+>> On 27/09/2022, at 11:02 AM, Gabriel Becker <gabembecker at gmail.com> wrote:
+>> 
+>> For the record, the only things switchr (my package) is doing internet wise should be hitting the bioconductor config file (http://bioconductor.org/config.yaml) so that it knows the things it need to know about Bioc repos/versions/etc (at load time, actually, not install time, but since install does a test load, those are essentially the same).
+>> 
+>> I have fallback behavior for when the file can't be read, so there shouldn't be any actual build breakages/install breakages I don't think, but the check does happen.
+>> 
+> 
+> $ sandbox-exec -n no-network R CMD INSTALL switchr_0.14.5.tar.gz 
+> [...]
+> ** testing if installed package can be loaded from final location
+> Error in readLines(con) : 
+>  cannot open the connection to 'http://bioconductor.org/config.yaml'
+> Calls: <Anonymous> ... getBiocDevelVr -> getBiocYaml -> inet_handlers -> readLines
+> Execution halted
+> ERROR: loading failed
+> 
+> So, yes, it does break. You should recover from the error and use a fall-back file that you ship.
+> 
+> Cheers,
+> Simon
+> 
+> 
+>> Advice on what to do for the above use case that is better practice is welcome.
+>> 
+>> ~G
+>> 
+>> On Mon, Sep 26, 2022 at 2:40 PM Simon Urbanek <simon.urbanek at r-project.org> wrote:
+>> 
+>> 
+>>> On 27/09/2022, at 10:21 AM, I?aki Ucar <iucar at fedoraproject.org> wrote:
+>>> 
+>>> On Mon, 26 Sept 2022 at 23:07, Simon Urbanek
+>>> <simon.urbanek at r-project.org> wrote:
+>>>> 
+>>>> I?aki,
+>>>> 
+>>>> I'm not sure I understand - system dependencies are an entirely different topic and I would argue a far more important one (very happy to start a discussion about that), but that has nothing to do with declaring downloads. I assumed your question was about large files in packages which packages avoid to ship and download instead so declaring them would be useful.
+>>> 
+>>> Exactly. Maybe there's a misunderstanding, because I didn't talk about system dependencies (alas there are packages that try to download things that are declared as system dependencies, as Gabe noted). :)
+>>> 
+>> 
+>> 
+>> Ok, understood. I would like to tackle those as well, but let's start that conversation in a few weeks when I have a lot more time.
+>> 
+>> 
+>>>> And for that, the obvious answer is they shouldn't do that - if a package needs a file to run, it should include it. So an easy solution is to disallow it.
+>>> 
+>>> Then we completely agree. My proposal about declaring additional sources was because, given that so many packages do this, I thought that I would find a strong opposition to this. But if R Core / CRAN is ok with just limiting net access at install time, then that's perfect to me. :)
+>>> 
+>> 
+>> Yes we do agree :). I started looking at your list, and so far those seem simply bugs or design deficiencies in the packages (and outright policy violations). I think the only reason they exist is that it doesn't get detected in CRAN incoming, it's certainly not intentional.
+>> 
+>> Cheers,
+>> Simon
+>> 
+>> 
+>>> I?aki
+>>> 
+>>>> But so far all examples where just (ab)use of downloads for binary dependencies which is an entirely different issue that needs a different solution (in a naive way declaring such dependencies, but we know it's not that simple - and download URLs don't help there).
+>>>> 
+>>>> Cheers,
+>>>> Simon
+>>>> 
+>>>> 
+>>>>> On 27/09/2022, at 8:25 AM,  Ucar <iucar at fedoraproject.org> wrote:
+>>>>> 
+>>>>> On Sat, 24 Sept 2022 at 01:55, Simon Urbanek
+>>>>> <simon.urbanek at r-project.org> wrote:
+>>>>>> 
+>>>>>> I?aki,
+>>>>>> 
+>>>>>> I fully agree, this a very common issue since vast majority of server deployments I have encountered don't allow internet access. In practice this means that such packages are effectively banned.
+>>>>>> 
+>>>>>> I would argue that not even (1) or (2) are really an issue, because in fact the CRAN policy doesn't impose any absolute limits on size, it only states that the package should be "of minimum necessary size" which means it shouldn't waste space. If there is no way to reduce the size without impacting functionality, it's perfectly fine.
+>>>>> 
+>>>>> "Packages should be of the minimum necessary size" is subject to
+>>>>> interpretation. And in practice, there is an issue with e.g. packages
+>>>>> that "bundle" big third-party libraries. There are also packages that
+>>>>> require downloading precompiled code, JARs... at installation time.
+>>>>> 
+>>>>>> That said, there are exceptions such as very large datasets (e.g., as distributed by Bioconductor) which are orders of magnitude larger than what is sustainable. I agree that it would be nice to have a mechanism for specifying such sources. So yes, I like the idea, but I'd like to see more real use cases to justify the effort.
+>>>>> 
+>>>>> "More real use cases" like in "more use cases" or like in "the
+>>>>> previous ones are not real ones"? :)
+>>>>> 
+>>>>>> The issue with any online downloads, though, is that there is no guarantee of availability - which is real issue for reproducibility. So one could argue that if such external sources are required then they should be on a well-defined, independent, permanent storage such as Zenodo. This could be a matter of policy as opposed to the technical side above which would be adding such support to R CMD INSTALL.
+>>>>> 
+>>>>> Not necessarily. If the package declares the additional sources in the
+>>>>> DESCRIPTION (probably with hashes), that's a big improvement over the
+>>>>> current state of things, in which basically we don't know what the
+>>>>> package tries download, then it may fail, and finally there's no
+>>>>> guarantee that it's what the author intended in the first place.
+>>>>> 
+>>>>> But on top of this, R could add a CMD to download those, and then some
+>>>>> lookaside storage could be used on CRAN. This is e.g. how RPM
+>>>>> packaging works: the spec declares all the sources, they are
+>>>>> downloaded once, hashed and stored in a lookaside cache. Then package
+>>>>> building doesn't need general Internet connectivity, just access to
+>>>>> the cache.
+>>>>> 
+>>>>> I?aki
+>>>>> 
+>>>>>> 
+>>>>>> Cheers,
+>>>>>> Simon
+>>>>>> 
+>>>>>> 
+>>>>>>> On Sep 24, 2022, at 3:22 AM, I?aki Ucar <iucar at fedoraproject.org> wrote:
+>>>>>>> 
+>>>>>>> Hi all,
+>>>>>>> 
+>>>>>>> I'd like to open this debate here, because IMO this is a big issue.
+>>>>>>> Many packages do this for various reasons, some more legitimate than
+>>>>>>> others, but I think that this shouldn't be allowed, because it
+>>>>>>> basically means that installation fails in a machine without Internet
+>>>>>>> access (which happens e.g. in Linux distro builders for security
+>>>>>>> reasons).
+>>>>>>> 
+>>>>>>> Now, what if connection is suppressed during package load? There are
+>>>>>>> basically three use cases out there:
+>>>>>>> 
+>>>>>>> (1) The package requires additional files for the installation (e.g.
+>>>>>>> the source code of an external library) that cannot be bundled into
+>>>>>>> the package due to CRAN restrictions (size).
+>>>>>>> (2) The package requires additional files for using it (e.g.,
+>>>>>>> datasets, a JAR...) that cannot be bundled into the package due to
+>>>>>>> CRAN restrictions (size).
+>>>>>>> (3) Other spurious reasons (e.g. the maintainer decided that package
+>>>>>>> load was a good place to check an online service availability, etc.).
+>>>>>>> 
+>>>>>>> Again IMO, (3) shouldn't be allowed in any case; (2) should be a
+>>>>>>> separate function that the user actively calls to download the files,
+>>>>>>> and those files should be placed into the user dir, and (3) is the
+>>>>>>> only legitimate use, but then other mechanism should be provided to
+>>>>>>> avoid connections during package load.
+>>>>>>> 
+>>>>>>> My proposal to support (3) would be to add a new field in the
+>>>>>>> DESCRIPTION, "Additional_sources", which would be a comma separated
+>>>>>>> list of additional resources to download during R CMD INSTALL. Those
+>>>>>>> sources would be downloaded by R CMD INSTALL if not provided via an
+>>>>>>> option (to support offline installations), and would be placed in a
+>>>>>>> predefined place for the package to find and configure them (via an
+>>>>>>> environment variable or in a predefined subdirectory).
+>>>>>>> 
+>>>>>>> This proposal has several advantages. Apart from the obvious one
+>>>>>>> (Internet access during package load can be limited without losing
+>>>>>>> current functionalities), it gives more visibility to the resources
+>>>>>>> that packages are using during the installation phase, and thus makes
+>>>>>>> those installations more reproducible and more secure.
+>>>>>>> 
+>>>>>>> Best,
+>>>>>>> --
+>>>>>>> I?aki ?car
+>>>>>>> 
+>>>>>>> ______________________________________________
+>>>>>>> R-devel at r-project.org mailing list
+>>>>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>>>>> 
+>>>>>> 
+>>>>> 
+>>>>> 
+>>>>> --
+>>>>> I?aki ?car
+>>>> 
+>>> 
+>>> 
+>>> -- 
+>>> I?aki ?car
+>>> 
+>> 
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
