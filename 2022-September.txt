@@ -9743,3 +9743,384 @@ paul at stat.auckland.ac.nz
 www.stat.auckland.ac.nz/~paul/
 
 
+From p@u| @end|ng |rom @t@t@@uck|@nd@@c@nz  Thu Sep 29 23:49:49 2022
+From: p@u| @end|ng |rom @t@t@@uck|@nd@@c@nz (Paul Murrell)
+Date: Fri, 30 Sep 2022 10:49:49 +1300
+Subject: [Rd] Question about grid.group compositing operators in cairo
+In-Reply-To: <c92574d5-f064-39c1-5fb4-05242607f19a@stat.auckland.ac.nz>
+References: <0eaac5fb-b749-1470-c2a7-9f2f8215ace9@posteo.net>
+ <c3debb04-04b8-90e8-2315-392105cd9db6@stat.auckland.ac.nz>
+ <f581c979-44f0-3dc3-2c6f-015c2651b19c@stat.auckland.ac.nz>
+ <6d240042-2017-a760-28d7-bf96d773fd90@posteo.net>
+ <3e245b89-9c4f-dcbc-b310-5d3a25687af2@stat.auckland.ac.nz>
+ <159821f0-0fc6-9054-c6bc-185102114e68@posteo.net>
+ <c92574d5-f064-39c1-5fb4-05242607f19a@stat.auckland.ac.nz>
+Message-ID: <197c7a88-fb1c-49e1-7fc9-c1605abfef95@stat.auckland.ac.nz>
+
+Hi
+
+Some more thoughts ...
+
+<1>
+I said before that currently, dev->group() does this ...
+
+[OVER] shape shape shape OP shape shape shape
+
+... and one option would be an implicit group on 'src' and 'dst' like 
+this ...
+
+([OVER] shape shape shape) OP ([OVER] shape shape shape)
+
+... but another approach could be just an implicit group on each shape, 
+like this ...
+
+[OVER] ([OVER] shape) ([OVER] shape) OP ([OVER] shape) ([OVER] shape)
+
+That may be a better representation of what you are already doing with 
+dsvg() ?  It may also better reflect what naturally occurs in some 
+graphics systems.
+
+<2>
+Changing the Cairo implementation to work like that would I think 
+produce the same result as your dsvg() for ...
+
+grid.group(src, "in", dst)
+
+... and it would make what constitutes more than one shape much less 
+surprising ...
+
+gList(rectGrob(), rectGrob())  ## multiple shapes (obviously)
+rectGrob(width=1:2/2)          ## multiple shapes (less obvious)
+rectGrob(gp=gpar(col=, fill=)) ## NOT multiple shapes (no surprise)
+
+... and it should not break any pre-existing non-group behaviour.
+
+<3>
+One casualty from this third option would be that the following would no 
+longer solve the overlapping fill and stroke problem ...
+
+grid.group(overlapRect, "source")
+
+... although the fact that that currently works is really a bit 
+surprising AND that result could still be achieved by explicitly drawing 
+separate shapes ...
+
+grid.group(rectGrob(gp=gpar(col=rgb(1,0,0,.5), lwd=20, fill=NA)),
+            "source",
+            rectGrob(gp=gpar(col=NA, fill="green")))
+
+<4>
+I need to try some of this out and also check in with some other people 
+who I think are working on implementing groups on different graphics 
+devices.
+
+<5>
+In summary, don't go changing dsvg() too much just yet!
+
+Paul
+
+On 29/09/2022 1:30 pm, Paul Murrell wrote:
+> Hi
+> 
+> Would it work to explicitly record a filled-and-stroked shape as two 
+> separate elements (one only filled and one only stroked) ?
+> 
+> Then it should only be as hard to apply the active operator on both of 
+> those elements as it is to apply the active operator to more than one 
+> shape (?)
+> 
+> Paul
+> 
+> On 29/09/22 10:17, Panagiotis Skintzos wrote:
+>> Thank you for the very thorough explanation Paul.
+>>
+>> To answer your question on 11: The dsvg device, simply defines svg
+>> elements with their attributes (rect with fill & stroke in my examples).
+>> It does not do any internal image processing like cairo.
+>>
+>> My concern is how to proceed with the implementation in dsvg.
+>>
+>> If I leave it as it is now, they're will be cases where it will give
+>> different results from cairo (and perhaps other devices that will
+>> implement group compositing in similar way).
+>>
+>> On the other hand It would be quite challenging in practice to simulate
+>> the cairo implementation and apply first the fill and then the stroke
+>> with the active operator, on the element itself.
+>>
+>> Any suggestions? :-)
+>>
+>> Panagiotis
+>>
+>>
+>> On 28/9/22 02:56, Paul Murrell wrote:
+>> ?> Hi
+>> ?>
+>> ?> Thanks for the code (and for the previous attachments).
+>> ?>
+>> ?> Some thoughts so far (HTML version with images attached) ...
+>> ?>
+>> ?> <1>
+>> ?> As you have pointed out, the Cairo device draws a stroked-and-filled
+>> ?> shape with two separate drawing operations: the path is filled and
+>> ?> then the path is stroked.? I do not believe that there is any
+>> ?> alternative in Cairo graphics (apart from filling and stroking as an
+>> ?> isolated group and then drawing the group, which we will come back 
+>> to).
+>> ?>
+>> ?> <2>
+>> ?> This fill-then-stroke approach is easy to demonstrate just with a 
+>> thick
+>> ?> semitransparent border ...
+>> ?>
+>> ?> library(grid)
+>> ?> overlapRect <- rectGrob(width=.5, height=.5,
+>> ?> ??????????????????????? gp=gpar(fill="green", lwd=20,
+>> ?> ??????????????????????????????? col=rgb(1,0,0,.5)))
+>> ?> grid.newpage()
+>> ?> grid.draw(overlapRect)
+>> ?>
+>> ?> <3>
+>> ?> This fill-then-stroke approach is what happens on many (most?)
+>> ?> graphics devices, including, for example, the core windows() device,
+>> ?> the core quartz() device, the 'ragg' devices, and 'ggiraph'.? The
+>> ?> latter is true because this is actually the defined behaviour for 
+>> SVG ...
+>> ?>
+>> ?> https://www.w3.org/TR/SVG2/render.html#Elements 
+>> <https://www.w3.org/TR/SVG2/render.html#Elements>
+>> ?> https://www.w3.org/TR/SVG2/render.html#PaintingShapesAndText 
+>> <https://www.w3.org/TR/SVG2/render.html#PaintingShapesAndText>
+>> ?>
+>> ?> <4>
+>> ?> There are exceptions to the fill-then-stroke approach, including the
+>> ?> core pdf() device, but I think they are in the minority.? The PDF
+>> ?> language supports a "B" operator that only fills within the border (no
+>> ?> overlap between fill and border).? Demonstrating this is complicated
+>> ?> by the fact that not all PDF viewers support this correctly (e.g.,
+>> ?> evince and Firefox do not;? ghostscript and chrome do)!
+>> ?>
+>> ?> <5>
+>> ?> Forcing all R graphics devices to change the rendering of
+>> ?> filled-and-stroked shapes to match the PDF definition instead of
+>> ?> fill-then-stroke is unlikely to happen because it would impact a lot
+>> ?> of graphics devices, it would break existing behaviour, it may be
+>> ?> difficult/impossible for some devices, and it is not clear that it is
+>> ?> the best approach anyway.
+>> ?>
+>> ?> <6>
+>> ?> Finally getting back to your example, the fill-then-stroke approach
+>> ?> produces some interesting results when applying compositing operators
+>> ?> because the fill is drawn using the compositing operator to combine it
+>> ?> with previous drawing and then the stroke is drawn using the
+>> ?> compositing operator to combine it with *the result of combining the
+>> ?> fill with previous drawing*. The result makes sense in terms of how
+>> ?> the rendering works, but it probably fails the "principle of least
+>> ?> surprise".
+>> ?>
+>> ?> srcRect <- rectGrob(2/3, 1/3, width=.6, height=.6,
+>> ?> ??????????????????? gp=gpar(lwd = 5, fill=rgb(0, 0, 0.9, 0.4)))
+>> ?> dstRect <- rectGrob(1/3, 2/3, width=.6, height=.6,
+>> ?> ??????????????????? gp=gpar(lwd = 5, fill=rgb(0.7, 0, 0, 0.8)))
+>> ?> grid.newpage()
+>> ?> grid.group(srcRect, "in", dstRect)
+>> ?>
+>> ?> <7>
+>> ?> This issue is not entirely unanticipated because it can arise
+>> ?> slightly-less-unintentionally if we combine a 'src' and/or 'dst' that
+>> ?> draw more than one shape, like this ...
+>> ?>
+>> ?> src <- circleGrob(3:4/5, r=.2, gp=gpar(col=NA, fill=2))
+>> ?> dst <- circleGrob(1:2/5, r=.2, gp=gpar(col=NA, fill=3))
+>> ?> grid.newpage()
+>> ?> grid.group(src, "xor", dst)
+>> ?>
+>> ?> This was discussed in the Section "Compositing and blend modes" in the
+>> ?> original technical report about groups and compositing ...
+>> ?>
+>> ?> 
+>> https://www.stat.auckland.ac.nz/~paul/Reports/GraphicsEngine/groups/groups.html#userdetails 
+>> <https://www.stat.auckland.ac.nz/~paul/Reports/GraphicsEngine/groups/groups.html#userdetails> 
+>>
+>> ?>
+>> ?>
+>> ?> <8>
+>> ?> A solution to the problem of drawing more than one shape (above) is to
+>> ?> take explicit control of how shapes are combined, *using explicit
+>> ?> groups* ...
+>> ?>
+>> ?> grid.newpage()
+>> ?> grid.group(groupGrob(src), "xor", dst)
+>> ?>
+>> ?> <9>
+>> ?> Explicit groups can be used to solve the problem of overlapping fill
+>> ?> and stroke (here we specify that the rectangle border should be
+>> ?> combined with the rectangle fill using the "source" operator) ...
+>> ?>
+>> ?> grid.newpage()
+>> ?> grid.group(overlapRect, "source")
+>> ?>
+>> ?> <10>
+>> ?> Explicit groups can also be used to get the result that we might have
+>> ?> originally expected for the "in" operator example (here we isolate the
+>> ?> 'src' rectangle so that the border and the fill are combined together
+>> ?> [using the default "over" operator] and then combined with the other
+>> ?> rectangle using the "in" operator) ...
+>> ?>
+>> ?> grid.newpage()
+>> ?> grid.group(groupGrob(srcRect), "in", dstRect)
+>> ?>
+>> ?> <11>
+>> ?> A possible change would be to force an implicit group (with op=OVER)
+>> ?> on the 'src' and 'dst' in dev->group().? I believe this is effectively
+>> ?> what you are doing with your dsvg() device (?).
+>> ?>
+>> ?> Currently, dev->group() does this ...
+>> ?>
+>> ?> [OVER] shape shape shape OP shape shape shape
+>> ?>
+>> ?> ... and an implicit group on 'src' and 'dst' would do this ...
+>> ?>
+>> ?> ([OVER] shape shape shape) OP ([OVER] shape shape shape)
+>> ?>
+>> ?> An implicit (OVER) group would make it easier to combine multiple
+>> ?> shapes with OVER (though only slightly) ...
+>> ?>
+>> ?> grid.group(src, OP, dst)
+>> ?>
+>> ?> ... instead of ...
+>> ?>
+>> ?> grid.group(groupGrob(src), OP, dst)
+>> ?>
+>> ?> On the other hand, an implicit (OVER) group would make it harder to
+>> ?> combine multiple shapes with an operator other than OVER (by quite a
+>> ?> lot?) ...
+>> ?>
+>> ?> grid.group(groupGrob(shape, OP, groupGrob(shape, OP, shape)), OP, dst)
+>> ?>
+>> ?> ... instead of ...
+>> ?>
+>> ?> grid.group(src, OP, dst)
+>> ?>
+>> ?> The complicating factor is that what constitutes more than one shape
+>> ?> (or drawing operation) can be unexpected ...
+>> ?>
+>> ?> gList(rectGrob(), rectGrob())? ## obvious
+>> ?> rectGrob(width=1:2/2)????????? ## less obvious
+>> ?> rectGrob(gp=gpar(col=, fill=)) ## a bit of a surprise
+>> ?>
+>> ?> <12>
+>> ?> In summary, while there is some temptation to add an implicit group
+>> ?> around 'src' and 'dst' in a group, there are also reasons not to.
+>> ?>
+>> ?> Happy to hear further arguments on this.
+>> ?>
+>> ?> Paul
+>> ?>
+>> ?> On 28/09/2022 8:04 am, Panagiotis Skintzos wrote:
+>> ?>> Here is the code again in text:
+>> ?>>
+>> ?>>
+>> ?>> src <- rectGrob(2/3, 1/3, width=.6, height=.6, gp=gpar(lwd = 5,
+>> ?>> fill=rgb(0, 0, 0.9, 0.4)))
+>> ?>> dst <- rectGrob(1/3, 2/3, width=.6, height=.6, gp=gpar(lwd = 5,
+>> ?>> fill=rgb(0.7, 0, 0, 0.8)))
+>> ?>>
+>> ?>> svg("cairo.in.svg", width = 5, height = 5)
+>> ?>> grid.group(src, "in", dst)
+>> ?>> dev.off()
+>> ?>>
+>> ?>>
+>> ?>>
+>> ?>> On 27/9/22 04:44, Paul Murrell wrote:
+>> ?>> ?>
+>> ?>> ?> Could you also please send me the SVG code that your device is
+>> ?>> ?> generating for your example.? Thanks!
+>> ?>> ?>
+>> ?>> ?> Paul
+>> ?>> ?>
+>> ?>> ?> On 27/09/22 08:50, Paul Murrell wrote:
+>> ?>> ?>> Hi
+>> ?>> ?>>
+>> ?>> ?>> Thanks for the report.? It certainly sounds like I have done
+>> ?>> ?>> something stupid :)? For my debugging and testing could you 
+>> please
+>> ?>> ?>> share the R code from your tests ?? Thanks!
+>> ?>> ?>>
+>> ?>> ?>> Paul
+>> ?>> ?>>
+>> ?>> ?>> On 26/09/22 10:27, Panagiotis Skintzos wrote:
+>> ?>> ?>>> Hello,
+>> ?>> ?>>>
+>> ?>> ?>>> I'm trying to update ggiraph package in graphic engine v15
+>> ?>> ?>>> (currently we support up to v14).
+>> ?>> ?>>>
+>> ?>> ?>>> I've implemented the group operators and when I compare the 
+>> outputs
+>> ?>> ?>>> of ggiraph::dsvg with the outputs of svg/png, I noticed some 
+>> weird
+>> ?>> ?>>> results.
+>> ?>> ?>>>
+>> ?>> ?>>> Specifically, some operators in cairo (in, out, dest.in, 
+>> dest.atop)
+>> ?>> ?>>> give strange output, when any source element in the group has a
+>> ?>> ?>>> stroke color defined.
+>> ?>> ?>>>
+>> ?>> ?>>> I attach three example images, where two stroked rectangles are
+>> ?>> used
+>> ?>> ?>>> as source (right) and destination (left).
+>> ?>> ?>>>
+>> ?>> ?>>> cairo.over.png shows the result of the over operator in cairo
+>> ?>> ?>>>
+>> ?>> ?>>> cairo.in.png shows the result of the in operator in cairo
+>> ?>> ?>>>
+>> ?>> ?>>> dsvg.in.png shows the result of the in operator in dsvg
+>> ?>> ?>>>
+>> ?>> ?>>>
+>> ?>> ?>>> You can see the difference between cairo.in.png and 
+>> dsvg.in.png. I
+>> ?>> ?>>> found out why I get different results:
+>> ?>> ?>>>
+>> ?>> ?>>> In dsvg implementation there is one drawing operation: Draw the
+>> ?>> ?>>> source element, as whole (fill and stroke) over the destination
+>> ?>> ?>>> element (using feComposite filter)
+>> ?>> ?>>>
+>> ?>> ?>>> In cairo implementation though there are two operations: 
+>> Apply the
+>> ?>> ?>>> fill on source and draw over the destination and then apply the
+>> ?>> ?>>> stroke and draw over the result of the previous operation.
+>> ?>> ?>>>
+>> ?>> ?>>> I'm not sure if this is intentional or not. Shouldn't the source
+>> ?>> ?>>> element being drawn first as whole (fill and stroke with over
+>> ?>> ?>>> operator) and then apply the group operator and draw it over the
+>> ?>> ?>>> destination? It would seem more logical that way.
+>> ?>> ?>>>
+>> ?>> ?>>>
+>> ?>> ?>>> Thanks,
+>> ?>> ?>>>
+>> ?>> ?>>> Panagiotis
+>> ?>> ?>>>
+>> ?>> ?>>>
+>> ?>> ?>>> ______________________________________________
+>> ?>> ?>>> R-devel at r-project.org mailing list
+>> ?>> ?>>> https://stat.ethz.ch/mailman/listinfo/r-devel 
+>> <https://stat.ethz.ch/mailman/listinfo/r-devel> 
+>>
+>> ?>> <https://stat.ethz.ch/mailman/listinfo/r-devel 
+>> <https://stat.ethz.ch/mailman/listinfo/r-devel>> 
+>>
+>> ?>> ?>>
+>> ?>> ?>
+>> ?>
+> 
+
+-- 
+Dr Paul Murrell
+Te Kura Tatauranga | Department of Statistics
+Waipapa Taumata Rau | The University of Auckland
+Private Bag 92019, Auckland, New Zealand
+64 9 3737599 x85392
+paul at stat.auckland.ac.nz
+www.stat.auckland.ac.nz/~paul/
+
+
