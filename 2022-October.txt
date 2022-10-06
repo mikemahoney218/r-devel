@@ -1344,3 +1344,307 @@ Size: 2034 bytes
 Desc: not available
 URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20221004/f2475af8/attachment.svg>
 
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Wed Oct  5 21:55:55 2022
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Wed, 5 Oct 2022 12:55:55 -0700
+Subject: [Rd] 
+ [External] Time to drop globalenv() from searches in package code?
+In-Reply-To: <aea3c2f-5d61-b73-2ced-724fb8e94da@uiowa.edu>
+References: <0bc42d07-d897-2807-0da2-eab959d35a2a@gmail.com>
+ <bec8c037-aa79-14f3-bf78-239528dac757@uiowa.edu>
+ <25381.36777.795591.36433@hornik.net>
+ <aea3c2f-5d61-b73-2ced-724fb8e94da@uiowa.edu>
+Message-ID: <CAFDcVCS=euEjcCruXwrQ4UW6xpPYpOPteBt80SMNX5WD49u2ug@mail.gmail.com>
+
+Excluding the global environment, and all its parent environments from
+the search path that a package sees would be great news, because it
+would makes things more robust and probably detect a few more bugs out
+there.  In addition to the use case that Duncan mentions, it would
+also remove the ambiguity that comes from searching attached packages
+for global/free variables.
+
+Speaking of the latter, isn't it time to escalate the following to a WARNING?
+
+* checking R code for possible problems ... NOTE
+my_fcn: no visible global function definition for ?var?
+Undefined global functions or variables:
+  var
+Consider adding
+  importFrom("stats", "var")
+to your NAMESPACE file.
+
+There are several package on Bioconductor with such mistakes, and I
+can imagine there are still some old CRAN package too that haven't
+gone from "recent" CRAN incoming checks. The problem here is that the
+intended `var` can be overridden in the global environment, in a
+third-party attached package, or in any other environment on the
+search() path.
+
+Regarding:
+
+> if (require("foo"))
+>    bar(...)
+>
+> with bar exported from foo. I don't know if that is already warned
+> about.  Moving away from this is arguably good in principle but also
+> probably fairly disruptive.
+
+This should be coved by 'R CMD check', also without --as-cran; if we use:
+
+hello <- function() {
+  msg <- "Hello world!"
+  if (require("tools")) msg <- toTitleCase(msg)
+  message(msg)
+}
+
+we get:
+
+* checking dependencies in R code ... NOTE
+'library' or 'require' call to ?tools? in package code.
+  Please use :: or requireNamespace() instead.
+  See section 'Suggested packages' in the 'Writing R Extensions' manual.?
+...
+* checking R code for possible problems ... NOTE
+hello: no visible global function definition for ?toTitleCase?
+Undefined global functions or variables:
+  toTitleCase
+
+This should be enough for a package developer to figure out that the
+function should be implemented as:
+
+hello <- function() {
+  msg <- "Hello world!"
+  if (requireNamespace("tools")) msg <- tools::toTitleCase(msg)
+  message(msg)
+}
+
+which passes 'R CMD check' with all OK.
+
+
+BTW, is there a reason why one cannot import from the 'base' package?
+If we add, say, importFrom(base, mean) to a package's NAMESPACE file,
+the package builds fine, but fails to install;
+
+$ R --vanilla CMD INSTALL teeny_0.1.0.tar.gz
+* installing to library ?/home/hb/R/x86_64-pc-linux-gnu-library/4.2-CBI-gcc9?
+* installing *source* package ?teeny? ...
+** using staged installation
+** R
+** byte-compile and prepare package for lazy loading
+Error in asNamespace(ns, base.OK = FALSE) :
+  operation not allowed on base namespace
+Calls: <Anonymous> ... namespaceImportFrom -> importIntoEnv ->
+getNamespaceInfo -> asNamespace
+Execution halted
+ERROR: lazy loading failed for package ?teeny?
+
+Is this by design (e.g. more flexibility in maintaining the base-R
+packages), or due to a technical limitation (e.g. the 'base' package
+is not fully loaded at this point)?
+
+/Henrik
+
+On Sat, Sep 17, 2022 at 1:24 PM <luke-tierney at uiowa.edu> wrote:
+>
+> On Sat, 17 Sep 2022, Kurt Hornik wrote:
+>
+> >>>>>> luke-tierney  writes:
+> >
+> >> On Thu, 15 Sep 2022, Duncan Murdoch wrote:
+> >>> The author of this Stackoverflow question
+> >>> https://stackoverflow.com/q/73722496/2554330 got confused because a typo in
+> >>> his code didn't trigger an error in normal circumstances, but it did when he
+> >>> ran his code in pkgdown.
+> >>>
+> >>> The typo was to use "x" in a test, when the local variable was named ".x".
+> >>> There was no "x" defined locally or in the package or its imports, so the
+> >>> search got all the way to the global environment and found one.  (The very
+> >>> confusing part for this user was that it found the right variable.)
+> >>>
+> >>> This author had suppressed the "R CMD check" check for use of global
+> >>> variables.  Obviously he shouldn't have done that, but he's working with
+> >>> tidyverse NSE, and that causes so many false positives that it is somewhat
+> >>> understandable he would suppress one too many.
+> >>>
+> >>> The pkgdown simulation of code in examples doesn't do perfect mimicry of
+> >>> running it at top level; the fake global environment never makes it onto the
+> >>> search list.  Some might call this a bug, but I'd call it the right search
+> >>> strategy.
+> >>>
+> >>> My suggestion is that the search for variables in package code should never
+> >>> get to globalenv().  The chain of environments should stop after handling the
+> >>> imports.  (Probably base package functions should also be implicitly
+> >>> imported, but nothing else.)
+> >>>
+> >
+> >> This was considered and discussed when I added namespaces. Basically
+> >> it would mean making the parent of the base namespace environment be
+> >> the empty environment instead of the global environment. As a design
+> >> this is cleaner, and it would be a one-line change in eval.c.  But
+> >> there were technical reasons this was not a viable option at the time,
+> >> also a few political reasons. The technical reasons mostly had to do
+> >> with S3 dispatch.
+> >
+> >> Changes over the years, mostly from work Kurt has done, to S3 dispatch
+> >> for methods defined and registered in packages might make this more
+> >> viable in principle, but there would still be a lot of existing code
+> >> that would stop working. For example, 'make check' with the one-line
+> >> change fails in a base example that defines an S3 method. It might be
+> >> possible to fiddle with the dispatch to keep most of that code
+> >> working, but I suspect that would be a lot of work. Seeing what it
+> >> would take to get 'make check' to succeed would be a first step if
+> >> anyone wants to take a crack at it.
+> >
+> > Luke,
+> >
+> > Can you please share the one-line change so that I can take a closer
+> > look?
+>
+> Index: src/main/envir.c
+> ===================================================================
+> --- src/main/envir.c    (revision 82861)
+> +++ src/main/envir.c    (working copy)
+> @@ -683,7 +683,7 @@
+>       R_GlobalCachePreserve = CONS(R_GlobalCache, R_NilValue);
+>       R_PreserveObject(R_GlobalCachePreserve);
+>   #endif
+> -    R_BaseNamespace = NewEnvironment(R_NilValue, R_NilValue, R_GlobalEnv);
+> +    R_BaseNamespace = NewEnvironment(R_NilValue, R_NilValue, R_EmptyEnv);
+>       R_PreserveObject(R_BaseNamespace);
+>       SET_SYMVALUE(install(".BaseNamespaceEnv"), R_BaseNamespace);
+>       R_BaseNamespaceName = ScalarString(mkChar("base"));
+>
+> -----
+>
+> For S3 the dispatch will have to be changed to explicitly search
+> .GlobalEnv and parents after the namespace if we don't want to break
+> too much.
+>
+> Another idiom that will be broken is
+>
+> if (require("foo"))
+>     bar(...)
+>
+> with bar exported from foo. I don't know if that is already warned
+> about.  Moving away from this is arguably good in principle but also
+> probably fairly disruptive. We might need to add some cleaner
+> use-if-available mechanism, or maybe just adjust some checking code.
+>
+> Best,
+>
+> luke
+>
+> >
+> > Best
+> > -k
+> >
+> >>> I suspect this change would reveal errors in lots of packages, but the number
+> >>> of legitimate uses of the current search strategy has got to be pretty small
+> >>> nowadays, since we've been getting warnings for years about implicit imports
+> >>> from other standard packages.
+> >
+> >> Your definition of 'legitimate' is probably quite similar to mine, but
+> >> there is likely to be a small but vocal minority with very different
+> >> views :-).
+> >
+> >> Best,
+> >
+> >> luke
+> >
+> >>> Duncan Murdoch
+> >>>
+> >>> ______________________________________________
+> >>> R-devel at r-project.org mailing list
+> >>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> >>>
+> >
+> >> --
+> >> Luke Tierney
+> >> Ralph E. Wareham Professor of Mathematical Sciences
+> >> University of Iowa                  Phone:             319-335-3386
+> >> Department of Statistics and        Fax:               319-335-3017
+> >>     Actuarial Science
+> >> 241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+> >> Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+> >
+> >> ______________________________________________
+> >> R-devel at r-project.org mailing list
+> >> https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+>
+> --
+> Luke Tierney
+> Ralph E. Wareham Professor of Mathematical Sciences
+> University of Iowa                  Phone:             319-335-3386
+> Department of Statistics and        Fax:               319-335-3017
+>     Actuarial Science
+> 241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+> Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From d@v|@ @end|ng |rom r@tud|o@com  Wed Oct  5 23:04:11 2022
+From: d@v|@ @end|ng |rom r@tud|o@com (Davis Vaughan)
+Date: Wed, 5 Oct 2022 17:04:11 -0400
+Subject: [Rd] A potential POSIXlt->Date bug introduced in r-devel
+Message-ID: <CABzLhzzsnRCwM3LPM-z2T8YFO3bBcD7=iE3Hxx9rLdEUeAkk3g@mail.gmail.com>
+
+Hi all,
+
+I think I have discovered a bug in the conversion from POSIXlt to Date that
+has been introduced in r-devel.
+
+It affects lubridate, but surprisingly didn't cause test failures there.
+Instead it caused test failures in users of lubridate, like slider, arrow,
+and admiral (see https://github.com/tidyverse/lubridate/issues/1069), and
+at least in slider I have been asked by CRAN to correct this issue before
+2022-10-16.
+
+In r-devel we get the following:
+
+```
+data <- list(
+  sec = 0,
+  min = 0L,
+  hour = 0L,
+  mday = 31L,
+  mon = c(0L, NA, 2L),
+  year = 113L,
+  wday = 4L,
+  yday = 30L,
+  isdst = 0L
+)
+
+x <- .POSIXlt(xx = data, tz = "UTC")
+x
+#> [1] "2013-01-31 UTC" NA               "2013-03-31 UTC"
+
+# Looks right
+as.POSIXct(x)
+#> [1] "2013-01-31 UTC" NA               "2013-03-31 UTC"
+
+# Weird, where is the `NA`?
+as.Date(x)
+#> [1] "2013-01-31" "1970-01-01" "2013-03-31"
+```
+
+The POSIXlt object is length 3, but is only partially filled out. The other
+elements are all recycled to length 3 upon conversion to POSIXct or Date.
+But when converting to Date, we lose the `NA` value. I think the
+`as.Date()` conversion seems inconsistent with the `as.POSIXct()`
+conversion.
+
+It looks like this comes up because the conversion to Date now defaults to
+using `sec` if any of the date-like fields are `NA_INTEGER`, but this means
+the `NA` in the `mon` field is ignored.
+https://github.com/wch/r-source/blob/e10a971dee6a0ab851279c183cc21954d66b3be4/src/main/datetime.c#L1293-L1295
+
+Thanks all,
+Davis Vaughan
+
+	[[alternative HTML version deleted]]
+
+
