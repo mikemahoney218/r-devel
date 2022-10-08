@@ -55,6 +55,7 @@ Wolfgang
 >www.fisheries.noaa.gov
 
 
+
 From bbo|ker @end|ng |rom gm@||@com  Sat Oct  1 18:48:39 2022
 From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
 Date: Sat, 1 Oct 2022 12:48:39 -0400
@@ -140,6 +141,7 @@ Director, School of Computational Science and Engineering
 (Acting) Graduate chair, Mathematics & Statistics
  > E-mail is sent at my convenience; I don't expect replies outside of 
 working hours.
+
 
 
 From @vr@h@m@@d|er @end|ng |rom gm@||@com  Sun Oct  2 01:52:39 2022
@@ -231,6 +233,7 @@ Sent from my iPhone
 > ______________________________________________
 > R-devel at r-project.org mailing list
 > https://stat.ethz.ch/mailman/listinfo/r-devel
+
 
 
 From @uh@rto_@nggono @end|ng |rom y@hoo@com  Sun Oct  2 10:42:50 2022
@@ -341,105 +344,6 @@ format(x)
 #?c("2016-12-06?18:59:01",?"2016-12-06?18:59:02")
 options(op)
 
-
-From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Mon Oct  3 13:17:58 2022
-From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
-Date: Mon, 3 Oct 2022 13:17:58 +0200
-Subject: [Rd] as.character.POSIXt in R devel
-In-Reply-To: <1454067819.3486826.1664700170912@mail.yahoo.com>
-References: <1454067819.3486826.1664700170912.ref@mail.yahoo.com>
- <1454067819.3486826.1664700170912@mail.yahoo.com>
-Message-ID: <25402.50406.857046.262247@stat.math.ethz.ch>
-
->>>>> Suharto Anggono Suharto Anggono via R-devel 
->>>>>     on Sun, 2 Oct 2022 08:42:50 +0000 (UTC) writes:
-
-    > With r82904, 'as.character.POSIXt' in R devel is changed. The NEWS item:
-    > as.character(<POSIXt>) now behaves more in line with the
-    >    methods for atomic vectors such as numbers, and is no longer
-    >    influenced by options().
-
-    > Part of the code:
-
-    >        s <- trunc(x$sec)         fs <- x$sec - s
-    >         r1 <- sprintf("%d-%02d-%02d", 1900 + x$year, x$mon+1L, x$mday)
-    >       if(any(n0 <- time != 0)) # add time if not 0
-    >             r1[n0] <- paste(r1[n0],
-    >                         sprintf("%02d:%02d:%02d%s", x$hour[n0], x$min[n0], s[n0],
-    >                                 substr(as.character(fs[n0]), 2L, 32L)))
-
-
-    > * Wrong:
-    > The result is wrong when as.character(fs[n0]) has scientific notation.
-    > Example (modified from https://bugs.r-project.org/show_bug.cgi?id=9819):
-    > op <- options(scipen = 0, OutDec = ".") # (default setting)
-    > x <- as.POSIXlt("2007-07-27 16:11:03.000002")
-    > as.character(x) # "2007-07-27 16:11:03.99999999983547e-06"
-    > as.character(x$sec - trunc(x$sec))
-    > # "1.99999999983547e-06" options(op)
-
-    > 'as.character.POSIXt' could temporarily set option 'scipen' large enough to prevent scientific notation in as.character(fs[n0]) .
-
-
-    > * Too much precision:
-    > In some cases with fractional seconds with seconds close to 60, the result has many decimal places while there is an accurate representation with less decimal places. It is actually OK, just unpleasant.
-    > Example (modified from https://bugs.r-project.org/show_bug.cgi?id=14693):
-    > op <- options(scipen = 0, OutDec = ".") # (default setting)
-    > x <- as.POSIXlt("2011-10-01 12:34:56.3")
-    > x$sec == 56.3 # TRUE print(x$sec, 17)
-    > # [1] 56.299999999999997 as.character(x)
-    > # "2011-10-01 12:34:56.299999999999997"
-    > format(x, "%Y-%m-%d %H:%M:%OS1") # short and accurate
-    > # "2011-10-01 12:34:56.3" ct <- as.POSIXct(x, tz = "UTC")
-    > identical(ct,
-    > as.POSIXct("2011-10-01 12:34:56.3", tz = "UTC")) # TRUE
-    > print(as.numeric(ct), 17) # [1] 1317472496.3
-    > lct <- as.POSIXlt(ct) lct$sec == 56.3 # FALSE
-    > print(lct$sec, 17) # [1] 56.299999952316284
-    > as.character(ct) # "2011-10-01 12:34:56.299999952316284"
-    > options(op)
-
-    > The "POSIXct" case is a little different because some precision is already lost after converted to "POSIXct".
-
-    > In 'as.character.POSIXt', using 'as.character' on the seconds (not separating the fractional part) might be good enough, but a leading zero must be added as necessary.
-
-
-    > * Different from 'format':
-
-    > - With fractional seconds, the result is influenced by option 'OutDec'.
-
-    > - From "Printing years" in ?strptime: "For years 0 to 999 most OSes pad with zeros or spaces to 4 characters, and Linux outputs just the number."
-    > Because (1900 + x$year) is formatted with %d in 'as.character.POSIXt', years 0 to 999 is output without padding. It is different from 'format' in OSes other than Linux.
-
-
-    > * Behavior with "improper" "POSIXlt" object:
-
-    > - "POSIXlt" object with out-of-bounds components is not normalized.
-    > Example (modified from regr.tests-1d.R):
-    > op <- options(scipen = 0) # (default setting)
-    > x <- structure( list(sec = 10000, min = 59L, hour = 18L,
-    > mday = 6L, mon = 11L, year = 116L, wday = 2L, yday = 340L,
-    > isdst = 0L, zone = "CET", gmtoff = 3600L),
-    > class = c("POSIXlt", "POSIXt"), tzone = "CET")
-    > as.character(x) # "2016-12-06 18:59:10000" format(x)
-    > # "2016-12-06 21:45:40" options(op)
-
-    > - With "POSIXlt" object where sec, min, hour, mday, mon, and year components are not all of the same length, recycling is not handled.
-    > Example (modified from regr.tests-1d.R):
-    > op <- options(scipen = 0) # (default setting)
-    > x <- structure(
-    > list(sec = c(1,  2), min = 59L, hour = 18L,
-    > mday = 6L, mon = 11L, year = 116L, wday = 2L, yday = 340L,
-    > isdst = 0L, zone = "CET", gmtoff = 3600L),
-    > class = c("POSIXlt", "POSIXt"), tzone = "CET")
-    > as.character(x) # c("2016-12-06 18:59:01", "NA NA:NA:02")
-    > format(x)
-    > # c("2016-12-06 18:59:01", "2016-12-06 18:59:02")
-    > options(op)
-
-    > ______________________________________________
-    > R-devel at r-project.org mailing list
-    > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
 From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Mon Oct  3 14:46:08 2022
@@ -662,6 +566,7 @@ on this future R behavior !
 
 Best regards,
 Martin
+
 
 
 From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Mon Oct  3 18:58:48 2022
@@ -925,6 +830,7 @@ should really be illegal in an otherwise non-0-length POSIXlt x
 
 
 Martin
+
 
 
 From p@u| @end|ng |rom @t@t@@uck|@nd@@c@nz  Mon Oct  3 22:20:50 2022
@@ -1342,7 +1248,7 @@ Name: dsvg.in-mod-4.svg
 Type: image/svg+xml
 Size: 2034 bytes
 Desc: not available
-URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20221004/f2475af8/attachment.svg>
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20221004/f2475af8/attachment-0002.svg>
 
 From henr|k@bengt@@on @end|ng |rom gm@||@com  Wed Oct  5 21:55:55 2022
 From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
@@ -1586,6 +1492,7 @@ On Sat, Sep 17, 2022 at 1:24 PM <luke-tierney at uiowa.edu> wrote:
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+
 From d@v|@ @end|ng |rom r@tud|o@com  Wed Oct  5 23:04:11 2022
 From: d@v|@ @end|ng |rom r@tud|o@com (Davis Vaughan)
 Date: Wed, 5 Oct 2022 17:04:11 -0400
@@ -1644,6 +1551,1065 @@ https://github.com/wch/r-source/blob/e10a971dee6a0ab851279c183cc21954d66b3be4/sr
 
 Thanks all,
 Davis Vaughan
+
+	[[alternative HTML version deleted]]
+
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Oct  6 10:15:29 2022
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 6 Oct 2022 10:15:29 +0200
+Subject: [Rd] A potential POSIXlt->Date bug introduced in r-devel
+In-Reply-To: <CABzLhzzsnRCwM3LPM-z2T8YFO3bBcD7=iE3Hxx9rLdEUeAkk3g@mail.gmail.com>
+References: <CABzLhzzsnRCwM3LPM-z2T8YFO3bBcD7=iE3Hxx9rLdEUeAkk3g@mail.gmail.com>
+Message-ID: <25406.36513.13316.676488@stat.math.ethz.ch>
+
+>>>>> Davis Vaughan 
+>>>>>     on Wed, 5 Oct 2022 17:04:11 -0400 writes:
+
+    > Hi all,
+
+    > I think I have discovered a bug in the conversion from POSIXlt to Date that
+    > has been introduced in r-devel.
+
+    > It affects lubridate, but surprisingly didn't cause test failures there.
+    > Instead it caused test failures in users of lubridate, like slider, arrow,
+    > and admiral (see https://github.com/tidyverse/lubridate/issues/1069), and
+    > at least in slider I have been asked by CRAN to correct this issue before
+    > 2022-10-16.
+
+    > In r-devel we get the following:
+
+    > ```
+    > data <- list(
+    > sec = 0,
+    > min = 0L,
+    > hour = 0L,
+    > mday = 31L,
+    > mon = c(0L, NA, 2L),
+    > year = 113L,
+    > wday = 4L,
+    > yday = 30L,
+    > isdst = 0L
+    > )
+
+    > x <- .POSIXlt(xx = data, tz = "UTC")
+    > x
+    > #> [1] "2013-01-31 UTC" NA               "2013-03-31 UTC"
+
+    > # Looks right
+    > as.POSIXct(x)
+    > #> [1] "2013-01-31 UTC" NA               "2013-03-31 UTC"
+
+
+
+    > # Weird, where is the `NA`?
+    > as.Date(x)
+    > #> [1] "2013-01-31" "1970-01-01" "2013-03-31"
+    > ```
+
+I agree that the above is wrong, i.e., a bug in current  R-devel.
+
+    > The POSIXlt object is length 3, but is only partially filled out. 
+
+    > The other elements are all recycled to length 3 upon
+    > conversion to POSIXct or Date. 
+
+    > But when converting to Date, we lose the `NA` value. I think the
+    > `as.Date()` conversion seems inconsistent with the `as.POSIXct()`
+    > conversion.
+
+Yes.  There was another very much relatd conversation here on R-devel,
+initiated by Suharto Anggono just a few days ago.
+
+This subject, i.e., "partially filled out" POSIXlt objects, was
+one of the topics, too.
+
+See my reply there, notably at the end:
+
+  https://stat.ethz.ch/pipermail/r-devel/2022-October/082072.html
+    
+I do mention that "recycling" of partially filled POSIXlt
+objects has only partially been implemented in R more generally
+and was actually asking for comments and further discussion.
+
+
+    > It looks like this comes up because the conversion to Date now defaults to
+    > using `sec` if any of the date-like fields are `NA_INTEGER`,
+
+yes, because only that allows to also deal with +/- Inf  etc,
+as was recently added as new feature, see the NEWS of R 4.2.0
+
+    ? Not strictly fixing a bug, format()ing and print()ing of
+      non-finite Date and POSIXt values NaN and +/-Inf no longer show
+      as NA but the respective string, e.g., Inf, for consistency with
+      numeric vector's behaviour, fulfilling the wish of PR#18308.
+
+i.e., see also R's bugzilla
+      https://bugs.r-project.org/show_bug.cgi?id=18308
+
+which actually *also* mentioned an NA problem in Date/Time objects.
+
+
+
+    >  but this means  the `NA` in the `mon` field is ignored.
+
+which I agree is bogous and we'll fix.
+
+Still, I did not get any feedback on asking about documentation
+etc on  POSIXlt objects ... and I *had* mentioned I agreed that
+the current partial implementation of  "partially filled" i.e. recycling of
+POSIXlt components should probably be made part of the
+"definition" of POSIXlt.
+
+Have I overlooked an existing definition / contract about these?
+
+Martin
+
+--
+Martin M?chler
+ETH Zurich   and  R Core team
+
+
+From berw|n@tur|@ch @end|ng |rom gm@||@com  Thu Oct  6 10:41:46 2022
+From: berw|n@tur|@ch @end|ng |rom gm@||@com (Berwin A Turlach)
+Date: Thu, 6 Oct 2022 16:41:46 +0800
+Subject: [Rd] A potential POSIXlt->Date bug introduced in r-devel
+In-Reply-To: <25406.36513.13316.676488@stat.math.ethz.ch>
+References: <CABzLhzzsnRCwM3LPM-z2T8YFO3bBcD7=iE3Hxx9rLdEUeAkk3g@mail.gmail.com>
+ <25406.36513.13316.676488@stat.math.ethz.ch>
+Message-ID: <20221006164146.39f9b8e4@ECM-DTC-716.uniwa.uwa.edu.au>
+
+G'day all,
+
+On Thu, 6 Oct 2022 10:15:29 +0200
+Martin Maechler <maechler at stat.math.ethz.ch> wrote:
+
+> >>>>> Davis Vaughan 
+> >>>>>     on Wed, 5 Oct 2022 17:04:11 -0400 writes:  
+
+>     > # Weird, where is the `NA`?
+>     > as.Date(x)  
+>     > #> [1] "2013-01-31" "1970-01-01" "2013-03-31"  
+>     > ```  
+> 
+> I agree that the above is wrong, i.e., a bug in current  R-devel.
+
+I have no intention of hijacking this thread, but I wonder whether this
+is a good opportunity to mention that the 32 bit build of R-devel falls
+over on my machine since 25 September.  It fails one of the regression
+tests in reg-tests-1d.R.  The final lines of reg-tests-1d.Rout.fail
+are:
+
+> tools::Rd2txt(rd, out <- textConnection(NULL, "w"), fragment = TRUE)
+> stopifnot(any(as.character(rd) != "\n"),
++           identical(textConnectionValue(out)[2L], "LaTeX"));
+close(out)
+> ## empty output in R <= 4.2.x
+> 
+> 
+> ## as.POSIXlt(<very large Date>)  gave integer overflow
+> stopifnot(as.POSIXlt(.Date(2^31 + 10))$year == 5879680L)
+Error: as.POSIXlt(.Date(2^31 + 10))$year == 5879680L is not TRUE
+Execution halted
+
+
+I should have reported this earlier, but somehow did not find the time
+to do so.  So I thought I mention it here. :)
+
+Cheers,
+
+	Berwin
+
+
+From @uh@rto_@nggono @end|ng |rom y@hoo@com  Thu Oct  6 12:20:38 2022
+From: @uh@rto_@nggono @end|ng |rom y@hoo@com (Suharto Anggono Suharto Anggono)
+Date: Thu, 6 Oct 2022 10:20:38 +0000 (UTC)
+Subject: [Rd] as.character.POSIXt in R devel
+In-Reply-To: <25403.5320.335656.447541@stat.math.ethz.ch>
+References: <1454067819.3486826.1664700170912.ref@mail.yahoo.com>
+ <1454067819.3486826.1664700170912@mail.yahoo.com>
+ <25402.55696.329918.913605@stat.math.ethz.ch>
+ <25403.5320.335656.447541@stat.math.ethz.ch>
+Message-ID: <1498226502.5494920.1665051638960@mail.yahoo.com>
+
+In?'as.character.POSIXt'?in?R?devel?after?r83010:
+????????????if(getOption("OutDec")?!=?OutDec)?{?op?<-?options(OutDec?=?OutDec);?on.exit(op)?}
+
+on.exit(op)
+does?nothing.?It?should?be
+on.exit(options(op))
+
+
+Is?it?OK?to?output?the?seconds?using?scientific?notation?
+Example?(modified?from?https://bugs.r-project.org/show_bug.cgi?id=9819):
+op?<-?options(scipen?=?0)?#?(default?setting)
+as.character(as.POSIXlt("2007-07-27?16:11:00.000002"))
+#?"2007-07-27?16:11:02e-06"
+options(op)
+
+
+Example (modified from https://bugs.r-project.org/show_bug.cgi?id=14579):
+op?<-?options(scipen?=?0)?#?(default?setting)
+ct <- as.POSIXct(1302811200 - 2e-07,
+origin = as.POSIXct("1970-01-01 00:00:00", tz="UTC"), tz = "UTC")
+as.character(ct) # outputs "60" for seconds
+# "2011-04-14 19:59:60"
+options(op)
+
+
+(CharleMagne.crowned?<-?as.POSIXlt(ISOdate(774,7,10)))
+as.character(CharleMagne.crowned)
+
+As?I?mentioned,?they?are?different?on?OSes?_other?than_?Linux.
+
+In?R?on?Windows:
+>?(CharleMagne.crowned?<-?as.POSIXlt(ISOdate(774,7,10)))
+[1]?"0774-07-10?12:00:00?GMT"
+
+
+-----------------------
+On?Monday,?3?October?2022,?11:58:53?pm?GMT+7,?Martin?Maechler?<maechler at stat.math.ethz.ch>?wrote:
+
+
+>>>>>?Martin?Maechler
+>>>>>????on?Mon,?3?Oct?2022?14:46:08?+0200?writes:
+
+>>>>>?Suharto?Anggono?Suharto?Anggono?via?R-devel
+>>>>>????on?Sun,?2?Oct?2022?08:42:50?+0000?(UTC)?writes:
+
+????>>?With?r82904,?'as.character.POSIXt'?in?R?devel?is?changed.?The?NEWS?item:
+
+????>>?as.character(<POSIXt>)?now?behaves?more?in?line?with?the
+????>>?methods?for?atomic?vectors?such?as?numbers,?and?is?no?longer
+????>>?influenced?by?options().
+
+[..............]
+
+????>>?*?Wrong:
+
+????>>?The?result?is?wrong?when?as.character(fs[n0])?has?scientific?notation.
+
+????>?yes,?you?are?right.??This?is?a?lapsus?I?will?fix.
+
+????>>?Example?(modified?from?https://bugs.r-project.org/show_bug.cgi?id=9819):
+????>>?op?<-?options(scipen?=?0,?OutDec?=?".")?#?(default?setting)
+????>>?x?<-?as.POSIXlt("2007-07-27?16:11:03.000002")
+????>>?as.character(x)
+????>>?#?"2007-07-27?16:11:03.99999999983547e-06"
+????>>?as.character(x$sec?-?trunc(x$sec))
+????>>?#?"1.99999999983547e-06"
+????>>?options(op)
+
+????>>?'as.character.POSIXt'?could?temporarily?set?option?'scipen'?large?enough?to?prevent?scientific?notation?in?as.character(fs[n0])?.
+
+????>?Yes,?something?like?that.
+
+I?have?committed?a?version?now?of?datetime.R,??svn?rev?83010?,
+which?does?no?longer?depend?on??'OutDec'?(but?gets?such?argument)
+and?which?has?a?new?'digits'?argument?which?defaults
+to?14?for?POSIXlt?and
+to??6?for?POSIXct??..?but?the?user?can?choose?a?different?value.
+
+Also,?it?now?uses?the?equivalent?of??as.character(round(x$sec,?digits))
+(in?case?the?seconds?need?to?be?shown)??which?also?solves?the
+following??"too?much?precision"??problem.
+
+????>>?*?Too?much?precision:
+
+????>>?In?some?cases?with?fractional?seconds?with?seconds?close?to?60,?the?result?has?many?decimal?places?while?there?is?an?accurate?representation?with?less?decimal?places.?It?is?actually?OK,?just?unpleasant.
+
+????>?I?agree?that?is?unpleasant.
+????>?To?someone?else?I?had?written?that?we?also?may?need?to?improve
+????>?the?number?of?decimals?shown?here.
+????>?The?design?has?been?that?it?should?be?"full?precision"
+????>?as?it?is?for??as.character(<numbers>)
+
+????>?Now,?we?know?that?POSIXct?cannot?be?very?precise?(in?its
+????>?fractional?seconds)?but?that?is?very?different?for?POSIXlt?where
+????>?fractional?seconds?may?have?14?digits?after?the?decimal?point.
+
+????>?Ideally?we?could?*store*?with?the?POSIXlt?object?if?it?was
+????>?produced?from?a?POSIXct?one,?and?hence?have?only?around?6?valid?digits
+????>?(after?the?dec.)?or?not.??As?we?cannot?currently?store/save?that
+????>?info,?we?kept?using?"full"?precision?which?may?be?much?more?than
+????>?is?sensible.
+
+????>>?Example?(modified?from?https://bugs.r-project.org/show_bug.cgi?id=14693):
+????>>?op?<-?options(scipen?=?0,?OutDec?=?".")?#?(default?setting)
+????>>?x?<-?as.POSIXlt("2011-10-01?12:34:56.3")
+????>>?x$sec?==?56.3?#?TRUE
+
+????>?[which?may?be?typical,?but?may?also?be?platform?dependent]
+
+????>>?print(x$sec,?17)
+????>>?#?[1]?56.299999999999997
+????>>?as.character(x)
+????>>?#?"2011-10-01?12:34:56.299999999999997"
+????>>?format(x,?"%Y-%m-%d?%H:%M:%OS1")?#?short?and?accurate
+????>>?#?"2011-10-01?12:34:56.3"
+????>>?ct?<-?as.POSIXct(x,?tz?=?"UTC")
+????>>?identical(ct,
+????>>?as.POSIXct("2011-10-01?12:34:56.3",?tz?=?"UTC"))
+????>>?#?TRUE
+????>>?print(as.numeric(ct),?17)
+????>>?#?[1]?1317472496.3
+????>>?lct?<-?as.POSIXlt(ct)
+????>>?lct$sec?==?56.3?#?FALSE
+????>>?print(lct$sec,?17)
+????>>?#?[1]?56.299999952316284
+????>>?as.character(ct)
+????>>?#?"2011-10-01?12:34:56.299999952316284"
+????>>?options(op)
+
+????>>?The?"POSIXct"?case?is?a?little?different?because?some?precision?is?already?lost?after?converted?to?"POSIXct".
+
+????>?yes,?indeed.
+
+????>>?In?'as.character.POSIXt',?using?'as.character'?on?the?seconds?(not?separating?the?fractional?part)?might?be?good?enough,?but?a?leading?zero?must?be?added?as?necessary.
+
+????>?I?think?you?are?right:?that?may?definitely?better...
+
+indeed;?part?of?my?commit.
+
+????>>?*?Different?from?'format':
+
+????>>?-?With?fractional?seconds,?the?result?is?influenced?by?option?'OutDec'.
+
+this?has?been?solved,?too.
+For?the?"freaks"?allowing?an?explicit??'OutDec?=?*'?argument
+but?*not*?with?default?depending?on?options()!
+
+
+????>?Thank?you.??I?was?not?aware?of?that.
+????>?The?reason?"of?course"?being?that??as.character(<numeric>)??is
+????>?*also*?depending?on?option??OutDec.
+
+????>?I?would?say?that?is?clearly?wrong...??and?I?think?we?should
+????>?strongl?consider?to?change?that:
+
+????>?'OutDec'?should?influence?print()ing?and?format()ing??but?should
+????>?*not*?influence??as.character()??at?least?not?for?basic?R?types/objects.
+
+
+????>>?-?From?"Printing?years"?in??strptime:?"For?years?0?to?999?most?OSes?pad?with?zeros?or?spaces?to?4?characters,?and?Linux?outputs?just?the?number."
+????>>?Because?(1900?+?x$year)?is?formatted?with?%d?in?'as.character.POSIXt',?years?0?to?999?is?output?without?padding.?It?is?different?from?'format'?in?OSes?other?than?Linux.
+
+????>?Good?point.??This?should?be??amended.
+
+Not?yet.??Actually,?I'm?no?longer?sure?this?needs?any?action.
+I?find?it?somewhat?natural?that
+
+>?(CharleMagne.crowned?<-?as.POSIXlt(ISOdate(774,7,10)))
+[1]?"774-07-10?12:00:00?GMT"
+>?as.character(CharleMagne.crowned)
+[1]?"774-07-10?12:00:00"
+
+
+[snip]
+
+
+From r|p|ey @end|ng |rom @t@t@@ox@@c@uk  Thu Oct  6 14:38:38 2022
+From: r|p|ey @end|ng |rom @t@t@@ox@@c@uk (Prof Brian Ripley)
+Date: Thu, 6 Oct 2022 13:38:38 +0100
+Subject: [Rd] A potential POSIXlt->Date bug introduced in r-devel
+In-Reply-To: <20221006164146.39f9b8e4@ECM-DTC-716.uniwa.uwa.edu.au>
+References: <CABzLhzzsnRCwM3LPM-z2T8YFO3bBcD7=iE3Hxx9rLdEUeAkk3g@mail.gmail.com>
+ <25406.36513.13316.676488@stat.math.ethz.ch>
+ <20221006164146.39f9b8e4@ECM-DTC-716.uniwa.uwa.edu.au>
+Message-ID: <df276af2-5024-05dd-1ccb-96ffbf6e980b@stats.ox.ac.uk>
+
+On 06/10/2022 09:41, Berwin A Turlach wrote:
+> G'day all,
+> 
+> On Thu, 6 Oct 2022 10:15:29 +0200
+> Martin Maechler <maechler at stat.math.ethz.ch> wrote:
+> 
+>>>>>>> Davis Vaughan
+>>>>>>>      on Wed, 5 Oct 2022 17:04:11 -0400 writes:
+> 
+>>      > # Weird, where is the `NA`?
+>>      > as.Date(x)
+>>      > #> [1] "2013-01-31" "1970-01-01" "2013-03-31"
+>>      > ```
+>>
+>> I agree that the above is wrong, i.e., a bug in current  R-devel.
+> 
+> I have no intention of hijacking this thread, but I wonder whether this
+> is a good opportunity to mention that the 32 bit build of R-devel falls
+> over on my machine since 25 September.  It fails one of the regression
+> tests in reg-tests-1d.R.  The final lines of reg-tests-1d.Rout.fail
+> are:
+> 
+>> tools::Rd2txt(rd, out <- textConnection(NULL, "w"), fragment = TRUE)
+>> stopifnot(any(as.character(rd) != "\n"),
+> +           identical(textConnectionValue(out)[2L], "LaTeX"));
+> close(out)
+>> ## empty output in R <= 4.2.x
+
+Yes, known for a few days on the R-core list. I am in the middle of an 
+OS upgrade on that machine and won't have time to do more than report 
+until that (and all the re-building and re-checking) is complete.
+
+>> ## as.POSIXlt(<very large Date>)  gave integer overflow
+>> stopifnot(as.POSIXlt(.Date(2^31 + 10))$year == 5879680L)
+> Error: as.POSIXlt(.Date(2^31 + 10))$year == 5879680L is not TRUE
+> Execution halted
+> 
+> 
+> I should have reported this earlier, but somehow did not find the time
+> to do so.  So I thought I mention it here. :)
+> 
+> Cheers,
+> 
+> 	Berwin
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+-- 
+Brian D. Ripley,                  ripley at stats.ox.ac.uk
+Emeritus Professor of Applied Statistics, University of Oxford
+
+
+From d@v|@ @end|ng |rom r@tud|o@com  Thu Oct  6 15:33:27 2022
+From: d@v|@ @end|ng |rom r@tud|o@com (Davis Vaughan)
+Date: Thu, 6 Oct 2022 09:33:27 -0400
+Subject: [Rd] Bug with `[<-.POSIXlt` on specific OSes
+Message-ID: <CABzLhzy0eTEAnb36raY5h_P=4+Dnm9uX0k0DB557zntD2qMLxg@mail.gmail.com>
+
+Hi all,
+
+I have found another POSIXlt bug while I've been fiddling around with it.
+This one only appears on specific OSes, because it has to do with the fact
+that the `gmtoff` field is optional, and isn't always used on all OSes. It
+also doesn't seem to be specific to r-devel, I think it has been there
+awhile.
+
+Here is the bug:
+
+```
+x <- as.POSIXlt(as.POSIXct("2013-01-31", tz = "America/Chicago"))
+
+# Oh no!
+x[1] <- NA
+#> Error in x[[n]][i] <- value[[n]] : replacement has length zero
+```
+
+If you look at the objects, you can see that `x` has a `gmtoff` field, but
+`NA` (when converted to POSIXlt, which is what `[<-.POSIXlt` does) does not:
+
+```
+unclass(x)
+#> $sec
+#> [1] 0
+#>
+#> $min
+#> [1] 0
+#>
+#> $hour
+#> [1] 0
+#>
+#> $mday
+#> [1] 31
+#>
+#> $mon
+#> [1] 0
+#>
+#> $year
+#> [1] 113
+#>
+#> $wday
+#> [1] 4
+#>
+#> $yday
+#> [1] 30
+#>
+#> $isdst
+#> [1] 0
+#>
+#> $zone
+#> [1] "CST"
+#>
+#> $gmtoff
+#> [1] -21600
+#>
+#> attr(,"tzone")
+#> [1] "America/Chicago" "CST"             "CDT"
+
+unclass(as.POSIXlt(NA))
+#> $sec
+#> [1] NA
+#>
+#> $min
+#> [1] NA
+#>
+#> $hour
+#> [1] NA
+#>
+#> $mday
+#> [1] NA
+#>
+#> $mon
+#> [1] NA
+#>
+#> $year
+#> [1] NA
+#>
+#> $wday
+#> [1] NA
+#>
+#> $yday
+#> [1] NA
+#>
+#> $isdst
+#> [1] -1
+#>
+#> attr(,"tzone")
+#> [1] "UTC"
+```
+
+The problem seems to be that `[<-.POSIXlt` assumes that if the field was
+there in `x` then it must also be there in `value`:
+https://github.com/wch/r-source/blob/e10a971dee6a0ab851279c183cc21954d66b3be4/src/library/base/R/datetime.R#L1303-L1304
+
+But this isn't the case for the `NA` value that was converted to POSIXlt.
+
+I can't reproduce this on my personal Mac, but it affects the Linux, Mac,
+and Windows machines we use for the lubridate CI checks through GitHub
+Actions.
+
+Thanks,
+Davis
+
+	[[alternative HTML version deleted]]
+
+
+From @uh@rto_@nggono @end|ng |rom y@hoo@com  Fri Oct  7 11:35:22 2022
+From: @uh@rto_@nggono @end|ng |rom y@hoo@com (Suharto Anggono Suharto Anggono)
+Date: Fri, 7 Oct 2022 09:35:22 +0000 (UTC)
+Subject: [Rd] as.character.POSIXt in R devel
+In-Reply-To: <25403.5320.335656.447541@stat.math.ethz.ch>
+References: <1454067819.3486826.1664700170912.ref@mail.yahoo.com>
+ <1454067819.3486826.1664700170912@mail.yahoo.com>
+ <25402.55696.329918.913605@stat.math.ethz.ch>
+ <25403.5320.335656.447541@stat.math.ethz.ch>
+Message-ID: <1924407454.6024655.1665135322197@mail.yahoo.com>
+
+ Yes, no documentation.
+"POSIXlt" object with out-of-bounds components or whose components are not all of the same length may be produced internally by 'seq.POSIXt'.
+Initially, 'r1' is a "POSIXlt" object whose all components have length 1.
+Component 'year', 'mon', or 'mday' of 'r1' is then modified. It may have more than one elements. For 'mon' or 'mday', some may be out-of-bounds.
+
+
+----------------------------
+On Monday, 3 October 2022, 11:58:53 pm GMT+7, Martin Maechler <maechler at stat.math.ethz.ch> wrote:
+
+
+>>>>> Martin Maechler
+>>>>>? ? on Mon, 3 Oct 2022 14:46:08 +0200 writes:
+
+>>>>> Suharto Anggono Suharto Anggono via R-devel
+>>>>>? ? on Sun, 2 Oct 2022 08:42:50 +0000 (UTC) writes:
+
+? ? >> With r82904, 'as.character.POSIXt' in R devel is changed. The NEWS item:
+
+? ? >> as.character(<POSIXt>) now behaves more in line with the
+? ? >> methods for atomic vectors such as numbers, and is no longer
+? ? >> influenced by options().
+
+[..............]
+
+[snip]
+
+
+? ? >> * Behavior with "improper" "POSIXlt" object:
+
+? ? >> - "POSIXlt" object with out-of-bounds components is not normalized.
+
+? ? >> Example (modified from regr.tests-1d.R):
+? ? >> op <- options(scipen = 0) # (default setting)
+? ? >> x <- structure(
+? ? >> list(sec = 10000, min = 59L, hour = 18L,
+? ? >> mday = 6L, mon = 11L, year = 116L,
+? ? >> wday = 2L, yday = 340L,
+? ? >> isdst = 0L, zone = "CET", gmtoff = 3600L),
+? ? >> class = c("POSIXlt", "POSIXt"), tzone = "CET")
+? ? >> as.character(x)
+? ? >> # "2016-12-06 18:59:10000"
+? ? >> format(x)
+? ? >> # "2016-12-06 21:45:40"
+? ? >> options(op)
+
+
+? ? > Yes, we knew that? and were not too happy about it, but also not
+? ? > too unhappy:
+? ? > After all,??? ??? ? ? help(DateTimeClasses)
+? ? > clearly explains how
+? ? > POSIXlt objects should look like :
+
+? ? > -------------------------------------------------------------------
+? ? > Class ?"POSIXlt"? is a named list of vectors representing
+
+? ? > ?sec? 0-61: seconds.
+? ? > ?min? 0-59: minutes.
+? ? > ?hour? 0-23: hours.
+? ? > ?mday? 1-31: day of the month
+? ? > ?mon? 0-11: months after the first of the year.
+? ? > ?year? years since 1900.
+? ? > ?wday? 0-6 day of the week, starting on Sunday.
+? ? > ?yday? 0-365: day of the year (365 only in leap years).
+
+? ? > ?isdst? Daylight Saving Time ... ... ...
+? ? > ................................
+? ? > ................................
+
+? ? > -------------------------------------------------------------------
+
+? ? > We have been aware that as.character() assumes the above specification,
+? ? > even though other R functions, notably format() which uses
+? ? > internal (C level; either system (OS) or R's own) strptime() do
+? ? > arithmetic (modulo 60, then modulo 24, then modulo month length)
+? ? > to compute the date "used".
+
+? ? > Allowing such? "un-normalized" / out-of-bound? POSIXlt objects
+? ? > in R has not been documented AFAICS, and has the consequence
+? ? > that two different POSIXlt objects may correspond to the exact
+? ? > same time.
+
+? ? > This may be something worth discussing.
+? ? > In some sense we are discussing how the "POSIXlt" class is defined
+? ? > (even though an S3 class is never formally defined).
+
+(nothing changed here)
+
+
+? ? >> - With "POSIXlt" object where sec, min, hour, mday, mon,
+? ? >> and year components are not all of the same length, recycling is not handled.
+
+This is still the case... (see below).
+
+? ? > Good point.? I tend to agree that this should be improved *and* also
+? ? > documented: AFAIK, it is also not at all documented? (or is it ??)
+? ? > that the POSIXlt components should be thought to be recycling.
+
+? ? > If we decide we want that,
+? ? > once this is documented (and all methods/functions tested with
+? ? > such POSIXlt) it could also be used to use considerably smaller size
+? ? > POSIXlt objects, e.g, when all parts are in the same year, or
+? ? > when all seconds are 0, or ...
+
+? ? >> Example (modified from regr.tests-1d.R):
+? ? >> op <- options(scipen = 0) # (default setting)
+? ? >> x <- structure(
+? ? >> list(sec = c(1,? 2), min = 59L, hour = 18L,
+? ? >> mday = 6L, mon = 11L, year = 116L,
+? ? >> wday = 2L, yday = 340L,
+? ? >> isdst = 0L, zone = "CET", gmtoff = 3600L),
+? ? >> class = c("POSIXlt", "POSIXt"), tzone = "CET")
+? ? >> as.character(x)
+? ? >> # c("2016-12-06 18:59:01", "NA NA:NA:02")
+? ? >> format(x)
+? ? >> # c("2016-12-06 18:59:01", "2016-12-06 18:59:02")
+? ? >> options(op)
+
+Note that currently such {needing recycling} - cases are
+*also* not handled by the simple? (and important!)? length.POSIXlt()
+method, either:? It currently only looks at the '.$sec'
+component !
+
+So this case does need discussion two.
+I think it's unfortunate that *some* *.POSIXt methods do such
+recycling, e.g. format.POSIXt,
+but others do not {and the documentation does not even mention recycling}.
+
+As mentioned, I am *pro* going in that direction;
+so I would change
+
+? length.POSIXlt <- function(x) length(unclass(x)[[1L]])
+
+? ? ? (which only uses x$sec !)
+
+to
+
+? length.POSIXlt <- function(x) max(lengths(unclass(x), use.names=FALSE))
+
+not allowing 0-length recycling; 0-lengths components
+should really be illegal in an otherwise non-0-length POSIXlt x
+
+
+
+Martin  
+	[[alternative HTML version deleted]]
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Fri Oct  7 14:52:01 2022
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Fri, 7 Oct 2022 14:52:01 +0200
+Subject: [Rd] A potential POSIXlt->Date bug introduced in r-devel
+In-Reply-To: <25406.36513.13316.676488@stat.math.ethz.ch>
+References: <CABzLhzzsnRCwM3LPM-z2T8YFO3bBcD7=iE3Hxx9rLdEUeAkk3g@mail.gmail.com>
+ <25406.36513.13316.676488@stat.math.ethz.ch>
+Message-ID: <25408.8433.260821.451226@stat.math.ethz.ch>
+
+>>>>> Martin Maechler 
+>>>>>     on Thu, 6 Oct 2022 10:15:29 +0200 writes:
+
+>>>>> Davis Vaughan 
+>>>>>     on Wed, 5 Oct 2022 17:04:11 -0400 writes:
+
+    >> Hi all,
+
+    >> I think I have discovered a bug in the conversion from POSIXlt to Date that
+    >> has been introduced in r-devel.
+
+    >> It affects lubridate, but surprisingly didn't cause test failures there.
+    >> Instead it caused test failures in users of lubridate, like slider, arrow,
+    >> and admiral (see https://github.com/tidyverse/lubridate/issues/1069), and
+    >> at least in slider I have been asked by CRAN to correct this issue before
+    >> 2022-10-16.
+
+    >> In r-devel we get the following:
+
+    >> ```
+    >> data <- list(
+    >> sec = 0,
+    >> min = 0L,
+    >> hour = 0L,
+    >> mday = 31L,
+    >> mon = c(0L, NA, 2L),
+    >> year = 113L,
+    >> wday = 4L,
+    >> yday = 30L,
+    >> isdst = 0L
+    >> )
+
+    >> x <- .POSIXlt(xx = data, tz = "UTC")
+    >> x
+    >> #> [1] "2013-01-31 UTC" NA               "2013-03-31 UTC"
+
+    >> # Looks right
+    >> as.POSIXct(x)
+    >> #> [1] "2013-01-31 UTC" NA               "2013-03-31 UTC"
+
+
+
+    >> # Weird, where is the `NA`?
+    >> as.Date(x)
+    >> #> [1] "2013-01-31" "1970-01-01" "2013-03-31"
+    >> ```
+
+    > I agree that the above is wrong, i.e., a bug in current  R-devel.
+
+    >> The POSIXlt object is length 3, but is only partially filled out. 
+
+    >> The other elements are all recycled to length 3 upon
+    >> conversion to POSIXct or Date. 
+
+    >> But when converting to Date, we lose the `NA` value. I think the
+    >> `as.Date()` conversion seems inconsistent with the `as.POSIXct()`
+    >> conversion.
+
+    > Yes.  There was another very much relatd conversation here on R-devel,
+    > initiated by Suharto Anggono just a few days ago.
+
+    > This subject, i.e., "partially filled out" POSIXlt objects, was
+    > one of the topics, too.
+
+    > See my reply there, notably at the end:
+
+    > https://stat.ethz.ch/pipermail/r-devel/2022-October/082072.html
+    
+    > I do mention that "recycling" of partially filled POSIXlt
+    > objects has only partially been implemented in R more generally
+    > and was actually asking for comments and further discussion.
+
+
+    >> It looks like this comes up because the conversion to Date now defaults to
+    >> using `sec` if any of the date-like fields are `NA_INTEGER`,
+
+    > yes, because only that allows to also deal with +/- Inf  etc,
+    > as was recently added as new feature, see the NEWS of R 4.2.0
+
+    > ? Not strictly fixing a bug, format()ing and print()ing of
+    > non-finite Date and POSIXt values NaN and +/-Inf no longer show
+    > as NA but the respective string, e.g., Inf, for consistency with
+    > numeric vector's behaviour, fulfilling the wish of PR#18308.
+
+    > i.e., see also R's bugzilla
+    > https://bugs.r-project.org/show_bug.cgi?id=18308
+
+    > which actually *also* mentioned an NA problem in Date/Time objects.
+
+
+    >> but this means  the `NA` in the `mon` field is ignored.
+
+    > which I agree is bogous and we'll fix.
+
+    > Still, I did not get any feedback on asking about documentation
+    > etc on  POSIXlt objects ... and I *had* mentioned I agreed that
+    > the current partial implementation of  "partially filled" i.e. recycling of
+    > POSIXlt components should probably be made part of the
+    > "definition" of POSIXlt.
+
+    > Have I overlooked an existing definition / contract about these?
+
+    > Martin
+
+I'm still waiting for comments.
+
+Note that  "partially filled" POSIXlt do not work correctly in
+any version of R.  I mentioned that even length(.) may easily
+fail; but there is much more.
+
+While I can relatively easily fix Davis' case above,
+the following example behaves wrongly in current and previous
+released versions of R and in R-devel:
+
+dlt <- .POSIXlt(list(sec = c(-999, 10000 + c(1:10,-Inf, NA)) + pi,
+                                        # "out of range", non-finite, fractions
+                     min = 45L, hour = c(21L, 3L, NA, 4L),
+                     mday = 6L, mon  = c(11L, NA, 3L),
+                     year = 116L, wday = 2L, yday = 340L, isdst = 1L))
+
+
+Of course that's constructed to be particularly unpleasant.
+You can try some of the following "checks" in your version(s) of
+R to see that some of the things are misbehaving with it in all (*)
+versions of R.
+--
+*) so I claim boldly
+
+
+dct <- as.POSIXct(dlt)
+(n <- length(dct))
+dD  <- as.Date(dlt)
+dDc <- as.Date(dct)
+dltN <- as.POSIXlt(dct) # "normalized POSIXlt" (with *lost* accuracy):
+data.frame(unclass(dltN))
+.POSIXltNormalize <- function(x) {
+    stopifnot(is.numeric(s <- x$sec))
+    x <- as.POSIXlt(as.POSIXct(x)) # and restore the precise seconds :
+    ifin <- is.finite(s) & is.finite(x$sec) # (maybe recycling already)
+    x$sec[ifin] <- s[ifin] %% 60
+    x
+}
+dlt2 <- .POSIXltNormalize(dlt) # normalized POSIXlt - with accuracy kept
+all.equal(dlt2$sec, dltN$sec, tolerance = 0) # .. small (2e-9) difference
+stopifnot(all.equal(dlt2, dltN),
+          identical(as.POSIXct(dlt2), as.POSIXct(dltN)))
+## First show (in a way it also works for older R), then check :
+oldR <- getRversion() < "4.2.2"
+print(width = 101,
+data.frame(dlt, dltN, asCT = dct, asDateCT = dDc,
+           asDate = if(oldR) rep_len(dD,  n) else dD ,
+           na = is.na(dlt),
+           fin = if(oldR) rep_len(NA, n) else is.finite(dlt))
+)
+
+
+
+
+--
+Martin M?chler
+ETH Zurich   and  R Core team
+
+
+From d@v|@ @end|ng |rom r@tud|o@com  Fri Oct  7 17:00:23 2022
+From: d@v|@ @end|ng |rom r@tud|o@com (Davis Vaughan)
+Date: Fri, 7 Oct 2022 11:00:23 -0400
+Subject: [Rd] A potential POSIXlt->Date bug introduced in r-devel
+In-Reply-To: <25408.8433.260821.451226@stat.math.ethz.ch>
+References: <CABzLhzzsnRCwM3LPM-z2T8YFO3bBcD7=iE3Hxx9rLdEUeAkk3g@mail.gmail.com>
+ <25406.36513.13316.676488@stat.math.ethz.ch>
+ <25408.8433.260821.451226@stat.math.ethz.ch>
+Message-ID: <CABzLhzynMazG7dVfr+GC_3F=QDEJK+zx4AX_tz-2CdbJdYvv=w@mail.gmail.com>
+
+Martin,
+
+FWIW, I scoured the docs using GitHub's new code search preview but can't
+seem to find any reference to the fact that POSIXlt fields are internally
+recycled (even though lubridate seems to have been relying on this for
+quite some time).
+
+-Davis
+
+On Fri, Oct 7, 2022 at 8:52 AM Martin Maechler <maechler at stat.math.ethz.ch>
+wrote:
+
+> >>>>> Martin Maechler
+> >>>>>     on Thu, 6 Oct 2022 10:15:29 +0200 writes:
+>
+> >>>>> Davis Vaughan
+> >>>>>     on Wed, 5 Oct 2022 17:04:11 -0400 writes:
+>
+>     >> Hi all,
+>
+>     >> I think I have discovered a bug in the conversion from POSIXlt to
+> Date that
+>     >> has been introduced in r-devel.
+>
+>     >> It affects lubridate, but surprisingly didn't cause test failures
+> there.
+>     >> Instead it caused test failures in users of lubridate, like slider,
+> arrow,
+>     >> and admiral (see https://github.com/tidyverse/lubridate/issues/1069),
+> and
+>     >> at least in slider I have been asked by CRAN to correct this issue
+> before
+>     >> 2022-10-16.
+>
+>     >> In r-devel we get the following:
+>
+>     >> ```
+>     >> data <- list(
+>     >> sec = 0,
+>     >> min = 0L,
+>     >> hour = 0L,
+>     >> mday = 31L,
+>     >> mon = c(0L, NA, 2L),
+>     >> year = 113L,
+>     >> wday = 4L,
+>     >> yday = 30L,
+>     >> isdst = 0L
+>     >> )
+>
+>     >> x <- .POSIXlt(xx = data, tz = "UTC")
+>     >> x
+>     >> #> [1] "2013-01-31 UTC" NA               "2013-03-31 UTC"
+>
+>     >> # Looks right
+>     >> as.POSIXct(x)
+>     >> #> [1] "2013-01-31 UTC" NA               "2013-03-31 UTC"
+>
+>
+>
+>     >> # Weird, where is the `NA`?
+>     >> as.Date(x)
+>     >> #> [1] "2013-01-31" "1970-01-01" "2013-03-31"
+>     >> ```
+>
+>     > I agree that the above is wrong, i.e., a bug in current  R-devel.
+>
+>     >> The POSIXlt object is length 3, but is only partially filled out.
+>
+>     >> The other elements are all recycled to length 3 upon
+>     >> conversion to POSIXct or Date.
+>
+>     >> But when converting to Date, we lose the `NA` value. I think the
+>     >> `as.Date()` conversion seems inconsistent with the `as.POSIXct()`
+>     >> conversion.
+>
+>     > Yes.  There was another very much relatd conversation here on
+> R-devel,
+>     > initiated by Suharto Anggono just a few days ago.
+>
+>     > This subject, i.e., "partially filled out" POSIXlt objects, was
+>     > one of the topics, too.
+>
+>     > See my reply there, notably at the end:
+>
+>     > https://stat.ethz.ch/pipermail/r-devel/2022-October/082072.html
+>
+>     > I do mention that "recycling" of partially filled POSIXlt
+>     > objects has only partially been implemented in R more generally
+>     > and was actually asking for comments and further discussion.
+>
+>
+>     >> It looks like this comes up because the conversion to Date now
+> defaults to
+>     >> using `sec` if any of the date-like fields are `NA_INTEGER`,
+>
+>     > yes, because only that allows to also deal with +/- Inf  etc,
+>     > as was recently added as new feature, see the NEWS of R 4.2.0
+>
+>     > ? Not strictly fixing a bug, format()ing and print()ing of
+>     > non-finite Date and POSIXt values NaN and +/-Inf no longer show
+>     > as NA but the respective string, e.g., Inf, for consistency with
+>     > numeric vector's behaviour, fulfilling the wish of PR#18308.
+>
+>     > i.e., see also R's bugzilla
+>     > https://bugs.r-project.org/show_bug.cgi?id=18308
+>
+>     > which actually *also* mentioned an NA problem in Date/Time objects.
+>
+>
+>     >> but this means  the `NA` in the `mon` field is ignored.
+>
+>     > which I agree is bogous and we'll fix.
+>
+>     > Still, I did not get any feedback on asking about documentation
+>     > etc on  POSIXlt objects ... and I *had* mentioned I agreed that
+>     > the current partial implementation of  "partially filled" i.e.
+> recycling of
+>     > POSIXlt components should probably be made part of the
+>     > "definition" of POSIXlt.
+>
+>     > Have I overlooked an existing definition / contract about these?
+>
+>     > Martin
+>
+> I'm still waiting for comments.
+>
+> Note that  "partially filled" POSIXlt do not work correctly in
+> any version of R.  I mentioned that even length(.) may easily
+> fail; but there is much more.
+>
+> While I can relatively easily fix Davis' case above,
+> the following example behaves wrongly in current and previous
+> released versions of R and in R-devel:
+>
+> dlt <- .POSIXlt(list(sec = c(-999, 10000 + c(1:10,-Inf, NA)) + pi,
+>                                         # "out of range", non-finite,
+> fractions
+>                      min = 45L, hour = c(21L, 3L, NA, 4L),
+>                      mday = 6L, mon  = c(11L, NA, 3L),
+>                      year = 116L, wday = 2L, yday = 340L, isdst = 1L))
+>
+>
+> Of course that's constructed to be particularly unpleasant.
+> You can try some of the following "checks" in your version(s) of
+> R to see that some of the things are misbehaving with it in all (*)
+> versions of R.
+> --
+> *) so I claim boldly
+>
+>
+> dct <- as.POSIXct(dlt)
+> (n <- length(dct))
+> dD  <- as.Date(dlt)
+> dDc <- as.Date(dct)
+> dltN <- as.POSIXlt(dct) # "normalized POSIXlt" (with *lost* accuracy):
+> data.frame(unclass(dltN))
+> .POSIXltNormalize <- function(x) {
+>     stopifnot(is.numeric(s <- x$sec))
+>     x <- as.POSIXlt(as.POSIXct(x)) # and restore the precise seconds :
+>     ifin <- is.finite(s) & is.finite(x$sec) # (maybe recycling already)
+>     x$sec[ifin] <- s[ifin] %% 60
+>     x
+> }
+> dlt2 <- .POSIXltNormalize(dlt) # normalized POSIXlt - with accuracy kept
+> all.equal(dlt2$sec, dltN$sec, tolerance = 0) # .. small (2e-9) difference
+> stopifnot(all.equal(dlt2, dltN),
+>           identical(as.POSIXct(dlt2), as.POSIXct(dltN)))
+> ## First show (in a way it also works for older R), then check :
+> oldR <- getRversion() < "4.2.2"
+> print(width = 101,
+> data.frame(dlt, dltN, asCT = dct, asDateCT = dDc,
+>            asDate = if(oldR) rep_len(dD,  n) else dD ,
+>            na = is.na(dlt),
+>            fin = if(oldR) rep_len(NA, n) else is.finite(dlt))
+> )
+>
+>
+>
+>
+> --
+> Martin M?chler
+> ETH Zurich   and  R Core team
+>
 
 	[[alternative HTML version deleted]]
 
