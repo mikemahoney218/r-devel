@@ -2614,3 +2614,67 @@ wrote:
 	[[alternative HTML version deleted]]
 
 
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Sun Oct  9 20:25:44 2022
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Sun, 9 Oct 2022 11:25:44 -0700
+Subject: [Rd] Rscript -e EXPR fails to launch if stdin is closed
+Message-ID: <CAFDcVCTVBQknxZYbDx9T0d045M9G8M4xdYpr0RA5Qq_+OyxpUw@mail.gmail.com>
+
+Rscript fails to launch if the standard input (stdin) is closed, e.g.
+
+$ Rscript --vanilla -e 42 0<&-
+Fatal error: creating temporary file for '-e' failed
+
+This appear to only happen with `-e EXPR`, e.g. it works when doing:
+
+$ echo "42" > script.R
+$ Rscript --vanilla script.R 0<&-
+[1] 42
+
+and:
+
+$ R --vanilla 0<&-
+R version 4.2.1 (2022-06-23) -- "Funny-Looking Kid"
+Copyright (C) 2022 The R Foundation for Statistical Computing
+Platform: x86_64-pc-linux-gnu (64-bit)
+...
+>
+
+
+TROUBLESHOOTING:
+
+$ strace Rscript --vanilla -e 42 0<&-
+execve("/home/hb/shared/software/CBI/R-4.2.1-gcc9/bin/Rscript",
+["Rscript", "--vanilla", "-e", "42"], 0x7fff9f476418 /* 147 vars */) =
+0
+brk(NULL)                               = 0x5625ca9e6000
+arch_prctl(0x3001 /* ARCH_??? */, 0x7fff23b4d260) = -1 EINVAL (Invalid argument)
+...
+fstat(1, {st_mode=S_IFCHR|0620, st_rdev=makedev(0x88, 0), ...}) = 0
+write(1, "Fatal error: creating temporary "..., 53Fatal error:
+creating temporary file for '-e' failed
+) = 53
+exit_group(2)                           = ?
++++ exited with 2 +++
+
+which points to src/unix/system.c:
+
+ifd = mkstemp(ifile);
+if (ifd > 0)
+    ifp = fdopen(ifd, "w+");
+if(!ifp) R_Suicide(_("creating temporary file for '-e' failed"));
+
+
+One rationale for having closed standard files (including stdin) is to
+avoid leaking file descriptors, cf.
+https://wiki.sei.cmu.edu/confluence/display/c/FIO22-C.+Close+files+before+spawning+processes
+and https://danwalsh.livejournal.com/53603.html.  The background for
+reporting on this was that `system()` fails to work in processx
+spawned processes, which closes the standard files by default in
+processx (<= 3.7.0).
+
+Best,
+
+Henrik
+
+
