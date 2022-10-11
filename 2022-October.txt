@@ -2678,3 +2678,355 @@ Best,
 Henrik
 
 
+From pd@|gd @end|ng |rom gm@||@com  Mon Oct 10 11:07:18 2022
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Mon, 10 Oct 2022 11:07:18 +0200
+Subject: [Rd] Rscript -e EXPR fails to launch if stdin is closed
+In-Reply-To: <CAFDcVCTVBQknxZYbDx9T0d045M9G8M4xdYpr0RA5Qq_+OyxpUw@mail.gmail.com>
+References: <CAFDcVCTVBQknxZYbDx9T0d045M9G8M4xdYpr0RA5Qq_+OyxpUw@mail.gmail.com>
+Message-ID: <CE13E09D-A0D5-42E7-949B-32BF375351FE@gmail.com>
+
+He! 
+
+Yes, that looks like a blunder.
+
+mkstemp() returns -1 on failure, not 0, so the test on ifd (and I suppose also the one on ifp) is wrong. And of course, once you close file descriptor 0, mkstemp() chooses the 1st available fd, i.e. 0, for its return value.
+
+-pd
+
+> On 9 Oct 2022, at 20:25 , Henrik Bengtsson <henrik.bengtsson at gmail.com> wrote:
+> 
+> Rscript fails to launch if the standard input (stdin) is closed, e.g.
+> 
+> $ Rscript --vanilla -e 42 0<&-
+> Fatal error: creating temporary file for '-e' failed
+> 
+> This appear to only happen with `-e EXPR`, e.g. it works when doing:
+> 
+> $ echo "42" > script.R
+> $ Rscript --vanilla script.R 0<&-
+> [1] 42
+> 
+> and:
+> 
+> $ R --vanilla 0<&-
+> R version 4.2.1 (2022-06-23) -- "Funny-Looking Kid"
+> Copyright (C) 2022 The R Foundation for Statistical Computing
+> Platform: x86_64-pc-linux-gnu (64-bit)
+> ...
+>> 
+> 
+> 
+> TROUBLESHOOTING:
+> 
+> $ strace Rscript --vanilla -e 42 0<&-
+> execve("/home/hb/shared/software/CBI/R-4.2.1-gcc9/bin/Rscript",
+> ["Rscript", "--vanilla", "-e", "42"], 0x7fff9f476418 /* 147 vars */) =
+> 0
+> brk(NULL)                               = 0x5625ca9e6000
+> arch_prctl(0x3001 /* ARCH_??? */, 0x7fff23b4d260) = -1 EINVAL (Invalid argument)
+> ...
+> fstat(1, {st_mode=S_IFCHR|0620, st_rdev=makedev(0x88, 0), ...}) = 0
+> write(1, "Fatal error: creating temporary "..., 53Fatal error:
+> creating temporary file for '-e' failed
+> ) = 53
+> exit_group(2)                           = ?
+> +++ exited with 2 +++
+> 
+> which points to src/unix/system.c:
+> 
+> ifd = mkstemp(ifile);
+> if (ifd > 0)
+>    ifp = fdopen(ifd, "w+");
+> if(!ifp) R_Suicide(_("creating temporary file for '-e' failed"));
+> 
+> 
+> One rationale for having closed standard files (including stdin) is to
+> avoid leaking file descriptors, cf.
+> https://wiki.sei.cmu.edu/confluence/display/c/FIO22-C.+Close+files+before+spawning+processes
+> and https://danwalsh.livejournal.com/53603.html.  The background for
+> reporting on this was that `system()` fails to work in processx
+> spawned processes, which closes the standard files by default in
+> processx (<= 3.7.0).
+> 
+> Best,
+> 
+> Henrik
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From pd@|gd @end|ng |rom gm@||@com  Mon Oct 10 14:54:48 2022
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Mon, 10 Oct 2022 14:54:48 +0200
+Subject: [Rd] Rscript -e EXPR fails to launch if stdin is closed
+In-Reply-To: <CE13E09D-A0D5-42E7-949B-32BF375351FE@gmail.com>
+References: <CAFDcVCTVBQknxZYbDx9T0d045M9G8M4xdYpr0RA5Qq_+OyxpUw@mail.gmail.com>
+ <CE13E09D-A0D5-42E7-949B-32BF375351FE@gmail.com>
+Message-ID: <1219AA40-4A8E-4B77-B141-12154DD5095C@gmail.com>
+
+It seems to work simply to do  "if (ifd >= 0)..." (the ifp test is fine since ifp is FILE* and initialized to NULL). Will commit (to r-devel for now).
+
+-pd
+
+> On 10 Oct 2022, at 11:07 , peter dalgaard <pdalgd at gmail.com> wrote:
+> 
+> He! 
+> 
+> Yes, that looks like a blunder.
+> 
+> mkstemp() returns -1 on failure, not 0, so the test on ifd (and I suppose also the one on ifp) is wrong. And of course, once you close file descriptor 0, mkstemp() chooses the 1st available fd, i.e. 0, for its return value.
+> 
+> -pd
+> 
+>> On 9 Oct 2022, at 20:25 , Henrik Bengtsson <henrik.bengtsson at gmail.com> wrote:
+>> 
+>> Rscript fails to launch if the standard input (stdin) is closed, e.g.
+>> 
+>> $ Rscript --vanilla -e 42 0<&-
+>> Fatal error: creating temporary file for '-e' failed
+>> 
+>> This appear to only happen with `-e EXPR`, e.g. it works when doing:
+>> 
+>> $ echo "42" > script.R
+>> $ Rscript --vanilla script.R 0<&-
+>> [1] 42
+>> 
+>> and:
+>> 
+>> $ R --vanilla 0<&-
+>> R version 4.2.1 (2022-06-23) -- "Funny-Looking Kid"
+>> Copyright (C) 2022 The R Foundation for Statistical Computing
+>> Platform: x86_64-pc-linux-gnu (64-bit)
+>> ...
+>>> 
+>> 
+>> 
+>> TROUBLESHOOTING:
+>> 
+>> $ strace Rscript --vanilla -e 42 0<&-
+>> execve("/home/hb/shared/software/CBI/R-4.2.1-gcc9/bin/Rscript",
+>> ["Rscript", "--vanilla", "-e", "42"], 0x7fff9f476418 /* 147 vars */) =
+>> 0
+>> brk(NULL)                               = 0x5625ca9e6000
+>> arch_prctl(0x3001 /* ARCH_??? */, 0x7fff23b4d260) = -1 EINVAL (Invalid argument)
+>> ...
+>> fstat(1, {st_mode=S_IFCHR|0620, st_rdev=makedev(0x88, 0), ...}) = 0
+>> write(1, "Fatal error: creating temporary "..., 53Fatal error:
+>> creating temporary file for '-e' failed
+>> ) = 53
+>> exit_group(2)                           = ?
+>> +++ exited with 2 +++
+>> 
+>> which points to src/unix/system.c:
+>> 
+>> ifd = mkstemp(ifile);
+>> if (ifd > 0)
+>>   ifp = fdopen(ifd, "w+");
+>> if(!ifp) R_Suicide(_("creating temporary file for '-e' failed"));
+>> 
+>> 
+>> One rationale for having closed standard files (including stdin) is to
+>> avoid leaking file descriptors, cf.
+>> https://wiki.sei.cmu.edu/confluence/display/c/FIO22-C.+Close+files+before+spawning+processes
+>> and https://danwalsh.livejournal.com/53603.html.  The background for
+>> reporting on this was that `system()` fails to work in processx
+>> spawned processes, which closes the standard files by default in
+>> processx (<= 3.7.0).
+>> 
+>> Best,
+>> 
+>> Henrik
+>> 
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> -- 
+> Peter Dalgaard, Professor,
+> Center for Statistics, Copenhagen Business School
+> Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+> Phone: (+45)38153501
+> Office: A 4.23
+> Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+> 
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From ||oruppr @end|ng |rom gm@||@com  Mon Oct 10 16:00:59 2022
+From: ||oruppr @end|ng |rom gm@||@com (Florian Rupprecht)
+Date: Mon, 10 Oct 2022 16:00:59 +0200
+Subject: [Rd] Pre-allocating serialization memory buffers
+Message-ID: <CAHTZEhDuRURhz384S=RKwT+tH_0WfW512R3MxUxL4wP4oVxkhQ@mail.gmail.com>
+
+Hi all,
+
+While investigating the performance of different hashing algorithms of the
+"digest" package, I found that serialization to memory buffers via
+serialize(obj, connection=NULL) was suspiciously slow for large objects.
+
+After looking into the R source I found that the memory buffer grows
+approx. n -> 2(n+1) but are not pre-allocated in any way. I then created a
+minimal demo package (https://github.com/nx10/serialize_prealloc) with
+different modified versions of the serialization mechanisms that let me
+trace memory allocations and pre-allocate the buffer using
+object.size(obj).
+
+Benchmarking this shows that there is no apparent performance decrease for
+small or deeply nested objects and approx. logarithmic gains with bigger
+objects (more than 3 times faster on my machine with ~1GB large objects).
+Benchmarks are included in the README of the demo package.
+
+I have not done any tests with other kinds of streams such as file
+connections, as I am not sure we can make assumptions about the
+implementation of streams that are created elsewhere.
+
+I would be happy to provide a patch for review if this is something you
+consider worth investigating, but I would need some pointers on how you
+would want this to be implemented, as object.size lives in the utils
+library and serialize is in src\main\. (E.g. copy a non-error version of
+objectsize to main\)
+
+Best,
+Florian
+
+	[[alternative HTML version deleted]]
+
+
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Mon Oct 10 18:34:32 2022
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Mon, 10 Oct 2022 09:34:32 -0700
+Subject: [Rd] Rscript -e EXPR fails to launch if stdin is closed
+In-Reply-To: <1219AA40-4A8E-4B77-B141-12154DD5095C@gmail.com>
+References: <CAFDcVCTVBQknxZYbDx9T0d045M9G8M4xdYpr0RA5Qq_+OyxpUw@mail.gmail.com>
+ <CE13E09D-A0D5-42E7-949B-32BF375351FE@gmail.com>
+ <1219AA40-4A8E-4B77-B141-12154DD5095C@gmail.com>
+Message-ID: <CAFDcVCRrBq1A53ggJNozxR1fNz3SYTocgkzsCBs2Y9vwC51LpA@mail.gmail.com>
+
+Thank you Peter for the quick fix.  Will this make it into R-patched
+to become R 4.2.2 soon?
+
+I can confirm that the fix resolved also the original problem report
+involving launching a parallel PSOCK cluster from within a 'processx'
+background process
+(https://stackoverflow.com/questions/73962109/why-are-the-workers-failing-to-connect-when-calling-makepsockcluster-from-an-e/73991833#73991833
+and https://github.com/r-lib/callr/issues/236)
+
+
+/Henrik
+
+On Mon, Oct 10, 2022 at 5:54 AM peter dalgaard <pdalgd at gmail.com> wrote:
+>
+> It seems to work simply to do  "if (ifd >= 0)..." (the ifp test is fine since ifp is FILE* and initialized to NULL). Will commit (to r-devel for now).
+>
+> -pd
+>
+> > On 10 Oct 2022, at 11:07 , peter dalgaard <pdalgd at gmail.com> wrote:
+> >
+> > He!
+> >
+> > Yes, that looks like a blunder.
+> >
+> > mkstemp() returns -1 on failure, not 0, so the test on ifd (and I suppose also the one on ifp) is wrong. And of course, once you close file descriptor 0, mkstemp() chooses the 1st available fd, i.e. 0, for its return value.
+> >
+> > -pd
+> >
+> >> On 9 Oct 2022, at 20:25 , Henrik Bengtsson <henrik.bengtsson at gmail.com> wrote:
+> >>
+> >> Rscript fails to launch if the standard input (stdin) is closed, e.g.
+> >>
+> >> $ Rscript --vanilla -e 42 0<&-
+> >> Fatal error: creating temporary file for '-e' failed
+> >>
+> >> This appear to only happen with `-e EXPR`, e.g. it works when doing:
+> >>
+> >> $ echo "42" > script.R
+> >> $ Rscript --vanilla script.R 0<&-
+> >> [1] 42
+> >>
+> >> and:
+> >>
+> >> $ R --vanilla 0<&-
+> >> R version 4.2.1 (2022-06-23) -- "Funny-Looking Kid"
+> >> Copyright (C) 2022 The R Foundation for Statistical Computing
+> >> Platform: x86_64-pc-linux-gnu (64-bit)
+> >> ...
+> >>>
+> >>
+> >>
+> >> TROUBLESHOOTING:
+> >>
+> >> $ strace Rscript --vanilla -e 42 0<&-
+> >> execve("/home/hb/shared/software/CBI/R-4.2.1-gcc9/bin/Rscript",
+> >> ["Rscript", "--vanilla", "-e", "42"], 0x7fff9f476418 /* 147 vars */) =
+> >> 0
+> >> brk(NULL)                               = 0x5625ca9e6000
+> >> arch_prctl(0x3001 /* ARCH_??? */, 0x7fff23b4d260) = -1 EINVAL (Invalid argument)
+> >> ...
+> >> fstat(1, {st_mode=S_IFCHR|0620, st_rdev=makedev(0x88, 0), ...}) = 0
+> >> write(1, "Fatal error: creating temporary "..., 53Fatal error:
+> >> creating temporary file for '-e' failed
+> >> ) = 53
+> >> exit_group(2)                           = ?
+> >> +++ exited with 2 +++
+> >>
+> >> which points to src/unix/system.c:
+> >>
+> >> ifd = mkstemp(ifile);
+> >> if (ifd > 0)
+> >>   ifp = fdopen(ifd, "w+");
+> >> if(!ifp) R_Suicide(_("creating temporary file for '-e' failed"));
+> >>
+> >>
+> >> One rationale for having closed standard files (including stdin) is to
+> >> avoid leaking file descriptors, cf.
+> >> https://wiki.sei.cmu.edu/confluence/display/c/FIO22-C.+Close+files+before+spawning+processes
+> >> and https://danwalsh.livejournal.com/53603.html.  The background for
+> >> reporting on this was that `system()` fails to work in processx
+> >> spawned processes, which closes the standard files by default in
+> >> processx (<= 3.7.0).
+> >>
+> >> Best,
+> >>
+> >> Henrik
+> >>
+> >> ______________________________________________
+> >> R-devel at r-project.org mailing list
+> >> https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+> > --
+> > Peter Dalgaard, Professor,
+> > Center for Statistics, Copenhagen Business School
+> > Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+> > Phone: (+45)38153501
+> > Office: A 4.23
+> > Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+> >
+>
+> --
+> Peter Dalgaard, Professor,
+> Center for Statistics, Copenhagen Business School
+> Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+> Phone: (+45)38153501
+> Office: A 4.23
+> Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+>
+
+
