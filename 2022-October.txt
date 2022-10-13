@@ -3923,3 +3923,1334 @@ so perhaps we should fill with the values for the unknown case?
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Wed Oct 12 10:17:28 2022
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Wed, 12 Oct 2022 10:17:28 +0200
+Subject: [Rd] Bug with `[<-.POSIXlt` on specific OSes
+In-Reply-To: <25413.33085.344041.49718@hornik.net>
+References: <CABzLhzy0eTEAnb36raY5h_P=4+Dnm9uX0k0DB557zntD2qMLxg@mail.gmail.com>
+ <CABzLhzxNNce6eEOnnv0fSpLRiZ70FC3-YadS2PeWOFSJfN6Zaw@mail.gmail.com>
+ <25413.33085.344041.49718@hornik.net>
+Message-ID: <25414.30744.139721.871865@stat.math.ethz.ch>
+
+>>>>> Kurt Hornik 
+>>>>>     on Tue, 11 Oct 2022 16:44:13 +0200 writes:
+
+>>>>> Davis Vaughan writes:
+    >> I've got a bit more information about this one. It seems like it
+    >> (only? not sure) appears when `TZ = "UTC"`, which is why I didn't see
+    >> it before on my Mac, which defaults to `TZ = ""`. I think this is at
+    >> least explainable by the fact that those "optional" fields aren't
+    >> technically needed when the time zone is UTC.
+
+    > Exactly.  Debugging `[<-.POSIlt` with
+
+    > x <- as.POSIXlt(as.POSIXct("2013-01-31", tz = "America/Chicago"))
+    > Sys.setenv(TZ = "UTC")
+    > x[1] <- NA
+
+    > shows we get into
+
+    > value <- unclass(as.POSIXlt(value))
+    > if (ici) {
+    > for (n in names(x)) names(x[[n]]) <- nms
+    > }
+    > for (n in names(x)) x[[n]][i] <- value[[n]]
+
+    > where
+
+    > Browse[2]> names(value)
+    > [1] "sec"   "min"   "hour"  "mday"  "mon"   "year"  "wday"  "yday"  "isdst"
+    > Browse[2]> names(x)
+    > [1] "sec"    "min"    "hour"   "mday"   "mon"    "year"   "wday"   "yday"  
+    > [9] "isdst"  "zone"   "gmtoff"
+
+    > Without having looked at the code, the docs say
+
+    > ?zone? (Optional.) The abbreviation for the time zone in force at
+    > that time: ?""? if unknown (but ?""? might also be used for
+    > UTC).
+
+    > ?gmtoff? (Optional.) The offset in seconds from GMT: positive
+    > values are East of the meridian.  Usually ?NA? if unknown,
+    > but ?0? could mean unknown.
+
+    > so perhaps we should fill with the values for the unknown case?
+
+    > -k
+
+Well,
+
+I think you both know  I'm in the midst of dealing with these
+issues, to fix both
+
+[.POSIXlt  and
+[<-.POSIXlt
+
+Yes, one needs a way to not only "fill" the partially filled
+entries but also to *normalize* out-of-range values
+(say negative seconds, minutes > 60, etc)
+
+All this is available in our C code, but not on the R level,
+so yesterday, I wrote a C function to be called via .Internal(.)
+from a new R that provides this.
+
+Provisionally called
+
+   balancePOXIXlt()
+
+because it both balances the 9 to 11 list-components of POSIXlt
+and it also puts all numbers of (sec, min, hour, mday, mon)
+into a correct range (and also computes correctl wday and yday numbers).
+but I'm happy for proposals of better names.
+I had contemplated  validatePOSIXlt() as alternative, but then
+dismissed that as in some sense we now do agree that
+"imbalanced" POSIXlt's are not really invalid ..
+
+.. and yes, to Davis:  Even though I've spent so many hours with
+POSIXlt, POSIXct and Date during the last week, I'm still
+surprised more often than I like by the effects of timezone
+settings there.
+
+Martin
+
+
+    >> I can reproduce this now on my personal Mac:
+
+    >> ```
+
+    >> x <- as.POSIXlt(as.POSIXct("2013-01-31", tz = "America/Chicago"))
+
+    >> Sys.setenv(TZ = "")
+
+    >> x[1] <- NA
+
+    >> x
+
+    >> #> [1] NA
+
+
+    >> x <- as.POSIXlt(as.POSIXct("2013-01-31", tz = "America/Chicago"))
+
+    >> Sys.setenv(TZ = "America/New_York")
+
+    >> x[1] <- NA
+
+    >> x
+
+    >> #> [1] NA
+
+
+    >> x <- as.POSIXlt(as.POSIXct("2013-01-31", tz = "America/Chicago"))
+
+    >> Sys.setenv(TZ = "UTC")
+
+    >> x[1] <- NA
+    >> #> Error in x[[n]][i] <- value[[n]] : replacement has length zero
+
+    >> x
+
+    >> #> [1] "2013-01-31 CST"
+    >> ```
+
+    >> Here are `sessionInfo()` and `Sys.getenv("TZ")` outputs for 3 GitHub
+    >> Actions platforms where the bug exists (note they all set `TZ = "UTC"`!):
+
+    >> Linux:
+
+    >> ```
+
+    >>> sessionInfo()
+
+    >> R version 4.2.1 (2022-06-23)
+
+    >> Platform: x86_64-pc-linux-gnu (64-bit)
+
+    >> Running under: Ubuntu 18.04.6 LTS
+
+
+    >> Matrix products: default
+
+    >> BLAS:   /usr/lib/x86_64-linux-gnu/openblas/libblas.so.3
+
+    >> LAPACK: /usr/lib/x86_64-linux-gnu/libopenblasp-r0.2.20.so
+
+
+    >> locale:
+
+    >> [1] LC_CTYPE=C.UTF-8       LC_NUMERIC=C           LC_TIME=C.UTF-8
+
+    >> [4] LC_COLLATE=C.UTF-8     LC_MONETARY=C.UTF-8    LC_MESSAGES=C.UTF-8
+
+    >> [7] LC_PAPER=C.UTF-8       LC_NAME=C              LC_ADDRESS=C
+
+    >> [10] LC_TELEPHONE=C         LC_MEASUREMENT=C.UTF-8 LC_IDENTIFICATION=C
+
+
+    >> attached base packages:
+
+    >> [1] stats     graphics  grDevices utils     datasets  methods   base
+
+
+    >> loaded via a namespace (and not attached):
+
+    >> [1] compiler_4.2.1
+
+
+    >>> Sys.getenv("TZ")
+
+    >> [1] "UTC"
+    >> ```
+
+    >> Mac:
+
+    >> ```
+
+    >>> sessionInfo()
+
+    >> R version 4.2.1 (2022-06-23)
+
+    >> Platform: x86_64-apple-darwin17.0 (64-bit)
+
+    >> Running under: macOS Big Sur ... 10.16
+
+
+    >> Matrix products: default
+
+    >> BLAS:
+    >> /Library/Frameworks/R.framework/Versions/4.2/Resources/lib/libRblas.0.dylib
+
+    >> LAPACK:
+    >> /Library/Frameworks/R.framework/Versions/4.2/Resources/lib/libRlapack.dylib
+
+
+    >> locale:
+
+    >> [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+
+
+    >> attached base packages:
+
+    >> [1] stats     graphics  grDevices utils     datasets  methods   base
+
+
+    >> loaded via a namespace (and not attached):
+
+    >> [1] compiler_4.2.1
+
+
+    >>> Sys.getenv("TZ")
+
+    >> [1] "UTC"
+    >> ```
+
+    >> Windows:
+    >> This is the best I can get you, sorry (remote worker issues), but note that
+    >> it does also say `tz UTC` like the others.
+
+    >> ```
+    >> version R version 4.2.1 (2022-06-23 ucrt)
+    >> os Windows Server x64 (build 20348)
+    >> system x86_64, mingw32
+    >> ui RTerm
+    >> language (EN)
+    >> collate English_United States.utf8
+    >> ctype English_United States.utf8
+    >> tz UTC
+    >> date 2022-10-11
+    >> ```
+
+    >> And here is my Mac where the bug doesn't show up by default because `TZ =
+    >> ""`:
+
+    >> ```
+
+    >>> sessionInfo()
+
+    >> R version 4.2.1 (2022-06-23)
+
+    >> Platform: x86_64-apple-darwin17.0 (64-bit)
+
+    >> Running under: macOS Big Sur ... 10.16
+
+
+    >> Matrix products: default
+
+    >> BLAS:
+    >> /Library/Frameworks/R.framework/Versions/4.2/Resources/lib/libRblas.0.dylib
+
+    >> LAPACK:
+    >> /Library/Frameworks/R.framework/Versions/4.2/Resources/lib/libRlapack.dylib
+
+
+    >> locale:
+
+    >> [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+
+
+    >> attached base packages:
+
+    >> [1] stats     graphics  grDevices utils     datasets  methods   base
+
+
+    >> loaded via a namespace (and not attached):
+
+    >> [1] compiler_4.2.1
+
+
+    >>> Sys.getenv("TZ")
+
+    >> [1] ""
+
+
+    >>> Sys.timezone()
+
+    >> [1] "America/New_York"
+    >> ```
+
+    >> -Davis
+
+
+    >> On Thu, Oct 6, 2022 at 9:33 AM Davis Vaughan <davis at rstudio.com> wrote:
+
+    >>> Hi all,
+    >>> 
+    >>> I have found another POSIXlt bug while I've been fiddling around with it.
+    >>> This one only appears on specific OSes, because it has to do with the fact
+    >>> that the `gmtoff` field is optional, and isn't always used on all OSes. It
+    >>> also doesn't seem to be specific to r-devel, I think it has been there
+    >>> awhile.
+    >>> 
+    >>> Here is the bug:
+    >>> 
+    >>> ```
+    >>> x <- as.POSIXlt(as.POSIXct("2013-01-31", tz = "America/Chicago"))
+    >>> 
+    >>> # Oh no!
+    >>> x[1] <- NA
+    >>> #> Error in x[[n]][i] <- value[[n]] : replacement has length zero
+    >>> ```
+    >>> 
+    >>> If you look at the objects, you can see that `x` has a `gmtoff` field, but
+    >>> `NA` (when converted to POSIXlt, which is what `[<-.POSIXlt` does) does not:
+    >>> 
+    >>> ```
+    >>> unclass(x)
+    >>> #> $sec
+    >>> #> [1] 0
+    >>> #>
+    >>> #> $min
+    >>> #> [1] 0
+    >>> #>
+    >>> #> $hour
+    >>> #> [1] 0
+    >>> #>
+    >>> #> $mday
+    >>> #> [1] 31
+    >>> #>
+    >>> #> $mon
+    >>> #> [1] 0
+    >>> #>
+    >>> #> $year
+    >>> #> [1] 113
+    >>> #>
+    >>> #> $wday
+    >>> #> [1] 4
+    >>> #>
+    >>> #> $yday
+    >>> #> [1] 30
+    >>> #>
+    >>> #> $isdst
+    >>> #> [1] 0
+    >>> #>
+    >>> #> $zone
+    >>> #> [1] "CST"
+    >>> #>
+    >>> #> $gmtoff
+    >>> #> [1] -21600
+    >>> #>
+    >>> #> attr(,"tzone")
+    >>> #> [1] "America/Chicago" "CST"             "CDT"
+    >>> 
+    >>> unclass(as.POSIXlt(NA))
+    >>> #> $sec
+    >>> #> [1] NA
+    >>> #>
+    >>> #> $min
+    >>> #> [1] NA
+    >>> #>
+    >>> #> $hour
+    >>> #> [1] NA
+    >>> #>
+    >>> #> $mday
+    >>> #> [1] NA
+    >>> #>
+    >>> #> $mon
+    >>> #> [1] NA
+    >>> #>
+    >>> #> $year
+    >>> #> [1] NA
+    >>> #>
+    >>> #> $wday
+    >>> #> [1] NA
+    >>> #>
+    >>> #> $yday
+    >>> #> [1] NA
+    >>> #>
+    >>> #> $isdst
+    >>> #> [1] -1
+    >>> #>
+    >>> #> attr(,"tzone")
+    >>> #> [1] "UTC"
+    >>> ```
+    >>> 
+    >>> The problem seems to be that `[<-.POSIXlt` assumes that if the field was
+    >>> there in `x` then it must also be there in `value`:
+    >>> 
+    >>> https://github.com/wch/r-source/blob/e10a971dee6a0ab851279c183cc21954d66b3be4/src/library/base/R/datetime.R#L1303-L1304
+    >>> 
+    >>> But this isn't the case for the `NA` value that was converted to POSIXlt.
+    >>> 
+    >>> I can't reproduce this on my personal Mac, but it affects the Linux, Mac,
+    >>> and Windows machines we use for the lubridate CI checks through GitHub
+    >>> Actions.
+    >>> 
+    >>> Thanks,
+    >>> Davis
+    >>>
+
+
+From r|p|ey @end|ng |rom @t@t@@ox@@c@uk  Wed Oct 12 12:46:19 2022
+From: r|p|ey @end|ng |rom @t@t@@ox@@c@uk (Prof Brian Ripley)
+Date: Wed, 12 Oct 2022 11:46:19 +0100
+Subject: [Rd] A potential POSIXlt->Date bug introduced in r-devel
+In-Reply-To: <df276af2-5024-05dd-1ccb-96ffbf6e980b@stats.ox.ac.uk>
+References: <CABzLhzzsnRCwM3LPM-z2T8YFO3bBcD7=iE3Hxx9rLdEUeAkk3g@mail.gmail.com>
+ <25406.36513.13316.676488@stat.math.ethz.ch>
+ <20221006164146.39f9b8e4@ECM-DTC-716.uniwa.uwa.edu.au>
+ <df276af2-5024-05dd-1ccb-96ffbf6e980b@stats.ox.ac.uk>
+Message-ID: <192501c4-46a4-ab4e-d908-8bde2eceda7b@stats.ox.ac.uk>
+
+Confirmed on Fedora 36 which has a 32-bit time_t for an i686 compile.  I 
+was a bit surprised that has not been changed, but gather Linux distros 
+are preferring to drop ix86 than fix it.
+
+There is a simple workaround, to configure R with 
+--with-internal-tzcode, which always uses a 64-bit time_t.  Given that 
+2038 is not that far away, avoiding 32-bit time_t is generally a very 
+good idea (not just for people working with dates in 5881580!).
+
+That test should not really be run on platforms with 32-bit time_t, but 
+that is not currently known at R level.
+
+On 06/10/2022 13:38, Prof Brian Ripley wrote:
+> On 06/10/2022 09:41, Berwin A Turlach wrote:
+>> G'day all,
+>>
+>> On Thu, 6 Oct 2022 10:15:29 +0200
+>> Martin Maechler <maechler at stat.math.ethz.ch> wrote:
+>>
+>>>>>>>> Davis Vaughan
+>>>>>>>> ???? on Wed, 5 Oct 2022 17:04:11 -0400 writes:
+>>
+>>> ???? > # Weird, where is the `NA`?
+>>> ???? > as.Date(x)
+>>> ???? > #> [1] "2013-01-31" "1970-01-01" "2013-03-31"
+>>> ???? > ```
+>>>
+>>> I agree that the above is wrong, i.e., a bug in current? R-devel.
+>>
+>> I have no intention of hijacking this thread, but I wonder whether this
+>> is a good opportunity to mention that the 32 bit build of R-devel falls
+>> over on my machine since 25 September.? It fails one of the regression
+>> tests in reg-tests-1d.R.? The final lines of reg-tests-1d.Rout.fail
+>> are:
+>>
+>>> tools::Rd2txt(rd, out <- textConnection(NULL, "w"), fragment = TRUE)
+>>> stopifnot(any(as.character(rd) != "\n"),
+>> +?????????? identical(textConnectionValue(out)[2L], "LaTeX"));
+>> close(out)
+>>> ## empty output in R <= 4.2.x
+> 
+> Yes, known for a few days on the R-core list. I am in the middle of an 
+> OS upgrade on that machine and won't have time to do more than report 
+> until that (and all the re-building and re-checking) is complete.
+> 
+>>> ## as.POSIXlt(<very large Date>)? gave integer overflow
+>>> stopifnot(as.POSIXlt(.Date(2^31 + 10))$year == 5879680L)
+>> Error: as.POSIXlt(.Date(2^31 + 10))$year == 5879680L is not TRUE
+>> Execution halted
+>>
+>>
+>> I should have reported this earlier, but somehow did not find the time
+>> to do so.? So I thought I mention it here. :)
+>>
+>> Cheers,
+>>
+>> ????Berwin
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> 
+
+
+-- 
+Brian D. Ripley,                  ripley at stats.ox.ac.uk
+Emeritus Professor of Applied Statistics, University of Oxford
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Wed Oct 12 12:47:50 2022
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Wed, 12 Oct 2022 12:47:50 +0200
+Subject: [Rd] Bug with `[<-.POSIXlt` on specific OSes
+In-Reply-To: <25414.30744.139721.871865@stat.math.ethz.ch>
+References: <CABzLhzy0eTEAnb36raY5h_P=4+Dnm9uX0k0DB557zntD2qMLxg@mail.gmail.com>
+ <CABzLhzxNNce6eEOnnv0fSpLRiZ70FC3-YadS2PeWOFSJfN6Zaw@mail.gmail.com>
+ <25413.33085.344041.49718@hornik.net>
+ <25414.30744.139721.871865@stat.math.ethz.ch>
+Message-ID: <25414.39766.204230.129162@stat.math.ethz.ch>
+
+>>>>> Martin Maechler 
+>>>>>     on Wed, 12 Oct 2022 10:17:28 +0200 writes:
+
+>>>>> Kurt Hornik 
+>>>>>     on Tue, 11 Oct 2022 16:44:13 +0200 writes:
+
+>>>>> Davis Vaughan writes:
+    >>> I've got a bit more information about this one. It seems like it
+    >>> (only? not sure) appears when `TZ = "UTC"`, which is why I didn't see
+    >>> it before on my Mac, which defaults to `TZ = ""`. I think this is at
+    >>> least explainable by the fact that those "optional" fields aren't
+    >>> technically needed when the time zone is UTC.
+
+    >> Exactly.  Debugging `[<-.POSIlt` with
+
+    >> x <- as.POSIXlt(as.POSIXct("2013-01-31", tz = "America/Chicago"))
+    >> Sys.setenv(TZ = "UTC")
+    >> x[1] <- NA
+
+    >> shows we get into
+
+    >> value <- unclass(as.POSIXlt(value))
+    >> if (ici) {
+    >> for (n in names(x)) names(x[[n]]) <- nms
+    >> }
+    >> for (n in names(x)) x[[n]][i] <- value[[n]]
+
+    >> where
+
+    >> Browse[2]> names(value)
+    >> [1] "sec"   "min"   "hour"  "mday"  "mon"   "year"  "wday"  "yday"  "isdst"
+    >> Browse[2]> names(x)
+    >> [1] "sec"    "min"    "hour"   "mday"   "mon"    "year"   "wday"   "yday"  
+    >> [9] "isdst"  "zone"   "gmtoff"
+
+    >> Without having looked at the code, the docs say
+
+    >> ?zone? (Optional.) The abbreviation for the time zone in force at
+    >> that time: ?""? if unknown (but ?""? might also be used for
+    >> UTC).
+
+    >> ?gmtoff? (Optional.) The offset in seconds from GMT: positive
+    >> values are East of the meridian.  Usually ?NA? if unknown,
+    >> but ?0? could mean unknown.
+
+    >> so perhaps we should fill with the values for the unknown case?
+
+    >> -k
+
+    > Well,
+
+    > I think you both know  I'm in the midst of dealing with these
+    > issues, to fix both
+
+    > [.POSIXlt  and
+    > [<-.POSIXlt
+
+    > Yes, one needs a way to not only "fill" the partially filled
+    > entries but also to *normalize* out-of-range values
+    > (say negative seconds, minutes > 60, etc)
+
+    > All this is available in our C code, but not on the R level,
+    > so yesterday, I wrote a C function to be called via .Internal(.)
+    > from a new R that provides this.
+
+    > Provisionally called
+
+    > balancePOSIXlt()
+
+    > because it both balances the 9 to 11 list-components of POSIXlt
+    > and it also puts all numbers of (sec, min, hour, mday, mon)
+    > into a correct range (and also computes correctl wday and yday numbers).
+    > but I'm happy for proposals of better names.
+    > I had contemplated  validatePOSIXlt() as alternative, but then
+    > dismissed that as in some sense we now do agree that
+    > "imbalanced" POSIXlt's are not really invalid ..
+
+    > .. and yes, to Davis:  Even though I've spent so many hours with
+    > POSIXlt, POSIXct and Date during the last week, I'm still
+    > surprised more often than I like by the effects of timezone
+    > settings there.
+
+    > Martin
+
+I have committed the new R and C code now, defining  balancePOSIXlt(),
+to get feedback from the community.
+
+I've extended the documentation in  help(DateTimeClasses),
+and notably factored out the description
+of  POSIXlt  mentioning the  "ragged" and "out-of-range" cases.
+
+This needs more testing and experiments, and I have not
+announced it  NEWS  yet.
+
+Planned next is to use it in  [.POSIXlt and [<-.POSIXlt
+so they will work correctly.
+
+But please share your thoughts, propositions, ...
+
+Martin
+
+
+    >>> I can reproduce this now on my personal Mac:
+
+    >>> ```
+
+    >>> x <- as.POSIXlt(as.POSIXct("2013-01-31", tz = "America/Chicago"))
+
+    >>> Sys.setenv(TZ = "")
+
+    >>> x[1] <- NA
+
+    >>> x
+
+    >>> #> [1] NA
+
+
+    >>> x <- as.POSIXlt(as.POSIXct("2013-01-31", tz = "America/Chicago"))
+
+    >>> Sys.setenv(TZ = "America/New_York")
+
+    >>> x[1] <- NA
+
+    >>> x
+
+    >>> #> [1] NA
+
+
+    >>> x <- as.POSIXlt(as.POSIXct("2013-01-31", tz = "America/Chicago"))
+
+    >>> Sys.setenv(TZ = "UTC")
+
+    >>> x[1] <- NA
+    >>> #> Error in x[[n]][i] <- value[[n]] : replacement has length zero
+
+    >>> x
+
+    >>> #> [1] "2013-01-31 CST"
+    >>> ```
+
+    >>> Here are `sessionInfo()` and `Sys.getenv("TZ")` outputs for 3 GitHub
+    >>> Actions platforms where the bug exists (note they all set `TZ = "UTC"`!):
+
+    >>> Linux:
+
+    >>> ```
+
+    >>>> sessionInfo()
+
+    >>> R version 4.2.1 (2022-06-23)
+
+    >>> Platform: x86_64-pc-linux-gnu (64-bit)
+
+    >>> Running under: Ubuntu 18.04.6 LTS
+
+
+    >>> Matrix products: default
+
+    >>> BLAS:   /usr/lib/x86_64-linux-gnu/openblas/libblas.so.3
+
+    >>> LAPACK: /usr/lib/x86_64-linux-gnu/libopenblasp-r0.2.20.so
+
+
+    >>> locale:
+
+    >>> [1] LC_CTYPE=C.UTF-8       LC_NUMERIC=C           LC_TIME=C.UTF-8
+
+    >>> [4] LC_COLLATE=C.UTF-8     LC_MONETARY=C.UTF-8    LC_MESSAGES=C.UTF-8
+
+    >>> [7] LC_PAPER=C.UTF-8       LC_NAME=C              LC_ADDRESS=C
+
+    >>> [10] LC_TELEPHONE=C         LC_MEASUREMENT=C.UTF-8 LC_IDENTIFICATION=C
+
+
+    >>> attached base packages:
+
+    >>> [1] stats     graphics  grDevices utils     datasets  methods   base
+
+
+    >>> loaded via a namespace (and not attached):
+
+    >>> [1] compiler_4.2.1
+
+
+    >>>> Sys.getenv("TZ")
+
+    >>> [1] "UTC"
+    >>> ```
+
+    >>> Mac:
+
+    >>> ```
+
+    >>>> sessionInfo()
+
+    >>> R version 4.2.1 (2022-06-23)
+
+    >>> Platform: x86_64-apple-darwin17.0 (64-bit)
+
+    >>> Running under: macOS Big Sur ... 10.16
+
+
+    >>> Matrix products: default
+
+    >>> BLAS:
+    >>> /Library/Frameworks/R.framework/Versions/4.2/Resources/lib/libRblas.0.dylib
+
+    >>> LAPACK:
+    >>> /Library/Frameworks/R.framework/Versions/4.2/Resources/lib/libRlapack.dylib
+
+
+    >>> locale:
+
+    >>> [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+
+
+    >>> attached base packages:
+
+    >>> [1] stats     graphics  grDevices utils     datasets  methods   base
+
+
+    >>> loaded via a namespace (and not attached):
+
+    >>> [1] compiler_4.2.1
+
+
+    >>>> Sys.getenv("TZ")
+
+    >>> [1] "UTC"
+    >>> ```
+
+    >>> Windows:
+    >>> This is the best I can get you, sorry (remote worker issues), but note that
+    >>> it does also say `tz UTC` like the others.
+
+    >>> ```
+    >>> version R version 4.2.1 (2022-06-23 ucrt)
+    >>> os Windows Server x64 (build 20348)
+    >>> system x86_64, mingw32
+    >>> ui RTerm
+    >>> language (EN)
+    >>> collate English_United States.utf8
+    >>> ctype English_United States.utf8
+    >>> tz UTC
+    >>> date 2022-10-11
+    >>> ```
+
+    >>> And here is my Mac where the bug doesn't show up by default because `TZ =
+    >>> ""`:
+
+    >>> ```
+
+    >>>> sessionInfo()
+
+    >>> R version 4.2.1 (2022-06-23)
+
+    >>> Platform: x86_64-apple-darwin17.0 (64-bit)
+
+    >>> Running under: macOS Big Sur ... 10.16
+
+
+    >>> Matrix products: default
+
+    >>> BLAS:
+    >>> /Library/Frameworks/R.framework/Versions/4.2/Resources/lib/libRblas.0.dylib
+
+    >>> LAPACK:
+    >>> /Library/Frameworks/R.framework/Versions/4.2/Resources/lib/libRlapack.dylib
+
+
+    >>> locale:
+
+    >>> [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+
+
+    >>> attached base packages:
+
+    >>> [1] stats     graphics  grDevices utils     datasets  methods   base
+
+
+    >>> loaded via a namespace (and not attached):
+
+    >>> [1] compiler_4.2.1
+
+
+    >>>> Sys.getenv("TZ")
+
+    >>> [1] ""
+
+
+    >>>> Sys.timezone()
+
+    >>> [1] "America/New_York"
+    >>> ```
+
+    >>> -Davis
+
+
+    >>> On Thu, Oct 6, 2022 at 9:33 AM Davis Vaughan <davis at rstudio.com> wrote:
+
+    >>>> Hi all,
+    >>>> 
+    >>>> I have found another POSIXlt bug while I've been fiddling around with it.
+    >>>> This one only appears on specific OSes, because it has to do with the fact
+    >>>> that the `gmtoff` field is optional, and isn't always used on all OSes. It
+    >>>> also doesn't seem to be specific to r-devel, I think it has been there
+    >>>> awhile.
+    >>>> 
+    >>>> Here is the bug:
+    >>>> 
+    >>>> ```
+    >>>> x <- as.POSIXlt(as.POSIXct("2013-01-31", tz = "America/Chicago"))
+    >>>> 
+    >>>> # Oh no!
+    >>>> x[1] <- NA
+    >>>> #> Error in x[[n]][i] <- value[[n]] : replacement has length zero
+    >>>> ```
+    >>>> 
+    >>>> If you look at the objects, you can see that `x` has a `gmtoff` field, but
+    >>>> `NA` (when converted to POSIXlt, which is what `[<-.POSIXlt` does) does not:
+    >>>> 
+    >>>> ```
+    >>>> unclass(x)
+    >>>> #> $sec
+    >>>> #> [1] 0
+    >>>> #>
+    >>>> #> $min
+    >>>> #> [1] 0
+    >>>> #>
+    >>>> #> $hour
+    >>>> #> [1] 0
+    >>>> #>
+    >>>> #> $mday
+    >>>> #> [1] 31
+    >>>> #>
+    >>>> #> $mon
+    >>>> #> [1] 0
+    >>>> #>
+    >>>> #> $year
+    >>>> #> [1] 113
+    >>>> #>
+    >>>> #> $wday
+    >>>> #> [1] 4
+    >>>> #>
+    >>>> #> $yday
+    >>>> #> [1] 30
+    >>>> #>
+    >>>> #> $isdst
+    >>>> #> [1] 0
+    >>>> #>
+    >>>> #> $zone
+    >>>> #> [1] "CST"
+    >>>> #>
+    >>>> #> $gmtoff
+    >>>> #> [1] -21600
+    >>>> #>
+    >>>> #> attr(,"tzone")
+    >>>> #> [1] "America/Chicago" "CST"             "CDT"
+    >>>> 
+    >>>> unclass(as.POSIXlt(NA))
+    >>>> #> $sec
+    >>>> #> [1] NA
+    >>>> #>
+    >>>> #> $min
+    >>>> #> [1] NA
+    >>>> #>
+    >>>> #> $hour
+    >>>> #> [1] NA
+    >>>> #>
+    >>>> #> $mday
+    >>>> #> [1] NA
+    >>>> #>
+    >>>> #> $mon
+    >>>> #> [1] NA
+    >>>> #>
+    >>>> #> $year
+    >>>> #> [1] NA
+    >>>> #>
+    >>>> #> $wday
+    >>>> #> [1] NA
+    >>>> #>
+    >>>> #> $yday
+    >>>> #> [1] NA
+    >>>> #>
+    >>>> #> $isdst
+    >>>> #> [1] -1
+    >>>> #>
+    >>>> #> attr(,"tzone")
+    >>>> #> [1] "UTC"
+    >>>> ```
+    >>>> 
+    >>>> The problem seems to be that `[<-.POSIXlt` assumes that if the field was
+    >>>> there in `x` then it must also be there in `value`:
+    >>>> 
+    >>>> https://github.com/wch/r-source/blob/e10a971dee6a0ab851279c183cc21954d66b3be4/src/library/base/R/datetime.R#L1303-L1304
+    >>>> 
+    >>>> But this isn't the case for the `NA` value that was converted to POSIXlt.
+    >>>> 
+    >>>> I can't reproduce this on my personal Mac, but it affects the Linux, Mac,
+    >>>> and Windows machines we use for the lubridate CI checks through GitHub
+    >>>> Actions.
+    >>>> 
+    >>>> Thanks,
+    >>>> Davis
+    >>>> 
+
+    > ______________________________________________
+    > R-devel at r-project.org mailing list
+    > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From p@u| @end|ng |rom @t@t@@uck|@nd@@c@nz  Wed Oct 12 23:27:57 2022
+From: p@u| @end|ng |rom @t@t@@uck|@nd@@c@nz (Paul Murrell)
+Date: Thu, 13 Oct 2022 10:27:57 +1300
+Subject: [Rd] Question about grid.group compositing operators in cairo
+In-Reply-To: <543be111-1ed2-24ad-51ca-4849a67a49eb@stat.auckland.ac.nz>
+References: <0eaac5fb-b749-1470-c2a7-9f2f8215ace9@posteo.net>
+ <c3debb04-04b8-90e8-2315-392105cd9db6@stat.auckland.ac.nz>
+ <f581c979-44f0-3dc3-2c6f-015c2651b19c@stat.auckland.ac.nz>
+ <6d240042-2017-a760-28d7-bf96d773fd90@posteo.net>
+ <3e245b89-9c4f-dcbc-b310-5d3a25687af2@stat.auckland.ac.nz>
+ <159821f0-0fc6-9054-c6bc-185102114e68@posteo.net>
+ <c92574d5-f064-39c1-5fb4-05242607f19a@stat.auckland.ac.nz>
+ <197c7a88-fb1c-49e1-7fc9-c1605abfef95@stat.auckland.ac.nz>
+ <543be111-1ed2-24ad-51ca-4849a67a49eb@stat.auckland.ac.nz>
+Message-ID: <2d7a8915-797f-4036-a489-21c1cd5be158@stat.auckland.ac.nz>
+
+Hi
+
+This issue has expanded to include the behaviour of compositing 
+operators in R graphics more generally.
+
+For the record, the discussion is continuing here ...
+
+https://github.com/pmur002/rgraphics-compositing
+
+Paul
+
+On 4/10/22 09:20, Paul Murrell wrote:
+> 
+> Interim update:? I have spoken with Thomas Lin Pedersen (cc'ed), the 
+> author/maintainer of 'ragg' and 'svglite', who is working on adding 
+> group support for those graphics devices and he has voted in support of 
+> the current Cairo implementation, so the needle has shifted towards 
+> Cairo at this stage.
+> 
+> I still want to do more tests on other devices to gather more evidence.
+> 
+> Paul
+> 
+> p.s.? Attached (if it makes it through the filters) is a manual 
+> modification of your original dsvg() example that has been changed so 
+> that it produces the Cairo result.? This is probably not exactly how you 
+> would want to implement the dsvg() solution, but it is at least a proof 
+> of concept that the Cairo result can be produced in SVG.
+> 
+> On 30/09/22 10:49, Paul Murrell wrote:
+>> Hi
+>>
+>> Some more thoughts ...
+>>
+>> <1>
+>> I said before that currently, dev->group() does this ...
+>>
+>> [OVER] shape shape shape OP shape shape shape
+>>
+>> ... and one option would be an implicit group on 'src' and 'dst' like 
+>> this ...
+>>
+>> ([OVER] shape shape shape) OP ([OVER] shape shape shape)
+>>
+>> ... but another approach could be just an implicit group on each 
+>> shape, like this ...
+>>
+>> [OVER] ([OVER] shape) ([OVER] shape) OP ([OVER] shape) ([OVER] shape)
+>>
+>> That may be a better representation of what you are already doing with 
+>> dsvg() ?? It may also better reflect what naturally occurs in some 
+>> graphics systems.
+>>
+>> <2>
+>> Changing the Cairo implementation to work like that would I think 
+>> produce the same result as your dsvg() for ...
+>>
+>> grid.group(src, "in", dst)
+>>
+>> ... and it would make what constitutes more than one shape much less 
+>> surprising ...
+>>
+>> gList(rectGrob(), rectGrob())? ## multiple shapes (obviously)
+>> rectGrob(width=1:2/2)????????? ## multiple shapes (less obvious)
+>> rectGrob(gp=gpar(col=, fill=)) ## NOT multiple shapes (no surprise)
+>>
+>> ... and it should not break any pre-existing non-group behaviour.
+>>
+>> <3>
+>> One casualty from this third option would be that the following would 
+>> no longer solve the overlapping fill and stroke problem ...
+>>
+>> grid.group(overlapRect, "source")
+>>
+>> ... although the fact that that currently works is really a bit 
+>> surprising AND that result could still be achieved by explicitly 
+>> drawing separate shapes ...
+>>
+>> grid.group(rectGrob(gp=gpar(col=rgb(1,0,0,.5), lwd=20, fill=NA)),
+>> ??????????? "source",
+>> ??????????? rectGrob(gp=gpar(col=NA, fill="green")))
+>>
+>> <4>
+>> I need to try some of this out and also check in with some other 
+>> people who I think are working on implementing groups on different 
+>> graphics devices.
+>>
+>> <5>
+>> In summary, don't go changing dsvg() too much just yet!
+>>
+>> Paul
+>>
+>> On 29/09/2022 1:30 pm, Paul Murrell wrote:
+>>> Hi
+>>>
+>>> Would it work to explicitly record a filled-and-stroked shape as two 
+>>> separate elements (one only filled and one only stroked) ?
+>>>
+>>> Then it should only be as hard to apply the active operator on both 
+>>> of those elements as it is to apply the active operator to more than 
+>>> one shape (?)
+>>>
+>>> Paul
+>>>
+>>> On 29/09/22 10:17, Panagiotis Skintzos wrote:
+>>>> Thank you for the very thorough explanation Paul.
+>>>>
+>>>> To answer your question on 11: The dsvg device, simply defines svg
+>>>> elements with their attributes (rect with fill & stroke in my 
+>>>> examples).
+>>>> It does not do any internal image processing like cairo.
+>>>>
+>>>> My concern is how to proceed with the implementation in dsvg.
+>>>>
+>>>> If I leave it as it is now, they're will be cases where it will give
+>>>> different results from cairo (and perhaps other devices that will
+>>>> implement group compositing in similar way).
+>>>>
+>>>> On the other hand It would be quite challenging in practice to simulate
+>>>> the cairo implementation and apply first the fill and then the stroke
+>>>> with the active operator, on the element itself.
+>>>>
+>>>> Any suggestions? :-)
+>>>>
+>>>> Panagiotis
+>>>>
+>>>>
+>>>> On 28/9/22 02:56, Paul Murrell wrote:
+>>>> ?> Hi
+>>>> ?>
+>>>> ?> Thanks for the code (and for the previous attachments).
+>>>> ?>
+>>>> ?> Some thoughts so far (HTML version with images attached) ...
+>>>> ?>
+>>>> ?> <1>
+>>>> ?> As you have pointed out, the Cairo device draws a stroked-and-filled
+>>>> ?> shape with two separate drawing operations: the path is filled and
+>>>> ?> then the path is stroked.? I do not believe that there is any
+>>>> ?> alternative in Cairo graphics (apart from filling and stroking as an
+>>>> ?> isolated group and then drawing the group, which we will come 
+>>>> back to).
+>>>> ?>
+>>>> ?> <2>
+>>>> ?> This fill-then-stroke approach is easy to demonstrate just with a 
+>>>> thick
+>>>> ?> semitransparent border ...
+>>>> ?>
+>>>> ?> library(grid)
+>>>> ?> overlapRect <- rectGrob(width=.5, height=.5,
+>>>> ?> ??????????????????????? gp=gpar(fill="green", lwd=20,
+>>>> ?> ??????????????????????????????? col=rgb(1,0,0,.5)))
+>>>> ?> grid.newpage()
+>>>> ?> grid.draw(overlapRect)
+>>>> ?>
+>>>> ?> <3>
+>>>> ?> This fill-then-stroke approach is what happens on many (most?)
+>>>> ?> graphics devices, including, for example, the core windows() device,
+>>>> ?> the core quartz() device, the 'ragg' devices, and 'ggiraph'.? The
+>>>> ?> latter is true because this is actually the defined behaviour for 
+>>>> SVG ...
+>>>> ?>
+>>>> ?> https://www.w3.org/TR/SVG2/render.html#Elements 
+>>>> <https://www.w3.org/TR/SVG2/render.html#Elements>
+>>>> ?> https://www.w3.org/TR/SVG2/render.html#PaintingShapesAndText 
+>>>> <https://www.w3.org/TR/SVG2/render.html#PaintingShapesAndText>
+>>>> ?>
+>>>> ?> <4>
+>>>> ?> There are exceptions to the fill-then-stroke approach, including the
+>>>> ?> core pdf() device, but I think they are in the minority.? The PDF
+>>>> ?> language supports a "B" operator that only fills within the 
+>>>> border (no
+>>>> ?> overlap between fill and border).? Demonstrating this is complicated
+>>>> ?> by the fact that not all PDF viewers support this correctly (e.g.,
+>>>> ?> evince and Firefox do not;? ghostscript and chrome do)!
+>>>> ?>
+>>>> ?> <5>
+>>>> ?> Forcing all R graphics devices to change the rendering of
+>>>> ?> filled-and-stroked shapes to match the PDF definition instead of
+>>>> ?> fill-then-stroke is unlikely to happen because it would impact a lot
+>>>> ?> of graphics devices, it would break existing behaviour, it may be
+>>>> ?> difficult/impossible for some devices, and it is not clear that 
+>>>> it is
+>>>> ?> the best approach anyway.
+>>>> ?>
+>>>> ?> <6>
+>>>> ?> Finally getting back to your example, the fill-then-stroke approach
+>>>> ?> produces some interesting results when applying compositing 
+>>>> operators
+>>>> ?> because the fill is drawn using the compositing operator to 
+>>>> combine it
+>>>> ?> with previous drawing and then the stroke is drawn using the
+>>>> ?> compositing operator to combine it with *the result of combining the
+>>>> ?> fill with previous drawing*. The result makes sense in terms of how
+>>>> ?> the rendering works, but it probably fails the "principle of least
+>>>> ?> surprise".
+>>>> ?>
+>>>> ?> srcRect <- rectGrob(2/3, 1/3, width=.6, height=.6,
+>>>> ?> ??????????????????? gp=gpar(lwd = 5, fill=rgb(0, 0, 0.9, 0.4)))
+>>>> ?> dstRect <- rectGrob(1/3, 2/3, width=.6, height=.6,
+>>>> ?> ??????????????????? gp=gpar(lwd = 5, fill=rgb(0.7, 0, 0, 0.8)))
+>>>> ?> grid.newpage()
+>>>> ?> grid.group(srcRect, "in", dstRect)
+>>>> ?>
+>>>> ?> <7>
+>>>> ?> This issue is not entirely unanticipated because it can arise
+>>>> ?> slightly-less-unintentionally if we combine a 'src' and/or 'dst' 
+>>>> that
+>>>> ?> draw more than one shape, like this ...
+>>>> ?>
+>>>> ?> src <- circleGrob(3:4/5, r=.2, gp=gpar(col=NA, fill=2))
+>>>> ?> dst <- circleGrob(1:2/5, r=.2, gp=gpar(col=NA, fill=3))
+>>>> ?> grid.newpage()
+>>>> ?> grid.group(src, "xor", dst)
+>>>> ?>
+>>>> ?> This was discussed in the Section "Compositing and blend modes" 
+>>>> in the
+>>>> ?> original technical report about groups and compositing ...
+>>>> ?>
+>>>> ?> 
+>>>> https://www.stat.auckland.ac.nz/~paul/Reports/GraphicsEngine/groups/groups.html#userdetails <https://www.stat.auckland.ac.nz/~paul/Reports/GraphicsEngine/groups/groups.html#userdetails>
+>>>> ?>
+>>>> ?>
+>>>> ?> <8>
+>>>> ?> A solution to the problem of drawing more than one shape (above) 
+>>>> is to
+>>>> ?> take explicit control of how shapes are combined, *using explicit
+>>>> ?> groups* ...
+>>>> ?>
+>>>> ?> grid.newpage()
+>>>> ?> grid.group(groupGrob(src), "xor", dst)
+>>>> ?>
+>>>> ?> <9>
+>>>> ?> Explicit groups can be used to solve the problem of overlapping fill
+>>>> ?> and stroke (here we specify that the rectangle border should be
+>>>> ?> combined with the rectangle fill using the "source" operator) ...
+>>>> ?>
+>>>> ?> grid.newpage()
+>>>> ?> grid.group(overlapRect, "source")
+>>>> ?>
+>>>> ?> <10>
+>>>> ?> Explicit groups can also be used to get the result that we might 
+>>>> have
+>>>> ?> originally expected for the "in" operator example (here we 
+>>>> isolate the
+>>>> ?> 'src' rectangle so that the border and the fill are combined 
+>>>> together
+>>>> ?> [using the default "over" operator] and then combined with the other
+>>>> ?> rectangle using the "in" operator) ...
+>>>> ?>
+>>>> ?> grid.newpage()
+>>>> ?> grid.group(groupGrob(srcRect), "in", dstRect)
+>>>> ?>
+>>>> ?> <11>
+>>>> ?> A possible change would be to force an implicit group (with op=OVER)
+>>>> ?> on the 'src' and 'dst' in dev->group().? I believe this is 
+>>>> effectively
+>>>> ?> what you are doing with your dsvg() device (?).
+>>>> ?>
+>>>> ?> Currently, dev->group() does this ...
+>>>> ?>
+>>>> ?> [OVER] shape shape shape OP shape shape shape
+>>>> ?>
+>>>> ?> ... and an implicit group on 'src' and 'dst' would do this ...
+>>>> ?>
+>>>> ?> ([OVER] shape shape shape) OP ([OVER] shape shape shape)
+>>>> ?>
+>>>> ?> An implicit (OVER) group would make it easier to combine multiple
+>>>> ?> shapes with OVER (though only slightly) ...
+>>>> ?>
+>>>> ?> grid.group(src, OP, dst)
+>>>> ?>
+>>>> ?> ... instead of ...
+>>>> ?>
+>>>> ?> grid.group(groupGrob(src), OP, dst)
+>>>> ?>
+>>>> ?> On the other hand, an implicit (OVER) group would make it harder to
+>>>> ?> combine multiple shapes with an operator other than OVER (by quite a
+>>>> ?> lot?) ...
+>>>> ?>
+>>>> ?> grid.group(groupGrob(shape, OP, groupGrob(shape, OP, shape)), OP, 
+>>>> dst)
+>>>> ?>
+>>>> ?> ... instead of ...
+>>>> ?>
+>>>> ?> grid.group(src, OP, dst)
+>>>> ?>
+>>>> ?> The complicating factor is that what constitutes more than one shape
+>>>> ?> (or drawing operation) can be unexpected ...
+>>>> ?>
+>>>> ?> gList(rectGrob(), rectGrob())? ## obvious
+>>>> ?> rectGrob(width=1:2/2)????????? ## less obvious
+>>>> ?> rectGrob(gp=gpar(col=, fill=)) ## a bit of a surprise
+>>>> ?>
+>>>> ?> <12>
+>>>> ?> In summary, while there is some temptation to add an implicit group
+>>>> ?> around 'src' and 'dst' in a group, there are also reasons not to.
+>>>> ?>
+>>>> ?> Happy to hear further arguments on this.
+>>>> ?>
+>>>> ?> Paul
+>>>> ?>
+>>>> ?> On 28/09/2022 8:04 am, Panagiotis Skintzos wrote:
+>>>> ?>> Here is the code again in text:
+>>>> ?>>
+>>>> ?>>
+>>>> ?>> src <- rectGrob(2/3, 1/3, width=.6, height=.6, gp=gpar(lwd = 5,
+>>>> ?>> fill=rgb(0, 0, 0.9, 0.4)))
+>>>> ?>> dst <- rectGrob(1/3, 2/3, width=.6, height=.6, gp=gpar(lwd = 5,
+>>>> ?>> fill=rgb(0.7, 0, 0, 0.8)))
+>>>> ?>>
+>>>> ?>> svg("cairo.in.svg", width = 5, height = 5)
+>>>> ?>> grid.group(src, "in", dst)
+>>>> ?>> dev.off()
+>>>> ?>>
+>>>> ?>>
+>>>> ?>>
+>>>> ?>> On 27/9/22 04:44, Paul Murrell wrote:
+>>>> ?>> ?>
+>>>> ?>> ?> Could you also please send me the SVG code that your device is
+>>>> ?>> ?> generating for your example.? Thanks!
+>>>> ?>> ?>
+>>>> ?>> ?> Paul
+>>>> ?>> ?>
+>>>> ?>> ?> On 27/09/22 08:50, Paul Murrell wrote:
+>>>> ?>> ?>> Hi
+>>>> ?>> ?>>
+>>>> ?>> ?>> Thanks for the report.? It certainly sounds like I have done
+>>>> ?>> ?>> something stupid :)? For my debugging and testing could you 
+>>>> please
+>>>> ?>> ?>> share the R code from your tests ?? Thanks!
+>>>> ?>> ?>>
+>>>> ?>> ?>> Paul
+>>>> ?>> ?>>
+>>>> ?>> ?>> On 26/09/22 10:27, Panagiotis Skintzos wrote:
+>>>> ?>> ?>>> Hello,
+>>>> ?>> ?>>>
+>>>> ?>> ?>>> I'm trying to update ggiraph package in graphic engine v15
+>>>> ?>> ?>>> (currently we support up to v14).
+>>>> ?>> ?>>>
+>>>> ?>> ?>>> I've implemented the group operators and when I compare the 
+>>>> outputs
+>>>> ?>> ?>>> of ggiraph::dsvg with the outputs of svg/png, I noticed 
+>>>> some weird
+>>>> ?>> ?>>> results.
+>>>> ?>> ?>>>
+>>>> ?>> ?>>> Specifically, some operators in cairo (in, out, dest.in, 
+>>>> dest.atop)
+>>>> ?>> ?>>> give strange output, when any source element in the group 
+>>>> has a
+>>>> ?>> ?>>> stroke color defined.
+>>>> ?>> ?>>>
+>>>> ?>> ?>>> I attach three example images, where two stroked rectangles 
+>>>> are
+>>>> ?>> used
+>>>> ?>> ?>>> as source (right) and destination (left).
+>>>> ?>> ?>>>
+>>>> ?>> ?>>> cairo.over.png shows the result of the over operator in cairo
+>>>> ?>> ?>>>
+>>>> ?>> ?>>> cairo.in.png shows the result of the in operator in cairo
+>>>> ?>> ?>>>
+>>>> ?>> ?>>> dsvg.in.png shows the result of the in operator in dsvg
+>>>> ?>> ?>>>
+>>>> ?>> ?>>>
+>>>> ?>> ?>>> You can see the difference between cairo.in.png and 
+>>>> dsvg.in.png. I
+>>>> ?>> ?>>> found out why I get different results:
+>>>> ?>> ?>>>
+>>>> ?>> ?>>> In dsvg implementation there is one drawing operation: Draw 
+>>>> the
+>>>> ?>> ?>>> source element, as whole (fill and stroke) over the 
+>>>> destination
+>>>> ?>> ?>>> element (using feComposite filter)
+>>>> ?>> ?>>>
+>>>> ?>> ?>>> In cairo implementation though there are two operations: 
+>>>> Apply the
+>>>> ?>> ?>>> fill on source and draw over the destination and then apply 
+>>>> the
+>>>> ?>> ?>>> stroke and draw over the result of the previous operation.
+>>>> ?>> ?>>>
+>>>> ?>> ?>>> I'm not sure if this is intentional or not. Shouldn't the 
+>>>> source
+>>>> ?>> ?>>> element being drawn first as whole (fill and stroke with over
+>>>> ?>> ?>>> operator) and then apply the group operator and draw it 
+>>>> over the
+>>>> ?>> ?>>> destination? It would seem more logical that way.
+>>>> ?>> ?>>>
+>>>> ?>> ?>>>
+>>>> ?>> ?>>> Thanks,
+>>>> ?>> ?>>>
+>>>> ?>> ?>>> Panagiotis
+>>>> ?>> ?>>>
+>>>> ?>> ?>>>
+>>>> ?>> ?>>> ______________________________________________
+>>>> ?>> ?>>> R-devel at r-project.org mailing list
+>>>> ?>> ?>>> https://stat.ethz.ch/mailman/listinfo/r-devel 
+>>>> <https://stat.ethz.ch/mailman/listinfo/r-devel>
+>>>> ?>> <https://stat.ethz.ch/mailman/listinfo/r-devel 
+>>>> <https://stat.ethz.ch/mailman/listinfo/r-devel>>
+>>>> ?>> ?>>
+>>>> ?>> ?>
+>>>> ?>
+>>>
+>>
+> 
+
+-- 
+Dr Paul Murrell
+Te Kura Tatauranga | Department of Statistics
+Waipapa Taumata Rau | The University of Auckland
+Private Bag 92019, Auckland 1142, New Zealand
+64 9 3737599 x85392
+paul at stat.auckland.ac.nz
+www.stat.auckland.ac.nz/~paul/
+
+
