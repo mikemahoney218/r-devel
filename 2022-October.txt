@@ -6915,3 +6915,123 @@ Tomas
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Tue Oct 18 10:56:25 2022
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Tue, 18 Oct 2022 10:56:25 +0200
+Subject: [Rd] Bug with `[<-.POSIXlt` on specific OSes
+In-Reply-To: <962239794.1944131.1665764474121@mail.yahoo.com>
+References: <962239794.1944131.1665764474121.ref@mail.yahoo.com>
+ <962239794.1944131.1665764474121@mail.yahoo.com>
+Message-ID: <20221018085625.CBFB82C1607@lynne.math.ethz.ch>
+
+>>>>> Suharto Anggono Suharto Anggono via R-devel 
+>>>>>     on Fri, 14 Oct 2022 16:21:14 +0000 (UTC) writes:
+
+    > I think '[.POSIXlt' and '[<-.POSIXlt' don't need to
+    > normalize out-of-range values. I think they just make same
+    > length for all components, to ensure correct extraction or
+    > replacement for arbitrary index.
+
+Yes, you are right; this is definitely correct...
+and would be more efficient.
+
+At the moment, we were mostly focused on *correct* behaviour in
+the case of "ragged" and/or out-of-range  POSIXlt objects.
+
+
+    > I have a thought of adding an optional argument for 'as.POSIXlt' applied to "POSIXlt" object. Possible name:
+    > normalize adjust fixup
+
+    > To allow recycling only without changing content, instead of TRUE or FALSE, maybe choice, like
+    > fixup = c("none", "balance", "normalize")
+    > , where "normalize" implies "balance", or
+    > adjust = c("none", "length", "content", "value")
+    > , where "content" and "value" are synonymous.
+
+Such an optional argument for as.POSIXlt() would be a
+possibility and could replace the new and for now still somewhat
+experimental  balancePOSIXlt().
+
++: One advantage of (one of the above proposals)
+   would be that it does not take up a new function name.
+
+-: OTOH, it may be overdoing the semantics
+
+     as.POSIXlt(<POSIXlt>, <some> = <other>)
+
+  and it may be harder to understand by non-sophisticated R users,
+  because as.POSIXlt() is a generic with several methods, and
+  these extra arguments would probably only apply to the
+  as.POSIXlt.default() method and there *only* for the case where
+  the argument inherits from "POSIXlt" .. and all that being
+  somewhat subtle to see for Joe Average UseR
+
+I agree that it will make sense to get an R-level version,
+either using new arguments in  as.POSIXlt() or (still my preference)
+in balancePOSIXlt() to allow to "only fill all components".
+
+HOWEVER note that the "filling" (by recycling) and no extra
+checking will often lead to internally inconsistent lt objects.
+Eg. Daylight saving time  (isdst = 1 or not) can only be known
+when the day (and hour) is known and that can be shifted by out-of-range
+sec/min/hour .. ((and of course for 1 hour per year, a time hour=2 will
+                  *need* specification of isdst in order to know which of
+		  the 2:<min>:<sec>  is meant))
+also  $wday and $yday  (who are described as read-only) also can
+only be checked after validation or "in-ranging" of the
+sec/min/hour/mday/mon components so their simple recycling will typically
+be incorrect.
+
+That's why I had opted to *mainly* do full "balancing" (in my
+sense), i.e., simultaneous both filling and "in-ranging".
+
+
+
+    > By the way, Inf in 'sec' component is out-of-range!
+
+Yes, the non-finite "values" {+/-Inf, NaN, NA}  are all "special", and we had decided
+to allow them for compatibility with classes "Date" and "POSIXct".
+
+BTW,  a few days ago, I have updated the
+help("DateTimeClasses")  page  in R-devel  to document a bit
+more, notably that "ragged" and out-of-range POSIXlt  may exist...
+see (the always +- current R-devel Help pages at)
+https://stat.ethz.ch/R-manual/R-devel/library/base/html/DateTimeClasses.html
+
+
+    > For 'gmtoff', NA or 0 should be put for unknown. A known 'gmtoff' may be [ositive, negative, or zero. The documentation says
+    > ?gmtoff? (Optional.) The offset in seconds from GMT:
+    > positive values are East of the meridian.  Usually ?NA? if
+    > unknown, but ?0? could mean unknown.
+
+
+    > dlt <- .POSIXlt(list(sec = c(-999, 10000 + c(1:10,-Inf, NA)) + pi,
+    >                                         # "out of range", non-finite, fractions
+    >                      min = 45L, hour = c(21L, 3L, NA, 4L),
+    >                      mday = 6L, mon  = c(11L, NA, 3L),
+    >                      year = 116L, wday = 2L, yday = 340L, isdst = 1L))
+
+    > as.POSIXct(dlt)[1] is NA on Linux with timezone without DST. For example, after
+    > Sys.setenv(TZ = "EST")
+
+Hmm... I needed time to look at the above. Indeed, one gets NA (and has in
+previous versions of R) in such a case.
+
+After applying  balancePOSIXlt(), one no longer gets NA.
+Are you proposing that we should do that (or possibly simple recycling)
+in as.POSIXct.POSIXlt() ?
+
+Martin
+
+    > ----------------
+    >>>>>>  Martin Maechler
+    >>>>>>      on Wed, 12 Oct 2022 10:17:28 +0200 writes:
+
+    >>>>>>  Kurt Hornik
+    >>>>>>      on Tue, 11 Oct 2022 16:44:13 +0200 writes:
+
+    >>>>>>  Davis Vaughan writes:
+
+ [.............]
+
+
