@@ -7035,3 +7035,184 @@ Martin
  [.............]
 
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Sat Oct 22 14:12:47 2022
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Sat, 22 Oct 2022 14:12:47 +0200
+Subject: [Rd] Bug with `[<-.POSIXlt` on specific OSes
+In-Reply-To: <20221018085625.CBFB82C1607@lynne.math.ethz.ch>
+References: <962239794.1944131.1665764474121.ref@mail.yahoo.com>
+ <962239794.1944131.1665764474121@mail.yahoo.com>
+ <20221018085625.CBFB82C1607@lynne.math.ethz.ch>
+Message-ID: <25427.56895.726279.318336@stat.math.ethz.ch>
+
+>>>>> Martin Maechler 
+>>>>>     on Tue, 18 Oct 2022 10:56:25 +0200 writes:
+
+>>>>> Suharto Anggono Suharto Anggono via R-devel 
+>>>>>     on Fri, 14 Oct 2022 16:21:14 +0000 (UTC) writes:
+
+    >> I think '[.POSIXlt' and '[<-.POSIXlt' don't need to
+    >> normalize out-of-range values. I think they just make
+    >> same length for all components, to ensure correct
+    >> extraction or replacement for arbitrary index.
+
+    > Yes, you are right; this is definitely correct...  and
+    > would be more efficient.
+
+    > At the moment, we were mostly focused on *correct*
+    > behaviour in the case of "ragged" and/or out-of-range
+    > POSIXlt objects.
+
+
+    >> I have a thought of adding an optional argument for
+    >> 'as.POSIXlt' applied to "POSIXlt" object. Possible name:
+    >> normalize adjust fixup
+
+    >> To allow recycling only without changing content, instead
+    >> of TRUE or FALSE, maybe choice, like fixup = c("none",
+    >> "balance", "normalize") , where "normalize" implies
+    >> "balance", or adjust = c("none", "length", "content",
+    >> "value") , where "content" and "value" are synonymous.
+
+    > Such an optional argument for as.POSIXlt() would be a
+    > possibility and could replace the new and for now still
+    > somewhat experimental balancePOSIXlt().
+
+    > +: One advantage of (one of the above proposals) would
+    > be that it does not take up a new function name.
+
+    > -: OTOH, it may be overdoing the semantics
+
+    >      as.POSIXlt(<POSIXlt>, <some> = <other>)
+
+    >   and it may be harder to understand by
+    > non-sophisticated R users, because as.POSIXlt() is a
+    > generic with several methods, and these extra arguments
+    > would probably only apply to the as.POSIXlt.default()
+    > method and there *only* for the case where the argument
+    > inherits from "POSIXlt" .. and all that being somewhat
+    > subtle to see for Joe Average UseR
+
+    > I agree that it will make sense to get an R-level
+    > version, either using new arguments in as.POSIXlt() or
+    > (still my preference) in balancePOSIXlt() to allow to
+    > "only fill all components".
+
+    > HOWEVER note that the "filling" (by recycling) and no
+    > extra checking will often lead to internally
+    > inconsistent lt objects.  Eg. Daylight saving time
+    > (isdst = 1 or not) can only be known when the day (and
+    > hour) is known and that can be shifted by out-of-range
+    > sec/min/hour .. ((and of course for 1 hour per year, a
+    > time hour=2 will *need* specification of isdst in order
+    > to know which of the 2:<min>:<sec> is meant)) also $wday
+    > and $yday (who are described as read-only) also can only
+    > be checked after validation or "in-ranging" of the
+    > sec/min/hour/mday/mon components so their simple
+    > recycling will typically be incorrect.
+
+    > That's why I had opted to *mainly* do full "balancing"
+    > (in my sense), i.e., simultaneous both filling and
+    > "in-ranging".
+
+A few hours ago [R-devel svn rev 83156; 2022-10-22 10:18:38 +0200]
+I have committed an enhanced version of balancePOSIXlt()  which
+now has an optional 'fill.only = F/T' rgument.
+When TRUE (not by default), it will only do the "filling", i.e.,
+recyclying of less-than-full-length components, without any
+"in-ranging" nor musch further validity checking.
+
+Currently, almost all POSIXlt methods using balancePOSIXlt(),
+notably 
+		[.POSIXlt    and    [<-.POSIXlt
+
+use  balancePOSIXlt(x, fill.only=TRUE ..)
+and hence are almost as fast as previously (when they did no
+balancing and gave sometimes wrong results or errored in case of
+partially filled POSIXlt).
+
+
+
+    >> By the way, Inf in 'sec' component is out-of-range!
+
+    > Yes, the non-finite "values" {+/-Inf, NaN, NA} are all
+    > "special", and we had decided to allow them for
+    > compatibility with classes "Date" and "POSIXct".
+
+    > BTW, a few days ago, I have updated the
+    > help("DateTimeClasses") page in R-devel to document a
+    > bit more, notably that "ragged" and out-of-range POSIXlt
+    > may exist...  see (the always +- current R-devel Help
+    > pages at)
+    > https://stat.ethz.ch/R-manual/R-devel/library/base/html/DateTimeClasses.html
+
+
+    >> For 'gmtoff', NA or 0 should be put for unknown. A known
+    >> 'gmtoff' may be [ositive, negative, or zero. The
+    >> documentation says ?gmtoff? (Optional.) The offset in
+    >> seconds from GMT: positive values are East of the
+    >> meridian.  Usually ?NA? if unknown, but ?0? could mean
+    >> unknown.
+
+
+    >> dlt <- .POSIXlt(list(sec = c(-999, 10000 + c(1:10,-Inf,
+    >> NA)) + pi, # "out of range", non-finite, fractions min =
+    >> 45L, hour = c(21L, 3L, NA, 4L), mday = 6L, mon = c(11L,
+    >> NA, 3L), year = 116L, wday = 2L, yday = 340L, isdst =
+    >> 1L))
+
+    >> as.POSIXct(dlt)[1] is NA on Linux with timezone without
+    >> DST. For example, after Sys.setenv(TZ = "EST")
+
+    > Hmm... I needed time to look at the above. Indeed, one
+    > gets NA (and has in previous versions of R) in such a
+    > case.
+
+    > After applying balancePOSIXlt(), one no longer gets NA.
+    > Are you proposing that we should do that (or possibly
+    > simple recycling) in as.POSIXct.POSIXlt() ?
+
+I am still waiting for comments (also by others) or other
+remarks or answers on this question/topic..
+
+Martin
+
+
+From ch@r||e@g@o @end|ng |rom @h|kokuchuo@net  Sat Oct 22 01:52:09 2022
+From: ch@r||e@g@o @end|ng |rom @h|kokuchuo@net (Charlie Gao)
+Date: Sat, 22 Oct 2022 00:52:09 +0100
+Subject: [Rd] R_GetCurrentEnv() not working as intended
+Message-ID: <51be8f23-d595-eb4d-9e0c-1b3f49b23a59@shikokuchuo.net>
+
+Dear all,
+
+I am attempting to use `R_GetCurrentEnv()` to return the current 
+environment within C code, but it seems to always return the global 
+environment.
+
+Specifically, I would like to use it as an argument to R_NewEnv() so it 
+is created with the correct enclosing environment. I also have functions 
+in the environment that reference symbols in the closure and I would 
+also like to use `R_GetCurrentEnv()` as an argument to `SET_CLOENV()`.
+
+My workaround at the moment is to pass `environment()` as one of the 
+arguments to the `.Call()`. For the actual code I am referring to:
+
+https://github.com/shikokuchuo/nanonext/blob/main/src/aio.c#L516-L535
+
+where I am currently passing `environment()` as 'clo' whereas ideally I 
+would be able to use `R_GetCurrentEnv()` instead.
+
+There is an open Bugzilla report from 2020 that says `R_GetCurrentEnv()` 
+only returns the base namespace from within a `.Call()`, however I see 
+that the proposed patch has already been adopted in the R source.
+
+It seems that the function was introduced (fairly) recently in R 3.6, 
+presumably for such uses. I would like to know if this is not the case 
+or else confirmation that this is an outstanding bug.
+
+Thanks,
+
+Charlie
+
+
