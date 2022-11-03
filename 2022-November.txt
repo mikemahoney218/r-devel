@@ -1,0 +1,97 @@
+From @tevem@rt|n041 @end|ng |rom gm@||@com  Wed Nov  2 02:26:26 2022
+From: @tevem@rt|n041 @end|ng |rom gm@||@com (Steve Martin)
+Date: Tue, 1 Nov 2022 21:26:26 -0400
+Subject: [Rd] unsplit() mangles attributes
+Message-ID: <CAP=dwz_nERk37W4ybjO7R1Y+C+UTZ+pan+oZVyGDnYa861yZ=w@mail.gmail.com>
+
+Hello,
+
+Unsplitting a named vector that's been split sets all the names as missing.
+
+x <- 1:12
+names(x) <- letters[x]
+f <- gl(2, 6)
+
+unsplit(split(x, f), f)
+<NA> <NA> <NA> <NA> <NA> <NA> <NA> <NA> <NA> <NA> <NA> <NA>
+   1    2    3    4    5    6    7    8    9   10   11   12
+
+The unsplit() function correctly deals with row names when unsplitting
+a split data frame, and the same approach preserves regular names as
+well. Here's a stripped-down version of unsplit() that keeps names:
+
+unsplit_with_names <- function(value, f) {
+  len <- length(f)
+  x <- value[[1L]][rep(NA_integer_, len)] # names get lost here...
+  split(x, f) <- value
+  has_names <- !is.null(names(value[[1L]]))
+  if (has_names) {
+    split(names(x), f) <- lapply(value, names) # so add them back here
+  }
+  x
+}
+
+unsplit_with_names(split(x, f), f)
+ a  b  c  d  e  f  g  h  i  j  k  l
+ 1  2  3  4  5  6  7  8  9 10 11 12
+
+I plan on reporting this on bugzilla, with a more general fix, but
+would first like to see if I'm missing anything, and check that my
+reasoning is clear.
+
+It seems that names are the only attribute for unclassed vectors that
+survive the default method of split(), and so I think the above
+version of unsplit() replaces all the attributes it can for unclassed
+vectors.
+
+I'm less confident about classed vectors, as unsplit() isn't generic
+and potentially needs to deal with objects. Dates and factors work
+fine, as it seems they can only lose names; this is addressed with the
+above version of unsplit(). But are there other attributes for classed
+objects that may get lost with unsplit? Can my fix above cause
+problems for certain classes? (Note that I didn't use the recursion
+that unsplit() uses for data frames, as that relies on names not
+themselves having names.)
+
+The real challenge is that unsplit need not have all the information
+about the original object it's trying to put back together. Take the
+case of a vector with a dim attribute.
+
+y <- matrix(x, 3, 4, dimnames = list(letters[1:3], letters[1:4]))
+
+unsplit(split(y, f), f)
+[1]  1  2  3  4  5  6  7  8  9 10 11 12
+
+A possible solution is for split() to record the attributes of its
+argument for later use by unsplit(). Again, consider some
+stripped-down alternatives:
+
+split_with_attr <- function(x, f) {
+  res <- split(x, f)
+  structure(res, original.attr = attributes(x))
+}
+
+unsplit_with_attr <- function(value, f) {
+  len <- length(f)
+  x <- value[[1L]][rep(NA_integer_, len)]
+  split(x, f) <- value
+  attributes(x) <- attr(value, "original.attr")
+  x
+}
+
+unsplit_with_attr(split_with_attr(y, f), f)
+  a b c  d
+a 1 4 7 10
+b 2 5 8 11
+c 3 6 9 12
+
+But this seems complicated, and may muck up existing code. It would be
+much easier if I can just restrict attention to restoring lost names
+for unclassed vectors :)
+
+Any thoughts are much appreciated.
+
+Thanks,
+Steve
+
+
