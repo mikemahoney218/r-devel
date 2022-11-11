@@ -1130,3 +1130,103 @@ Tim
 	[[alternative HTML version deleted]]
 
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Wed Nov  9 11:32:59 2022
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Wed, 9 Nov 2022 11:32:59 +0100
+Subject: [Rd] R blog link on developer page
+In-Reply-To: <23327077.345337.1667944529976@office.mailbox.org>
+References: <23327077.345337.1667944529976@office.mailbox.org>
+Message-ID: <25451.33243.203153.708623@stat.math.ethz.ch>
+
+>>>>> tim taylor 
+>>>>>     on Tue, 8 Nov 2022 21:55:29 +0000 (GMT) writes:
+
+    > The link to the R blog on https://developer.r-project.org/ currently points to the old site (https://developer.r-project.org/Blog/public). Should the link be updated to the new location (https://blog.r-project.org/)?
+    > Apologies if this was the wrong list to raise this - please flag if there's a more appropriate one.
+ 
+    > Tim
+
+Thank you, Tim.
+
+You were right and the change has happened now.
+
+Martin
+
+
+From j@g@nmn2 @end|ng |rom gm@||@com  Wed Nov  9 21:58:52 2022
+From: j@g@nmn2 @end|ng |rom gm@||@com (Mikael Jagan)
+Date: Wed, 9 Nov 2022 15:58:52 -0500
+Subject: [Rd] det(diag(c(NaN, 1))) should be NaN, not 0
+Message-ID: <4d6116fe-ecf0-19c8-d572-4eb1a3631d4c@gmail.com>
+
+Hello,
+
+Currently, determinant(A) calculates the determinant of 'A' by factorizing
+A=LU and computing prod(diag(U)) [or the logarithm of the absolute value].
+The factorization is done by LAPACK routine DGETRF, which gives a status
+code INFO, documented [1] as follows:
+
+*>          INFO is INTEGER
+*>          = 0:  successful exit
+*>          < 0:  if INFO = -i, the i-th argument had an illegal value
+*>          > 0:  if INFO = i, U(i,i) is exactly zero. The factorization
+*>                has been completed, but the factor U is exactly
+*>                singular, and division by zero will occur if it is used
+*>                to solve a system of equations.
+
+Accordingly, when INF0>0, determinant(A) behaves as det(A)=0, _not_ computing
+prod(diag(U)).  The problem here is that DGETRF can _also_ give positive
+INFO for matrices containing NaN, which may very well not be singular for some
+finite value of NaN.
+
+I claim that, when INFO>0, determinant(A) should _not_ behave as det(A)=0
+unconditionally, but rather sometimes (depending on some test) give NaN.
+Here is one case where 0 is really "wrong":
+
+ > (A <- diag(c(NaN, 1)))
+      [,1] [,2]
+[1,]  NaN    0
+[2,]    0    1
+ > det(A)
+[1] 0
+
+R isn't consistent, either:
+
+ > (B <- diag(c(1, NaN)))
+      [,1] [,2]
+[1,]    1    0
+[2,]    0  NaN
+ > det(B)
+[1] NaN
+
+Here, DGETRF _does_ succeed, because it does not "see" the trailing NaN in 'B'.
+
+So: Should R change to better handle the INFO>0 case?  If so, how?
+
+Ideally (I think), the proposed change would give NaN for 'A' and 'B'
+above and 0 for 'C' and 'D' below (both of which really _are_ singular):
+
+ > (C <- matrix(c(NaN, NaN, 0, 0), 2L, 2L))
+      [,1] [,2]
+[1,]  NaN    0
+[2,]  NaN    0
+ > det(C)
+[1] NaN
+ > (D <- t(C))
+      [,1] [,2]
+[1,]  NaN  NaN
+[2,]    0    0
+ > det(D)
+[1] 0
+
+Furthermore, the proposed change should _not_ decrease the performance
+of determinant(A) for nonsingular 'A' ...
+
+For those looking, the relevant C-level function is det_ge_real(),
+defined in R-devel/src/modules/lapack/Lapack.c (at line 1260 in r83320).
+
+Mikael
+
+[1] https://github.com/Reference-LAPACK/lapack/blob/master/SRC/dgetrf.f
+
+
