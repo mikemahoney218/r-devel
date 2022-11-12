@@ -1230,3 +1230,58 @@ Mikael
 [1] https://github.com/Reference-LAPACK/lapack/blob/master/SRC/dgetrf.f
 
 
+From j@g@nmn2 @end|ng |rom gm@||@com  Thu Nov 10 19:10:50 2022
+From: j@g@nmn2 @end|ng |rom gm@||@com (Mikael Jagan)
+Date: Thu, 10 Nov 2022 13:10:50 -0500
+Subject: [Rd] solve.default(a, b) should not ignore names(dimnames(.))
+Message-ID: <fb6e26da-a95c-5eec-098c-490bc81d7e1a@gmail.com>
+
+Hello,
+
+Currently, solve.default() is defined such that
+
+ > identical(dimnames(solve.default(a, b)),
+             list(dimnames(a)[[2L]], dimnames(b)[[2L]]))
+
+is always TRUE, i.e., ignoring names(dimnames(a)) and names(dimnames(b)).
+Hence we see:
+
+ > a <- b <- diag(2L)
+ > dimnames(a) <- list(A1 = c("a11", "a12"), A2 = c("a21", "a22"))
+ > dimnames(b) <- list(B1 = c("b11", "b12"), B2 = c("b21", "b22"))
+ > a
+      A2
+A1    a21 a22
+   a11   1   0
+   a12   0   1
+ > b
+      B2
+B1    b21 b22
+   b11   1   0
+   b12   0   1
+ > solve.default(a, b)
+     b21 b22
+a21   1   0
+a22   0   1
+
+I claim that solve.default() should be changed to instead give:
+
+ > identical(dimnames(solve.default(a, b)),
+             c(dimnames(a)[2L], dimnames(b)[2L]))
+
+This would make solve.default() consistent with `%*%`, which
+_does_ respect names(dimnames(.)) :
+
+ > a %*% b
+      B2
+A1    b21 b22
+   a11   1   0
+   a12   0   1
+
+If others agree, then I would submit a minimal patch to the R-level
+solve.default() in src/library/base/R/solve.R and to the C-level
+La_solve() and La_solve_cmplx() in src/modules/lapack/Lapack.c ...
+
+Mikael
+
+
