@@ -1452,3 +1452,183 @@ October 22, 2022 12:52 AM, "Charlie Gao" <charlie.gao at shikokuchuo.net> wrote:
 > Charlie
 
 
+From ch@riie@g@o m@iii@g oii shikokuchuo@@et  Mon Nov 14 10:35:05 2022
+From: ch@riie@g@o m@iii@g oii shikokuchuo@@et (ch@riie@g@o m@iii@g oii shikokuchuo@@et)
+Date: Mon, 14 Nov 2022 09:35:05 +0000
+Subject: [Rd] R_GetCurrentEnv() not working as intended
+In-Reply-To: <CAJf4E3qbeiTozFg=MdteJLqCmM6Bte1hWzthnWQ6V71bM+18sQ@mail.gmail.com>
+References: <CAJf4E3qbeiTozFg=MdteJLqCmM6Bte1hWzthnWQ6V71bM+18sQ@mail.gmail.com>
+ <51be8f23-d595-eb4d-9e0c-1b3f49b23a59@shikokuchuo.net>
+ <c39614311353b6ada6e7c5c592a4ed64@shikokuchuo.net>
+Message-ID: <1448db9333163e7bfde63aa3a03a8495@shikokuchuo.net>
+
+Hi Lionel,
+
+I had indeed seen your Bugzilla, but must have misread the R source as I thought it had already been adopted.
+
+Thanks for sharing the workaround as well, it is interesting. As I can pass in `environment()` to my `.Call()`, I suspect there is not much difference given the call to `Rf_eval()` at the end of the workaround.
+
+Let's hope your patch gets reviewed and adopted.
+
+Thanks,
+
+Charlie
+
+November 14, 2022 8:55 AM, "Lionel Henry" <lionel at posit.co> wrote:
+
+> Hello,
+> 
+> This function currently does not work when called from `.Call()`.
+> This is reported with a patch at
+> https://bugs.r-project.org/show_bug.cgi?id=17839
+> 
+> In the meantime, you can use this stopgap implementation:
+> 
+> https://github.com/tidyverse/purrr/blob/55c9a8ab8788d878ce9e8e80b867139e46d15395/src/conditions.c#L6
+> L34
+> 
+> Best,
+> Lionel
+> 
+> On 11/13/22, Charlie Gao via R-devel <r-devel at r-project.org> wrote:
+> 
+>> Perhaps my original question was too complicated, so I will just ask: is
+>> anyone using R_GetCurrentEnv() in their C code? If so, grateful if you could
+>> point me to an example where it is working for you.
+>> 
+>> I have searched Github and only come across a couple of trivial uses as an
+>> argument to Rf_eval(), where it probably returns the global environment,
+>> with the result being indistinguishable in normal use.
+>> 
+>> Thanks,
+>> 
+>> Charlie
+>> 
+>> October 22, 2022 12:52 AM, "Charlie Gao" <charlie.gao at shikokuchuo.net>
+>> wrote:
+>> 
+>>> Dear all,
+>>> 
+>>> I am attempting to use `R_GetCurrentEnv()` to return the current
+>>> environment within C code, but it
+>>> seems to always return the global environment.
+>>> 
+>>> Specifically, I would like to use it as an argument to R_NewEnv() so it is
+>>> created with the correct
+>>> enclosing environment. I also have functions in the environment that
+>>> reference symbols in the
+>>> closure and I would also like to use `R_GetCurrentEnv()` as an argument to
+>>> `SET_CLOENV()`.
+>>> 
+>>> My workaround at the moment is to pass `environment()` as one of the
+>>> arguments to the `.Call()`.
+>>> For the actual code I am referring to:
+>>> 
+>>> https://github.com/shikokuchuo/nanonext/blob/main/src/aio.c#L516-L535
+>>> 
+>>> where I am currently passing `environment()` as 'clo' whereas ideally I
+>>> would be able to use
+>>> `R_GetCurrentEnv()` instead.
+>>> 
+>>> There is an open Bugzilla report from 2020 that says `R_GetCurrentEnv()`
+>>> only returns the base
+>>> namespace from within a `.Call()`, however I see that the proposed patch
+>>> has already been adopted
+>>> in the R source.
+>>> 
+>>> It seems that the function was introduced (fairly) recently in R 3.6,
+>>> presumably for such uses. I
+>>> would like to know if this is not the case or else confirmation that this
+>>> is an outstanding bug.
+>>> 
+>>> Thanks,
+>>> 
+>>> Charlie
+>> 
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From ||one| @end|ng |rom po@|t@co  Mon Nov 14 09:55:52 2022
+From: ||one| @end|ng |rom po@|t@co (Lionel Henry)
+Date: Mon, 14 Nov 2022 09:55:52 +0100
+Subject: [Rd] R_GetCurrentEnv() not working as intended
+In-Reply-To: <c39614311353b6ada6e7c5c592a4ed64@shikokuchuo.net>
+References: <51be8f23-d595-eb4d-9e0c-1b3f49b23a59@shikokuchuo.net>
+ <c39614311353b6ada6e7c5c592a4ed64@shikokuchuo.net>
+Message-ID: <CAJf4E3qbeiTozFg=MdteJLqCmM6Bte1hWzthnWQ6V71bM+18sQ@mail.gmail.com>
+
+Hello,
+
+This function currently does not work when called from `.Call()`.
+This is reported with a patch at
+https://bugs.r-project.org/show_bug.cgi?id=17839
+
+In the meantime, you can use this stopgap implementation:
+
+https://github.com/tidyverse/purrr/blob/55c9a8ab8788d878ce9e8e80b867139e46d15395/src/conditions.c#L6-L34
+
+Best,
+Lionel
+
+On 11/13/22, Charlie Gao via R-devel <r-devel at r-project.org> wrote:
+> Perhaps my original question was too complicated, so I will just ask: is
+> anyone using R_GetCurrentEnv() in their C code? If so, grateful if you could
+> point me to an example where it is working for you.
+>
+> I have searched Github and only come across a couple of trivial uses as an
+> argument to Rf_eval(), where it probably returns the global environment,
+> with the result being indistinguishable in normal use.
+>
+> Thanks,
+>
+> Charlie
+>
+> October 22, 2022 12:52 AM, "Charlie Gao" <charlie.gao at shikokuchuo.net>
+> wrote:
+>
+>> Dear all,
+>>
+>> I am attempting to use `R_GetCurrentEnv()` to return the current
+>> environment within C code, but it
+>> seems to always return the global environment.
+>>
+>> Specifically, I would like to use it as an argument to R_NewEnv() so it is
+>> created with the correct
+>> enclosing environment. I also have functions in the environment that
+>> reference symbols in the
+>> closure and I would also like to use `R_GetCurrentEnv()` as an argument to
+>> `SET_CLOENV()`.
+>>
+>> My workaround at the moment is to pass `environment()` as one of the
+>> arguments to the `.Call()`.
+>> For the actual code I am referring to:
+>>
+>> https://github.com/shikokuchuo/nanonext/blob/main/src/aio.c#L516-L535
+>>
+>> where I am currently passing `environment()` as 'clo' whereas ideally I
+>> would be able to use
+>> `R_GetCurrentEnv()` instead.
+>>
+>> There is an open Bugzilla report from 2020 that says `R_GetCurrentEnv()`
+>> only returns the base
+>> namespace from within a `.Call()`, however I see that the proposed patch
+>> has already been adopted
+>> in the R source.
+>>
+>> It seems that the function was introduced (fairly) recently in R 3.6,
+>> presumably for such uses. I
+>> would like to know if this is not the case or else confirmation that this
+>> is an outstanding bug.
+>>
+>> Thanks,
+>>
+>> Charlie
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
