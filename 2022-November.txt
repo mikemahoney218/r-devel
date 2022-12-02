@@ -2284,3 +2284,70 @@ Tomas
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Wed Nov 30 23:03:35 2022
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Wed, 30 Nov 2022 14:03:35 -0800
+Subject: [Rd] R-devel: toLatex() for sessionInfo needs to escape new 'Time
+ zone' entry
+Message-ID: <CAFDcVCSjtrHNOXMm7zDDau7FgyK=Chv1eTDVafj4hi0tRT6b_Q@mail.gmail.com>
+
+BACKGROUND:
+
+In recent versions of R-devel, sessionInfo() has a 'tzone' element, e.g.
+
+> sessionInfo()$tzone
+[1] "America/Los_Angeles"
+
+
+ISSUE:
+
+Some time zones, like the one above, has an underscore.  This
+underscore is *not* escaped by utils:::toLatex.sessionInfo, e.g.
+
+$ TZ="America/Los_Angeles" Rscript --vanilla -e "toLatex(sessionInfo())"
+\begin{itemize}\raggedright
+  \item R Under development (unstable) (2022-11-30 r83391),
+\verb|x86_64-pc-linux-gnu|
+  \item Locale: \verb|LC_CTYPE=en_US.UTF-8|, \verb|LC_NUMERIC=C|,
+\verb|LC_TIME=en_US.UTF-8|, \verb|LC_COLLATE=en_US.UTF-8|,
+\verb|LC_MONETARY=en_US.UTF-8|, \verb|LC_MESSAGES=en_US.UTF-8|,
+\verb|LC_PAPER=en_US.UTF-8|, \verb|LC_NAME=C|, \verb|LC_ADDRESS=C|,
+\verb|LC_TELEPHONE=C|, \verb|LC_MEASUREMENT=en_US.UTF-8|,
+\verb|LC_IDENTIFICATION=C|
+  \item Time zone America/Los_Angeles
+  \item Running under: \verb|Ubuntu 20.04.5 LTS|
+  \item Matrix products: default
+  \item BLAS:   \verb|/home/hb/software/R-devel/trunk/lib/R/lib/libRblas.so|
+  \item LAPACK: \verb|/home/hb/software/R-devel/trunk/lib/R/lib/libRlapack.so|
+  \item Base packages: base, datasets, graphics, grDevices, methods,
+    stats, utils
+  \item Loaded via a namespace (and not attached): compiler~4.3.0
+\end{itemize}
+
+This causes LaTeX-based vignettes using toLatex(sessionInfo()) to fail
+their LaTeX compilation with an error, e.g.
+
+Error: processing vignette 'mypkg.Rnw' failed with diagnostics:
+Running 'texi2dvi' on 'mypkg.tex' failed.
+LaTeX errors:
+! Missing $ inserted.
+<inserted text>
+                $
+l.684   \item Time zone America/Los_
+                                    Angeles
+! LaTeX Error: Command \item invalid in math mode.
+
+
+SUGGESTION:
+
+To fix this, either escape any underscores, e.g.
+
+  \item Time zone America/Los\_Angeles
+
+or use \verb as done elsewhere:
+
+  \item Time zone \verb|America/Los_Angeles|
+
+/Henrik
+
+
