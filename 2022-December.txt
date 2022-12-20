@@ -1073,3 +1073,159 @@ Uwe Ligges
 >
 
 
+From edd @end|ng |rom deb|@n@org  Sun Dec 18 20:41:01 2022
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Sun, 18 Dec 2022 13:41:01 -0600
+Subject: [Rd] Repeated segfault at installing sysdata.rda with clang/san
+ build
+Message-ID: <25503.27853.968124.950608@rob.eddelbuettel.com>
+
+
+I have maintained two SAN/UBSAN builds (one gcc, one clang) for many years
+(even though I also happily use Winston's newer/bigger container and
+generally recommend its use) and still have GitHub actions build them on a
+weekly schedule (as they follow r-devel).
+
+The clang one started to fail a little while ago. I just tried it locally,
+and it too blew up in the same spot:
+
+
+[...]
+make[4]: Entering directory '/tmp/R-devel/src/library/tools'
+installing 'sysdata.rda'
+
+ *** caught segfault ***
+address (nil), cause 'memory not mapped'
+
+Traceback:
+ 1: load(srcFile, e)
+ 2: tools:::sysdata2LazyLoadDB("./R/sysdata.rda", "../../../library/tools/R")
+An irrecoverable exception occurred. R is aborting now ...
+/bin/bash: line 2: 10795 Done                    echo "tools:::sysdata2LazyLoadDB(\"./R/sysdata.rda\",\"../../../library/tools/R\")"
+     10796 Segmentation fault      (core dumped) | R_DEFAULT_PACKAGES=NULL LC_ALL=C R_ENABLE_JIT=0 TZ=UTC ../../../bin/R --vanilla --no-echo
+make[4]: Leaving directory '/tmp/R-devel/src/library/tools'
+make[4]: *** [../../../share/make/basepkg.mk:151: sysdata] Error 139
+make[3]: *** [Makefile:36: all] Error 2
+make[3]: Leaving directory '/tmp/R-devel/src/library/tools'
+make[2]: Leaving directory '/tmp/R-devel/src/library'
+make[2]: *** [Makefile:37: R] Error 1
+make[1]: *** [Makefile:28: R] Error 1
+make[1]: Leaving directory '/tmp/R-devel/src'
+make: *** [Makefile:61: R] Error 1
+
+
+I assume it shouldn't. But I am also not too familiar with internals of
+sysdata and the lazyload format.  The Dockerfile is in the repository at
+
+  https://github.com/rocker-org/r-devel-san-clang
+
+in case someone else wants to take stab. I may try this on my Ubuntu machine
+too in temporary directory.
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Mon Dec 19 01:57:29 2022
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Mon, 19 Dec 2022 13:57:29 +1300
+Subject: [Rd] Repeated segfault at installing sysdata.rda with clang/san
+ build
+In-Reply-To: <25503.27853.968124.950608@rob.eddelbuettel.com>
+References: <25503.27853.968124.950608@rob.eddelbuettel.com>
+Message-ID: <6E666940-253D-4DAB-BAF3-B80A3349593A@R-project.org>
+
+This crashes unceremoniously in glibc:
+
+> tools:::sysdata2LazyLoadDB("./R/sysdata.rda","../../../library/tools/R")
+xdrmem_create(0x7ffdf19699e0, 0x7ffdf1969ba0, 4)
+
+Program received signal SIGSEGV, Segmentation fault.
+0x0000000000000000 in ?? ()
+(gdb) bt
+
+#0  0x0000000000000000 in ?? ()
+#1  0x00005559317e61d4 in xdrmem_create ()
+#2  0x00007fd82b9bd08b in R_XDRDecodeInteger (buf=<optimized out>) at saveload.c:2246
+#3  0x00007fd82ba007db in InInteger (stream=0x7ffc57b50f40) at serialize.c:425
+#4  0x00007fd82b9ff743 in R_Unserialize (stream=0x7ffc57b50f40) at serialize.c:2175
+#5  0x00007fd82ba0bfa4 in do_unserializeFromConn (call=0x625000706cb8, op=0x6250000298a8, args=<optimized out>, env=<optimized out>) at ser\
+ialize.c:2628
+#6  0x00007fd82b8b5435 in do_internal (call=call at entry=0x625000706ba0, op=op at entry=0x62500000b678, args=<optimized out>, env=0x1, env at entry\
+=0x625000d7b3a0) at names.c:1403
+
+int attribute_hidden R_XDRDecodeInteger(void *buf)
+{
+    XDR xdrs;
+    int i, success;
+
+    xdrmem_create(&xdrs, (char *) buf, R_XDR_INTEGER_SIZE, XDR_DECODE);
+
+The odd thing is there is nothing wrong with the input, the location is accessible and just 4 bytes of an integer as expected:
+
+(gdb) p/x *((int*)0x7ffdf1969ba0)
+$4 = 0x3000000
+
+which should turn into a perfectly normal 3L, so this a something bad happening in xdrmem_create() which is part of glibc. But looking at glibc sources, nothing suspicious in there, since it just populates XDR and shouldn't call any function, but yet it looks like it is trying to call a function which is a NULL pointer ... This is outside of R so really odd - perhaps some odd interaction of *SAN and glibc? No idea why it suddenly appeared - perhaps some changes in toolchain or glibc?
+
+Cheers,
+Simon
+
+
+> On 19/12/2022, at 8:41 AM, Dirk Eddelbuettel <edd at debian.org> wrote:
+> 
+> 
+> I have maintained two SAN/UBSAN builds (one gcc, one clang) for many years
+> (even though I also happily use Winston's newer/bigger container and
+> generally recommend its use) and still have GitHub actions build them on a
+> weekly schedule (as they follow r-devel).
+> 
+> The clang one started to fail a little while ago. I just tried it locally,
+> and it too blew up in the same spot:
+> 
+> 
+> [...]
+> make[4]: Entering directory '/tmp/R-devel/src/library/tools'
+> installing 'sysdata.rda'
+> 
+> *** caught segfault ***
+> address (nil), cause 'memory not mapped'
+> 
+> Traceback:
+> 1: load(srcFile, e)
+> 2: tools:::sysdata2LazyLoadDB("./R/sysdata.rda", "../../../library/tools/R")
+> An irrecoverable exception occurred. R is aborting now ...
+> /bin/bash: line 2: 10795 Done                    echo "tools:::sysdata2LazyLoadDB(\"./R/sysdata.rda\",\"../../../library/tools/R\")"
+>     10796 Segmentation fault      (core dumped) | R_DEFAULT_PACKAGES=NULL LC_ALL=C R_ENABLE_JIT=0 TZ=UTC ../../../bin/R --vanilla --no-echo
+> make[4]: Leaving directory '/tmp/R-devel/src/library/tools'
+> make[4]: *** [../../../share/make/basepkg.mk:151: sysdata] Error 139
+> make[3]: *** [Makefile:36: all] Error 2
+> make[3]: Leaving directory '/tmp/R-devel/src/library/tools'
+> make[2]: Leaving directory '/tmp/R-devel/src/library'
+> make[2]: *** [Makefile:37: R] Error 1
+> make[1]: *** [Makefile:28: R] Error 1
+> make[1]: Leaving directory '/tmp/R-devel/src'
+> make: *** [Makefile:61: R] Error 1
+> 
+> 
+> I assume it shouldn't. But I am also not too familiar with internals of
+> sysdata and the lazyload format.  The Dockerfile is in the repository at
+> 
+>  https://github.com/rocker-org/r-devel-san-clang
+> 
+> in case someone else wants to take stab. I may try this on my Ubuntu machine
+> too in temporary directory.
+> 
+> Dirk
+> 
+> -- 
+> dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
