@@ -1229,3 +1229,766 @@ Simon
 > 
 
 
+From edd @end|ng |rom deb|@n@org  Mon Dec 19 03:43:16 2022
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Sun, 18 Dec 2022 20:43:16 -0600
+Subject: [Rd] Repeated segfault at installing sysdata.rda with clang/san
+ build
+In-Reply-To: <6E666940-253D-4DAB-BAF3-B80A3349593A@R-project.org>
+References: <25503.27853.968124.950608@rob.eddelbuettel.com>
+ <6E666940-253D-4DAB-BAF3-B80A3349593A@R-project.org>
+Message-ID: <25503.53188.444343.954168@rob.eddelbuettel.com>
+
+
+Very nice follow-up, Simon.
+
+On 19 December 2022 at 13:57, Simon Urbanek wrote:
+| This crashes unceremoniously in glibc:
+| 
+| > tools:::sysdata2LazyLoadDB("./R/sysdata.rda","../../../library/tools/R")
+| xdrmem_create(0x7ffdf19699e0, 0x7ffdf1969ba0, 4)
+| 
+| Program received signal SIGSEGV, Segmentation fault.
+| 0x0000000000000000 in ?? ()
+| (gdb) bt
+| 
+| #0  0x0000000000000000 in ?? ()
+| #1  0x00005559317e61d4 in xdrmem_create ()
+| #2  0x00007fd82b9bd08b in R_XDRDecodeInteger (buf=<optimized out>) at saveload.c:2246
+| #3  0x00007fd82ba007db in InInteger (stream=0x7ffc57b50f40) at serialize.c:425
+| #4  0x00007fd82b9ff743 in R_Unserialize (stream=0x7ffc57b50f40) at serialize.c:2175
+| #5  0x00007fd82ba0bfa4 in do_unserializeFromConn (call=0x625000706cb8, op=0x6250000298a8, args=<optimized out>, env=<optimized out>) at ser\
+| ialize.c:2628
+| #6  0x00007fd82b8b5435 in do_internal (call=call at entry=0x625000706ba0, op=op at entry=0x62500000b678, args=<optimized out>, env=0x1, env at entry\
+| =0x625000d7b3a0) at names.c:1403
+| 
+| int attribute_hidden R_XDRDecodeInteger(void *buf)
+| {
+|     XDR xdrs;
+|     int i, success;
+| 
+|     xdrmem_create(&xdrs, (char *) buf, R_XDR_INTEGER_SIZE, XDR_DECODE);
+| 
+| The odd thing is there is nothing wrong with the input, the location is accessible and just 4 bytes of an integer as expected:
+| 
+| (gdb) p/x *((int*)0x7ffdf1969ba0)
+| $4 = 0x3000000
+| 
+| which should turn into a perfectly normal 3L, so this a something bad happening in xdrmem_create() which is part of glibc. But looking at glibc sources, nothing suspicious in there, since it just populates XDR and shouldn't call any function, but yet it looks like it is trying to call a function which is a NULL pointer ... This is outside of R so really odd - perhaps some odd interaction of *SAN and glibc? No idea why it suddenly appeared - perhaps some changes in toolchain or glibc?
+
+Yep. And as I had on schedule for some time with no issues it likely is
+external. No obvious how to minimize it to a smaller reproducible example
+though.
+
+Best, Dirk
+
+| Cheers,
+| Simon
+| 
+| 
+| > On 19/12/2022, at 8:41 AM, Dirk Eddelbuettel <edd at debian.org> wrote:
+| > 
+| > 
+| > I have maintained two SAN/UBSAN builds (one gcc, one clang) for many years
+| > (even though I also happily use Winston's newer/bigger container and
+| > generally recommend its use) and still have GitHub actions build them on a
+| > weekly schedule (as they follow r-devel).
+| > 
+| > The clang one started to fail a little while ago. I just tried it locally,
+| > and it too blew up in the same spot:
+| > 
+| > 
+| > [...]
+| > make[4]: Entering directory '/tmp/R-devel/src/library/tools'
+| > installing 'sysdata.rda'
+| > 
+| > *** caught segfault ***
+| > address (nil), cause 'memory not mapped'
+| > 
+| > Traceback:
+| > 1: load(srcFile, e)
+| > 2: tools:::sysdata2LazyLoadDB("./R/sysdata.rda", "../../../library/tools/R")
+| > An irrecoverable exception occurred. R is aborting now ...
+| > /bin/bash: line 2: 10795 Done                    echo "tools:::sysdata2LazyLoadDB(\"./R/sysdata.rda\",\"../../../library/tools/R\")"
+| >     10796 Segmentation fault      (core dumped) | R_DEFAULT_PACKAGES=NULL LC_ALL=C R_ENABLE_JIT=0 TZ=UTC ../../../bin/R --vanilla --no-echo
+| > make[4]: Leaving directory '/tmp/R-devel/src/library/tools'
+| > make[4]: *** [../../../share/make/basepkg.mk:151: sysdata] Error 139
+| > make[3]: *** [Makefile:36: all] Error 2
+| > make[3]: Leaving directory '/tmp/R-devel/src/library/tools'
+| > make[2]: Leaving directory '/tmp/R-devel/src/library'
+| > make[2]: *** [Makefile:37: R] Error 1
+| > make[1]: *** [Makefile:28: R] Error 1
+| > make[1]: Leaving directory '/tmp/R-devel/src'
+| > make: *** [Makefile:61: R] Error 1
+| > 
+| > 
+| > I assume it shouldn't. But I am also not too familiar with internals of
+| > sysdata and the lazyload format.  The Dockerfile is in the repository at
+| > 
+| >  https://github.com/rocker-org/r-devel-san-clang
+| > 
+| > in case someone else wants to take stab. I may try this on my Ubuntu machine
+| > too in temporary directory.
+| > 
+| > Dirk
+| > 
+| > -- 
+| > dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+| > 
+| > ______________________________________________
+| > R-devel at r-project.org mailing list
+| > https://stat.ethz.ch/mailman/listinfo/r-devel
+| > 
+| 
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From wewo|@k| @end|ng |rom gm@||@com  Mon Dec 19 10:52:30 2022
+From: wewo|@k| @end|ng |rom gm@||@com (Witold E Wolski)
+Date: Mon, 19 Dec 2022 10:52:30 +0100
+Subject: [Rd] [R]  I do not want that R CMD build removes temp directory
+In-Reply-To: <b2825ce6-6601-eb65-fffd-981db52feb58@statistik.tu-dortmund.de>
+References: <CAAjnpdg8uLOBBEHWEWq81R+t0sUy=TiTPN_fy2WrgTn2-AWRqA@mail.gmail.com>
+ <24A51D24-B62A-42E2-94C4-6842EFC87D50@R-project.org>
+ <CAAjnpdhUb6eJ78wZd501AH0CnkDYN7TQ0U=sP7RXpYjQTd0Reg@mail.gmail.com>
+ <b2825ce6-6601-eb65-fffd-981db52feb58@statistik.tu-dortmund.de>
+Message-ID: <CAAjnpdiR6sugnRDB93UNGGxuQ0O_F-8nNOQtcd=u7-tmZEh4Ow@mail.gmail.com>
+
+Dear Uwe,
+
+Unfortunately there isn't much of an output. This is all what I have:
+
+$ R CMD INSTALL --log prolfqua
+Warning: unknown option '--log'
+* installing to library 'C:/Users/witoldwolski/AppData/Local/R/win-library/4.2'
+* installing *source* package 'prolfqua' ...
+** using staged installation
+** R
+** data
+** inst
+** byte-compile and prepare package for lazy loading
+ERROR: lazy loading failed for package 'prolfqua'
+* removing 'C:/Users/witoldwolski/AppData/Local/R/win-library/4.2/prolfqua'
+
+Also with --no-test-load option the install is failing :
+
+$ R CMD INSTALL --clean --no-test-load prolfqua
+
+* installing to library 'C:/Users/witoldwolski/AppData/Local/R/win-library/4.2'
+* installing *source* package 'prolfqua' ...
+** using staged installation
+** R
+** data
+** inst
+** byte-compile and prepare package for lazy loading
+ERROR: lazy loading failed for package 'prolfqua'
+* removing 'C:/Users/witoldwolski/AppData/Local/R/win-library/4.2/prolfqua'
+
+And including "--no-clean-on-error" also does not help because the
+installation directory is empty.
+
+
+Tested the install, on macos M1, linux ARM64, linux x86, Windows 64,
+and it works everywhere except
+Parallels Windows 64 on ARM M1.
+
+R version 4.2.2 (2022-10-31 ucrt) -- "Innocent and Trusting"
+Copyright (C) 2022 The R Foundation for Statistical Computing
+Platform: x86_64-w64-mingw32/x64 (64-bit)
+
+best regards
+Witek
+
+
+
+On Fri, 16 Dec 2022 at 11:24, Uwe Ligges
+<ligges at statistik.tu-dortmund.de> wrote:
+>
+>
+>
+> On 15.12.2022 21:47, Witold E Wolski wrote:
+> > Thank you Simon,
+> >
+> > It seems not to be related to the R package but rather to the OS,
+> > (just got the same error when installing the shiny R package from
+> > CRAN).
+> > I am on an M1 mac running Windows ARM in Parallels. Installed a
+> > x86_64-w64 R version.
+> >
+> >
+> >
+> > "** byte-compile and prepare package for lazy loading
+> > ERROR: lazy loading failed for package 'shiny'
+> > * removing 'C:/Users/witoldwolski/AppData/Local/R/win-library/4.2/shiny'
+> > Warning in install.packages :"
+>
+> Can we please have the full output?
+>
+> Best,
+> Uwe Ligges
+>
+>
+>
+> > On Thu, 15 Dec 2022 at 19:09, Simon Urbanek <simon.urbanek at r-project.org> wrote:
+> >>
+> >> Yes:
+> >>
+> >> $ R CMD INSTALL --help | grep error
+> >>        --no-clean-on-error       do not remove installed package on error
+> >>
+> >> But probably more commonly used way is to install the package from its unpacked directory as that avoids the use of temporary directories in the first place.
+> >>
+> >> In you case you can also use --no-test-load and the non-functional package will still be installed so you can inspect it.
+> >>
+> >> Cheers,
+> >> Simon
+> >>
+> >> PS: please don't cross-post
+> >>
+> >>
+> >>> On Dec 16, 2022, at 7:01 AM, Witold E Wolski <wewolski at gmail.com> wrote:
+> >>>
+> >>> I am getting a package build error, and can not figure out the problem.
+> >>> The error is
+> >>> "
+> >>> ERROR: lazy loading failed for package 'prolfqua'
+> >>> * removing 'C:/Users/
+> >>> "
+> >>> However since R CMD build removes the temp directory and does not give
+> >>> any other errors how can I find out what the build problem is?
+> >>>
+> >>> Is there a way to disable the temp directory removal?
+> >>>
+> >>> Best Regards
+> >>> Witek
+> >>> --
+> >>> Witold Eryk Wolski
+> >>>
+> >>> ______________________________________________
+> >>> R-devel at r-project.org mailing list
+> >>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> >>>
+> >>
+> >
+> >
+
+
+
+--
+Witold Eryk Wolski
+
+
+From ||gge@ @end|ng |rom @t@t|@t|k@tu-dortmund@de  Mon Dec 19 11:08:15 2022
+From: ||gge@ @end|ng |rom @t@t|@t|k@tu-dortmund@de (Uwe Ligges)
+Date: Mon, 19 Dec 2022 11:08:15 +0100
+Subject: [Rd] [R]  I do not want that R CMD build removes temp directory
+In-Reply-To: <CAAjnpdiR6sugnRDB93UNGGxuQ0O_F-8nNOQtcd=u7-tmZEh4Ow@mail.gmail.com>
+References: <CAAjnpdg8uLOBBEHWEWq81R+t0sUy=TiTPN_fy2WrgTn2-AWRqA@mail.gmail.com>
+ <24A51D24-B62A-42E2-94C4-6842EFC87D50@R-project.org>
+ <CAAjnpdhUb6eJ78wZd501AH0CnkDYN7TQ0U=sP7RXpYjQTd0Reg@mail.gmail.com>
+ <b2825ce6-6601-eb65-fffd-981db52feb58@statistik.tu-dortmund.de>
+ <CAAjnpdiR6sugnRDB93UNGGxuQ0O_F-8nNOQtcd=u7-tmZEh4Ow@mail.gmail.com>
+Message-ID: <179a373c-d53a-849c-3c83-43fb09148fb9@statistik.tu-dortmund.de>
+
+Ah, before that you wrote
+
+""
+ERROR: lazy loading failed for package 'prolfqua'
+* removing 'C:Users
+"
+
+and C:Users  without a slash sonds suspicious. Now with the new output I 
+do not see where the issue is from. Does this also happen when you try 
+it on winbuilder?
+
+Best,
+Uwe Ligges
+
+On 19.12.2022 10:52, Witold E Wolski wrote:
+> Dear Uwe,
+> 
+> Unfortunately there isn't much of an output. This is all what I have:
+> 
+> $ R CMD INSTALL --log prolfqua
+> Warning: unknown option '--log'
+> * installing to library 'C:/Users/witoldwolski/AppData/Local/R/win-library/4.2'
+> * installing *source* package 'prolfqua' ...
+> ** using staged installation
+> ** R
+> ** data
+> ** inst
+> ** byte-compile and prepare package for lazy loading
+> ERROR: lazy loading failed for package 'prolfqua'
+> * removing 'C:/Users/witoldwolski/AppData/Local/R/win-library/4.2/prolfqua'
+> 
+> Also with --no-test-load option the install is failing :
+> 
+> $ R CMD INSTALL --clean --no-test-load prolfqua
+> 
+> * installing to library 'C:/Users/witoldwolski/AppData/Local/R/win-library/4.2'
+> * installing *source* package 'prolfqua' ...
+> ** using staged installation
+> ** R
+> ** data
+> ** inst
+> ** byte-compile and prepare package for lazy loading
+> ERROR: lazy loading failed for package 'prolfqua'
+> * removing 'C:/Users/witoldwolski/AppData/Local/R/win-library/4.2/prolfqua'
+> 
+> And including "--no-clean-on-error" also does not help because the
+> installation directory is empty.
+> 
+> 
+> Tested the install, on macos M1, linux ARM64, linux x86, Windows 64,
+> and it works everywhere except
+> Parallels Windows 64 on ARM M1.
+> 
+> R version 4.2.2 (2022-10-31 ucrt) -- "Innocent and Trusting"
+> Copyright (C) 2022 The R Foundation for Statistical Computing
+> Platform: x86_64-w64-mingw32/x64 (64-bit)
+> 
+> best regards
+> Witek
+> 
+> 
+> 
+> On Fri, 16 Dec 2022 at 11:24, Uwe Ligges
+> <ligges at statistik.tu-dortmund.de> wrote:
+>>
+>>
+>>
+>> On 15.12.2022 21:47, Witold E Wolski wrote:
+>>> Thank you Simon,
+>>>
+>>> It seems not to be related to the R package but rather to the OS,
+>>> (just got the same error when installing the shiny R package from
+>>> CRAN).
+>>> I am on an M1 mac running Windows ARM in Parallels. Installed a
+>>> x86_64-w64 R version.
+>>>
+>>>
+>>>
+>>> "** byte-compile and prepare package for lazy loading
+>>> ERROR: lazy loading failed for package 'shiny'
+>>> * removing 'C:/Users/witoldwolski/AppData/Local/R/win-library/4.2/shiny'
+>>> Warning in install.packages :"
+>>
+>> Can we please have the full output?
+>>
+>> Best,
+>> Uwe Ligges
+>>
+>>
+>>
+>>> On Thu, 15 Dec 2022 at 19:09, Simon Urbanek <simon.urbanek at r-project.org> wrote:
+>>>>
+>>>> Yes:
+>>>>
+>>>> $ R CMD INSTALL --help | grep error
+>>>>         --no-clean-on-error       do not remove installed package on error
+>>>>
+>>>> But probably more commonly used way is to install the package from its unpacked directory as that avoids the use of temporary directories in the first place.
+>>>>
+>>>> In you case you can also use --no-test-load and the non-functional package will still be installed so you can inspect it.
+>>>>
+>>>> Cheers,
+>>>> Simon
+>>>>
+>>>> PS: please don't cross-post
+>>>>
+>>>>
+>>>>> On Dec 16, 2022, at 7:01 AM, Witold E Wolski <wewolski at gmail.com> wrote:
+>>>>>
+>>>>> I am getting a package build error, and can not figure out the problem.
+>>>>> The error is
+>>>>> "
+>>>>> ERROR: lazy loading failed for package 'prolfqua'
+>>>>> * removing 'C:/Users/
+>>>>> "
+>>>>> However since R CMD build removes the temp directory and does not give
+>>>>> any other errors how can I find out what the build problem is?
+>>>>>
+>>>>> Is there a way to disable the temp directory removal?
+>>>>>
+>>>>> Best Regards
+>>>>> Witek
+>>>>> --
+>>>>> Witold Eryk Wolski
+>>>>>
+>>>>> ______________________________________________
+>>>>> R-devel at r-project.org mailing list
+>>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>>>
+>>>>
+>>>
+>>>
+> 
+> 
+> 
+> --
+> Witold Eryk Wolski
+> 
+> ______________________________________________
+> R-help at r-project.org mailing list -- To UNSUBSCRIBE and more, see
+> https://stat.ethz.ch/mailman/listinfo/r-help
+> PLEASE do read the posting guide http://www.R-project.org/posting-guide.html
+> and provide commented, minimal, self-contained, reproducible code.
+
+
+From @oko| @end|ng |rom |n@@-tou|ou@e@|r  Mon Dec 19 11:17:36 2022
+From: @oko| @end|ng |rom |n@@-tou|ou@e@|r (Serguei Sokol)
+Date: Mon, 19 Dec 2022 11:17:36 +0100
+Subject: [Rd] [R] I do not want that R CMD build removes temp directory
+In-Reply-To: <CAAjnpdiR6sugnRDB93UNGGxuQ0O_F-8nNOQtcd=u7-tmZEh4Ow@mail.gmail.com>
+References: <CAAjnpdg8uLOBBEHWEWq81R+t0sUy=TiTPN_fy2WrgTn2-AWRqA@mail.gmail.com>
+ <24A51D24-B62A-42E2-94C4-6842EFC87D50@R-project.org>
+ <CAAjnpdhUb6eJ78wZd501AH0CnkDYN7TQ0U=sP7RXpYjQTd0Reg@mail.gmail.com>
+ <b2825ce6-6601-eb65-fffd-981db52feb58@statistik.tu-dortmund.de>
+ <CAAjnpdiR6sugnRDB93UNGGxuQ0O_F-8nNOQtcd=u7-tmZEh4Ow@mail.gmail.com>
+Message-ID: <d5cff7f3-487f-9a2c-b2c1-7ddb6c8cb59e@insa-toulouse.fr>
+
+Le 19/12/2022 ? 10:52, Witold E Wolski a ?crit?:
+> Dear Uwe,
+>
+> Unfortunately there isn't much of an output. This is all what I have:
+>
+> $ R CMD INSTALL --log prolfqua
+> Warning: unknown option '--log'
+> * installing to library 'C:/Users/witoldwolski/AppData/Local/R/win-library/4.2'
+> * installing *source* package 'prolfqua' ...
+> ** using staged installation
+> ** R
+> ** data
+> ** inst
+> ** byte-compile and prepare package for lazy loading
+> ERROR: lazy loading failed for package 'prolfqua'
+> * removing 'C:/Users/witoldwolski/AppData/Local/R/win-library/4.2/prolfqua'
+>
+> Also with --no-test-load option the install is failing :
+>
+> $ R CMD INSTALL --clean --no-test-load prolfqua
+>
+> * installing to library 'C:/Users/witoldwolski/AppData/Local/R/win-library/4.2'
+> * installing *source* package 'prolfqua' ...
+> ** using staged installation
+> ** R
+> ** data
+> ** inst
+> ** byte-compile and prepare package for lazy loading
+> ERROR: lazy loading failed for package 'prolfqua'
+> * removing 'C:/Users/witoldwolski/AppData/Local/R/win-library/4.2/prolfqua'
+>
+> And including "--no-clean-on-error" also does not help because the
+> installation directory is empty.
+You don't show the full command you run. If you included also "--clean" 
+as in previous command, may be it just does what is asked, i.e. clean 
+the temp dir ?
+I don't know what prevails: "--clean" or "--no-clean-on-error" if put 
+simultaneously.
+
+Best,
+Serguei.
+
+>
+>
+> Tested the install, on macos M1, linux ARM64, linux x86, Windows 64,
+> and it works everywhere except
+> Parallels Windows 64 on ARM M1.
+>
+> R version 4.2.2 (2022-10-31 ucrt) -- "Innocent and Trusting"
+> Copyright (C) 2022 The R Foundation for Statistical Computing
+> Platform: x86_64-w64-mingw32/x64 (64-bit)
+>
+> best regards
+> Witek
+>
+>
+>
+> On Fri, 16 Dec 2022 at 11:24, Uwe Ligges
+> <ligges at statistik.tu-dortmund.de> wrote:
+>>
+>>
+>> On 15.12.2022 21:47, Witold E Wolski wrote:
+>>> Thank you Simon,
+>>>
+>>> It seems not to be related to the R package but rather to the OS,
+>>> (just got the same error when installing the shiny R package from
+>>> CRAN).
+>>> I am on an M1 mac running Windows ARM in Parallels. Installed a
+>>> x86_64-w64 R version.
+>>>
+>>>
+>>>
+>>> "** byte-compile and prepare package for lazy loading
+>>> ERROR: lazy loading failed for package 'shiny'
+>>> * removing 'C:/Users/witoldwolski/AppData/Local/R/win-library/4.2/shiny'
+>>> Warning in install.packages :"
+>> Can we please have the full output?
+>>
+>> Best,
+>> Uwe Ligges
+>>
+>>
+>>
+>>> On Thu, 15 Dec 2022 at 19:09, Simon Urbanek <simon.urbanek at r-project.org> wrote:
+>>>> Yes:
+>>>>
+>>>> $ R CMD INSTALL --help | grep error
+>>>>         --no-clean-on-error       do not remove installed package on error
+>>>>
+>>>> But probably more commonly used way is to install the package from its unpacked directory as that avoids the use of temporary directories in the first place.
+>>>>
+>>>> In you case you can also use --no-test-load and the non-functional package will still be installed so you can inspect it.
+>>>>
+>>>> Cheers,
+>>>> Simon
+>>>>
+>>>> PS: please don't cross-post
+>>>>
+>>>>
+>>>>> On Dec 16, 2022, at 7:01 AM, Witold E Wolski <wewolski at gmail.com> wrote:
+>>>>>
+>>>>> I am getting a package build error, and can not figure out the problem.
+>>>>> The error is
+>>>>> "
+>>>>> ERROR: lazy loading failed for package 'prolfqua'
+>>>>> * removing 'C:/Users/
+>>>>> "
+>>>>> However since R CMD build removes the temp directory and does not give
+>>>>> any other errors how can I find out what the build problem is?
+>>>>>
+>>>>> Is there a way to disable the temp directory removal?
+>>>>>
+>>>>> Best Regards
+>>>>> Witek
+>>>>> --
+>>>>> Witold Eryk Wolski
+>>>>>
+>>>>> ______________________________________________
+>>>>> R-devel at r-project.org mailing list
+>>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>>>
+>>>
+>
+>
+> --
+> Witold Eryk Wolski
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+-- 
+Serguei Sokol
+Ingenieur de recherche INRAE
+
+Cellule Math?matiques
+TBI, INSA/INRAE UMR 792, INSA/CNRS UMR 5504
+135 Avenue de Rangueil
+31077 Toulouse Cedex 04
+
+tel: +33 5 61 55 98 49
+email: sokol at insa-toulouse.fr
+http://www.toulouse-biotechnology-institute.fr/en/technology_platforms/mathematics-cell.html
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Mon Dec 19 11:42:09 2022
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Mon, 19 Dec 2022 11:42:09 +0100
+Subject: [Rd] [R] I do not want that R CMD build removes temp directory
+In-Reply-To: <179a373c-d53a-849c-3c83-43fb09148fb9@statistik.tu-dortmund.de>
+References: <CAAjnpdg8uLOBBEHWEWq81R+t0sUy=TiTPN_fy2WrgTn2-AWRqA@mail.gmail.com>
+ <24A51D24-B62A-42E2-94C4-6842EFC87D50@R-project.org>
+ <CAAjnpdhUb6eJ78wZd501AH0CnkDYN7TQ0U=sP7RXpYjQTd0Reg@mail.gmail.com>
+ <b2825ce6-6601-eb65-fffd-981db52feb58@statistik.tu-dortmund.de>
+ <CAAjnpdiR6sugnRDB93UNGGxuQ0O_F-8nNOQtcd=u7-tmZEh4Ow@mail.gmail.com>
+ <179a373c-d53a-849c-3c83-43fb09148fb9@statistik.tu-dortmund.de>
+Message-ID: <9a88642f-3e1a-a000-4ce4-a27a28e86ea1@gmail.com>
+
+
+On 12/19/22 11:08, Uwe Ligges wrote:
+> Ah, before that you wrote
+>
+> ""
+> ERROR: lazy loading failed for package 'prolfqua'
+> * removing 'C:Users
+> "
+>
+> and C:Users? without a slash sonds suspicious. Now with the new output 
+> I do not see where the issue is from. Does this also happen when you 
+> try it on winbuilder?
+
+You can try Process Monitor (from sysinternals) to get a trace of system 
+calls and failures. There may be something indicative there.
+
+If it works in Winbuilder and on your Windows installation, and you 
+don't do anything special in the package, and can't find a way to debug 
+this, you can perhaps assume it is specific to your Parallels Windows 
+installation and ignore.
+
+You can try with a shorter username (e.g. "witold" only - up to 8 ASCII 
+characters) - maybe your installation in Parallels doesn't enable short 
+names by default on the used volume - but, this is a guess, the trace 
+would allow to tell more, and I would expect an indicative error message 
+if this were the cause.
+
+Best
+Tomas
+
+
+>
+> Best,
+> Uwe Ligges
+>
+> On 19.12.2022 10:52, Witold E Wolski wrote:
+>> Dear Uwe,
+>>
+>> Unfortunately there isn't much of an output. This is all what I have:
+>>
+>> $ R CMD INSTALL --log prolfqua
+>> Warning: unknown option '--log'
+>> * installing to library 
+>> 'C:/Users/witoldwolski/AppData/Local/R/win-library/4.2'
+>> * installing *source* package 'prolfqua' ...
+>> ** using staged installation
+>> ** R
+>> ** data
+>> ** inst
+>> ** byte-compile and prepare package for lazy loading
+>> ERROR: lazy loading failed for package 'prolfqua'
+>> * removing 
+>> 'C:/Users/witoldwolski/AppData/Local/R/win-library/4.2/prolfqua'
+>>
+>> Also with --no-test-load option the install is failing :
+>>
+>> $ R CMD INSTALL --clean --no-test-load prolfqua
+>>
+>> * installing to library 
+>> 'C:/Users/witoldwolski/AppData/Local/R/win-library/4.2'
+>> * installing *source* package 'prolfqua' ...
+>> ** using staged installation
+>> ** R
+>> ** data
+>> ** inst
+>> ** byte-compile and prepare package for lazy loading
+>> ERROR: lazy loading failed for package 'prolfqua'
+>> * removing 
+>> 'C:/Users/witoldwolski/AppData/Local/R/win-library/4.2/prolfqua'
+>>
+>> And including "--no-clean-on-error" also does not help because the
+>> installation directory is empty.
+>>
+>>
+>> Tested the install, on macos M1, linux ARM64, linux x86, Windows 64,
+>> and it works everywhere except
+>> Parallels Windows 64 on ARM M1.
+>>
+>> R version 4.2.2 (2022-10-31 ucrt) -- "Innocent and Trusting"
+>> Copyright (C) 2022 The R Foundation for Statistical Computing
+>> Platform: x86_64-w64-mingw32/x64 (64-bit)
+>>
+>> best regards
+>> Witek
+>>
+>>
+>>
+>> On Fri, 16 Dec 2022 at 11:24, Uwe Ligges
+>> <ligges at statistik.tu-dortmund.de> wrote:
+>>>
+>>>
+>>>
+>>> On 15.12.2022 21:47, Witold E Wolski wrote:
+>>>> Thank you Simon,
+>>>>
+>>>> It seems not to be related to the R package but rather to the OS,
+>>>> (just got the same error when installing the shiny R package from
+>>>> CRAN).
+>>>> I am on an M1 mac running Windows ARM in Parallels. Installed a
+>>>> x86_64-w64 R version.
+>>>>
+>>>>
+>>>>
+>>>> "** byte-compile and prepare package for lazy loading
+>>>> ERROR: lazy loading failed for package 'shiny'
+>>>> * removing 
+>>>> 'C:/Users/witoldwolski/AppData/Local/R/win-library/4.2/shiny'
+>>>> Warning in install.packages :"
+>>>
+>>> Can we please have the full output?
+>>>
+>>> Best,
+>>> Uwe Ligges
+>>>
+>>>
+>>>
+>>>> On Thu, 15 Dec 2022 at 19:09, Simon Urbanek 
+>>>> <simon.urbanek at r-project.org> wrote:
+>>>>>
+>>>>> Yes:
+>>>>>
+>>>>> $ R CMD INSTALL --help | grep error
+>>>>> ??????? --no-clean-on-error?????? do not remove installed package 
+>>>>> on error
+>>>>>
+>>>>> But probably more commonly used way is to install the package from 
+>>>>> its unpacked directory as that avoids the use of temporary 
+>>>>> directories in the first place.
+>>>>>
+>>>>> In you case you can also use --no-test-load and the non-functional 
+>>>>> package will still be installed so you can inspect it.
+>>>>>
+>>>>> Cheers,
+>>>>> Simon
+>>>>>
+>>>>> PS: please don't cross-post
+>>>>>
+>>>>>
+>>>>>> On Dec 16, 2022, at 7:01 AM, Witold E Wolski <wewolski at gmail.com> 
+>>>>>> wrote:
+>>>>>>
+>>>>>> I am getting a package build error, and can not figure out the 
+>>>>>> problem.
+>>>>>> The error is
+>>>>>> "
+>>>>>> ERROR: lazy loading failed for package 'prolfqua'
+>>>>>> * removing 'C:/Users/
+>>>>>> "
+>>>>>> However since R CMD build removes the temp directory and does not 
+>>>>>> give
+>>>>>> any other errors how can I find out what the build problem is?
+>>>>>>
+>>>>>> Is there a way to disable the temp directory removal?
+>>>>>>
+>>>>>> Best Regards
+>>>>>> Witek
+>>>>>> -- 
+>>>>>> Witold Eryk Wolski
+>>>>>>
+>>>>>> ______________________________________________
+>>>>>> R-devel at r-project.org mailing list
+>>>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>>>>
+>>>>>
+>>>>
+>>>>
+>>
+>>
+>>
+>> -- 
+>> Witold Eryk Wolski
+>>
+>> ______________________________________________
+>> R-help at r-project.org mailing list -- To UNSUBSCRIBE and more, see
+>> https://stat.ethz.ch/mailman/listinfo/r-help
+>> PLEASE do read the posting guide 
+>> http://www.R-project.org/posting-guide.html
+>> and provide commented, minimal, self-contained, reproducible code.
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
