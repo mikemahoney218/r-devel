@@ -1992,3 +1992,290 @@ Tomas
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From |@r@@re|und @end|ng |rom gm@||@com  Tue Dec 20 12:33:40 2022
+From: |@r@@re|und @end|ng |rom gm@||@com (Lars Relund)
+Date: Tue, 20 Dec 2022 12:33:40 +0100
+Subject: [Rd] F77_CALL(dgetrs) C++ call in R-devel
+Message-ID: <CAGJijVNbg7CNu4tEkKomCknBHgzmXwMUEdYFXe=3zaMWRaHYJA@mail.gmail.com>
+
+In my package, I have the method:
+
+    /** Solve equations transpose(P)w = r. */
+    int LASolveT(MatSimple<double> &P, MatSimple<double> &w, const
+MatSimple<double> &r) {
+        int rows = P.rows;
+        int nrhs = 1;
+        int lda = rows;
+        int ldb = rows;
+        int info = -1;
+        MatSimple<int> ipivot(1,rows);
+        w.Inject(r);    // copy r to w;
+        F77_CALL(dgetrf)(&rows, &rows, &P(0,0), &lda, &ipivot(0,0), &info);
+        if (info!=0) {
+            cout << "Error in LASolve (dgetrf). Info=" << info << endl;
+            return 1;
+        }
+        F77_CALL(dgetrs)("T", &rows, &nrhs, &P(0,0), &lda, &ipivot(0,0),
+&w(0,0), &ldb, &info);("T", &rows, &nrhs, &P(0,0), &lda, &ipivot(0,0),
+&w(0,0), &ldb, &info);
+        if (info!=0) {
+            cout << "Error in LASolve (dgetrs). Info=" << info << endl;
+            return 1;
+        }
+        return 0;
+    }
+
+When compiling the package on using R-devel the error for F77_CALL(dgetrs)
+occur:
+
+matalg.h:67:25: error: too few arguments to function ?void dgetrs_(const
+char*, const int*, const int*, const double*, const int*, const int*,
+double*, const int*, int*, size_t)?
+   67 |         F77_CALL(dgetrs)("T", &rows, &nrhs, &P(0,0), &lda,
+&ipivot(0,0), &w(0,0), &ldb, &info);
+
+It works in R-release and I guess it have something to do with
+https://cran.r-project.org/doc/manuals/r-devel/NEWS.html and LAPACK.
+
+Any hints on how to get it to work for both R-release and R-devel.
+
+Best
+Lars Relund
+
+	[[alternative HTML version deleted]]
+
+
+From edd @end|ng |rom deb|@n@org  Tue Dec 20 14:09:16 2022
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Tue, 20 Dec 2022 07:09:16 -0600
+Subject: [Rd] F77_CALL(dgetrs) C++ call in R-devel
+In-Reply-To: <CAGJijVNbg7CNu4tEkKomCknBHgzmXwMUEdYFXe=3zaMWRaHYJA@mail.gmail.com>
+References: <CAGJijVNbg7CNu4tEkKomCknBHgzmXwMUEdYFXe=3zaMWRaHYJA@mail.gmail.com>
+Message-ID: <25505.46076.413588.816423@rob.eddelbuettel.com>
+
+
+On 20 December 2022 at 12:33, Lars Relund wrote:
+| In my package, I have the method:
+| 
+|     /** Solve equations transpose(P)w = r. */
+|     int LASolveT(MatSimple<double> &P, MatSimple<double> &w, const
+| MatSimple<double> &r) {
+|         int rows = P.rows;
+|         int nrhs = 1;
+|         int lda = rows;
+|         int ldb = rows;
+|         int info = -1;
+|         MatSimple<int> ipivot(1,rows);
+|         w.Inject(r);    // copy r to w;
+|         F77_CALL(dgetrf)(&rows, &rows, &P(0,0), &lda, &ipivot(0,0), &info);
+|         if (info!=0) {
+|             cout << "Error in LASolve (dgetrf). Info=" << info << endl;
+|             return 1;
+|         }
+|         F77_CALL(dgetrs)("T", &rows, &nrhs, &P(0,0), &lda, &ipivot(0,0),
+| &w(0,0), &ldb, &info);("T", &rows, &nrhs, &P(0,0), &lda, &ipivot(0,0),
+| &w(0,0), &ldb, &info);
+|         if (info!=0) {
+|             cout << "Error in LASolve (dgetrs). Info=" << info << endl;
+|             return 1;
+|         }
+|         return 0;
+|     }
+| 
+| When compiling the package on using R-devel the error for F77_CALL(dgetrs)
+| occur:
+| 
+| matalg.h:67:25: error: too few arguments to function ?void dgetrs_(const
+| char*, const int*, const int*, const double*, const int*, const int*,
+| double*, const int*, int*, size_t)?
+|    67 |         F77_CALL(dgetrs)("T", &rows, &nrhs, &P(0,0), &lda,
+| &ipivot(0,0), &w(0,0), &ldb, &info);
+| 
+| It works in R-release and I guess it have something to do with
+| https://cran.r-project.org/doc/manuals/r-devel/NEWS.html and LAPACK.
+| 
+| Any hints on how to get it to work for both R-release and R-devel.
+
+I can offer you two answers. The first, and narrower, is in Writing R
+Extensions and concerns FC_LEN. R now 'automagically' injects additional
+parameters for a better, more stringent, control of character variable
+length. See eg
+
+  https://rstudio.github.io/r-manuals/r-exts/The-R-API.html#fortran-character-strings
+
+and related. (And this isn't new per se, those of use with packages with
+Fortran interfaces have been keeping this up.)
+
+The second, more pragmatic answer, is of course 'to not do that' but to rely
+on the decade of tuning and bazillion of test and runs a higher-end Linear
+Algebra package like (Rcpp)Armadillo offers by wrapping around LAPACK and
+BLAS for you.  You already are in C++, so there os essentially no switching
+cost. And (Rcpp)Armadillo is header-only and hence free of added
+complications.
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue Dec 20 22:27:36 2022
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 20 Dec 2022 22:27:36 +0100
+Subject: [Rd] Problem with accessibility in R 4.2.0 and 4.2.1.
+In-Reply-To: <23cdc9ad-765b-b5c9-32b6-d1cbfe9ccd44@dim.uchile.cl>
+References: <88b4bd63-0ec3-626b-1fa3-148f1419a8a3@dim.uchile.cl>
+ <0836b27f-99cf-ef24-fa31-3f4af75f276d@gmail.com>
+ <CALK03d36eK=VtUPPTTS1O5ch7dL+y2nKQvwdvAHkz5XL23vu9Q@mail.gmail.com>
+ <23cdc9ad-765b-b5c9-32b6-d1cbfe9ccd44@dim.uchile.cl>
+Message-ID: <06bb9c2e-566b-3ba2-2bb4-79279fc20992@gmail.com>
+
+
+On 9/22/22 23:15, Andrew Hart via R-devel wrote:
+> ????On 22/09/2022 16:42, Toby Hocking wrote:
+>> Another option is to use https://emacspeak.sourceforge.net/ 
+>> <https://emacspeak.sourceforge.net/> (version of emacs editor/ide 
+>> which can speak letters/words/lines -- has a blind maintainer) with 
+>> https://ess.r-project.org/ <https://ess.r-project.org/> (interface 
+>> for editing and running R code from within emacs)
+>
+> Thanks everyone for all the suggestions. Of course, the optimal 
+> solution would be to figure out what is going on in Rgui, but, as is 
+> always the case, the blind user use case is a fairly niche one. I 
+> appreciate all the suggestions for finding an immediate solution to my 
+> problem.
+> I don't use any kind of IDE for working with R since I simply haven't 
+> found one that is accessible or that i understand how to use. There is 
+> a plug-in for the Eclipse IDE I installed a few years ago, but I 
+> didn't understand the first thing about how it was to be used. So I've 
+> just always worked with an editor open in one Window and R in another,
+> working interactively in R or bouncing over to the editor for more 
+> complex things and sourcing code into R as necessary. However, I only 
+> use the R console in Rgui. I went and had a look at Rterm, which I 
+> have never used on Windows; I've only ever used it when ssh-ing into 
+> Linux systems to use R. However, I've just found out that Rterm does a 
+> number of fairly important things that probably mean I can just use it 
+> instead of Rgui:
+> 1. You can paste from the clipboard into the Rterm prompt;
+> 2. It has a command history;
+> 3. If you plot something, it opens a Window to draw the plot (I never 
+> realised it could do this and had always assumed Rgui was needed for 
+> this); and
+> 4. It opens the HTML help if you ask for help on windows. I only ever 
+> saw it display text help on Linux, but I was logged in remotely. 
+> Text-based help is fine when ssh-ing into a machine, but HTML help is 
+> much nicer to read and navigate.
+>
+> I think I'll just switch over to Rterm for a while, but I can also 
+> check out ess, which I wasn't aware of.
+>
+> Thanks a lot,
+> Andrew.
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue Dec 20 23:33:41 2022
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 20 Dec 2022 23:33:41 +0100
+Subject: [Rd] Problem with accessibility in R 4.2.0 and 4.2.1.
+In-Reply-To: <23cdc9ad-765b-b5c9-32b6-d1cbfe9ccd44@dim.uchile.cl>
+References: <88b4bd63-0ec3-626b-1fa3-148f1419a8a3@dim.uchile.cl>
+ <0836b27f-99cf-ef24-fa31-3f4af75f276d@gmail.com>
+ <CALK03d36eK=VtUPPTTS1O5ch7dL+y2nKQvwdvAHkz5XL23vu9Q@mail.gmail.com>
+ <23cdc9ad-765b-b5c9-32b6-d1cbfe9ccd44@dim.uchile.cl>
+Message-ID: <06025c82-ad7a-70f4-96a9-3e5f4ec4251f@gmail.com>
+
+Dear Andrew, Jonathan,
+
+I had a closer look and tried to improve accessibility in Rgui, please 
+see below. I would be grateful for feedback.
+
+Rgui supports three cursor types, which can be selected via Edit/GUI 
+preferences/Cursor blink.
+
+The default is "partial", but for screen readers, please use "full". You 
+can change the selection in the menu and then "Save..." to save it into 
+your Rconsole file. If you already have the file, the corresponding 
+selection is "cursor_blink = Full".
+
+The "full" cursor is implemented as the standard Windows "caret" and 
+this is what screen readers can see. Once you set this cursor as the 
+default in your Rconsole file and re-start Rgui, but before you start 
+using the console, please switch focus out and back in (e.g. press 
+Alt+TAB twice). This helps NVDA detect the characters under the cursor 
+in already released versions of R. Please start the screen reader before 
+starting Rgui.
+
+I found that the "full" cursor implementation has a number of problems: 
+in some situation it disappears when it shouldn't, in some the other way 
+around. I thought this was confusing the screen reader, so I fixed most 
+of these cases.
+
+However, the true cause was that Rgui didn't create the cursor right 
+when it got focus the first time. Luckily NVDA is open-source, so one 
+can read and modify the source code to find out. I've added a 
+work-around to Rgui, which is used only with the "full" cursor, because 
+the "partial" cursor confuses the screen reader too much to be usable, 
+anyway. So, after this fix, one doesn't have to do that focus out+in trick.
+
+The improvements are in R-devel (revision 83482 or newer). I would be 
+grateful if you could test it, so that it could be improved further (or 
+reverted if it actually turned out worse). Particularly if you find a 
+problem reproducible with NVDA, that should be something I could 
+diagnose and improve, as I have the sources.
+
+I've been testing with NVDA and I'd be curious about the impact on JAWS.
+Rgui doesn't work with Narrator.
+
+Thanks,
+Tomas
+
+On 9/22/22 23:15, Andrew Hart via R-devel wrote:
+> ????On 22/09/2022 16:42, Toby Hocking wrote:
+>> Another option is to use https://emacspeak.sourceforge.net/ 
+>> <https://emacspeak.sourceforge.net/> (version of emacs editor/ide 
+>> which can speak letters/words/lines -- has a blind maintainer) with 
+>> https://ess.r-project.org/ <https://ess.r-project.org/> (interface 
+>> for editing and running R code from within emacs)
+>
+> Thanks everyone for all the suggestions. Of course, the optimal 
+> solution would be to figure out what is going on in Rgui, but, as is 
+> always the case, the blind user use case is a fairly niche one. I 
+> appreciate all the suggestions for finding an immediate solution to my 
+> problem.
+> I don't use any kind of IDE for working with R since I simply haven't 
+> found one that is accessible or that i understand how to use. There is 
+> a plug-in for the Eclipse IDE I installed a few years ago, but I 
+> didn't understand the first thing about how it was to be used. So I've 
+> just always worked with an editor open in one Window and R in another,
+> working interactively in R or bouncing over to the editor for more 
+> complex things and sourcing code into R as necessary. However, I only 
+> use the R console in Rgui. I went and had a look at Rterm, which I 
+> have never used on Windows; I've only ever used it when ssh-ing into 
+> Linux systems to use R. However, I've just found out that Rterm does a 
+> number of fairly important things that probably mean I can just use it 
+> instead of Rgui:
+> 1. You can paste from the clipboard into the Rterm prompt;
+> 2. It has a command history;
+> 3. If you plot something, it opens a Window to draw the plot (I never 
+> realised it could do this and had always assumed Rgui was needed for 
+> this); and
+> 4. It opens the HTML help if you ask for help on windows. I only ever 
+> saw it display text help on Linux, but I was logged in remotely. 
+> Text-based help is fine when ssh-ing into a machine, but HTML help is 
+> much nicer to read and navigate.
+>
+> I think I'll just switch over to Rterm for a while, but I can also 
+> check out ess, which I wasn't aware of.
+>
+> Thanks a lot,
+> Andrew.
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
