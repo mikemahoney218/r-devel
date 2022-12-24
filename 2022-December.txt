@@ -2893,3 +2893,277 @@ On 12/21/22 17:12, Andrew Hart wrote:
 >
 
 
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Thu Dec 22 09:14:59 2022
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Thu, 22 Dec 2022 09:14:59 +0100
+Subject: [Rd] Problem with accessibility in R 4.2.0 and 4.2.1.
+In-Reply-To: <MEAPR01MB3829A370C96D682D114BDE4593EB9@MEAPR01MB3829.ausprd01.prod.outlook.com>
+References: <88b4bd63-0ec3-626b-1fa3-148f1419a8a3@dim.uchile.cl>
+ <0836b27f-99cf-ef24-fa31-3f4af75f276d@gmail.com>
+ <CALK03d36eK=VtUPPTTS1O5ch7dL+y2nKQvwdvAHkz5XL23vu9Q@mail.gmail.com>
+ <23cdc9ad-765b-b5c9-32b6-d1cbfe9ccd44@dim.uchile.cl>
+ <06025c82-ad7a-70f4-96a9-3e5f4ec4251f@gmail.com>
+ <b16f8ab4-118e-17a6-f511-3a45641160d9@dim.uchile.cl>
+ <73b7f903-30bb-85e9-b7da-98103ed27f1f@gmail.com>
+ <MEAPR01MB3829A370C96D682D114BDE4593EB9@MEAPR01MB3829.ausprd01.prod.outlook.com>
+Message-ID: <f1e01766-01d7-fa80-9f96-30d69836f088@gmail.com>
+
+Hello Jonathan,
+
+Rgui uses GraphApp as toolbox, but that is part of R source code and 
+I've included into my summary of changes between 4.2.1 and 4.2.2, and I 
+couldn't find anything that I think could impact the screen reader on 
+the Rgui console. The changes in GraphApp are included also in NEWS, 
+many of the fixes in Rgui are in fact in GraphApp. GraphApp then 
+directly uses the Windows Graphics Device Interface (GDI). I am not 
+aware of any such changes even between 4.2.0 and 4.2.1, either. So I 
+have no clue why differences in screen reader performance were observed.
+
+I've now tried with JAWS as well, the default installation, 40 minute 
+trial. I did this experiment:
+
+1. start Rgui
+2. type "hello"
+3. navigate back using left arrow
+
+On R 4.0.5, 4.1.3, 4.2.1, 4.2.2, R-devel with the defaults (so 
+"partial") cursor, JAWS worked fine and the same in all versions. It 
+could read the letters back when I was navigating over them. It worked 
+also with the "full" cursor. I didn't find any difference. I noticed 
+that JAWS increased the cursor blink rate, which sighted people could 
+find annoying.
+
+Trying the same with NVDA.? "partial" cursor didn't work with any R 
+version, the letters could be read when typed, but not when navigated 
+back. The "full" cursor worked fine in R-devel (so with my recent 
+fixes). In the released R versions I tested, I could make the "full" 
+cursor work by switching focus (before step 3) by going to the "Edit" 
+menu and back, e.g. "Alt+E followed by ESC followed by ESC".
+
+So it looks like my fix wasn't needed for JAWS, but only for NVDA.
+
+Of course my experiment is rather limited, if you or anyone else could 
+test more scenarios and report any problems with the current R-devel 
+Rgui (and the "full" cursor), it would be a great help and we can try to 
+fix those.
+
+Regarding changes that did happen to the R sources in the past, which 
+clearly could impact the screen reader performance, I see R 2.12.0 has 
+in NEWS: "The Rgui console now has an optional blinking caret (cursor) 
+to assist screen readers for the visually impaired." Before this change, 
+Rgui only used its custom drawn cursor, about which it didn't tell 
+Windows, and hence Windows couldn't tell the screen readers. After this 
+change, one could choose also "partial" (default) and "full" cursor. 
+"partial" included the custom drawn cursor together with the standard 
+Windows cursor ("caret") Windows knows about. "Full" cursor included 
+only the standard Windows cursor. This was an addition by Duncan 
+Murdoch, which allowed the navigation to work. "None" (none blinking) 
+cursor in R 4.2.2 is like the original custom drawn cursor and neither 
+NVDA nor JAWS with that can read the characters back when they are 
+navigated over: they cannot detect the cursor.
+
+I don't see any changes in the implementation of the cursor since the 
+original Duncan's code for 2.12.0. I fixed some name clashes in 76745 in 
+June 2019 (so R 4.0.0), but that should be completely benign.
+
+However, what I did see was non-standard behavior of the standard 
+Windows cursor in Rgui when switching windows, going to menu, starting 
+Rgui, etc. I've fixed most but not (yet) all of those. It may be that 
+users have ran into intermittent problems with the screen readers as a 
+consequence of such actions (sometimes they lead not only to visually 
+loosing the Windows cursor, but also to the cursor really disappearing 
+so that Windows didn't know about it anymore). It is well possible that 
+this also affected JAWS. I know for sure it did affect NVDA, based on 
+which I did the current fixes.
+
+Best
+Tomas
+
+On 12/21/22 20:33, Jonathan Godfrey wrote:
+> Hello both,
+>
+> I so seldom use the RGUI that I hand't noticed it was behaving nicely in 4.2.2 which has been running on my laptop for a long time!
+>
+> I confirm the JAWS experience is back to what I expected prior to 4.2.0 and assure you that I do nothing to alter the default settings. I do think maintaining the usefulness of the GUI has merit because that is what a new R user will end up trying once they discover RStudio's inaccessibility.
+>
+> I really do not understand how/why switching a cosmetic element of a cursor should lead to changes in the screen reader performance. I'm sure the size, shape, and colour of a mouse pointer  doesn't affect it's performance although I would expect it to have an impact on a user's performance.
+>
+> Rather, I assumed that the change in the cosmetics of the cursor was the symptom of an underlying change that had multiple impacts, one of which was the disconnect with the screen reader.
+>
+> Did the underlying development toolbox undergo any version changes from ( <4.2.0 ) to (4.2.0...4.2.1) to (4.2.2) ??
+>
+> Great that normal transmission has resumed.
+>
+> Jonathan
+>
+>
+> -----Original Message-----
+> From: Tomas Kalibera <tomas.kalibera at gmail.com>
+> Sent: Thursday, 22 December 2022 6:53 am
+> To: Andrew Hart <ahart at dim.uchile.cl>; Jonathan Godfrey <A.J.Godfrey at massey.ac.nz>
+> Cc: R-devel at r-project.org
+> Subject: Re: [Rd] Problem with accessibility in R 4.2.0 and 4.2.1.
+>
+> Hi Andrew,
+>
+> thanks a lot for your testing and I am looking forward to what you find
+> out about the fixes in R-devel.
+>
+> You asked about changes between 4.2.1 and 4.2.2 relevant to this. I
+> don't think you overlooked anything, I looked now again at the source
+> code diff and I didn't find anything relevant. The Rgui console was
+> fixed to work with Alt+sequences (tilde on Italian keyboard). GraphApp
+> was fixed to use the correct font charset for UTF-8 in dialog boxes.
+> Search and replace was fixed in the script editor. Invalid write was
+> fixed with printing very long lines.
+>
+> None of those changes should impact the behavior of the caret in the
+> console window. I would not be surprised if the behavior with the screen
+> reader was unpredictable/random, certainly inconsequential to whether we
+> had R 4.2.1 or 4.2.2. Hopefully the changes now in R-devel would make it
+> more reliable. If not, we can try to improve it further.
+>
+> Thanks for testing with JAWS, I am impressed it can get anything out
+> from Rgui with the partial cursor. NVDA cannot, it allows navigating
+> using left arrow/right arrow over the line (after focus out+in in R
+> 4.2.2), but it thinks that the characters on the line are all spaces.
+>
+> In either case, I think using the partial cursor with screen readers
+> doesn't make sense, it could only confuse the screen reader application.
+> If some people preferred a wider cursor than "full", we could add a
+> "wide full" cursor, that would be quite easy. If some people preferred
+> less blinking or no blinking at all, they can already set that up
+> system-wide in Windows for the "full" (or potential "wide full") cursor.
+>
+> Cheers
+> Tomas
+>
+> On 12/21/22 17:12, Andrew Hart wrote:
+>> HI Tomas,
+>>
+>> Thanks a lot for not letting this go. It is truly appreciated. I had
+>> been using Rterm directly as Jonathan had suggested since we discussed
+>> this a number of months ago on the R-devel list. However, about a week
+>> and a half ago I accidentally launched Rgui for R 4.2.2 (which I
+>> installed around the end of October) and was surprised when I could
+>> actually? use it like I could use the pre-4.2 versions of R! I have
+>> been using it for a little more than a week now and was intending to
+>> write to you, but you beat me with this message.
+>> The accessibility of Rgui 4.2.2 seems very similar to R 4.1.2 (which I
+>> still have on my system). In contrast, Rgui 4.2.1 is more or less
+>> unusable. I was wanting to ask you if perhaps something got changed in
+>> R 4.2.2? Nothing jumped out at me in the release notes, but I could
+>> easily have overlooked something.
+>>
+>> After reading this message, I went and checked the cursor blink
+>> setting in my 4.2.2 installation and it is indeed set to partial.
+>> You're right in that occasionally JAWS loses the cursor and the
+>> ability to read the R window. However, simply pressing the <enter> key
+>> while Rgui has the focus fixes this. It seems that drawing a new
+>> command prompt on a new line sets JAWS straight and I am able to keep
+>> working. I haven't used 4.1.2 for a while, but I think it had the same
+>> issue. I assumed that this was caused by moving from Windows 7 to
+>> Windows 10, since I never encountered this kind of issue in windows 7.
+>> I'll try out full cursor and see if that makes a difference in 4.2.2.
+>>
+>> Also, I'll download the development snapshot and try it out. I'll let
+>> you know how I get on. Please excuse me if I don't get to it
+>> immediately; things are a bit crazy at work at the moment and it is
+>> that time of the year too!
+>>
+>> Cheers,
+>> Andrew.
+>>
+>> On 20/12/2022 19:33, Tomas Kalibera wrote:
+>>> Dear Andrew, Jonathan,
+>>>
+>>> I had a closer look and tried to improve accessibility in Rgui,
+>>> please see below. I would be grateful for feedback.
+>>>
+>>> Rgui supports three cursor types, which can be selected via Edit/GUI
+>>> preferences/Cursor blink.
+>>>
+>>> The default is "partial", but for screen readers, please use "full".
+>>> You can change the selection in the menu and then "Save..." to save
+>>> it into your Rconsole file. If you already have the file, the
+>>> corresponding selection is "cursor_blink = Full".
+>>>
+>>> The "full" cursor is implemented as the standard Windows "caret" and
+>>> this is what screen readers can see. Once you set this cursor as the
+>>> default in your Rconsole file and re-start Rgui, but before you start
+>>> using the console, please switch focus out and back in (e.g. press
+>>> Alt+TAB twice). This helps NVDA detect the characters under the
+>>> cursor in already released versions of R. Please start the screen
+>>> reader before starting Rgui.
+>>>
+>>> I found that the "full" cursor implementation has a number of
+>>> problems: in some situation it disappears when it shouldn't, in some
+>>> the other way around. I thought this was confusing the screen reader,
+>>> so I fixed most of these cases.
+>>>
+>>> However, the true cause was that Rgui didn't create the cursor right
+>>> when it got focus the first time. Luckily NVDA is open-source, so one
+>>> can read and modify the source code to find out. I've added a
+>>> work-around to Rgui, which is used only with the "full" cursor,
+>>> because the "partial" cursor confuses the screen reader too much to
+>>> be usable, anyway. So, after this fix, one doesn't have to do that
+>>> focus out+in trick.
+>>>
+>>> The improvements are in R-devel (revision 83482 or newer). I would be
+>>> grateful if you could test it, so that it could be improved further
+>>> (or reverted if it actually turned out worse). Particularly if you
+>>> find a problem reproducible with NVDA, that should be something I
+>>> could diagnose and improve, as I have the sources.
+>>>
+>>> I've been testing with NVDA and I'd be curious about the impact on JAWS.
+>>> Rgui doesn't work with Narrator.
+>>>
+>>> Thanks,
+>>> Tomas
+>>>
+>>> On 9/22/22 23:15, Andrew Hart via R-devel wrote:
+>>>>  ????On 22/09/2022 16:42, Toby Hocking wrote:
+>>>>> Another option is to use https://apc01.safelinks.protection.outlook.com/?url=https%3A%2F%2Femacspeak.sourceforge.net%2F&data=05%7C01%7CA.J.Godfrey%40massey.ac.nz%7C57c5944c92d44191ddc108dae37c3ec1%7C388728e1bbd0437898dcf8682e644300%7C1%7C0%7C638072420031027810%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=26qSJenRyJmtcitO543qXzUrMv0APRhPUVroL5j2bWA%3D&reserved=0
+>>>>> <https://apc01.safelinks.protection.outlook.com/?url=https%3A%2F%2Femacspeak.sourceforge.net%2F&data=05%7C01%7CA.J.Godfrey%40massey.ac.nz%7C57c5944c92d44191ddc108dae37c3ec1%7C388728e1bbd0437898dcf8682e644300%7C1%7C0%7C638072420031027810%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=26qSJenRyJmtcitO543qXzUrMv0APRhPUVroL5j2bWA%3D&reserved=0> (version of emacs editor/ide
+>>>>> which can speak letters/words/lines -- has a blind maintainer) with
+>>>>> https://apc01.safelinks.protection.outlook.com/?url=https%3A%2F%2Fess.r-project.org%2F&data=05%7C01%7CA.J.Godfrey%40massey.ac.nz%7C57c5944c92d44191ddc108dae37c3ec1%7C388728e1bbd0437898dcf8682e644300%7C1%7C0%7C638072420031027810%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=zaSGfvpJrIKhSFU6fC%2FoBFFrRQJmp0bNui79UyHkmdE%3D&reserved=0 <https://apc01.safelinks.protection.outlook.com/?url=https%3A%2F%2Fess.r-project.org%2F&data=05%7C01%7CA.J.Godfrey%40massey.ac.nz%7C57c5944c92d44191ddc108dae37c3ec1%7C388728e1bbd0437898dcf8682e644300%7C1%7C0%7C638072420031027810%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=zaSGfvpJrIKhSFU6fC%2FoBFFrRQJmp0bNui79UyHkmdE%3D&reserved=0> (interface
+>>>>> for editing and running R code from within emacs)
+>>>> Thanks everyone for all the suggestions. Of course, the optimal
+>>>> solution would be to figure out what is going on in Rgui, but, as is
+>>>> always the case, the blind user use case is a fairly niche one. I
+>>>> appreciate all the suggestions for finding an immediate solution to
+>>>> my problem.
+>>>> I don't use any kind of IDE for working with R since I simply
+>>>> haven't found one that is accessible or that i understand how to
+>>>> use. There is a plug-in for the Eclipse IDE I installed a few years
+>>>> ago, but I didn't understand the first thing about how it was to be
+>>>> used. So I've just always worked with an editor open in one Window
+>>>> and R in another,
+>>>> working interactively in R or bouncing over to the editor for more
+>>>> complex things and sourcing code into R as necessary. However, I
+>>>> only use the R console in Rgui. I went and had a look at Rterm,
+>>>> which I have never used on Windows; I've only ever used it when
+>>>> ssh-ing into Linux systems to use R. However, I've just found out
+>>>> that Rterm does a number of fairly important things that probably
+>>>> mean I can just use it instead of Rgui:
+>>>> 1. You can paste from the clipboard into the Rterm prompt;
+>>>> 2. It has a command history;
+>>>> 3. If you plot something, it opens a Window to draw the plot (I
+>>>> never realised it could do this and had always assumed Rgui was
+>>>> needed for this); and
+>>>> 4. It opens the HTML help if you ask for help on windows. I only
+>>>> ever saw it display text help on Linux, but I was logged in
+>>>> remotely. Text-based help is fine when ssh-ing into a machine, but
+>>>> HTML help is much nicer to read and navigate.
+>>>>
+>>>> I think I'll just switch over to Rterm for a while, but I can also
+>>>> check out ess, which I wasn't aware of.
+>>>>
+>>>> Thanks a lot,
+>>>> Andrew.
+>>>>
+>>>> ______________________________________________
+>>>> R-devel at r-project.org mailing list
+>>>> https://apc01.safelinks.protection.outlook.com/?url=https%3A%2F%2Fstat.ethz.ch%2Fmailman%2Flistinfo%2Fr-devel&data=05%7C01%7CA.J.Godfrey%40massey.ac.nz%7C57c5944c92d44191ddc108dae37c3ec1%7C388728e1bbd0437898dcf8682e644300%7C1%7C0%7C638072420031027810%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=H2lu1uaB3BLrl5trR2KweKe4GvFNTCK0KGIYVEMsBS8%3D&reserved=0
+
+
