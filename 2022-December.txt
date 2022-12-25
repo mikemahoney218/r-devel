@@ -3167,3 +3167,538 @@ On 12/21/22 20:33, Jonathan Godfrey wrote:
 >>>> https://apc01.safelinks.protection.outlook.com/?url=https%3A%2F%2Fstat.ethz.ch%2Fmailman%2Flistinfo%2Fr-devel&data=05%7C01%7CA.J.Godfrey%40massey.ac.nz%7C57c5944c92d44191ddc108dae37c3ec1%7C388728e1bbd0437898dcf8682e644300%7C1%7C0%7C638072420031027810%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=H2lu1uaB3BLrl5trR2KweKe4GvFNTCK0KGIYVEMsBS8%3D&reserved=0
 
 
+From sergio@vig@@ii m@iii@g oii u@ibe@ch  Fri Dec 23 15:45:17 2022
+From: sergio@vig@@ii m@iii@g oii u@ibe@ch (sergio@vig@@ii m@iii@g oii u@ibe@ch)
+Date: Fri, 23 Dec 2022 14:45:17 +0000
+Subject: [Rd] RTools 4.2 - possible conflict with git bash
+Message-ID: <403295558c4742549a750e284346ac85@unibe.ch>
+
+Hi all,
+
+It seems that RTools 4.2 conflicts with git bash on Windows 10.
+When I use the git bash terminal in RStudio and I run `make --version`, I get the following error:
+
+$ C:/rtools42/usr/bin/make.exe --version
+      1 [main] make (5948) C:\rtools42\usr\bin\make.exe: *** fatal error - cygheap base mismatch detected - 0x210351408/0x180350408.
+This problem is probably due to using incompatible versions of the cygwin DLL.
+Search for cygwin1.dll using the Windows Start->Find/Search facility
+and delete all but the most recent version.  The most recent version *should*
+reside in x:\cygwin\bin, where 'x' is the drive on which you have
+installed the cygwin distribution.  Rebooting is also suggested if you
+are unable to find another cygwin DLL.
+
+However, if I use the **Build All** tool of RStudio, the command works properly.
+The problem seems an incompatible version of msys-2.0.dll, but I could not solve the problem. Any idea?
+
+Below the version of git:
+
+$ git --version
+git version 2.39.0.windows.2
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Fri Dec 23 16:17:04 2022
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Fri, 23 Dec 2022 16:17:04 +0100
+Subject: [Rd] RTools 4.2 - possible conflict with git bash
+In-Reply-To: <403295558c4742549a750e284346ac85@unibe.ch>
+References: <403295558c4742549a750e284346ac85@unibe.ch>
+Message-ID: <bbdf1e2f-bf3b-f028-ffb5-b1e76626ea1d@gmail.com>
+
+On 12/23/22 15:45, sergio.vignali at unibe.ch wrote:
+> Hi all,
+>
+> It seems that RTools 4.2 conflicts with git bash on Windows 10.
+
+You can't mix tools from two different distributions based on msys2 (or 
+cygwin). You cannot e.g. call "make" of one of them from a shell ran in 
+another one. This is due to how cygwin and dynamic loading on Windows 
+works. Both Rtools42 and git bash are based on msys2.
+
+You need to stick to one of the distributions. For instance, you can use 
+Rtools42 and install there any msys2 tools you want there, e.g. 
+including git.
+
+Or, you can have a standalone Msys2 installation and use only toolchain 
+tarballs from Rtools (requires some set up but is documented). This is 
+what I usually do as I want to upgrade Rtools often without messing with 
+my Msys2 installation and vice-versa. One of the Msys2 packages I have 
+installed there is git.
+
+Tomas
+
+> When I use the git bash terminal in RStudio and I run `make --version`, I get the following error:
+>
+> $ C:/rtools42/usr/bin/make.exe --version
+>        1 [main] make (5948) C:\rtools42\usr\bin\make.exe: *** fatal error - cygheap base mismatch detected - 0x210351408/0x180350408.
+> This problem is probably due to using incompatible versions of the cygwin DLL.
+> Search for cygwin1.dll using the Windows Start->Find/Search facility
+> and delete all but the most recent version.  The most recent version *should*
+> reside in x:\cygwin\bin, where 'x' is the drive on which you have
+> installed the cygwin distribution.  Rebooting is also suggested if you
+> are unable to find another cygwin DLL.
+>
+> However, if I use the **Build All** tool of RStudio, the command works properly.
+> The problem seems an incompatible version of msys-2.0.dll, but I could not solve the problem. Any idea?
+>
+> Below the version of git:
+>
+> $ git --version
+> git version 2.39.0.windows.2
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From co|||nber|ck@on @end|ng |rom gm@||@com  Fri Dec 23 18:30:06 2022
+From: co|||nber|ck@on @end|ng |rom gm@||@com (Collin Erickson)
+Date: Fri, 23 Dec 2022 11:30:06 -0600
+Subject: [Rd] Bug in optim for specific orders of magnitude
+Message-ID: <CAP6aD9d+A9h8FfAX1On29Oo2979HeiWSQMg=dxBSAu_zJNXTqQ@mail.gmail.com>
+
+Hello,
+
+I've come across what seems to be a bug in optim that has become a nuisance
+for me.
+
+To recreate the bug, run:
+
+optim(c(0,0), function(x) {x[1]*1e-317}, lower=c(-1,-1), upper=c(1,1),
+method='L-BFGS-B')
+
+The error message says:
+
+Error in optim(c(0, 0), function(x) { :
+  non-finite value supplied by optim
+
+What makes this particularly treacherous is that this error only occurs for
+specific powers. By running the following code you will find that the error
+only occurs when the power is between -309 and -320; above and below that
+work fine.
+
+p <- 1:1000
+giveserror <- rep(NA, length(p))
+for (i in seq_along(p)) {
+  tryout <- try({
+    optim(c(0,0), function(x) {x[1]*10^-p[i]}, lower=c(-1,-1),
+upper=c(1,1), method='L-BFGS-B')
+  })
+  giveserror[i] <- inherits(tryout, "try-error")
+}
+p[giveserror]
+
+Obviously my function is much more complex than this and usually doesn't
+fail, but this reprex demonstrates that this is a problem. To avoid the
+error I may multiply by a factor or take the log, but it seems like a
+legitimate bug that should be fixed.
+
+I tried to look inside of optim to track down the error, but the error lies
+within the external C code:
+
+.External2(C_optim, par, fn1, gr1, method, con, lower,
+        upper)
+
+For reference, I am running R 4.2.2, but was also able to recreate this bug
+on another device running R 4.1.2 and another running 4.0.3.
+
+Thanks,
+Collin Erickson
+
+	[[alternative HTML version deleted]]
+
+
+From ru|pb@rr@d@@ @end|ng |rom @@po@pt  Fri Dec 23 19:41:10 2022
+From: ru|pb@rr@d@@ @end|ng |rom @@po@pt (Rui Barradas)
+Date: Fri, 23 Dec 2022 18:41:10 +0000
+Subject: [Rd] Bug in optim for specific orders of magnitude
+In-Reply-To: <CAP6aD9d+A9h8FfAX1On29Oo2979HeiWSQMg=dxBSAu_zJNXTqQ@mail.gmail.com>
+References: <CAP6aD9d+A9h8FfAX1On29Oo2979HeiWSQMg=dxBSAu_zJNXTqQ@mail.gmail.com>
+Message-ID: <6722312a-0975-23db-ebce-2466971317bb@sapo.pt>
+
+?s 17:30 de 23/12/2022, Collin Erickson escreveu:
+> Hello,
+> 
+> I've come across what seems to be a bug in optim that has become a nuisance
+> for me.
+> 
+> To recreate the bug, run:
+> 
+> optim(c(0,0), function(x) {x[1]*1e-317}, lower=c(-1,-1), upper=c(1,1),
+> method='L-BFGS-B')
+> 
+> The error message says:
+> 
+> Error in optim(c(0, 0), function(x) { :
+>    non-finite value supplied by optim
+> 
+> What makes this particularly treacherous is that this error only occurs for
+> specific powers. By running the following code you will find that the error
+> only occurs when the power is between -309 and -320; above and below that
+> work fine.
+> 
+> p <- 1:1000
+> giveserror <- rep(NA, length(p))
+> for (i in seq_along(p)) {
+>    tryout <- try({
+>      optim(c(0,0), function(x) {x[1]*10^-p[i]}, lower=c(-1,-1),
+> upper=c(1,1), method='L-BFGS-B')
+>    })
+>    giveserror[i] <- inherits(tryout, "try-error")
+> }
+> p[giveserror]
+> 
+> Obviously my function is much more complex than this and usually doesn't
+> fail, but this reprex demonstrates that this is a problem. To avoid the
+> error I may multiply by a factor or take the log, but it seems like a
+> legitimate bug that should be fixed.
+> 
+> I tried to look inside of optim to track down the error, but the error lies
+> within the external C code:
+> 
+> .External2(C_optim, par, fn1, gr1, method, con, lower,
+>          upper)
+> 
+> For reference, I am running R 4.2.2, but was also able to recreate this bug
+> on another device running R 4.1.2 and another running 4.0.3.
+> 
+> Thanks,
+> Collin Erickson
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+Hello,
+
+See if this R-Help thread [1] earlier this year is relevant.
+In particular, the post by R Core team member Luke Tierney [2], that 
+answers much better than what I could.
+
+The very small numbers in your question seem to have hit a limit and 
+this limit is not R related.
+
+
+[1] https://stat.ethz.ch/pipermail/r-help/2022-February/473840.html
+[2] https://stat.ethz.ch/pipermail/r-help/2022-February/473844.html
+
+
+Hope this helps,
+
+Rui Barradas
+
+
+From @d|rk@e @end|ng |rom g@m@@com  Fri Dec 23 20:29:07 2022
+From: @d|rk@e @end|ng |rom g@m@@com (Steven Dirkse)
+Date: Fri, 23 Dec 2022 14:29:07 -0500
+Subject: [Rd] Bug in optim for specific orders of magnitude
+In-Reply-To: <CAP6aD9d+A9h8FfAX1On29Oo2979HeiWSQMg=dxBSAu_zJNXTqQ@mail.gmail.com>
+References: <CAP6aD9d+A9h8FfAX1On29Oo2979HeiWSQMg=dxBSAu_zJNXTqQ@mail.gmail.com>
+Message-ID: <CAHiA-Zkf2kRniCRo0g2S5o_JG4BksqcSQ_-c4j83_-3Fm2TC6g@mail.gmail.com>
+
+Collin,
+
+It is interesting that you get such strange results when passing denormal
+values to optim().  Several possibilities for this spring to mind.
+
+A better question though might be, "What kind of results are you expecting
+when you pass such small values to optim()?"  In general, you shouldn't
+have a strong expectation that you'll get good results back when you have
+small coefficients like 1e-317 (or 1e-17) in your objective function.  The
+algorithms behind optim() are not designed or implemented to do their best
+work with coefficients of magnitude far from 1.  You can hope.  You can get
+lucky.  But I would not advise you to have strong expectations.
+
+-Steve
+
+On Fri, Dec 23, 2022 at 1:20 PM Collin Erickson <collinberickson at gmail.com>
+wrote:
+
+> Hello,
+>
+> I've come across what seems to be a bug in optim that has become a nuisance
+> for me.
+>
+> To recreate the bug, run:
+>
+> optim(c(0,0), function(x) {x[1]*1e-317}, lower=c(-1,-1), upper=c(1,1),
+> method='L-BFGS-B')
+>
+> The error message says:
+>
+> Error in optim(c(0, 0), function(x) { :
+>   non-finite value supplied by optim
+>
+> What makes this particularly treacherous is that this error only occurs for
+> specific powers. By running the following code you will find that the error
+> only occurs when the power is between -309 and -320; above and below that
+> work fine.
+>
+> p <- 1:1000
+> giveserror <- rep(NA, length(p))
+> for (i in seq_along(p)) {
+>   tryout <- try({
+>     optim(c(0,0), function(x) {x[1]*10^-p[i]}, lower=c(-1,-1),
+> upper=c(1,1), method='L-BFGS-B')
+>   })
+>   giveserror[i] <- inherits(tryout, "try-error")
+> }
+> p[giveserror]
+>
+> Obviously my function is much more complex than this and usually doesn't
+> fail, but this reprex demonstrates that this is a problem. To avoid the
+> error I may multiply by a factor or take the log, but it seems like a
+> legitimate bug that should be fixed.
+>
+> I tried to look inside of optim to track down the error, but the error lies
+> within the external C code:
+>
+> .External2(C_optim, par, fn1, gr1, method, con, lower,
+>         upper)
+>
+> For reference, I am running R 4.2.2, but was also able to recreate this bug
+> on another device running R 4.1.2 and another running 4.0.3.
+>
+> Thanks,
+> Collin Erickson
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+-- 
+Steven Dirkse, Ph.D.
+GAMS Development Corp.
+office: 202.342.0180
+
+	[[alternative HTML version deleted]]
+
+
+From pro|jcn@@h @end|ng |rom gm@||@com  Fri Dec 23 20:36:29 2022
+From: pro|jcn@@h @end|ng |rom gm@||@com (J C Nash)
+Date: Fri, 23 Dec 2022 14:36:29 -0500
+Subject: [Rd] Bug in optim for specific orders of magnitude
+In-Reply-To: <6722312a-0975-23db-ebce-2466971317bb@sapo.pt>
+References: <CAP6aD9d+A9h8FfAX1On29Oo2979HeiWSQMg=dxBSAu_zJNXTqQ@mail.gmail.com>
+ <6722312a-0975-23db-ebce-2466971317bb@sapo.pt>
+Message-ID: <3475cfd9-06a2-39c1-bb8d-ab69932c4306@gmail.com>
+
+Extreme scaling quite often ruins optimization calculations. If you think available methods
+are capable of doing this, there's a bridge I can sell you in NYC.
+
+I've been trying for some years to develop a good check on scaling so I can tell users
+who provide functions like this to send (lots of) money and I'll give them the best answer
+there is (generally no answer at all). Or, more seriously, to inform them that they should
+not expect results unless they scale. Richard Varga once said some decades ago that any
+problem was trivially solvable in the right scale, and he was mostly right. Scaling is
+important.
+
+To see the range of answers from a number of methods, the script below is helpful. I had
+to remove lbfgsb3c from the mix as it stopped mid-calculation in unrecoverable way. Note
+that I use my development version of optimx, so some methods might not be included in
+CRAN offering. Just remove the methods from the ameth and bmeth lists if necessary.
+
+Cheers, John Nash
+
+# CErickson221223.R
+# optim(c(0,0), function(x) {x[1]*1e-317}, lower=c(-1,-1), upper=c(1,1),
+#      method='L-BFGS-B')
+
+tfun <- function(x, xpnt=317){
+       if ((length(x)) != 2) {stop("Must have length 2")}
+       scl <- 10^(-xpnt)
+       val <- x[1]*scl # note that x[2] unused. May be an issue!
+       val
+}
+gtfun <- function(x, xpnt=317){ # gradient
+   scl <- 10^(-xpnt)
+   gg <- c(scl, 0.0)
+   gg
+}
+
+
+xx <- c(0,0)
+lo <- c(-1,-1)
+up <- c(1,1)
+print(tfun(xx))
+library(optimx)
+ameth <- c("BFGS", "CG", "Nelder-Mead", "L-BFGS-B", "nlm", "nlminb",
+              "Rcgmin", "Rtnmin", "Rvmmin", "spg", "ucminf", "newuoa", "bobyqa",
+              "nmkb", "hjkb",  "hjn", "lbfgs", "subplex", "ncg", "nvm", "mla",
+              "slsqp", "anms")
+
+bmeth <- c("L-BFGS-B", "nlminb", "Rcgmin", "Rtnmin", "nvm",
+             "bobyqa", "nmkb", "hjkb", "hjn", "ncg", "slsqp")
+
+tstu <- opm(x<-c(0,0), fn=tfun, gr=gtfun, method=ameth, control=list(trace=0))
+summary(tstu, order=value)
+
+tstb <- opm(x<-c(0,0), fn=tfun, gr=gtfun, method=bmeth, lower=lo, upper=up,
+             control=list(trace=0))
+summary(tstb, order=value)
+
+
+On 2022-12-23 13:41, Rui Barradas wrote:
+> ?s 17:30 de 23/12/2022, Collin Erickson escreveu:
+>> Hello,
+>>
+>> I've come across what seems to be a bug in optim that has become a nuisance
+>> for me.
+>>
+>> To recreate the bug, run:
+>>
+>> optim(c(0,0), function(x) {x[1]*1e-317}, lower=c(-1,-1), upper=c(1,1),
+>> method='L-BFGS-B')
+>>
+>> The error message says:
+>>
+>> Error in optim(c(0, 0), function(x) { :
+>> ?? non-finite value supplied by optim
+>>
+>> What makes this particularly treacherous is that this error only occurs for
+>> specific powers. By running the following code you will find that the error
+>> only occurs when the power is between -309 and -320; above and below that
+>> work fine.
+>>
+>> p <- 1:1000
+>> giveserror <- rep(NA, length(p))
+>> for (i in seq_along(p)) {
+>> ?? tryout <- try({
+>> ???? optim(c(0,0), function(x) {x[1]*10^-p[i]}, lower=c(-1,-1),
+>> upper=c(1,1), method='L-BFGS-B')
+>> ?? })
+>> ?? giveserror[i] <- inherits(tryout, "try-error")
+>> }
+>> p[giveserror]
+>>
+>> Obviously my function is much more complex than this and usually doesn't
+>> fail, but this reprex demonstrates that this is a problem. To avoid the
+>> error I may multiply by a factor or take the log, but it seems like a
+>> legitimate bug that should be fixed.
+>>
+>> I tried to look inside of optim to track down the error, but the error lies
+>> within the external C code:
+>>
+>> .External2(C_optim, par, fn1, gr1, method, con, lower,
+>> ???????? upper)
+>>
+>> For reference, I am running R 4.2.2, but was also able to recreate this bug
+>> on another device running R 4.1.2 and another running 4.0.3.
+>>
+>> Thanks,
+>> Collin Erickson
+>>
+>> ????[[alternative HTML version deleted]]
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> Hello,
+> 
+> See if this R-Help thread [1] earlier this year is relevant.
+> In particular, the post by R Core team member Luke Tierney [2], that answers much better than what I could.
+> 
+> The very small numbers in your question seem to have hit a limit and this limit is not R related.
+> 
+> 
+> [1] https://stat.ethz.ch/pipermail/r-help/2022-February/473840.html
+> [2] https://stat.ethz.ch/pipermail/r-help/2022-February/473844.html
+> 
+> 
+> Hope this helps,
+> 
+> Rui Barradas
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Fri Dec 23 20:52:52 2022
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Fri, 23 Dec 2022 14:52:52 -0500
+Subject: [Rd] Bug in optim for specific orders of magnitude
+In-Reply-To: <CAP6aD9d+A9h8FfAX1On29Oo2979HeiWSQMg=dxBSAu_zJNXTqQ@mail.gmail.com>
+References: <CAP6aD9d+A9h8FfAX1On29Oo2979HeiWSQMg=dxBSAu_zJNXTqQ@mail.gmail.com>
+Message-ID: <52130044-5386-3c13-6953-28da6709c358@gmail.com>
+
+The optim help page mentions scaling in the discussion of the "control" 
+argument.  Specifically under the parscale description:
+
+"Optimization is performed on par/parscale and these should be 
+comparable in the sense that a unit change in any element produces about 
+a unit change in the scaled value."
+
+In your function a unit change in x[1] makes a change of 1e-317 in the 
+function value, and changing x[2] has no effect at all.
+
+It would be nice if violating the rule only led to inefficiencies or 
+poor stopping decisions, but the numbers you are working with are close 
+to the hardware limits (the smallest positive number with full precision 
+is .Machine$double.xmin, about 2e-308), and sometimes that means 
+assumptions in the code about how arithmetic works are violated, e.g. 
+things like x*1.1 > x may not be true for positive x below 
+.Machine$double.xmin .
+
+Duncan Murdoch
+
+On 23/12/2022 12:30 p.m., Collin Erickson wrote:
+> Hello,
+> 
+> I've come across what seems to be a bug in optim that has become a nuisance
+> for me.
+> 
+> To recreate the bug, run:
+> 
+> optim(c(0,0), function(x) {x[1]*1e-317}, lower=c(-1,-1), upper=c(1,1),
+> method='L-BFGS-B')
+> 
+> The error message says:
+> 
+> Error in optim(c(0, 0), function(x) { :
+>    non-finite value supplied by optim
+> 
+> What makes this particularly treacherous is that this error only occurs for
+> specific powers. By running the following code you will find that the error
+> only occurs when the power is between -309 and -320; above and below that
+> work fine.
+> 
+> p <- 1:1000
+> giveserror <- rep(NA, length(p))
+> for (i in seq_along(p)) {
+>    tryout <- try({
+>      optim(c(0,0), function(x) {x[1]*10^-p[i]}, lower=c(-1,-1),
+> upper=c(1,1), method='L-BFGS-B')
+>    })
+>    giveserror[i] <- inherits(tryout, "try-error")
+> }
+> p[giveserror]
+> 
+> Obviously my function is much more complex than this and usually doesn't
+> fail, but this reprex demonstrates that this is a problem. To avoid the
+> error I may multiply by a factor or take the log, but it seems like a
+> legitimate bug that should be fixed.
+> 
+> I tried to look inside of optim to track down the error, but the error lies
+> within the external C code:
+> 
+> .External2(C_optim, par, fn1, gr1, method, con, lower,
+>          upper)
+> 
+> For reference, I am running R 4.2.2, but was also able to recreate this bug
+> on another device running R 4.1.2 and another running 4.0.3.
+> 
+> Thanks,
+> Collin Erickson
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
