@@ -3702,3 +3702,408 @@ On 23/12/2022 12:30 p.m., Collin Erickson wrote:
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From co|||nber|ck@on @end|ng |rom gm@||@com  Fri Dec 23 23:09:09 2022
+From: co|||nber|ck@on @end|ng |rom gm@||@com (Collin Erickson)
+Date: Fri, 23 Dec 2022 16:09:09 -0600
+Subject: [Rd] Bug in optim for specific orders of magnitude
+In-Reply-To: <52130044-5386-3c13-6953-28da6709c358@gmail.com>
+References: <CAP6aD9d+A9h8FfAX1On29Oo2979HeiWSQMg=dxBSAu_zJNXTqQ@mail.gmail.com>
+ <52130044-5386-3c13-6953-28da6709c358@gmail.com>
+Message-ID: <CAP6aD9drCFjRVkEcYGu6MhU7RU+h+r9H_oeZ34SR_UdXbPC51Q@mail.gmail.com>
+
+Thanks for all of your replies.
+
+I would like to clarify that I am not expecting optim to return a good
+result in these cases, as I am aware of the difficulties that come with the
+numerical precision for such small numbers. I would be happy for optim to
+take zero steps and return the initial value after it sees the gradient as
+close enough to 0. What I think is a bug is for optim to return an error
+for a specific range of numbers between 1e-309 and 1e-320 while not giving
+an error for values on either side. I think the behavior should be the same
+as for smaller numbers where it simply returns the starting point after
+estimating the gradient to be 0.
+
+To give an idea of where I was seeing the error, consider a function that
+is mostly near 0, but has some areas of interest, for example:
+f <- function(x) {-exp(-sum(x^2))}
+
+As long as the starting point is near the peak, optim works fine, but if
+you give it a bad starting point it will see the function as flat and
+return the starting point.
+
+Again, it is fine that it is not able to find the optimum in the scenario
+of starting far from the peak, but I believe that it should NOT return an
+error when the initial value falls within a specific range. The bug is that
+it returns an error, not that it fails to optimize.
+
+Thanks,
+Collin
+
+On Fri, Dec 23, 2022 at 1:52 PM Duncan Murdoch <murdoch.duncan at gmail.com>
+wrote:
+
+> The optim help page mentions scaling in the discussion of the "control"
+> argument.  Specifically under the parscale description:
+>
+> "Optimization is performed on par/parscale and these should be
+> comparable in the sense that a unit change in any element produces about
+> a unit change in the scaled value."
+>
+> In your function a unit change in x[1] makes a change of 1e-317 in the
+> function value, and changing x[2] has no effect at all.
+>
+> It would be nice if violating the rule only led to inefficiencies or
+> poor stopping decisions, but the numbers you are working with are close
+> to the hardware limits (the smallest positive number with full precision
+> is .Machine$double.xmin, about 2e-308), and sometimes that means
+> assumptions in the code about how arithmetic works are violated, e.g.
+> things like x*1.1 > x may not be true for positive x below
+> .Machine$double.xmin .
+>
+> Duncan Murdoch
+>
+> On 23/12/2022 12:30 p.m., Collin Erickson wrote:
+> > Hello,
+> >
+> > I've come across what seems to be a bug in optim that has become a
+> nuisance
+> > for me.
+> >
+> > To recreate the bug, run:
+> >
+> > optim(c(0,0), function(x) {x[1]*1e-317}, lower=c(-1,-1), upper=c(1,1),
+> > method='L-BFGS-B')
+> >
+> > The error message says:
+> >
+> > Error in optim(c(0, 0), function(x) { :
+> >    non-finite value supplied by optim
+> >
+> > What makes this particularly treacherous is that this error only occurs
+> for
+> > specific powers. By running the following code you will find that the
+> error
+> > only occurs when the power is between -309 and -320; above and below that
+> > work fine.
+> >
+> > p <- 1:1000
+> > giveserror <- rep(NA, length(p))
+> > for (i in seq_along(p)) {
+> >    tryout <- try({
+> >      optim(c(0,0), function(x) {x[1]*10^-p[i]}, lower=c(-1,-1),
+> > upper=c(1,1), method='L-BFGS-B')
+> >    })
+> >    giveserror[i] <- inherits(tryout, "try-error")
+> > }
+> > p[giveserror]
+> >
+> > Obviously my function is much more complex than this and usually doesn't
+> > fail, but this reprex demonstrates that this is a problem. To avoid the
+> > error I may multiply by a factor or take the log, but it seems like a
+> > legitimate bug that should be fixed.
+> >
+> > I tried to look inside of optim to track down the error, but the error
+> lies
+> > within the external C code:
+> >
+> > .External2(C_optim, par, fn1, gr1, method, con, lower,
+> >          upper)
+> >
+> > For reference, I am running R 4.2.2, but was also able to recreate this
+> bug
+> > on another device running R 4.1.2 and another running 4.0.3.
+> >
+> > Thanks,
+> > Collin Erickson
+> >
+> >       [[alternative HTML version deleted]]
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+>
+
+	[[alternative HTML version deleted]]
+
+
+From yugong @end|ng |rom out|ook@com  Mon Dec 26 03:46:38 2022
+From: yugong @end|ng |rom out|ook@com (gong yu)
+Date: Mon, 26 Dec 2022 02:46:38 +0000
+Subject: [Rd] Sys.timezone() return wrong result on windows 10
+Message-ID: <TYAP286MB02684C8D2C8EDBB6F823CEFBD1EC9@TYAP286MB0268.JPNP286.PROD.OUTLOOK.COM>
+
+Dear R core team:
+Sys.timezone()  return wrong result on windows 10 (simple chinese version), it return  Asia/Taipei ,but The time zone  is  " China Standard Time (UTC+08:00) Beijing, Chongqing, Hong Kong, Urumqi" .
+
+after some digging , the code related this issue at r\src\extra\tzone\registryTZ.c line 54.
+ { L"China Standard Time", "Asia/Taipei" }
+it should be
+ { L"China Standard Time", "Asia/Shanghai" }
+
+this can be verified use windows command  " tzutil /l" , which report :
+(UTC+08:00) Beijing, Chongqing, Hong Kong, Urumqi
+China Standard Time
+
+(UTC+08:00) Taipei
+Taipei Standard Time
+
+there also more information about timezone  on windows 10 (https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/default-time-zones?view=windows-10)
+
+could we chang r\src\extra\tzone\registryTZ.c line 54 to { L"China Standard Time", "Asia/Shanghai" } ?
+
+your sincerely
+
+Yu Gong
+
+
+	[[alternative HTML version deleted]]
+
+
+From ggrothend|eck @end|ng |rom gm@||@com  Mon Dec 26 13:49:45 2022
+From: ggrothend|eck @end|ng |rom gm@||@com (Gabor Grothendieck)
+Date: Mon, 26 Dec 2022 07:49:45 -0500
+Subject: [Rd] anova and intercept
+Message-ID: <CAP01uRkgyfuJVR2c2rsGXn5cxXizGVzj+f0n+kLSnsPyP2jGSw@mail.gmail.com>
+
+Suppose we want to perform a paired test using the sleep data frame
+with anova in R.  Then this works and gives the same p value as
+t.test(extra ~ group, sleep, paired = TRUE, var.equal = TRUE)
+
+   ones <- rep(1, 10)
+   anova(lm(diff(extra, 10) ~ ones + 0, sleep)
+
+This gives output but does not give an F test at all.
+
+   ones <- rep(1, 10)
+   anova(lm(diff(extra, 10) ~ 1, sleep)
+
+Maybe there should be some way to force an F test to be produced for
+the intercept in anova for consistency with t.test so that the second
+code can be used.
+
+
+-- 
+Statistics & Software Consulting
+GKX Group, GKX Associates Inc.
+tel: 1-877-GKX-GROUP
+email: ggrothendieck at gmail.com
+
+
+From brod|e@g@@|@m @end|ng |rom y@hoo@com  Mon Dec 26 15:19:34 2022
+From: brod|e@g@@|@m @end|ng |rom y@hoo@com (Brodie Gaslam)
+Date: Mon, 26 Dec 2022 14:19:34 +0000 (UTC)
+Subject: [Rd] Bug in optim for specific orders of magnitude
+In-Reply-To: <CAP6aD9drCFjRVkEcYGu6MhU7RU+h+r9H_oeZ34SR_UdXbPC51Q@mail.gmail.com>
+References: <CAP6aD9d+A9h8FfAX1On29Oo2979HeiWSQMg=dxBSAu_zJNXTqQ@mail.gmail.com>
+ <52130044-5386-3c13-6953-28da6709c358@gmail.com>
+ <CAP6aD9drCFjRVkEcYGu6MhU7RU+h+r9H_oeZ34SR_UdXbPC51Q@mail.gmail.com>
+Message-ID: <1194615585.3969501.1672064374067@mail.yahoo.com>
+
+FWIW, I suspect the problem might have something to do with:
+
+> 1/1e-308
+[1] 1e+308
+> 1/1e-309
+[1] Inf
+> 1e-309 > 0
+[1] TRUE
+> 1e-324 > 0
+[1] FALSE
+
+That is 1e-309 starts being treated as zero by division, but not by comparison (which happens at 1e-324).? This is not quite the range of values you were seeing the anomaly, but close.
+
+This is on a 6th gen Skylake on MacOS.? 
+
+Best,
+
+B.
+
+
+
+
+
+
+On Monday, December 26, 2022 at 06:57:03 AM EST, Collin Erickson <collinberickson at gmail.com> wrote: 
+
+
+
+
+
+Thanks for all of your replies.
+
+I would like to clarify that I am not expecting optim to return a good
+result in these cases, as I am aware of the difficulties that come with the
+numerical precision for such small numbers. I would be happy for optim to
+take zero steps and return the initial value after it sees the gradient as
+close enough to 0. What I think is a bug is for optim to return an error
+for a specific range of numbers between 1e-309 and 1e-320 while not giving
+an error for values on either side. I think the behavior should be the same
+as for smaller numbers where it simply returns the starting point after
+estimating the gradient to be 0.
+
+To give an idea of where I was seeing the error, consider a function that
+is mostly near 0, but has some areas of interest, for example:
+f <- function(x) {-exp(-sum(x^2))}
+
+As long as the starting point is near the peak, optim works fine, but if
+you give it a bad starting point it will see the function as flat and
+return the starting point.
+
+Again, it is fine that it is not able to find the optimum in the scenario
+of starting far from the peak, but I believe that it should NOT return an
+error when the initial value falls within a specific range. The bug is that
+it returns an error, not that it fails to optimize.
+
+Thanks,
+Collin
+
+On Fri, Dec 23, 2022 at 1:52 PM Duncan Murdoch <murdoch.duncan at gmail.com>
+wrote:
+
+> The optim help page mentions scaling in the discussion of the "control"
+> argument.? Specifically under the parscale description:
+>
+> "Optimization is performed on par/parscale and these should be
+> comparable in the sense that a unit change in any element produces about
+> a unit change in the scaled value."
+>
+> In your function a unit change in x[1] makes a change of 1e-317 in the
+> function value, and changing x[2] has no effect at all.
+>
+> It would be nice if violating the rule only led to inefficiencies or
+> poor stopping decisions, but the numbers you are working with are close
+> to the hardware limits (the smallest positive number with full precision
+> is .Machine$double.xmin, about 2e-308), and sometimes that means
+> assumptions in the code about how arithmetic works are violated, e.g.
+> things like x*1.1 > x may not be true for positive x below
+> .Machine$double.xmin .
+>
+> Duncan Murdoch
+>
+> On 23/12/2022 12:30 p.m., Collin Erickson wrote:
+> > Hello,
+> >
+> > I've come across what seems to be a bug in optim that has become a
+> nuisance
+> > for me.
+> >
+> > To recreate the bug, run:
+> >
+> > optim(c(0,0), function(x) {x[1]*1e-317}, lower=c(-1,-1), upper=c(1,1),
+> > method='L-BFGS-B')
+> >
+> > The error message says:
+> >
+> > Error in optim(c(0, 0), function(x) { :
+> >? ? non-finite value supplied by optim
+> >
+> > What makes this particularly treacherous is that this error only occurs
+> for
+> > specific powers. By running the following code you will find that the
+> error
+> > only occurs when the power is between -309 and -320; above and below that
+> > work fine.
+> >
+> > p <- 1:1000
+> > giveserror <- rep(NA, length(p))
+> > for (i in seq_along(p)) {
+> >? ? tryout <- try({
+> >? ? ? optim(c(0,0), function(x) {x[1]*10^-p[i]}, lower=c(-1,-1),
+> > upper=c(1,1), method='L-BFGS-B')
+> >? ? })
+> >? ? giveserror[i] <- inherits(tryout, "try-error")
+> > }
+> > p[giveserror]
+> >
+> > Obviously my function is much more complex than this and usually doesn't
+> > fail, but this reprex demonstrates that this is a problem. To avoid the
+> > error I may multiply by a factor or take the log, but it seems like a
+> > legitimate bug that should be fixed.
+> >
+> > I tried to look inside of optim to track down the error, but the error
+> lies
+> > within the external C code:
+> >
+> > .External2(C_optim, par, fn1, gr1, method, con, lower,
+> >? ? ? ? ? upper)
+> >
+> > For reference, I am running R 4.2.2, but was also able to recreate this
+> bug
+> > on another device running R 4.1.2 and another running 4.0.3.
+> >
+> > Thanks,
+> > Collin Erickson
+> >
+> >? ? ? [[alternative HTML version deleted]]
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+>
+>
+
+??? [[alternative HTML version deleted]]
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From pd@|gd @end|ng |rom gm@||@com  Mon Dec 26 18:59:35 2022
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Mon, 26 Dec 2022 18:59:35 +0100
+Subject: [Rd] anova and intercept
+In-Reply-To: <CAP01uRkgyfuJVR2c2rsGXn5cxXizGVzj+f0n+kLSnsPyP2jGSw@mail.gmail.com>
+References: <CAP01uRkgyfuJVR2c2rsGXn5cxXizGVzj+f0n+kLSnsPyP2jGSw@mail.gmail.com>
+Message-ID: <0136AFB4-B361-4520-A09B-434F4034F110@gmail.com>
+
+My usual advice on getting nonstandard F tests out of anova() is to fit the models explicitly and compare. 
+
+So how about this?
+
+fit1 <- lm(diff(extra,10) ~ 1, sleep)
+fit0 <- update(fit1, ~ -1)
+anova(fit0, fit1)
+
+-pd
+
+> On 26 Dec 2022, at 13:49 , Gabor Grothendieck <ggrothendieck at gmail.com> wrote:
+> 
+> Suppose we want to perform a paired test using the sleep data frame
+> with anova in R.  Then this works and gives the same p value as
+> t.test(extra ~ group, sleep, paired = TRUE, var.equal = TRUE)
+> 
+>   ones <- rep(1, 10)
+>   anova(lm(diff(extra, 10) ~ ones + 0, sleep)
+> 
+> This gives output but does not give an F test at all.
+> 
+>   ones <- rep(1, 10)
+>   anova(lm(diff(extra, 10) ~ 1, sleep)
+> 
+> Maybe there should be some way to force an F test to be produced for
+> the intercept in anova for consistency with t.test so that the second
+> code can be used.
+> 
+> 
+> -- 
+> Statistics & Software Consulting
+> GKX Group, GKX Associates Inc.
+> tel: 1-877-GKX-GROUP
+> email: ggrothendieck at gmail.com
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
