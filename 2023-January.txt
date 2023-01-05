@@ -1,0 +1,136 @@
+From Andre@G||||bert @end|ng |rom chu-rouen@|r  Tue Jan  3 12:56:37 2023
+From: Andre@G||||bert @end|ng |rom chu-rouen@|r (GILLIBERT, Andre)
+Date: Tue, 3 Jan 2023 11:56:37 +0000
+Subject: [Rd] Bug in optim for specific orders of magnitude
+In-Reply-To: <3475cfd9-06a2-39c1-bb8d-ab69932c4306@gmail.com>
+References: <CAP6aD9d+A9h8FfAX1On29Oo2979HeiWSQMg=dxBSAu_zJNXTqQ@mail.gmail.com>
+ <6722312a-0975-23db-ebce-2466971317bb@sapo.pt>
+ <3475cfd9-06a2-39c1-bb8d-ab69932c4306@gmail.com>
+Message-ID: <1b44379526744a5aa448c23132a7bf9d@chu-rouen.fr>
+
+
+J C Nash wrote:
+> Extreme scaling quite often ruins optimization calculations. If you think available methods are capable of doing this, there's a bridge I can sell you in NYC.
+
+Given that optim()seems to have problem with denormals but work correctly with values greater than 1e-308, I think that it can hardly be considered a real bug.
+
+There is no miracle solution, but there are a few tricks to work with extreme values.
+What I call "flogs" are alternative representation of a number x as log(abs(x)) and sign(x). It supports very large and very small numbers, but the precision of flogs is very poor for very large numbers. Functions for addition, substraction, multiplication, etc, can easily be written.
+
+For values that are between 0 and 1 and can be extremely close to 0 or extremely close to 1, a cloglog transformations can be used.
+
+Another trick is to detect "hot points". Values that can be extremely close to hot points should be expressed as differences to the hot point, and the algorithm should be re-written to work with that, which is not always easy to do. For instance, the function log1p can be seen as a modification of the log function when the hot point is 1. 
+
+In my experience, the algorithm should be rewritten before having to deal with denormals, because denormals expand the range of floating point values by a quite small amount.
+
+-- 
+Sincerely
+Andr? GILLIBERT
+
+From wo||g@ng@v|echtb@uer @end|ng |rom m@@@tr|chtun|ver@|ty@n|  Tue Jan  3 21:25:18 2023
+From: wo||g@ng@v|echtb@uer @end|ng |rom m@@@tr|chtun|ver@|ty@n| (Viechtbauer, Wolfgang (NP))
+Date: Tue, 3 Jan 2023 20:25:18 +0000
+Subject: [Rd] R 4.2.2 on Haiku
+Message-ID: <8e91fa86638d4ee98d6a3b0477b020bf@UM-MAIL3213.unimaas.nl>
+
+Hi all,
+
+Not sure if this is of interest to anybody, but with the help of some kind folks over at the #haiku channel on IRC, I finally got the current version of R to compile under the Haiku operating system (https://www.haiku-os.org):
+
+https://scholar.social/@wviechtb/109627078225954444
+
+Kate (https://kate-editor.org) makes for a workable IDE allowing for REPL-like interactivity. X11 support is lacking, so graphs are directly created as pdfs, but this is workable.
+
+In case you want to give this a try, it's pretty much this:
+
+pkgman install gcc_fortran bzip2_devel lrzip_devel xz_utils_devel libpcre2_devel libiconv_devel curl_devel readline_devel tiff4_devel libtool ncurses6_devel libpaper_devel lapack_devel tcl_devel xcairo_devel pangomm_devel
+
+wget https://cran.r-project.org/src/base/R-4/R-4.2.2.tar.gz
+
+tar -xzf R-4.2.2.tar.gz
+cd R-4.2.2
+
+export CPPFLAGS="-D_BSD_SOURCE"
+export LIBS="-lnetwork -lbsd"
+
+./configure --with-x=no --disable-java --enable-R-shlib --prefix=/boot/home/<wherever>
+make
+make install
+
+Best,
+Wolfgang
+
+-- 
+Wolfgang Viechtbauer, PhD, Statistician | Department of Psychiatry and    
+Neuropsychology | Maastricht University | PO Box 616 (VIJV1) | 6200 MD    
+Maastricht, The Netherlands | +31(43)3884170 | https://www.wvbauer.com    
+
+
+From yugong @end|ng |rom out|ook@com  Wed Jan  4 00:33:18 2023
+From: yugong @end|ng |rom out|ook@com (gong yu)
+Date: Tue, 3 Jan 2023 23:33:18 +0000
+Subject: [Rd] =?utf-8?b?5Zue5aSNOiBSIDQuMi4yIG9uIEhhaWt1?=
+In-Reply-To: <8e91fa86638d4ee98d6a3b0477b020bf@UM-MAIL3213.unimaas.nl>
+References: <8e91fa86638d4ee98d6a3b0477b020bf@UM-MAIL3213.unimaas.nl>
+Message-ID: <TYAP286MB02688574948197B20FA609FDD1F49@TYAP286MB0268.JPNP286.PROD.OUTLOOK.COM>
+
+thank you very much,  use R on haiku-os several times before. the OS is fast and eye-candy, just release beta 4 before new year.
+when use R on haiku-os, some package will compiled failed(cairo for example) ,but most package work seamlessly.
+
+btw, about R on haiku-os , Maybe you could create a git push on haikuports?
+haikuports/dev-lang/r at master ? haikuports/haikuports (github.com)<https://github.com/haikuports/haikuports/tree/master/dev-lang/r>
+?
+[https://opengraph.githubassets.com/99315a64241d0f1906ef7bc8d4dab63cc45fb5bb90c51b40d0537e663fca4096/haikuports/haikuports]<https://github.com/haikuports/haikuports/tree/master/dev-lang/r>
+haikuports/dev-lang/r at master ? haikuports/haikuports<https://github.com/haikuports/haikuports/tree/master/dev-lang/r>
+Software ports for the Haiku operating system. Contribute to haikuports/haikuports development by creating an account on GitHub.
+github.com
+
+
+
+Yu Gong
+
+________________________________
+???: R-devel <r-devel-bounces at r-project.org> ?? Viechtbauer, Wolfgang (NP) <wolfgang.viechtbauer at maastrichtuniversity.nl>
+????: 2023?1?4? 4:25
+???: R Devel List <r-devel at r-project.org>
+??: [Rd] R 4.2.2 on Haiku
+
+Hi all,
+
+Not sure if this is of interest to anybody, but with the help of some kind folks over at the #haiku channel on IRC, I finally got the current version of R to compile under the Haiku operating system (https://www.haiku-os.org):
+
+https://scholar.social/@wviechtb/109627078225954444
+
+Kate (https://kate-editor.org) makes for a workable IDE allowing for REPL-like interactivity. X11 support is lacking, so graphs are directly created as pdfs, but this is workable.
+
+In case you want to give this a try, it's pretty much this:
+
+pkgman install gcc_fortran bzip2_devel lrzip_devel xz_utils_devel libpcre2_devel libiconv_devel curl_devel readline_devel tiff4_devel libtool ncurses6_devel libpaper_devel lapack_devel tcl_devel xcairo_devel pangomm_devel
+
+wget https://cran.r-project.org/src/base/R-4/R-4.2.2.tar.gz
+
+tar -xzf R-4.2.2.tar.gz
+cd R-4.2.2
+
+export CPPFLAGS="-D_BSD_SOURCE"
+export LIBS="-lnetwork -lbsd"
+
+./configure --with-x=no --disable-java --enable-R-shlib --prefix=/boot/home/<wherever>
+make
+make install
+
+Best,
+Wolfgang
+
+--
+Wolfgang Viechtbauer, PhD, Statistician | Department of Psychiatry and
+Neuropsychology | Maastricht University | PO Box 616 (VIJV1) | 6200 MD
+Maastricht, The Netherlands | +31(43)3884170 | https://www.wvbauer.com
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+	[[alternative HTML version deleted]]
+
+
