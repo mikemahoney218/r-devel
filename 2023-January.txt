@@ -192,3 +192,649 @@ Is this intentional?
 Duncan Murdoch
 
 
+From deep@y@n@@@rk@r @end|ng |rom gm@||@com  Fri Jan  6 04:10:42 2023
+From: deep@y@n@@@rk@r @end|ng |rom gm@||@com (Deepayan Sarkar)
+Date: Fri, 6 Jan 2023 08:40:42 +0530
+Subject: [Rd] Not documenting a function and not getting a check error?
+In-Reply-To: <ba02397f-c3f1-bb53-18c8-31aa91f498c2@gmail.com>
+References: <ba02397f-c3f1-bb53-18c8-31aa91f498c2@gmail.com>
+Message-ID: <CADfFDC5KKOt1GJh8SEZXkQJkDF4O7AVze3TLhE4k7ymGfabdJg@mail.gmail.com>
+
+On Fri, Jan 6, 2023 at 1:49 AM Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+>
+> I'm in the process of a fairly large overhaul of the exports from the
+> rgl package, with an aim of simplifying maintenance of the package.
+> During this work, I came across the reverse dependency geomorph that
+> calls the rgl.primitive function.
+>
+> I had forgotten that rgl.primitive was still exported:  I've been
+> thinking of it as an internal function for a few years now.  I was
+> surprised geomorph was able to call it.
+>
+> Particularly surprising to me was the fact that it is not properly
+> documented.  One of the help topics lists it as an alias, but it
+> contains no usage info, and is not mentioned in the .Rd file other than
+> the alias.  And yet "R CMD check rgl" has never complained about it.
+>
+> Is this intentional?
+
+Does the Rd file that documents it have \keyword{internal}? These are
+not checked fully (as I realized recently while working on the help
+system), and I guess that's intentional.
+
+Best,
+-Deepayan
+
+>
+> Duncan Murdoch
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From yugong @end|ng |rom out|ook@com  Fri Jan  6 05:24:43 2023
+From: yugong @end|ng |rom out|ook@com (gong yu)
+Date: Fri, 6 Jan 2023 04:24:43 +0000
+Subject: [Rd] patch about timezone name of China Standard Time  on windows
+Message-ID: <TYAP286MB0268B510AA1D33E61F7A39A7D1FB9@TYAP286MB0268.JPNP286.PROD.OUTLOOK.COM>
+
+Last week ,I report a issuse about  timezone name about" China Standard Time", R on windows will report to Asia/Taipei , but it should be Asia/Shanghai,
+Since  still now  no feedback (maybe because for my poor english). So resubmit a patch about this .
+
+Change it from Asia/Taipei to Asia/Shanghai could veryfied from
+1  tzutil (this is windows buildin command  made by microsoft )  , run tzutil /l , it show  " China Standard Time" is (UTC+08:00) Beijing, Chongqing, Hong Kong, Urumqi  (AKA Asia/Shanghai on linux)? and furthermore , tzutil /l also report   Taipei Standard Time (Asia/Taipei) , so Sys.timezone() report  " China Standard Time" to Asia/Taipei indeed uncorrect.
+
+2  timezone and their definition on window could found on microsoft website
+   https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/default-time-zones?view=windows-10
+
+   in this document , it also show " China Standard Time" is (UTC+08:00) Beijing, Chongqing, Hong Kong, Urumqi  (AKA Asia/Shanghai on linux) ,
+
+3  also in unicode org web , the lastest document about time also support this patch
+https://unicode-org.github.io/cldr-staging/charts/42/supplemental/zone_tzid.html
+
+  China Standard Time   Asia/Shanghai
+
+and in current R implemention , it report " China Standard Time" is incorrect ,but "Taipei Standard Time" is correct, so this patch only need modify " China Standard Time" and will not affect other timezone.
+
+please feel free to share your thoughts or feedbacks of this patch
+
+Index: src/extra/tzone/registryTZ.c
+===================================================================
+--- src/extra/tzone/registryTZ.c????(revision 83566)
++++ src/extra/tzone/registryTZ.c????(working copy)
+@@ -51,7 +51,7 @@
+     { L"Central Pacific Standard Time", "Pacific/Guadalcanal" },
+     { L"Central Standard Time", "America/Chicago" },
+     { L"Central Standard Time (Mexico)", "America/Mexico_City" },
+-    { L"China Standard Time", "Asia/Taipei" },
++    { L"China Standard Time", "Asia/Shanghai" },
+     { L"Dateline Standard Time", "Pacific/Kwajalein" },
+     { L"E. Africa Standard Time", "Africa/Nairobi" },
+     { L"E. Australia Standard Time", "Australia/Brisbane" },
+
+
+
+
+
+Yu Gong
+
+
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Fri Jan  6 08:26:57 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Fri, 6 Jan 2023 10:26:57 +0300
+Subject: [Rd] 
+ patch about timezone name of China Standard Time  on windows
+In-Reply-To: <TYAP286MB0268B510AA1D33E61F7A39A7D1FB9@TYAP286MB0268.JPNP286.PROD.OUTLOOK.COM>
+References: <TYAP286MB0268B510AA1D33E61F7A39A7D1FB9@TYAP286MB0268.JPNP286.PROD.OUTLOOK.COM>
+Message-ID: <20230106102657.1085ecff@Tarkus>
+
+Hello Yu Gong!
+
+I'm not an R developer, but I hope I'll be able to help you with my
+advice.
+
+On Fri, 6 Jan 2023 04:24:43 +0000
+gong yu <yugong at outlook.com> wrote:
+
+> Last week ,I report a issuse about  timezone name about" China
+> Standard Time", R on windows will report to Asia/Taipei , but it
+> should be Asia/Shanghai, Since  still now  no feedback (maybe because
+> for my poor english). So resubmit a patch about this .
+
+Sometimes, everyone is too busy to discuss a patch right now, but a
+patch just left on R-devel may be eventually forgotten before there's
+time for discussion. Try asking for a Bugzilla account (by following
+the guide at <https://www.r-project.org/bugs.html>) and submitting the
+patch there.
+
+> and in current R implemention , it report " China Standard Time" is
+> incorrect ,but "Taipei Standard Time" is correct, so this patch only
+> need modify " China Standard Time" and will not affect other timezone.
+
+Thank you for verifying this. As far as I can tell, the file has always
+contained both entries referring to "Asia/Taipei":
+https://github.com/r-devel/r-svn/blame/22bf3a2cb1dd6844e69c9214d990bf438a485db7/src/extra/tzone/registryTZ.c
+
+-- 
+Best regards,
+Ivan
+
+
+From yugong @end|ng |rom out|ook@com  Fri Jan  6 10:17:54 2023
+From: yugong @end|ng |rom out|ook@com (gong yu)
+Date: Fri, 6 Jan 2023 09:17:54 +0000
+Subject: [Rd] =?gb2312?b?u9i4tDogIHBhdGNoIGFib3V0IHRpbWV6b25lIG5hbWUgb2Yg?=
+ =?gb2312?b?Q2hpbmEgU3RhbmRhcmQgVGltZSAgb24gd2luZG93cw==?=
+In-Reply-To: <20230106102657.1085ecff@Tarkus>
+References: <TYAP286MB0268B510AA1D33E61F7A39A7D1FB9@TYAP286MB0268.JPNP286.PROD.OUTLOOK.COM>
+ <20230106102657.1085ecff@Tarkus>
+Message-ID: <TYAP286MB0268DE8C16ADA8BB267927F4D1FB9@TYAP286MB0268.JPNP286.PROD.OUTLOOK.COM>
+
+Thanks Ivan!
+I  really missed the information on   https://www.r-project.org/bugs.html .  Instead ,  browse https://bugs.r-project.org<https://bugs.r-project.org/> and didn't found where to registration and login, then send email to this list.
+will send a email to bug-report-request at r-project.org.
+for two  entries in  registryTZ.c<https://github.com/r-devel/r-svn/blame/22bf3a2cb1dd6844e69c9214d990bf438a485db7/src/extra/tzone/registryTZ.c>  , the China Standard Time is incorrect ,but Taipei Standard Tim is ok
+
+Best regards,
+Yu Gong
+
+
+
+________________________________
+??????: Ivan Krylov <krylov.r00t at gmail.com>
+???????: 2023??1??6?? 15:26
+?????: gong yu <yugong at outlook.com>
+????: r-devel at r-project.org <r-devel at r-project.org>
+????: Re: [Rd] patch about timezone name of China Standard Time on windows
+
+Hello Yu Gong!
+
+I'm not an R developer, but I hope I'll be able to help you with my
+advice.
+
+On Fri, 6 Jan 2023 04:24:43 +0000
+gong yu <yugong at outlook.com> wrote:
+
+> Last week ,I report a issuse about  timezone name about" China
+> Standard Time", R on windows will report to Asia/Taipei , but it
+> should be Asia/Shanghai, Since  still now  no feedback (maybe because
+> for my poor english). So resubmit a patch about this .
+
+Sometimes, everyone is too busy to discuss a patch right now, but a
+patch just left on R-devel may be eventually forgotten before there's
+time for discussion. Try asking for a Bugzilla account (by following
+the guide at <https://www.r-project.org/bugs.html>) and submitting the
+patch there.
+
+> and in current R implemention , it report " China Standard Time" is
+> incorrect ,but "Taipei Standard Time" is correct, so this patch only
+> need modify " China Standard Time" and will not affect other timezone.
+
+Thank you for verifying this. As far as I can tell, the file has always
+contained both entries referring to "Asia/Taipei":
+https://github.com/r-devel/r-svn/blame/22bf3a2cb1dd6844e69c9214d990bf438a485db7/src/extra/tzone/registryTZ.c
+
+--
+Best regards,
+Ivan
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Fri Jan  6 10:47:48 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Fri, 6 Jan 2023 04:47:48 -0500
+Subject: [Rd] Not documenting a function and not getting a check error?
+In-Reply-To: <CADfFDC5KKOt1GJh8SEZXkQJkDF4O7AVze3TLhE4k7ymGfabdJg@mail.gmail.com>
+References: <ba02397f-c3f1-bb53-18c8-31aa91f498c2@gmail.com>
+ <CADfFDC5KKOt1GJh8SEZXkQJkDF4O7AVze3TLhE4k7ymGfabdJg@mail.gmail.com>
+Message-ID: <515cfe1a-cee1-1434-2ea3-b7f015324658@gmail.com>
+
+On 05/01/2023 10:10 p.m., Deepayan Sarkar wrote:
+> On Fri, Jan 6, 2023 at 1:49 AM Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+>>
+>> I'm in the process of a fairly large overhaul of the exports from the
+>> rgl package, with an aim of simplifying maintenance of the package.
+>> During this work, I came across the reverse dependency geomorph that
+>> calls the rgl.primitive function.
+>>
+>> I had forgotten that rgl.primitive was still exported:  I've been
+>> thinking of it as an internal function for a few years now.  I was
+>> surprised geomorph was able to call it.
+>>
+>> Particularly surprising to me was the fact that it is not properly
+>> documented.  One of the help topics lists it as an alias, but it
+>> contains no usage info, and is not mentioned in the .Rd file other than
+>> the alias.  And yet "R CMD check rgl" has never complained about it.
+>>
+>> Is this intentional?
+> 
+> Does the Rd file that documents it have \keyword{internal}? These are
+> not checked fully (as I realized recently while working on the help
+> system), and I guess that's intentional.
+
+No, not marked internal.  Here's a simple example:  a package that 
+exports f and g, and has only one help page:
+
+---------------------
+NAMESPACE:
+---------------------
+export(f, g)
+---------------------
+
+---------------------
+R/source.R:
+---------------------
+f <- function() "this is f"
+
+g <- function() "this is g"
+---------------------
+
+---------------------
+man/f.Rd:
+---------------------
+\name{f}
+\alias{f}
+\alias{g}
+\title{
+This is f.
+}
+\description{
+This does nothing
+}
+\usage{
+f()
+}
+---------------------
+
+
+No complaints about the lack of documentation of g.
+
+Duncan Murdoch
+
+
+From kev|n@r@coombe@ @end|ng |rom gm@||@com  Fri Jan  6 11:25:19 2023
+From: kev|n@r@coombe@ @end|ng |rom gm@||@com (Kevin Coombes)
+Date: Fri, 6 Jan 2023 05:25:19 -0500
+Subject: [Rd] Not documenting a function and not getting a check error?
+In-Reply-To: <515cfe1a-cee1-1434-2ea3-b7f015324658@gmail.com>
+References: <ba02397f-c3f1-bb53-18c8-31aa91f498c2@gmail.com>
+ <CADfFDC5KKOt1GJh8SEZXkQJkDF4O7AVze3TLhE4k7ymGfabdJg@mail.gmail.com>
+ <515cfe1a-cee1-1434-2ea3-b7f015324658@gmail.com>
+Message-ID: <CAHJ+2VL8aJjvPiObLTWroOFF4iObpaRY639VXqzrumwZeCK5vQ@mail.gmail.com>
+
+I am fairly certain that the check for documentation is really just a check
+for the presence of the function name in an "alias" line. My circumstantial
+evidence, from a package in the early stages of development, came from
+changing the name of a function. I updated everything else (usage,
+examples, etc.) but forgot to change the alias. Got a warning that the
+newly named function was not documented. It took me a while to figure out
+why R CMD check was still complaining.
+
+I am also pretty sure that, when looking for help in at least one existing
+package (can't remember which one), I clicked on the link and got sent to a
+page that said absolutely nothing about the function I was interested in.
+
+On Fri, Jan 6, 2023, 4:48 AM Duncan Murdoch <murdoch.duncan at gmail.com>
+wrote:
+
+> On 05/01/2023 10:10 p.m., Deepayan Sarkar wrote:
+> > On Fri, Jan 6, 2023 at 1:49 AM Duncan Murdoch <murdoch.duncan at gmail.com>
+> wrote:
+> >>
+> >> I'm in the process of a fairly large overhaul of the exports from the
+> >> rgl package, with an aim of simplifying maintenance of the package.
+> >> During this work, I came across the reverse dependency geomorph that
+> >> calls the rgl.primitive function.
+> >>
+> >> I had forgotten that rgl.primitive was still exported:  I've been
+> >> thinking of it as an internal function for a few years now.  I was
+> >> surprised geomorph was able to call it.
+> >>
+> >> Particularly surprising to me was the fact that it is not properly
+> >> documented.  One of the help topics lists it as an alias, but it
+> >> contains no usage info, and is not mentioned in the .Rd file other than
+> >> the alias.  And yet "R CMD check rgl" has never complained about it.
+> >>
+> >> Is this intentional?
+> >
+> > Does the Rd file that documents it have \keyword{internal}? These are
+> > not checked fully (as I realized recently while working on the help
+> > system), and I guess that's intentional.
+>
+> No, not marked internal.  Here's a simple example:  a package that
+> exports f and g, and has only one help page:
+>
+> ---------------------
+> NAMESPACE:
+> ---------------------
+> export(f, g)
+> ---------------------
+>
+> ---------------------
+> R/source.R:
+> ---------------------
+> f <- function() "this is f"
+>
+> g <- function() "this is g"
+> ---------------------
+>
+> ---------------------
+> man/f.Rd:
+> ---------------------
+> \name{f}
+> \alias{f}
+> \alias{g}
+> \title{
+> This is f.
+> }
+> \description{
+> This does nothing
+> }
+> \usage{
+> f()
+> }
+> ---------------------
+>
+>
+> No complaints about the lack of documentation of g.
+>
+> Duncan Murdoch
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Fri Jan  6 11:57:58 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Fri, 6 Jan 2023 05:57:58 -0500
+Subject: [Rd] Not documenting a function and not getting a check error?
+In-Reply-To: <CAHJ+2VL8aJjvPiObLTWroOFF4iObpaRY639VXqzrumwZeCK5vQ@mail.gmail.com>
+References: <ba02397f-c3f1-bb53-18c8-31aa91f498c2@gmail.com>
+ <CADfFDC5KKOt1GJh8SEZXkQJkDF4O7AVze3TLhE4k7ymGfabdJg@mail.gmail.com>
+ <515cfe1a-cee1-1434-2ea3-b7f015324658@gmail.com>
+ <CAHJ+2VL8aJjvPiObLTWroOFF4iObpaRY639VXqzrumwZeCK5vQ@mail.gmail.com>
+Message-ID: <d5fb9c50-52b6-8e30-3e8c-df56f842b2c2@gmail.com>
+
+On 06/01/2023 5:25 a.m., Kevin Coombes wrote:
+> I am fairly certain that the check for documentation is really just a 
+> check for the presence of the function name in an "alias" line. 
+
+Yes, that's what the test does, and that's fine.  The problem is with 
+the usage test in tools::codoc().  If I had incorrect arguments 
+specified for a documented function, I'd be warned.  If I skip the usage 
+docs completely, I am not warned.	
+
+I think the test belongs around here in the source:
+
+https://github.com/r-devel/r-svn/blob/b57918fd104962415a752ea7db12dcf4f3f5219f/src/library/tools/R/QC.R#L585
+
+If you look there, you see a variable named 
+"functions_in_usages_not_in_code" but nothing named 
+"functions_in_code_not_in_usages".
+
+Duncan Murdoch
+
+
+My
+> circumstantial evidence, from a package in the early stages of 
+> development, came from changing the name of a function. I updated 
+> everything else (usage, examples, etc.) but forgot to change the alias. 
+> Got a warning that the newly named function was not documented. It took 
+> me a while to figure out why R CMD check was still complaining.
+> 
+> I am also pretty sure that, when looking for help in at least one 
+> existing package (can't remember which one), I clicked on the link and 
+> got sent to a page that said absolutely nothing about the function I was 
+> interested?in.
+> 
+> On Fri, Jan 6, 2023, 4:48 AM Duncan Murdoch <murdoch.duncan at gmail.com 
+> <mailto:murdoch.duncan at gmail.com>> wrote:
+> 
+>     On 05/01/2023 10:10 p.m., Deepayan Sarkar wrote:
+>      > On Fri, Jan 6, 2023 at 1:49 AM Duncan Murdoch
+>     <murdoch.duncan at gmail.com <mailto:murdoch.duncan at gmail.com>> wrote:
+>      >>
+>      >> I'm in the process of a fairly large overhaul of the exports
+>     from the
+>      >> rgl package, with an aim of simplifying maintenance of the package.
+>      >> During this work, I came across the reverse dependency geomorph that
+>      >> calls the rgl.primitive function.
+>      >>
+>      >> I had forgotten that rgl.primitive was still exported:? I've been
+>      >> thinking of it as an internal function for a few years now.? I was
+>      >> surprised geomorph was able to call it.
+>      >>
+>      >> Particularly surprising to me was the fact that it is not properly
+>      >> documented.? One of the help topics lists it as an alias, but it
+>      >> contains no usage info, and is not mentioned in the .Rd file
+>     other than
+>      >> the alias.? And yet "R CMD check rgl" has never complained about it.
+>      >>
+>      >> Is this intentional?
+>      >
+>      > Does the Rd file that documents it have \keyword{internal}? These are
+>      > not checked fully (as I realized recently while working on the help
+>      > system), and I guess that's intentional.
+> 
+>     No, not marked internal.? Here's a simple example:? a package that
+>     exports f and g, and has only one help page:
+> 
+>     ---------------------
+>     NAMESPACE:
+>     ---------------------
+>     export(f, g)
+>     ---------------------
+> 
+>     ---------------------
+>     R/source.R:
+>     ---------------------
+>     f <- function() "this is f"
+> 
+>     g <- function() "this is g"
+>     ---------------------
+> 
+>     ---------------------
+>     man/f.Rd:
+>     ---------------------
+>     \name{f}
+>     \alias{f}
+>     \alias{g}
+>     \title{
+>     This is f.
+>     }
+>     \description{
+>     This does nothing
+>     }
+>     \usage{
+>     f()
+>     }
+>     ---------------------
+> 
+> 
+>     No complaints about the lack of documentation of g.
+> 
+>     Duncan Murdoch
+> 
+>     ______________________________________________
+>     R-devel at r-project.org <mailto:R-devel at r-project.org> mailing list
+>     https://stat.ethz.ch/mailman/listinfo/r-devel
+>     <https://stat.ethz.ch/mailman/listinfo/r-devel>
+>
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Fri Jan  6 23:36:04 2023
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Sat, 7 Jan 2023 11:36:04 +1300
+Subject: [Rd] 
+ patch about timezone name of China Standard Time  on windows
+In-Reply-To: <TYAP286MB0268DE8C16ADA8BB267927F4D1FB9@TYAP286MB0268.JPNP286.PROD.OUTLOOK.COM>
+References: <TYAP286MB0268B510AA1D33E61F7A39A7D1FB9@TYAP286MB0268.JPNP286.PROD.OUTLOOK.COM>
+ <20230106102657.1085ecff@Tarkus>
+ <TYAP286MB0268DE8C16ADA8BB267927F4D1FB9@TYAP286MB0268.JPNP286.PROD.OUTLOOK.COM>
+Message-ID: <1A72FB16-F6A3-4F28-A8D4-5ADEB0D37842@R-project.org>
+
+Just a quick comment here - this is not as easy as it sounds, because the code is in the "extra" directory which means it is based on upstream sources, so those sources are typically not patched manually as it would be hard to apply upstream updates. In this case the standards have changed since the last update, so the way to go about this would be to upgrade according to latest sources and standards as it's quite possible that the issue has been addressed there. However, such update is quite time-consuming process as we have to make sure that the standards are matched and changes have not broken something in R. So you can file an issue so this is on record, but I wouldn't include patches since they cannot be applied directly for reasons explained as it has to be done as a part of the full update, not just a single entry.
+
+Cheers,
+Simon
+
+
+> On Jan 6, 2023, at 10:17 PM, gong yu <yugong at outlook.com> wrote:
+> 
+> Thanks Ivan!
+> I  really missed the information on   https://www.r-project.org/bugs.html .  Instead ,  browse https://bugs.r-project.org<https://bugs.r-project.org/> and didn't found where to registration and login, then send email to this list.
+> will send a email to bug-report-request at r-project.org.
+> for two  entries in  registryTZ.c<https://github.com/r-devel/r-svn/blame/22bf3a2cb1dd6844e69c9214d990bf438a485db7/src/extra/tzone/registryTZ.c>  , the China Standard Time is incorrect ,but Taipei Standard Tim is ok
+> 
+> Best regards,
+> Yu Gong
+> 
+> 
+> 
+> ________________________________
+> ???: Ivan Krylov <krylov.r00t at gmail.com>
+> ????: 2023?1?6? 15:26
+> ???: gong yu <yugong at outlook.com>
+> ??: r-devel at r-project.org <r-devel at r-project.org>
+> ??: Re: [Rd] patch about timezone name of China Standard Time on windows
+> 
+> Hello Yu Gong!
+> 
+> I'm not an R developer, but I hope I'll be able to help you with my
+> advice.
+> 
+> On Fri, 6 Jan 2023 04:24:43 +0000
+> gong yu <yugong at outlook.com> wrote:
+> 
+>> Last week ,I report a issuse about  timezone name about" China
+>> Standard Time", R on windows will report to Asia/Taipei , but it
+>> should be Asia/Shanghai, Since  still now  no feedback (maybe because
+>> for my poor english). So resubmit a patch about this .
+> 
+> Sometimes, everyone is too busy to discuss a patch right now, but a
+> patch just left on R-devel may be eventually forgotten before there's
+> time for discussion. Try asking for a Bugzilla account (by following
+> the guide at <https://www.r-project.org/bugs.html>) and submitting the
+> patch there.
+> 
+>> and in current R implemention , it report " China Standard Time" is
+>> incorrect ,but "Taipei Standard Time" is correct, so this patch only
+>> need modify " China Standard Time" and will not affect other timezone.
+> 
+> Thank you for verifying this. As far as I can tell, the file has always
+> contained both entries referring to "Asia/Taipei":
+> https://github.com/r-devel/r-svn/blame/22bf3a2cb1dd6844e69c9214d990bf438a485db7/src/extra/tzone/registryTZ.c
+> 
+> --
+> Best regards,
+> Ivan
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From yugong @end|ng |rom out|ook@com  Sat Jan  7 01:17:23 2023
+From: yugong @end|ng |rom out|ook@com (gong yu)
+Date: Sat, 7 Jan 2023 00:17:23 +0000
+Subject: [Rd] =?gb2312?b?tPC4tDogIHBhdGNoIGFib3V0IHRpbWV6b25lIG5hbWUgb2Yg?=
+ =?gb2312?b?Q2hpbmEgU3RhbmRhcmQgVGltZSAgb24gd2luZG93cw==?=
+In-Reply-To: <1A72FB16-F6A3-4F28-A8D4-5ADEB0D37842@R-project.org>
+References: <TYAP286MB0268B510AA1D33E61F7A39A7D1FB9@TYAP286MB0268.JPNP286.PROD.OUTLOOK.COM>
+ <20230106102657.1085ecff@Tarkus>
+ <TYAP286MB0268DE8C16ADA8BB267927F4D1FB9@TYAP286MB0268.JPNP286.PROD.OUTLOOK.COM>
+ <1A72FB16-F6A3-4F28-A8D4-5ADEB0D37842@R-project.org>
+Message-ID: <TYAP286MB0268667489AE050C0C8F4CCDD1FB9@TYAP286MB0268.JPNP286.PROD.OUTLOOK.COM>
+
+understand your concerns.
+for registerTZ.c itself , IMHO , the most important part is the definition of tztable[] .  which come form http://unicode.org/cldr/data/diff/supplemental/windows_tzid.html ,but it can??t access now, the lasted version is https://unicode-org.github.io/cldr-staging/charts/42/supplemental/zone_tzid.html.
+
+maybe  we need write a script  or small tools  , use it sync with unicode standard and microsoft registery or tzutil , to generate tztable definition?
+will this better than current way? if it is i
+will try it in next 1-2 weeks.
+
+best regards
+Yu Gong
+________________________________
+??????: Simon Urbanek <simon.urbanek at R-project.org>
+???????: 2023??1??7?? 6:36
+?????: gong yu <yugong at outlook.com>
+????: Ivan Krylov <krylov.r00t at gmail.com>; r-devel at r-project.org <r-devel at r-project.org>
+????: Re: [Rd] patch about timezone name of China Standard Time on windows
+
+Just a quick comment here - this is not as easy as it sounds, because the code is in the "extra" directory which means it is based on upstream sources, so those sources are typically not patched manually as it would be hard to apply upstream updates. In this case the standards have changed since the last update, so the way to go about this would be to upgrade according to latest sources and standards as it's quite possible that the issue has been addressed there. However, such update is quite time-consuming process as we have to make sure that the standards are matched and changes have not broken something in R. So you can file an issue so this is on record, but I wouldn't include patches since they cannot be applied directly for reasons explained as it has to be done as a part of the full update, not just a single entry.
+
+Cheers,
+Simon
+
+
+> On Jan 6, 2023, at 10:17 PM, gong yu <yugong at outlook.com> wrote:
+>
+> Thanks Ivan!
+> I  really missed the information on   https://www.r-project.org/bugs.html .  Instead ,  browse [https://bugs.r-project.org<https://bugs.r-project.org/>]https://bugs.r-project.org<https://bugs.r-project.org/> and didn't found where to registration and login, then send email to this list.
+> will send a email to bug-report-request at r-project.org.
+> for two  entries in  registryTZ.c<https://github.com/r-devel/r-svn/blame/22bf3a2cb1dd6844e69c9214d990bf438a485db7/src/extra/tzone/registryTZ.c>  , the China Standard Time is incorrect ,but Taipei Standard Tim is ok
+>
+> Best regards,
+> Yu Gong
+>
+>
+>
+> ________________________________
+> ??????: Ivan Krylov <krylov.r00t at gmail.com>
+> ???????: 2023??1??6?? 15:26
+> ?????: gong yu <yugong at outlook.com>
+> ????: r-devel at r-project.org <r-devel at r-project.org>
+> ????: Re: [Rd] patch about timezone name of China Standard Time on windows
+>
+> Hello Yu Gong!
+>
+> I'm not an R developer, but I hope I'll be able to help you with my
+> advice.
+>
+> On Fri, 6 Jan 2023 04:24:43 +0000
+> gong yu <yugong at outlook.com> wrote:
+>
+>> Last week ,I report a issuse about  timezone name about" China
+>> Standard Time", R on windows will report to Asia/Taipei , but it
+>> should be Asia/Shanghai, Since  still now  no feedback (maybe because
+>> for my poor english). So resubmit a patch about this .
+>
+> Sometimes, everyone is too busy to discuss a patch right now, but a
+> patch just left on R-devel may be eventually forgotten before there's
+> time for discussion. Try asking for a Bugzilla account (by following
+> the guide at <https://www.r-project.org/bugs.html>) and submitting the
+> patch there.
+>
+>> and in current R implemention , it report " China Standard Time" is
+>> incorrect ,but "Taipei Standard Time" is correct, so this patch only
+>> need modify " China Standard Time" and will not affect other timezone.
+>
+> Thank you for verifying this. As far as I can tell, the file has always
+> contained both entries referring to "Asia/Taipei":
+> https://github.com/r-devel/r-svn/blame/22bf3a2cb1dd6844e69c9214d990bf438a485db7/src/extra/tzone/registryTZ.c
+>
+> --
+> Best regards,
+> Ivan
+>
+>        [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+	[[alternative HTML version deleted]]
+
+
