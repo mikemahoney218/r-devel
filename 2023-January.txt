@@ -1460,3 +1460,880 @@ https://github.com/r-devel/r-svn/blob/4198a2941b702d965bb2374c2b908f48c369f40a/s
 Mike C
 
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Tue Jan 10 10:26:53 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Tue, 10 Jan 2023 10:26:53 +0100
+Subject: [Rd] 
+ Shouldn't "Loading" be "Attaching" when referring to library()
+ calls?
+In-Reply-To: <CAD7Bkx-SFxFYra8kPZvNntKBtscQzgABw1LMNTKY7XYexnCQgQ@mail.gmail.com>
+References: <CAD7Bkx-SFxFYra8kPZvNntKBtscQzgABw1LMNTKY7XYexnCQgQ@mail.gmail.com>
+Message-ID: <25533.12125.780136.352115@stat.math.ethz.ch>
+
+>>>>> Michael Chirico via R-devel 
+>>>>>     on Mon, 9 Jan 2023 12:25:46 -0800 writes:
+
+    > require() and library() both emit this message immediately before
+    > running library():
+
+    > "Loading required package: %s"
+
+    > https://github.com/r-devel/r-svn/blob/4198a2941b702d965bb2374c2b908f48c369f40a/src/library/base/R/library.R#L967-L968
+
+    > https://github.com/r-devel/r-svn/blob/4198a2941b702d965bb2374c2b908f48c369f40a/src/library/base/R/library.R#L684-L685
+
+    > Shouldn't "Loading" be "Attaching" instead?
+
+Good question... I had asked myself as well a couple of times.
+
+The vagueness is mostly "historical" in the sense that
+originally R (nor S) had namespaces.
+OTOH,  attach(.)  has always worked for data frames (already in pre-R S).
+
+Still, I agree (when teaching and otherwise), we should
+clearly distinguish the two notably in the context of packages
+and their namespaces.
+
+
+    > My understanding is "a package is loaded" is equivalent to
+    > "isNamespaceLoaded()", i.e., loadNamespace() was run. And that "a
+    > package is attached" is equivalent to "pkg %in% .packages()", i.e.,
+    > library(pkg) was run.
+
+or (easier for teaching)  that  "package:<pkg>" %in% search()
+-- which is what .packages() does {by default}.
+
+I agree with the above.
+
+
+    > Is the terminology not so precise?
+
+    > There's certainly ambiguity in the internal variable names referenced
+    > above -- in require, we see
+
+    > loaded <- paste0("package:", package) %in% search()
+    > https://github.com/r-devel/r-svn/blob/4198a2941b702d965bb2374c2b908f48c369f40a/src/library/base/R/library.R#L680
+
+again, historical:  require() exists for considerably longer
+than namespaces.
+
+I think we should at least change the message printed by
+require() and library() you mentioned above.
+
+Martin
+
+
+    > Whereas in library() [via .getRequiredPackages2()] we see
+
+    > attached <- paste0("package:", pkg) %in% search()
+    > https://github.com/r-devel/r-svn/blob/4198a2941b702d965bb2374c2b908f48c369f40a/src/library/base/R/library.R#L931
+
+    > Mike C
+
+
+From y@nn@r|chet @end|ng |rom |r@n@|r  Tue Jan 10 10:44:11 2023
+From: y@nn@r|chet @end|ng |rom |r@n@|r (RICHET Yann)
+Date: Tue, 10 Jan 2023 09:44:11 +0000
+Subject: [Rd] rhub vs. CRAN fedora-*-devel, using armadillo & slapack
+Message-ID: <334d6d8de5094164a99c8d4b26d77246@irsn.fr>
+
+Dear R-devel people,
+
+We are working to submit a package which is mainly a binding over a C++ lib (https://github.com/libKriging) using armadillo.
+It is _not_ a standard RcppArmadillo package, because we also had to provide a python binding... so there is a huge layer of cmake & scripting to make it work with a standard armadillo (but using same version that RcppArmadillo).
+It seems now working with almost all CRAN targets, but a problem remains with fedora (clang & gcc) devel.
+
+Our issue is that the rhub docker is not well sync with the CRAN fedora-clang-devel config:
+- failing on CRAN (without clear reason): https://www.r-project.org/nosvn/R.check/r-devel-linux-x86_64-fedora-clang/rlibkriging-00check.html
+- passing on rhub: https://builder.r-hub.io/status/rlibkriging_0.7-3.tar.gz-20f7dc7562726497af7c678ab41f4dea
+
+So we cannot investigate and fix the problem.
+
+Note that we did quite strange things with the fedora platforms: include explicitely slapack to provide simple precision for our (vanilla) armadillo... 
+
+Do you have any idea, or even known problem in mind, that could be related to this ?
+
+Best regards,
+
+--
+Dr. Yann Richet
+Institute for Radiological Protection and Nuclear Safety (https://www.irsn.fr), 
+  Department of Characterization of Natural Unexpected Events and Sites
+Office?: +33 1 58 35 88 84
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Tue Jan 10 11:31:40 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Tue, 10 Jan 2023 11:31:40 +0100
+Subject: [Rd] 
+ Shouldn't "Loading" be "Attaching" when referring to library()
+ calls?
+In-Reply-To: <25533.12125.780136.352115@stat.math.ethz.ch>
+References: <CAD7Bkx-SFxFYra8kPZvNntKBtscQzgABw1LMNTKY7XYexnCQgQ@mail.gmail.com>
+ <25533.12125.780136.352115@stat.math.ethz.ch>
+Message-ID: <25533.16012.558065.724821@stat.math.ethz.ch>
+
+>>>>> Martin Maechler 
+>>>>>     on Tue, 10 Jan 2023 10:26:53 +0100 writes:
+
+>>>>> Michael Chirico via R-devel 
+>>>>>     on Mon, 9 Jan 2023 12:25:46 -0800 writes:
+
+    >> require() and library() both emit this message immediately before
+    >> running library():
+
+    >> "Loading required package: %s"
+
+    >> https://github.com/r-devel/r-svn/blob/4198a2941b702d965bb2374c2b908f48c369f40a/src/library/base/R/library.R#L967-L968
+
+    >> https://github.com/r-devel/r-svn/blob/4198a2941b702d965bb2374c2b908f48c369f40a/src/library/base/R/library.R#L684-L685
+
+    >> Shouldn't "Loading" be "Attaching" instead?
+
+    > Good question... I had asked myself as well a couple of times.
+
+    > The vagueness is mostly "historical" in the sense that
+    > originally R (nor S) had namespaces.
+
+Oops!  If you skip the "( .. )" above it's 100% wrong.
+Correct (I hope even according Oxford Dictionary) is
+
+" Originally, neither R nor S had namespaces. "
+
+
+
+    > OTOH,  attach(.)  has always worked for data frames (already in pre-R S).
+
+    > Still, I agree (when teaching and otherwise), we should
+    > clearly distinguish the two notably in the context of packages
+    > and their namespaces.
+
+
+    >> My understanding is "a package is loaded" is equivalent to
+    >> "isNamespaceLoaded()", i.e., loadNamespace() was run. And that "a
+    >> package is attached" is equivalent to "pkg %in% .packages()", i.e.,
+    >> library(pkg) was run.
+
+    > or (easier for teaching)  that  "package:<pkg>" %in% search()
+    > -- which is what .packages() does {by default}.
+
+    > I agree with the above.
+
+
+    >> Is the terminology not so precise?
+
+    >> There's certainly ambiguity in the internal variable names referenced
+    >> above -- in require, we see
+
+    >> loaded <- paste0("package:", package) %in% search()
+    >> https://github.com/r-devel/r-svn/blob/4198a2941b702d965bb2374c2b908f48c369f40a/src/library/base/R/library.R#L680
+
+    > again, historical:  require() exists for considerably longer
+    > than namespaces.
+
+    > I think we should at least change the message printed by
+    > require() and library() you mentioned above.
+
+    > Martin
+
+
+    >> Whereas in library() [via .getRequiredPackages2()] we see
+
+    >> attached <- paste0("package:", pkg) %in% search()
+    >> https://github.com/r-devel/r-svn/blob/4198a2941b702d965bb2374c2b908f48c369f40a/src/library/base/R/library.R#L931
+
+    >> Mike C
+
+    > ______________________________________________
+    > R-devel at r-project.org mailing list
+    > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @oko| @end|ng |rom |n@@-tou|ou@e@|r  Tue Jan 10 11:37:46 2023
+From: @oko| @end|ng |rom |n@@-tou|ou@e@|r (Serguei Sokol)
+Date: Tue, 10 Jan 2023 11:37:46 +0100
+Subject: [Rd] rhub vs. CRAN fedora-*-devel, using armadillo & slapack
+In-Reply-To: <334d6d8de5094164a99c8d4b26d77246@irsn.fr>
+References: <334d6d8de5094164a99c8d4b26d77246@irsn.fr>
+Message-ID: <72de7b54-ff87-166f-4f8a-2b91381488cb@insa-toulouse.fr>
+
+Le 10/01/2023 ? 10:44, RICHET Yann a ?crit?:
+> Dear R-devel people,
+>
+> We are working to submit a package which is mainly a binding over a C++ lib (https://github.com/libKriging) using armadillo.
+> It is _not_ a standard RcppArmadillo package, because we also had to provide a python binding... so there is a huge layer of cmake & scripting to make it work with a standard armadillo (but using same version that RcppArmadillo).
+> It seems now working with almost all CRAN targets, but a problem remains with fedora (clang & gcc) devel.
+>
+> Our issue is that the rhub docker is not well sync with the CRAN fedora-clang-devel config:
+> - failing on CRAN (without clear reason): https://www.r-project.org/nosvn/R.check/r-devel-linux-x86_64-fedora-clang/rlibkriging-00check.html
+I see? 2 candidates for? reasons of failing on CRAN:
+ ?1. test time is 30 min while 15 min are allowed;
+ ?2. your code try to get 30 threads while CRAN limits them to 2;
+
+Try to make your tests shorter ( < 15 min) on 2 threads. May be it will 
+help.
+
+Best,
+Serguei.
+
+> - passing on rhub: https://builder.r-hub.io/status/rlibkriging_0.7-3.tar.gz-20f7dc7562726497af7c678ab41f4dea
+>
+> So we cannot investigate and fix the problem.
+>
+> Note that we did quite strange things with the fedora platforms: include explicitely slapack to provide simple precision for our (vanilla) armadillo...
+>
+> Do you have any idea, or even known problem in mind, that could be related to this ?
+>
+> Best regards,
+>
+> --
+> Dr. Yann Richet
+> Institute for Radiological Protection and Nuclear Safety (https://www.irsn.fr),
+>    Department of Characterization of Natural Unexpected Events and Sites
+> Office?: +33 1 58 35 88 84
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+-- 
+Serguei Sokol
+Ingenieur de recherche INRAE
+
+Cellule Math?matiques
+TBI, INSA/INRAE UMR 792, INSA/CNRS UMR 5504
+135 Avenue de Rangueil
+31077 Toulouse Cedex 04
+
+tel: +33 5 61 55 98 49
+email: sokol at insa-toulouse.fr
+http://www.toulouse-biotechnology-institute.fr/en/technology_platforms/mathematics-cell.html
+
+
+From @oko| @end|ng |rom |n@@-tou|ou@e@|r  Tue Jan 10 11:40:38 2023
+From: @oko| @end|ng |rom |n@@-tou|ou@e@|r (Serguei Sokol)
+Date: Tue, 10 Jan 2023 11:40:38 +0100
+Subject: [Rd] rhub vs. CRAN fedora-*-devel, using armadillo & slapack
+In-Reply-To: <72de7b54-ff87-166f-4f8a-2b91381488cb@insa-toulouse.fr>
+References: <334d6d8de5094164a99c8d4b26d77246@irsn.fr>
+ <72de7b54-ff87-166f-4f8a-2b91381488cb@insa-toulouse.fr>
+Message-ID: <ffef02ea-52ae-a27a-1a8e-3d2046fd092c@insa-toulouse.fr>
+
+Le 10/01/2023 ? 11:37, Serguei Sokol a ?crit?:
+> Le 10/01/2023 ? 10:44, RICHET Yann a ?crit?:
+>> Dear R-devel people,
+>>
+>> We are working to submit a package which is mainly a binding over a 
+>> C++ lib (https://github.com/libKriging) using armadillo.
+>> It is _not_ a standard RcppArmadillo package, because we also had to 
+>> provide a python binding... so there is a huge layer of cmake & 
+>> scripting to make it work with a standard armadillo (but using same 
+>> version that RcppArmadillo).
+>> It seems now working with almost all CRAN targets, but a problem 
+>> remains with fedora (clang & gcc) devel.
+>>
+>> Our issue is that the rhub docker is not well sync with the CRAN 
+>> fedora-clang-devel config:
+>> - failing on CRAN (without clear reason): 
+>> https://www.r-project.org/nosvn/R.check/r-devel-linux-x86_64-fedora-clang/rlibkriging-00check.html
+> I see? 2 candidates for? reasons of failing on CRAN:
+> ?1. test time is 30 min while 15 min are allowed;
+> ?2. your code try to get 30 threads
+Oops, it was 10 threads not 30 but it does not change the nature of a 
+possible issue.
+
+> while CRAN limits them to 2;
+>
+> Try to make your tests shorter ( < 15 min) on 2 threads. May be it 
+> will help.
+>
+> Best,
+> Serguei.
+>
+>> - passing on rhub: 
+>> https://builder.r-hub.io/status/rlibkriging_0.7-3.tar.gz-20f7dc7562726497af7c678ab41f4dea
+>>
+>> So we cannot investigate and fix the problem.
+>>
+>> Note that we did quite strange things with the fedora platforms: 
+>> include explicitely slapack to provide simple precision for our 
+>> (vanilla) armadillo...
+>>
+>> Do you have any idea, or even known problem in mind, that could be 
+>> related to this ?
+>>
+>> Best regards,
+>>
+>> -- 
+>> Dr. Yann Richet
+>> Institute for Radiological Protection and Nuclear Safety 
+>> (https://www.irsn.fr),
+>> ?? Department of Characterization of Natural Unexpected Events and Sites
+>> Office?: +33 1 58 35 88 84
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+>
+
+
+-- 
+Serguei Sokol
+Ingenieur de recherche INRAE
+
+Cellule Math?matiques
+TBI, INSA/INRAE UMR 792, INSA/CNRS UMR 5504
+135 Avenue de Rangueil
+31077 Toulouse Cedex 04
+
+tel: +33 5 61 55 98 49
+email: sokol at insa-toulouse.fr
+http://www.toulouse-biotechnology-institute.fr/en/technology_platforms/mathematics-cell.html
+
+
+From y@nn@r|chet @end|ng |rom |r@n@|r  Tue Jan 10 17:27:53 2023
+From: y@nn@r|chet @end|ng |rom |r@n@|r (RICHET Yann)
+Date: Tue, 10 Jan 2023 16:27:53 +0000
+Subject: [Rd] rhub vs. CRAN fedora-*-devel, using armadillo & slapack
+In-Reply-To: <ffef02ea-52ae-a27a-1a8e-3d2046fd092c@insa-toulouse.fr>
+References: <334d6d8de5094164a99c8d4b26d77246@irsn.fr>
+ <72de7b54-ff87-166f-4f8a-2b91381488cb@insa-toulouse.fr>
+ <ffef02ea-52ae-a27a-1a8e-3d2046fd092c@insa-toulouse.fr>
+Message-ID: <ba0f6126425d4a43a3e1e3b0009e4105@irsn.fr>
+
+Thank you for your answer.
+In facts, 10 threads are asked by armadillo for some LinAlg, which backs to two threads as warned. But I cannot imagine this costs so much time just for that...
+
+A deeper analysis of time spent seems to point that a large time was mainly spent on testthat and Rcpp dependencies compilation... But other recent packages depending on these also are not spending so much time.
+
+CRAN team, as I failed to reproduce the issue with rhub dockers, 
+- is there any reason that could explain that fedora-*-devel is so slow for this package or compilation of Rcpp/testthat ?
+- is our slapack a possible source of... anything ?
+- are we the only package which embeds "standard armadillo" and tries to deal with simple precision lapack issues on fedora ?
+- is there any chance that I can get a deeper log of what happened ?
+
+Best regards,
+
+Yann
+
+-----Message d'origine-----
+De?: Serguei Sokol <sokol at insa-toulouse.fr> 
+Envoy??: mardi 10 janvier 2023 11:41
+??: RICHET Yann <yann.richet at irsn.fr>; R-devel at r-project.org
+Cc?: Pascal Hav? <pascal at haveneer.com>
+Objet?: Re: [Rd] rhub vs. CRAN fedora-*-devel, using armadillo & slapack
+
+Le 10/01/2023 ? 11:37, Serguei Sokol a ?crit?:
+> Le 10/01/2023 ? 10:44, RICHET Yann a ?crit?:
+>> Dear R-devel people,
+>>
+>> We are working to submit a package which is mainly a binding over a
+>> C++ lib (https://github.com/libKriging) using armadillo.
+>> It is _not_ a standard RcppArmadillo package, because we also had to 
+>> provide a python binding... so there is a huge layer of cmake & 
+>> scripting to make it work with a standard armadillo (but using same 
+>> version that RcppArmadillo).
+>> It seems now working with almost all CRAN targets, but a problem 
+>> remains with fedora (clang & gcc) devel.
+>>
+>> Our issue is that the rhub docker is not well sync with the CRAN 
+>> fedora-clang-devel config:
+>> - failing on CRAN (without clear reason): 
+>> https://www.r-project.org/nosvn/R.check/r-devel-linux-x86_64-fedora-c
+>> lang/rlibkriging-00check.html
+> I see? 2 candidates for? reasons of failing on CRAN:
+> ?1. test time is 30 min while 15 min are allowed;
+> ?2. your code try to get 30 threads
+Oops, it was 10 threads not 30 but it does not change the nature of a possible issue.
+
+> while CRAN limits them to 2;
+>
+> Try to make your tests shorter ( < 15 min) on 2 threads. May be it 
+> will help.
+>
+> Best,
+> Serguei.
+>
+>> - passing on rhub: 
+>> https://builder.r-hub.io/status/rlibkriging_0.7-3.tar.gz-20f7dc756272
+>> 6497af7c678ab41f4dea
+>>
+>> So we cannot investigate and fix the problem.
+>>
+>> Note that we did quite strange things with the fedora platforms: 
+>> include explicitely slapack to provide simple precision for our
+>> (vanilla) armadillo...
+>>
+>> Do you have any idea, or even known problem in mind, that could be 
+>> related to this ?
+>>
+>> Best regards,
+>>
+>> --
+>> Dr. Yann Richet
+>> Institute for Radiological Protection and Nuclear Safety 
+>> (https://www.irsn.fr),
+>> ?? Department of Characterization of Natural Unexpected Events and 
+>> Sites Office?: +33 1 58 35 88 84
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+>
+
+
+--
+Serguei Sokol
+Ingenieur de recherche INRAE
+
+Cellule Math?matiques
+TBI, INSA/INRAE UMR 792, INSA/CNRS UMR 5504
+135 Avenue de Rangueil
+31077 Toulouse Cedex 04
+
+tel: +33 5 61 55 98 49
+email: sokol at insa-toulouse.fr
+http://www.toulouse-biotechnology-institute.fr/en/technology_platforms/mathematics-cell.html
+
+
+From @oko| @end|ng |rom |n@@-tou|ou@e@|r  Tue Jan 10 18:10:12 2023
+From: @oko| @end|ng |rom |n@@-tou|ou@e@|r (Serguei Sokol)
+Date: Tue, 10 Jan 2023 18:10:12 +0100
+Subject: [Rd] rhub vs. CRAN fedora-*-devel, using armadillo & slapack
+In-Reply-To: <ba0f6126425d4a43a3e1e3b0009e4105@irsn.fr>
+References: <334d6d8de5094164a99c8d4b26d77246@irsn.fr>
+ <72de7b54-ff87-166f-4f8a-2b91381488cb@insa-toulouse.fr>
+ <ffef02ea-52ae-a27a-1a8e-3d2046fd092c@insa-toulouse.fr>
+ <ba0f6126425d4a43a3e1e3b0009e4105@irsn.fr>
+Message-ID: <6314ae19-a605-0286-a200-dfa0f09ffc52@insa-toulouse.fr>
+
+Looks like there is a kind of misunderstanding...
+
+Le 10/01/2023 ? 17:27, RICHET Yann a ?crit?:
+> Thank you for your answer.
+> In facts, 10 threads are asked by armadillo for some LinAlg, which backs to two threads as warned. But I cannot imagine this costs so much time just for that...
+Excessive thread number is a problem per se. I did not say that it was 
+responsible for excessive test time.
+It's up to you to configure armadillo to use no more then 2 threads when 
+run on CRAN. May be, setting environment variable OPENBLAS_NUM_THREADS=2 
+could help.
+
+>
+> A deeper analysis of time spent seems to point that a large time was mainly spent on testthat and Rcpp dependencies compilation...
+Normally, compilation time is not accounted in the quota of 15 min 
+dedicated to tests.
+I would just focus on reducing this time, e.g. by running tests on 
+smaller cases or skipping time-consuming tests conditionally when on CRAN.
+
+Serguei.
+>   But other recent packages depending on these also are not spending so much time.
+>
+> CRAN team, as I failed to reproduce the issue with rhub dockers,
+> - is there any reason that could explain that fedora-*-devel is so slow for this package or compilation of Rcpp/testthat ?
+> - is our slapack a possible source of... anything ?
+> - are we the only package which embeds "standard armadillo" and tries to deal with simple precision lapack issues on fedora ?
+> - is there any chance that I can get a deeper log of what happened ?
+>
+> Best regards,
+>
+> Yann
+>
+> -----Message d'origine-----
+> De?: Serguei Sokol<sokol at insa-toulouse.fr>  
+> Envoy??: mardi 10 janvier 2023 11:41
+> ??: RICHET Yann<yann.richet at irsn.fr>;R-devel at r-project.org
+> Cc?: Pascal Hav?<pascal at haveneer.com>
+> Objet?: Re: [Rd] rhub vs. CRAN fedora-*-devel, using armadillo & slapack
+>
+> Le 10/01/2023 ? 11:37, Serguei Sokol a ?crit?:
+>> Le 10/01/2023 ? 10:44, RICHET Yann a ?crit?:
+>>> Dear R-devel people,
+>>>
+>>> We are working to submit a package which is mainly a binding over a
+>>> C++ lib (https://github.com/libKriging) using armadillo.
+>>> It is _not_ a standard RcppArmadillo package, because we also had to
+>>> provide a python binding... so there is a huge layer of cmake &
+>>> scripting to make it work with a standard armadillo (but using same
+>>> version that RcppArmadillo).
+>>> It seems now working with almost all CRAN targets, but a problem
+>>> remains with fedora (clang & gcc) devel.
+>>>
+>>> Our issue is that the rhub docker is not well sync with the CRAN
+>>> fedora-clang-devel config:
+>>> - failing on CRAN (without clear reason):
+>>> https://www.r-project.org/nosvn/R.check/r-devel-linux-x86_64-fedora-c
+>>> lang/rlibkriging-00check.html
+>> I see? 2 candidates for? reasons of failing on CRAN:
+>>  ?1. test time is 30 min while 15 min are allowed;
+>>  ?2. your code try to get 30 threads
+> Oops, it was 10 threads not 30 but it does not change the nature of a possible issue.
+>
+>> while CRAN limits them to 2;
+>>
+>> Try to make your tests shorter ( < 15 min) on 2 threads. May be it
+>> will help.
+>>
+>> Best,
+>> Serguei.
+>>
+>>> - passing on rhub:
+>>> https://builder.r-hub.io/status/rlibkriging_0.7-3.tar.gz-20f7dc756272
+>>> 6497af7c678ab41f4dea
+>>>
+>>> So we cannot investigate and fix the problem.
+>>>
+>>> Note that we did quite strange things with the fedora platforms:
+>>> include explicitely slapack to provide simple precision for our
+>>> (vanilla) armadillo...
+>>>
+>>> Do you have any idea, or even known problem in mind, that could be
+>>> related to this ?
+>>>
+>>> Best regards,
+>>>
+>>> --
+>>> Dr. Yann Richet
+>>> Institute for Radiological Protection and Nuclear Safety
+>>> (https://www.irsn.fr),
+>>>  ?? Department of Characterization of Natural Unexpected Events and
+>>> Sites Office?: +33 1 58 35 88 84
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org  mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+
+	[[alternative HTML version deleted]]
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Tue Jan 10 20:05:45 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Tue, 10 Jan 2023 22:05:45 +0300
+Subject: [Rd] rhub vs. CRAN fedora-*-devel, using armadillo & slapack
+In-Reply-To: <ba0f6126425d4a43a3e1e3b0009e4105@irsn.fr>
+References: <334d6d8de5094164a99c8d4b26d77246@irsn.fr>
+ <72de7b54-ff87-166f-4f8a-2b91381488cb@insa-toulouse.fr>
+ <ffef02ea-52ae-a27a-1a8e-3d2046fd092c@insa-toulouse.fr>
+ <ba0f6126425d4a43a3e1e3b0009e4105@irsn.fr>
+Message-ID: <20230110220545.5d213d2d@Tarkus>
+
+On Tue, 10 Jan 2023 16:27:53 +0000
+RICHET Yann <yann.richet at irsn.fr> wrote:
+
+> In facts, 10 threads are asked by armadillo for some LinAlg, which
+> backs to two threads as warned. 
+
+I think you're right about your tests de-facto using two threads, but
+it might be a good idea to _default_ to up to two threads in tests and
+examples. This is especially valuable for third-party developers who
+have to mass-test packages (one of which could be rlibkriging) in
+parallel.
+
+> - is there any reason that could explain that fedora-*-devel is so
+> slow for this package or compilation of Rcpp/testthat ?
+
+Compilation time is definitely not the reason. Something in tests/*
+actually runs for 30 minutes by itself.
+
+> - is there any chance that I can get a deeper log of what happened ?
+
+If you split your tests into separate files under tests/*.R instead of
+using a single tests/testthat.R calling the rest of the tests, R will
+be able to show you the individual test file that hung and maybe the
+line where it happened. (Also, you'll get per-file timing.) But that
+is potentially a huge investment: you may have to rewrite the tests to
+work outside the testthat harness, and you'd also have to prepare
+another CRAN submission just to have those tests run. It's also against
+CRAN policy to knowingly submit a package with unfixed ERRORs.
+
+(Currently, R can only tell you that the tests hung in the
+test_check('rlibkriging') call in the tests/testthat.R, which isn't
+precise enough.)
+
+These lines look a bit scary:
+
+tests/testthat/bench-KrigingFit.R:
+
+pack=list.files(file.path("bindings","R"),pattern = ".tar.gz",full.names = T) install.packages(pack,repos=NULL)
+
+tests/testthat/notest-LinearRegression.R:
+
+install.packages(pkgs="rlibkriging_0.7-2.tgz", type="source", repos=NULL)
+library(rlibkriging)
+
+I don't think that install.packages does anything besides raising a
+warning and letting the test continue (there doesn't seem to be any
+.tar.gz files inside the package on CRAN, so installation fails), but
+it's probably not a good idea to install packages during testing [*].
+
+This is also not quite right but harmless, because rlibkriging is
+already loaded:
+
+library(rlibkriging, lib.loc="bindings/R/Rlibs")
+
+I'm afraid I don't know how to reproduce the timeouts you're seeing on
+the CRAN Fedora machine.
+
+-- 
+Best regards,
+Ivan
+
+[*] I once wrote a test that launched multiple child R processes,
+created a temporary library in each of them and installed the package
+there. The test was designed to only run on the developer's machine in
+order to test file format compatibility between different versions of
+R. I ended up moving the test away from tests/*.R in order to make sure
+it won't run by accident.
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Tue Jan 10 21:28:36 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 10 Jan 2023 15:28:36 -0500
+Subject: [Rd] rhub vs. CRAN fedora-*-devel, using armadillo & slapack
+In-Reply-To: <20230110220545.5d213d2d@Tarkus>
+References: <334d6d8de5094164a99c8d4b26d77246@irsn.fr>
+ <72de7b54-ff87-166f-4f8a-2b91381488cb@insa-toulouse.fr>
+ <ffef02ea-52ae-a27a-1a8e-3d2046fd092c@insa-toulouse.fr>
+ <ba0f6126425d4a43a3e1e3b0009e4105@irsn.fr> <20230110220545.5d213d2d@Tarkus>
+Message-ID: <44168649-5146-9cb0-a416-fbdb8b020029@gmail.com>
+
+On 10/01/2023 2:05 p.m., Ivan Krylov wrote:
+> On Tue, 10 Jan 2023 16:27:53 +0000
+> RICHET Yann <yann.richet at irsn.fr> wrote:
+> 
+>> In facts, 10 threads are asked by armadillo for some LinAlg, which
+>> backs to two threads as warned.
+> 
+> I think you're right about your tests de-facto using two threads, but
+> it might be a good idea to _default_ to up to two threads in tests and
+> examples. This is especially valuable for third-party developers who
+> have to mass-test packages (one of which could be rlibkriging) in
+> parallel.
+> 
+>> - is there any reason that could explain that fedora-*-devel is so
+>> slow for this package or compilation of Rcpp/testthat ?
+> 
+> Compilation time is definitely not the reason. Something in tests/*
+> actually runs for 30 minutes by itself.
+> 
+>> - is there any chance that I can get a deeper log of what happened ?
+> 
+> If you split your tests into separate files under tests/*.R instead of
+> using a single tests/testthat.R calling the rest of the tests, R will
+> be able to show you the individual test file that hung and maybe the
+> line where it happened. (Also, you'll get per-file timing.) But that
+> is potentially a huge investment: you may have to rewrite the tests to
+> work outside the testthat harness, and you'd also have to prepare
+> another CRAN submission just to have those tests run. It's also against
+> CRAN policy to knowingly submit a package with unfixed ERRORs.
+> 
+> (Currently, R can only tell you that the tests hung in the
+> test_check('rlibkriging') call in the tests/testthat.R, which isn't
+> precise enough.)
+
+You can specify a different "reporter" in the test_check() call, and it 
+will print more useful information.  I don't think there's a perfect 
+one, but
+
+   test_check('rlibkriging', reporter = "progress")
+
+should at least show you the tests that finished running before the 
+timeout.  You could possibly also write your own custom reporter that 
+could give timings for each of the tests as they run, but the documents 
+for how to do that don't seem to exist.  Maybe someone else has done it?
+
+Duncan Murdoch
+
+
+From @eb@meyer @end|ng |rom |@u@de  Tue Jan 10 22:07:26 2023
+From: @eb@meyer @end|ng |rom |@u@de (Sebastian Meyer)
+Date: Tue, 10 Jan 2023 22:07:26 +0100
+Subject: [Rd] rhub vs. CRAN fedora-*-devel, using armadillo & slapack
+In-Reply-To: <44168649-5146-9cb0-a416-fbdb8b020029@gmail.com>
+References: <334d6d8de5094164a99c8d4b26d77246@irsn.fr>
+ <72de7b54-ff87-166f-4f8a-2b91381488cb@insa-toulouse.fr>
+ <ffef02ea-52ae-a27a-1a8e-3d2046fd092c@insa-toulouse.fr>
+ <ba0f6126425d4a43a3e1e3b0009e4105@irsn.fr> <20230110220545.5d213d2d@Tarkus>
+ <44168649-5146-9cb0-a416-fbdb8b020029@gmail.com>
+Message-ID: <8cb80424-2264-4faa-b16f-e137b9f85bd4@fau.de>
+
+Am 10.01.23 um 21:28 schrieb Duncan Murdoch:
+> On 10/01/2023 2:05 p.m., Ivan Krylov wrote:
+>> On Tue, 10 Jan 2023 16:27:53 +0000
+>> RICHET Yann <yann.richet at irsn.fr> wrote:
+>>
+>>> In facts, 10 threads are asked by armadillo for some LinAlg, which
+>>> backs to two threads as warned.
+>>
+>> I think you're right about your tests de-facto using two threads, but
+>> it might be a good idea to _default_ to up to two threads in tests and
+>> examples. This is especially valuable for third-party developers who
+>> have to mass-test packages (one of which could be rlibkriging) in
+>> parallel.
+>>
+>>> - is there any reason that could explain that fedora-*-devel is so
+>>> slow for this package or compilation of Rcpp/testthat ?
+>>
+>> Compilation time is definitely not the reason. Something in tests/*
+>> actually runs for 30 minutes by itself.
+>>
+>>> - is there any chance that I can get a deeper log of what happened ?
+>>
+>> If you split your tests into separate files under tests/*.R instead of
+>> using a single tests/testthat.R calling the rest of the tests, R will
+>> be able to show you the individual test file that hung and maybe the
+>> line where it happened. (Also, you'll get per-file timing.) But that
+>> is potentially a huge investment: you may have to rewrite the tests to
+>> work outside the testthat harness, and you'd also have to prepare
+>> another CRAN submission just to have those tests run. It's also against
+>> CRAN policy to knowingly submit a package with unfixed ERRORs.
+>>
+>> (Currently, R can only tell you that the tests hung in the
+>> test_check('rlibkriging') call in the tests/testthat.R, which isn't
+>> precise enough.)
+> 
+> You can specify a different "reporter" in the test_check() call, and it 
+> will print more useful information.? I don't think there's a perfect 
+> one, but
+> 
+>  ? test_check('rlibkriging', reporter = "progress")
+> 
+> should at least show you the tests that finished running before the 
+> timeout.  
+
+I had similar problems with testthat and timeouts when mass-checking 
+packages on patched R versions. My notes say
+
+> ## testthat's 'LocationReporter' does cat() after each expectation
+> ## so we can see results even if timeout is reached
+> options(testthat.default_check_reporter = c("Location", "Check"))
+
+The help("LocationReporter") says: "This reporter simply prints the 
+location of every expectation and error. This is useful if you're trying 
+to figure out the source of a segfault, or you want to figure out which 
+code triggers a C/C++ breakpoint"
+
+HTH!
+
+	Sebastian Meyer
+
+> You could possibly also write your own custom reporter that 
+> could give timings for each of the tests as they run, but the documents 
+> for how to do that don't seem to exist.? Maybe someone else has done it?
+> 
+> Duncan Murdoch
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Wed Jan 11 00:35:57 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 10 Jan 2023 18:35:57 -0500
+Subject: [Rd] rhub vs. CRAN fedora-*-devel, using armadillo & slapack
+In-Reply-To: <8cb80424-2264-4faa-b16f-e137b9f85bd4@fau.de>
+References: <334d6d8de5094164a99c8d4b26d77246@irsn.fr>
+ <72de7b54-ff87-166f-4f8a-2b91381488cb@insa-toulouse.fr>
+ <ffef02ea-52ae-a27a-1a8e-3d2046fd092c@insa-toulouse.fr>
+ <ba0f6126425d4a43a3e1e3b0009e4105@irsn.fr> <20230110220545.5d213d2d@Tarkus>
+ <44168649-5146-9cb0-a416-fbdb8b020029@gmail.com>
+ <8cb80424-2264-4faa-b16f-e137b9f85bd4@fau.de>
+Message-ID: <84e94d6c-3408-014a-3845-76e66e88a779@gmail.com>
+
+On 10/01/2023 4:07 p.m., Sebastian Meyer wrote:
+> Am 10.01.23 um 21:28 schrieb Duncan Murdoch:
+>> On 10/01/2023 2:05 p.m., Ivan Krylov wrote:
+>>> On Tue, 10 Jan 2023 16:27:53 +0000
+>>> RICHET Yann <yann.richet at irsn.fr> wrote:
+>>>
+>>>> In facts, 10 threads are asked by armadillo for some LinAlg, which
+>>>> backs to two threads as warned.
+>>>
+>>> I think you're right about your tests de-facto using two threads, but
+>>> it might be a good idea to _default_ to up to two threads in tests and
+>>> examples. This is especially valuable for third-party developers who
+>>> have to mass-test packages (one of which could be rlibkriging) in
+>>> parallel.
+>>>
+>>>> - is there any reason that could explain that fedora-*-devel is so
+>>>> slow for this package or compilation of Rcpp/testthat ?
+>>>
+>>> Compilation time is definitely not the reason. Something in tests/*
+>>> actually runs for 30 minutes by itself.
+>>>
+>>>> - is there any chance that I can get a deeper log of what happened ?
+>>>
+>>> If you split your tests into separate files under tests/*.R instead of
+>>> using a single tests/testthat.R calling the rest of the tests, R will
+>>> be able to show you the individual test file that hung and maybe the
+>>> line where it happened. (Also, you'll get per-file timing.) But that
+>>> is potentially a huge investment: you may have to rewrite the tests to
+>>> work outside the testthat harness, and you'd also have to prepare
+>>> another CRAN submission just to have those tests run. It's also against
+>>> CRAN policy to knowingly submit a package with unfixed ERRORs.
+>>>
+>>> (Currently, R can only tell you that the tests hung in the
+>>> test_check('rlibkriging') call in the tests/testthat.R, which isn't
+>>> precise enough.)
+>>
+>> You can specify a different "reporter" in the test_check() call, and it
+>> will print more useful information.? I don't think there's a perfect
+>> one, but
+>>
+>>   ? test_check('rlibkriging', reporter = "progress")
+>>
+>> should at least show you the tests that finished running before the
+>> timeout.
+> 
+> I had similar problems with testthat and timeouts when mass-checking
+> packages on patched R versions. My notes say
+> 
+>> ## testthat's 'LocationReporter' does cat() after each expectation
+>> ## so we can see results even if timeout is reached
+>> options(testthat.default_check_reporter = c("Location", "Check"))
+> 
+> The help("LocationReporter") says: "This reporter simply prints the
+> location of every expectation and error. This is useful if you're trying
+> to figure out the source of a segfault, or you want to figure out which
+> code triggers a C/C++ breakpoint"
+> 
+> HTH!
+
+Yes, that looks like it would pin down the location of the problem. 
+Here's some sample output from it:
+
+   Running ?testthat.R? [41s/42s]
+Running the tests in ?tests/testthat.R? failed.
+Last 13 lines of output:
+   Start test: can use constructed calls in verify_output() (#945)
+     'test-verify-output.R:55' [success]
+   End test: can use constructed calls in verify_output() (#945)
+
+   Start test: verify_output() doesn't use cli unicode by default
+     'test-verify-output.R:65' [success]
+     'test-verify-output.R:73' [success]
+   End test: verify_output() doesn't use cli unicode by default
+
+   Start test: verify_output() handles carriage return
+     'test-verify-output.R:82' [success]
+   End test: verify_output() handles carriage return
+
+   Error: Test failures
+   Execution halted
+
+One other thing:  you enabled this by using
+
+   options(testthat.default_check_reporter = c("Location", "Check"))
+
+before running the tests; the package writer could do the same thing by 
+using
+
+   test_check('rlibkriging', reporter = c("Location", "Check"))
+
+Duncan Murdoch
+
+
