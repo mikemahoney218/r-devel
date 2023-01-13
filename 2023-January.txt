@@ -2337,3 +2337,346 @@ using
 Duncan Murdoch
 
 
+From yugong @end|ng |rom out|ook@com  Wed Jan 11 15:25:33 2023
+From: yugong @end|ng |rom out|ook@com (yu gong)
+Date: Wed, 11 Jan 2023 14:25:33 +0000
+Subject: [Rd] proposal for use ICU for timezone convertion on windows and a
+ draft patch
+Message-ID: <TYAP286MB0268F0EDEE6C5A36C751B0C7D1FC9@TYAP286MB0268.JPNP286.PROD.OUTLOOK.COM>
+
+Dear All,
+
+ Last week I found an issue about R Sys.timezone function on Windows and send email to this list. This week , I read quite a few  docs and codes about windows time zone to IANA time zone conversion. and found in unicode.org's  ICU library has a function  ucal_getTimeZoneIDForWindowsID which do the time zone convert. Microsoft also use it for time zone convertion in dotnet 6 and 7.(https://github.com/dotnet/runtime/blob/main/src/native/libs/System.Globalization.Native/pal_timeZoneInfo.c) .
+
+IMHO, use this function to implement time zone convert on windows is better than R's hand-write conversion implementation, use the ICU , it will update the conversion when unicode org upgrade the ICU library and no more hand-write conversion code needed. Also RTools already included the ICU library,and R on windows build link ICU lib on default  , so no additional library or tools need for use this function for time zone conversion.
+
+so I wrote a quick and dirty patch use the ucal_getTimeZoneIDForWindowsID, I think maybe better discuss here before I send patch to bugs.r-project.org.
+I put the patch on https://github.com/armgong/misc-r-patch/blob/main/registryTZ-ICU.diff.
+
+this patch mainly do following three steps : 1 read current English time zone name from registry ; 2 read current region name from registry(this also affect conversion); 3 use ucal_getTimeZoneIDForWindowsID implement the conversion.
+
+please feel free to share your thoughts or feedbacks of this patch.  if it doable ,then I will modify it and send it to bugs.r-project.org
+
+best regards,
+Yu Gong
+
+
+
+
+	[[alternative HTML version deleted]]
+
+
+From y@nn@r|chet @end|ng |rom |r@n@|r  Wed Jan 11 18:35:45 2023
+From: y@nn@r|chet @end|ng |rom |r@n@|r (RICHET Yann)
+Date: Wed, 11 Jan 2023 17:35:45 +0000
+Subject: [Rd] rhub vs. CRAN fedora-*-devel, using armadillo & slapack
+In-Reply-To: <84e94d6c-3408-014a-3845-76e66e88a779@gmail.com>
+References: <334d6d8de5094164a99c8d4b26d77246@irsn.fr>
+ <72de7b54-ff87-166f-4f8a-2b91381488cb@insa-toulouse.fr>
+ <ffef02ea-52ae-a27a-1a8e-3d2046fd092c@insa-toulouse.fr>
+ <ba0f6126425d4a43a3e1e3b0009e4105@irsn.fr> <20230110220545.5d213d2d@Tarkus>
+ <44168649-5146-9cb0-a416-fbdb8b020029@gmail.com>
+ <8cb80424-2264-4faa-b16f-e137b9f85bd4@fau.de>
+ <84e94d6c-3408-014a-3845-76e66e88a779@gmail.com>
+Message-ID: <30578c9825ff429baecb0be28fc8b778@irsn.fr>
+
+Thank you all, for these advices.
+
+So I try to fix OMP_THREADS, cleanup tests, and display explicitly what test is running by moving in tests/ instead of tests/testthat/...
+Next step should be to investigate blocking test using a reporter (maybe "list").
+For now, waiting for CRAN results...
+
+Yann
+
+-----Message d'origine-----
+De?: Duncan Murdoch <murdoch.duncan at gmail.com> 
+Envoy??: mercredi 11 janvier 2023 00:36
+??: Sebastian Meyer <seb.meyer at fau.de>; Ivan Krylov <krylov.r00t at gmail.com>; RICHET Yann <yann.richet at irsn.fr>
+Cc?: Pascal Hav? <pascal at haveneer.com>; R-devel at r-project.org
+Objet?: Re: [Rd] rhub vs. CRAN fedora-*-devel, using armadillo & slapack
+
+On 10/01/2023 4:07 p.m., Sebastian Meyer wrote:
+> Am 10.01.23 um 21:28 schrieb Duncan Murdoch:
+>> On 10/01/2023 2:05 p.m., Ivan Krylov wrote:
+>>> On Tue, 10 Jan 2023 16:27:53 +0000
+>>> RICHET Yann <yann.richet at irsn.fr> wrote:
+>>>
+>>>> In facts, 10 threads are asked by armadillo for some LinAlg, which 
+>>>> backs to two threads as warned.
+>>>
+>>> I think you're right about your tests de-facto using two threads, 
+>>> but it might be a good idea to _default_ to up to two threads in 
+>>> tests and examples. This is especially valuable for third-party 
+>>> developers who have to mass-test packages (one of which could be 
+>>> rlibkriging) in parallel.
+>>>
+>>>> - is there any reason that could explain that fedora-*-devel is so 
+>>>> slow for this package or compilation of Rcpp/testthat ?
+>>>
+>>> Compilation time is definitely not the reason. Something in tests/* 
+>>> actually runs for 30 minutes by itself.
+>>>
+>>>> - is there any chance that I can get a deeper log of what happened ?
+>>>
+>>> If you split your tests into separate files under tests/*.R instead 
+>>> of using a single tests/testthat.R calling the rest of the tests, R 
+>>> will be able to show you the individual test file that hung and 
+>>> maybe the line where it happened. (Also, you'll get per-file 
+>>> timing.) But that is potentially a huge investment: you may have to 
+>>> rewrite the tests to work outside the testthat harness, and you'd 
+>>> also have to prepare another CRAN submission just to have those 
+>>> tests run. It's also against CRAN policy to knowingly submit a package with unfixed ERRORs.
+>>>
+>>> (Currently, R can only tell you that the tests hung in the
+>>> test_check('rlibkriging') call in the tests/testthat.R, which isn't 
+>>> precise enough.)
+>>
+>> You can specify a different "reporter" in the test_check() call, and 
+>> it will print more useful information.? I don't think there's a 
+>> perfect one, but
+>>
+>>   ? test_check('rlibkriging', reporter = "progress")
+>>
+>> should at least show you the tests that finished running before the 
+>> timeout.
+> 
+> I had similar problems with testthat and timeouts when mass-checking 
+> packages on patched R versions. My notes say
+> 
+>> ## testthat's 'LocationReporter' does cat() after each expectation ## 
+>> so we can see results even if timeout is reached 
+>> options(testthat.default_check_reporter = c("Location", "Check"))
+> 
+> The help("LocationReporter") says: "This reporter simply prints the 
+> location of every expectation and error. This is useful if you're 
+> trying to figure out the source of a segfault, or you want to figure 
+> out which code triggers a C/C++ breakpoint"
+> 
+> HTH!
+
+Yes, that looks like it would pin down the location of the problem. 
+Here's some sample output from it:
+
+   Running ?testthat.R? [41s/42s]
+Running the tests in ?tests/testthat.R? failed.
+Last 13 lines of output:
+   Start test: can use constructed calls in verify_output() (#945)
+     'test-verify-output.R:55' [success]
+   End test: can use constructed calls in verify_output() (#945)
+
+   Start test: verify_output() doesn't use cli unicode by default
+     'test-verify-output.R:65' [success]
+     'test-verify-output.R:73' [success]
+   End test: verify_output() doesn't use cli unicode by default
+
+   Start test: verify_output() handles carriage return
+     'test-verify-output.R:82' [success]
+   End test: verify_output() handles carriage return
+
+   Error: Test failures
+   Execution halted
+
+One other thing:  you enabled this by using
+
+   options(testthat.default_check_reporter = c("Location", "Check"))
+
+before running the tests; the package writer could do the same thing by using
+
+   test_check('rlibkriging', reporter = c("Location", "Check"))
+
+Duncan Murdoch
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Wed Jan 11 19:09:25 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Wed, 11 Jan 2023 13:09:25 -0500
+Subject: [Rd] rhub vs. CRAN fedora-*-devel, using armadillo & slapack
+In-Reply-To: <30578c9825ff429baecb0be28fc8b778@irsn.fr>
+References: <334d6d8de5094164a99c8d4b26d77246@irsn.fr>
+ <72de7b54-ff87-166f-4f8a-2b91381488cb@insa-toulouse.fr>
+ <ffef02ea-52ae-a27a-1a8e-3d2046fd092c@insa-toulouse.fr>
+ <ba0f6126425d4a43a3e1e3b0009e4105@irsn.fr> <20230110220545.5d213d2d@Tarkus>
+ <44168649-5146-9cb0-a416-fbdb8b020029@gmail.com>
+ <8cb80424-2264-4faa-b16f-e137b9f85bd4@fau.de>
+ <84e94d6c-3408-014a-3845-76e66e88a779@gmail.com>
+ <30578c9825ff429baecb0be28fc8b778@irsn.fr>
+Message-ID: <ab26f046-bf7c-465b-cf3e-cdccf6b05bcf@gmail.com>
+
+On 11/01/2023 12:35 p.m., RICHET Yann wrote:
+> Thank you all, for these advices.
+> 
+> So I try to fix OMP_THREADS, cleanup tests, and display explicitly what test is running by moving in tests/ instead of tests/testthat/...
+> Next step should be to investigate blocking test using a reporter (maybe "list").
+> For now, waiting for CRAN results...
+
+I think Sebastian or my suggestion is easier than redoing all of your 
+tests.  They are each one line changes.
+
+Duncan Murdoch
+
+> 
+> Yann
+> 
+> -----Message d'origine-----
+> De?: Duncan Murdoch <murdoch.duncan at gmail.com>
+> Envoy??: mercredi 11 janvier 2023 00:36
+> ??: Sebastian Meyer <seb.meyer at fau.de>; Ivan Krylov <krylov.r00t at gmail.com>; RICHET Yann <yann.richet at irsn.fr>
+> Cc?: Pascal Hav? <pascal at haveneer.com>; R-devel at r-project.org
+> Objet?: Re: [Rd] rhub vs. CRAN fedora-*-devel, using armadillo & slapack
+> 
+> On 10/01/2023 4:07 p.m., Sebastian Meyer wrote:
+>> Am 10.01.23 um 21:28 schrieb Duncan Murdoch:
+>>> On 10/01/2023 2:05 p.m., Ivan Krylov wrote:
+>>>> On Tue, 10 Jan 2023 16:27:53 +0000
+>>>> RICHET Yann <yann.richet at irsn.fr> wrote:
+>>>>
+>>>>> In facts, 10 threads are asked by armadillo for some LinAlg, which
+>>>>> backs to two threads as warned.
+>>>>
+>>>> I think you're right about your tests de-facto using two threads,
+>>>> but it might be a good idea to _default_ to up to two threads in
+>>>> tests and examples. This is especially valuable for third-party
+>>>> developers who have to mass-test packages (one of which could be
+>>>> rlibkriging) in parallel.
+>>>>
+>>>>> - is there any reason that could explain that fedora-*-devel is so
+>>>>> slow for this package or compilation of Rcpp/testthat ?
+>>>>
+>>>> Compilation time is definitely not the reason. Something in tests/*
+>>>> actually runs for 30 minutes by itself.
+>>>>
+>>>>> - is there any chance that I can get a deeper log of what happened ?
+>>>>
+>>>> If you split your tests into separate files under tests/*.R instead
+>>>> of using a single tests/testthat.R calling the rest of the tests, R
+>>>> will be able to show you the individual test file that hung and
+>>>> maybe the line where it happened. (Also, you'll get per-file
+>>>> timing.) But that is potentially a huge investment: you may have to
+>>>> rewrite the tests to work outside the testthat harness, and you'd
+>>>> also have to prepare another CRAN submission just to have those
+>>>> tests run. It's also against CRAN policy to knowingly submit a package with unfixed ERRORs.
+>>>>
+>>>> (Currently, R can only tell you that the tests hung in the
+>>>> test_check('rlibkriging') call in the tests/testthat.R, which isn't
+>>>> precise enough.)
+>>>
+>>> You can specify a different "reporter" in the test_check() call, and
+>>> it will print more useful information.? I don't think there's a
+>>> perfect one, but
+>>>
+>>>    ? test_check('rlibkriging', reporter = "progress")
+>>>
+>>> should at least show you the tests that finished running before the
+>>> timeout.
+>>
+>> I had similar problems with testthat and timeouts when mass-checking
+>> packages on patched R versions. My notes say
+>>
+>>> ## testthat's 'LocationReporter' does cat() after each expectation ##
+>>> so we can see results even if timeout is reached
+>>> options(testthat.default_check_reporter = c("Location", "Check"))
+>>
+>> The help("LocationReporter") says: "This reporter simply prints the
+>> location of every expectation and error. This is useful if you're
+>> trying to figure out the source of a segfault, or you want to figure
+>> out which code triggers a C/C++ breakpoint"
+>>
+>> HTH!
+> 
+> Yes, that looks like it would pin down the location of the problem.
+> Here's some sample output from it:
+> 
+>     Running ?testthat.R? [41s/42s]
+> Running the tests in ?tests/testthat.R? failed.
+> Last 13 lines of output:
+>     Start test: can use constructed calls in verify_output() (#945)
+>       'test-verify-output.R:55' [success]
+>     End test: can use constructed calls in verify_output() (#945)
+> 
+>     Start test: verify_output() doesn't use cli unicode by default
+>       'test-verify-output.R:65' [success]
+>       'test-verify-output.R:73' [success]
+>     End test: verify_output() doesn't use cli unicode by default
+> 
+>     Start test: verify_output() handles carriage return
+>       'test-verify-output.R:82' [success]
+>     End test: verify_output() handles carriage return
+> 
+>     Error: Test failures
+>     Execution halted
+> 
+> One other thing:  you enabled this by using
+> 
+>     options(testthat.default_check_reporter = c("Location", "Check"))
+> 
+> before running the tests; the package writer could do the same thing by using
+> 
+>     test_check('rlibkriging', reporter = c("Location", "Check"))
+> 
+> Duncan Murdoch
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Wed Jan 11 19:27:19 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Wed, 11 Jan 2023 21:27:19 +0300
+Subject: [Rd] rhub vs. CRAN fedora-*-devel, using armadillo & slapack
+In-Reply-To: <ab26f046-bf7c-465b-cf3e-cdccf6b05bcf@gmail.com>
+References: <334d6d8de5094164a99c8d4b26d77246@irsn.fr>
+ <72de7b54-ff87-166f-4f8a-2b91381488cb@insa-toulouse.fr>
+ <ffef02ea-52ae-a27a-1a8e-3d2046fd092c@insa-toulouse.fr>
+ <ba0f6126425d4a43a3e1e3b0009e4105@irsn.fr>
+ <20230110220545.5d213d2d@Tarkus>
+ <44168649-5146-9cb0-a416-fbdb8b020029@gmail.com>
+ <8cb80424-2264-4faa-b16f-e137b9f85bd4@fau.de>
+ <84e94d6c-3408-014a-3845-76e66e88a779@gmail.com>
+ <30578c9825ff429baecb0be28fc8b778@irsn.fr>
+ <ab26f046-bf7c-465b-cf3e-cdccf6b05bcf@gmail.com>
+Message-ID: <20230111212719.49c123e1@Tarkus>
+
+On Wed, 11 Jan 2023 13:09:25 -0500
+Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+
+> I think Sebastian or my suggestion is easier than redoing all of your 
+> tests.  They are each one line changes.
+
+Yes, sorry about that. Definitely try a verbose reporter first instead
+of redoing the tests. I'll remember not to give this advice next time.
+
+-- 
+Best regards,
+Ivan
+
+
+From edd @end|ng |rom deb|@n@org  Wed Jan 11 19:34:31 2023
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Wed, 11 Jan 2023 12:34:31 -0600
+Subject: [Rd] rhub vs. CRAN fedora-*-devel, using armadillo & slapack
+In-Reply-To: <30578c9825ff429baecb0be28fc8b778@irsn.fr>
+References: <334d6d8de5094164a99c8d4b26d77246@irsn.fr>
+ <72de7b54-ff87-166f-4f8a-2b91381488cb@insa-toulouse.fr>
+ <ffef02ea-52ae-a27a-1a8e-3d2046fd092c@insa-toulouse.fr>
+ <ba0f6126425d4a43a3e1e3b0009e4105@irsn.fr>
+ <20230110220545.5d213d2d@Tarkus>
+ <44168649-5146-9cb0-a416-fbdb8b020029@gmail.com>
+ <8cb80424-2264-4faa-b16f-e137b9f85bd4@fau.de>
+ <84e94d6c-3408-014a-3845-76e66e88a779@gmail.com>
+ <30578c9825ff429baecb0be28fc8b778@irsn.fr>
+Message-ID: <25535.311.322068.314067@rob.eddelbuettel.com>
+
+
+On 11 January 2023 at 17:35, RICHET Yann wrote:
+| Thank you all, for these advices.
+| 
+| So I try to fix OMP_THREADS, cleanup tests, and display explicitly what test is running by moving in tests/ instead of tests/testthat/...
+| Next step should be to investigate blocking test using a reporter (maybe "list").
+| For now, waiting for CRAN results...
+
+BTW your package failed its tests for me in a reverse-depends run when I had
+`ccache` as usual in the definition of CC, CXX, FC, CXX14, ... That usually
+works with other packages using CMake. Maybe something you could look into.
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
