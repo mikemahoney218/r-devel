@@ -3446,3 +3446,78 @@ On 1/13/23 4:11 AM, Serguei Sokol via R-devel wrote:
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From Andre@G||||bert @end|ng |rom chu-rouen@|r  Sat Jan 14 17:05:31 2023
+From: Andre@G||||bert @end|ng |rom chu-rouen@|r (GILLIBERT, Andre)
+Date: Sat, 14 Jan 2023 16:05:31 +0000
+Subject: [Rd] Bug or feature?
+Message-ID: <e9e812c035874cf28f309c64c3016be9@chu-rouen.fr>
+
+Dear developers,
+
+
+I found an inconsistency in the predict.lm() function between offset and non-offset terms of the formula, but I am not sure whether that is intentional or a bug.
+
+
+The problem can be shown in a simple example:
+
+
+mod <- local({
+    y <- rep(0,10)
+    x <- rep(c(0,1), each=5)
+    list(lm(y ~ x), lm(y ~ offset(x)))
+})
+# works fine, using the x variable of the local environment
+predict(mod[[1]], newdata=data.frame(z=1:10))
+# error 'x' not found, because it seeks x in the global environment
+predict(mod[[2]], newdata=data.frame(z=1:10))
+
+I would expect either both predict() to use the local x variable or the global x variable, but the current behavior is inconsistent.
+
+In the worse case, both variables may exist but refer to different data, which seems to be very dangerous in my opinion.
+
+
+The problem becomes obvious from the source code of model.frame.default() and predict.lm()
+
+predict.lm() calls model.frame()
+
+For a non-offset variable, the source code of model.frame.default shows:
+
+
+variables <- eval(predvars, data, env)
+
+
+Where env is the environment of the formula parameter.
+
+Consequently, non-offset variables are evaluated in the context of the data frame, then in the environment of the formula/terms of the model.
+
+
+For offset variables, the source code of predict.lm() contains:
+
+eval(attr(tt, "variables")[[i + 1]], newdata)
+
+
+It is not executed in the environment of the formula/terms of the model.
+
+
+The inconsistency could easily be fixed by a patch to predict.lm() by replacing eval(attr(tt, "variables")[[i + 1]], newdata) by eval(attr(tt, "variables")[[i + 1]], newdata, environment(Terms))
+
+The same modification would have to be done two lines after:
+
+offset <- offset + eval(object$call$offset, newdata, environment(Terms))
+
+
+However, fixing this inconsistency could break code that rely on the old behavior.
+
+
+What do you think of that?
+
+
+--
+
+Sincerely
+
+Andr? GILLIBERT
+
+	[[alternative HTML version deleted]]
+
+
