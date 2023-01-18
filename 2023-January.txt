@@ -3521,3 +3521,373 @@ Andr? GILLIBERT
 	[[alternative HTML version deleted]]
 
 
+From ro|@nd@|u@@ @end|ng |rom thuenen@de  Mon Jan 16 11:23:47 2023
+From: ro|@nd@|u@@ @end|ng |rom thuenen@de (=?UTF-8?Q?Roland_Fu=c3=9f?=)
+Date: Mon, 16 Jan 2023 11:23:47 +0100
+Subject: [Rd] Recycling in arithmetic operations involving zero-length
+ vectors
+Message-ID: <036134c4-d818-eff8-9e8c-777595695c14@thuenen.de>
+
+Dear R-core,
+
+The language definition is very clear:
+
+"As from R 1.4.0, any arithmetic operation involving a zero-length 
+vector has a zero-length result."
+
+Thus, `1 + numeric()` returns `numeric(0)`. However, I don't find this 
+very intuitive because usually the shorter vector is recycled to the 
+length of the longer vector. Would it be possible to throw at least a 
+warning for such cases? I don't expect them to be intended by most users.
+
+Best regards,
+
+-- 
+Dr. Roland Fu?
+
+Th?nen-Institut f?r Agrarklimaschutz/
+Th?nen Institute of Climate-Smart Agriculture
+
+Bundesallee 65
+D-38116 Braunschweig, Germany
+
+Tel.: ++49 531 596 2627
+Fax:  ++49 531 596 2699
+Email: roland.fuss at thuenen.de
+
+Arbeitsgruppe "Emissionsberichterstattung"/
+Working group "Emission Inventories"
+Email: emissionsinventare at thuenen.de
+
+Das Johann Heinrich von Th?nen-Institut,
+Bundesforschungsinstitut f?r L?ndliche R?ume,
+Wald und Fischerei ? kurz: Th?nen-Institut ?
+besteht aus 15 Fachinstituten, die in den
+Bereichen ?konomie, ?kologie und Technologie
+forschen und die Politik beraten.
+
+The Johann Heinrich von Th?nen Institute,
+Federal Research Institute for Rural Areas,
+Forestry and Fisheries ? Th?nen Institute in brief ?
+consists of 15 specialized institutes that
+carry out research and provide policy advice
+in the fields of economy, ecology and technology.
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Mon Jan 16 12:11:10 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Mon, 16 Jan 2023 06:11:10 -0500
+Subject: [Rd] Recycling in arithmetic operations involving zero-length
+ vectors
+In-Reply-To: <036134c4-d818-eff8-9e8c-777595695c14@thuenen.de>
+References: <036134c4-d818-eff8-9e8c-777595695c14@thuenen.de>
+Message-ID: <81b28da2-a549-eff5-c13e-95b1b5e55b16@gmail.com>
+
+On 16/01/2023 5:23 a.m., Roland Fu? wrote:
+> Dear R-core,
+> 
+> The language definition is very clear:
+> 
+> "As from R 1.4.0, any arithmetic operation involving a zero-length
+> vector has a zero-length result."
+> 
+> Thus, `1 + numeric()` returns `numeric(0)`. However, I don't find this
+> very intuitive because usually the shorter vector is recycled to the
+> length of the longer vector. Would it be possible to throw at least a
+> warning for such cases? I don't expect them to be intended by most users.
+> 
+> Best regards,
+
+The previous paragraph says "If the length of the longer vector is not a 
+multiple of the shorter one, a warning is given."  Since 1 is not a 
+multiple of 0, that implies a warning should be given here.
+
+However, R 1.4.0 was released more than 20 years ago, so I would guess 
+there are lots of packages intentionally using this.  For example, it's 
+a way to propagate bad inputs through a long calculation that allows a 
+single test at the end.
+
+And even unintentional uses are unlikely to lead to problematic results: 
+  numeric(0) is usually a pretty clear signal that something is wrong.
+
+So I'd suggest a documentation change: "As from R 1.4.0, any arithmetic 
+operation involving a zero-length vector has a zero-length result 
+*without a warning*."
+
+Duncan Murdoch
+
+
+From dw|n@em|u@ @end|ng |rom comc@@t@net  Mon Jan 16 12:55:54 2023
+From: dw|n@em|u@ @end|ng |rom comc@@t@net (David Winsemius)
+Date: Mon, 16 Jan 2023 18:55:54 +0700
+Subject: [Rd] Recycling in arithmetic operations involving zero-length
+ vectors
+In-Reply-To: <81b28da2-a549-eff5-c13e-95b1b5e55b16@gmail.com>
+References: <81b28da2-a549-eff5-c13e-95b1b5e55b16@gmail.com>
+Message-ID: <314EC34E-7214-4037-9E18-A7E8AE7AD9E5@comcast.net>
+
+
+
+Sent from my iPhone
+
+> On Jan 16, 2023, at 6:11 PM, Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+> 
+> ?On 16/01/2023 5:23 a.m., Roland Fu? wrote:
+>> Dear R-core,
+>> The language definition is very clear:
+>> "As from R 1.4.0, any arithmetic operation involving a zero-length
+>> vector has a zero-length result."
+>> Thus, `1 + numeric()` returns `numeric(0)`. However, I don't find this
+>> very intuitive because usually the shorter vector is recycled to the
+>> length of the longer vector. Would it be possible to throw at least a
+>> warning for such cases? I don't expect them to be intended by most users.
+>> Best regards,
+> 
+> The previous paragraph says "If the length of the longer vector is not a multiple of the shorter one, a warning is given."  Since 1 is not a multiple of 0, that implies a warning should be given here.
+> 
+> However, R 1.4.0 was released more than 20 years ago, so I would guess there are lots of packages intentionally using this.  For example, it's a way to propagate bad inputs through a long calculation that allows a single test at the end.
+> 
+> And even unintentional uses are unlikely to lead to problematic results:  numeric(0) is usually a pretty clear signal that something is wrong.
+> 
+> So I'd suggest a documentation change: "As from R 1.4.0, any arithmetic operation involving a zero-length vector has a zero-length result *without a warning*."
+
+I doubt that a documentation change will help very much. Roland is responding here with his and my surprise at the lack of a warning after witnessing my answer to an R newb Q where the impression at seeing ?numeric(0) was understood as the value 0. I suggested that many interpretations were possible and that a warning was given for NA generation. I stand with Roland in thinking a warning is appropriate. 
+
+David Winsemius
+> 
+> Duncan Murdoch
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Mon Jan 16 14:58:25 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Mon, 16 Jan 2023 08:58:25 -0500
+Subject: [Rd] Recycling in arithmetic operations involving zero-length
+ vectors
+In-Reply-To: <314EC34E-7214-4037-9E18-A7E8AE7AD9E5@comcast.net>
+References: <81b28da2-a549-eff5-c13e-95b1b5e55b16@gmail.com>
+ <314EC34E-7214-4037-9E18-A7E8AE7AD9E5@comcast.net>
+Message-ID: <42313a53-c0b2-e673-2eae-ee93477af02a@gmail.com>
+
+On 16/01/2023 6:55 a.m., David Winsemius wrote:
+> 
+> 
+> Sent from my iPhone
+> 
+>> On Jan 16, 2023, at 6:11 PM, Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+>>
+>> ?On 16/01/2023 5:23 a.m., Roland Fu? wrote:
+>>> Dear R-core,
+>>> The language definition is very clear:
+>>> "As from R 1.4.0, any arithmetic operation involving a zero-length
+>>> vector has a zero-length result."
+>>> Thus, `1 + numeric()` returns `numeric(0)`. However, I don't find this
+>>> very intuitive because usually the shorter vector is recycled to the
+>>> length of the longer vector. Would it be possible to throw at least a
+>>> warning for such cases? I don't expect them to be intended by most users.
+>>> Best regards,
+>>
+>> The previous paragraph says "If the length of the longer vector is not a multiple of the shorter one, a warning is given."  Since 1 is not a multiple of 0, that implies a warning should be given here.
+>>
+>> However, R 1.4.0 was released more than 20 years ago, so I would guess there are lots of packages intentionally using this.  For example, it's a way to propagate bad inputs through a long calculation that allows a single test at the end.
+>>
+>> And even unintentional uses are unlikely to lead to problematic results:  numeric(0) is usually a pretty clear signal that something is wrong.
+>>
+>> So I'd suggest a documentation change: "As from R 1.4.0, any arithmetic operation involving a zero-length vector has a zero-length result *without a warning*."
+> 
+> I doubt that a documentation change will help very much. Roland is responding here with his and my surprise at the lack of a warning after witnessing my answer to an R newb Q where the impression at seeing ?numeric(0) was understood as the value 0. I suggested that many interpretations were possible and that a warning was given for NA generation. I stand with Roland in thinking a warning is appropriate.
+
+I didn't see this exchange, but I don't understand "a warning was given 
+for NA generation".  We don't get a warning for 1 + NA.  Do you mean 
+you'd like to get one?
+
+In any case, I think your anecdote illustrates a different problem: 
+printing numeric() as numeric(0) confused a beginning user.  I've also 
+seen people get confused by that.
+
+Perhaps the change should be to the way numeric(0) is printed, but  that 
+would also have consequences, since some people test the way output is 
+printed.
+
+Or perhaps we should just recognize that it's in the nature of being a 
+beginning user to be confused sometimes, and just help them to grow out 
+of that stage.
+
+Before a change like one of these is made, someone should make it in a 
+local copy, then run R CMD check on every package on CRAN to see how 
+disruptive it is.  Maybe adding a warning() will uncover so few 
+intentional uses that fixing them is worthwhile.
+
+The trouble is, running checks across CRAN is a very resource-intensive 
+exercise, and analyzing the results is a very developer-intensive 
+exercise.  I'm sure the doc change is easier.
+
+Duncan Murdoch
+
+
+From |on|de@ @end|ng |rom um|ch@edu  Mon Jan 16 15:04:49 2023
+From: |on|de@ @end|ng |rom um|ch@edu (Edward Ionides)
+Date: Mon, 16 Jan 2023 09:04:49 -0500
+Subject: [Rd] memory leak in png()
+Message-ID: <CAN=OUeXJvTtQL4fC3mSjcocMV+quAKONX-kW6sKPe0poy93Zsg@mail.gmail.com>
+
+Hi all,
+
+Yesterday I discovered what seems to me like a memory leak in png() so I'm
+reporting it in case that is helpful. Here is a small reproducible example:
+
+R -d "valgrind --tool=memcheck --track-origins=yes --leak-check=full"
+--vanilla -e "png(filename='p.png'); plot(1:10); dev.off()"
+## HAS LEAK
+==1021711== LEAK SUMMARY:
+==1021711==    definitely lost: 9,216 bytes in 30 blocks
+==1021711==    indirectly lost: 19,370 bytes in 838 blocks
+==1021711==      possibly lost: 3,868 bytes in 8 blocks
+
+R -d "valgrind --tool=memcheck --track-origins=yes --leak-check=full"
+--vanilla -e "pdf(file='p.pdf'); plot(1:10); dev.off()"
+## NO LEAK
+==1031300== LEAK SUMMARY:
+==1031300==    definitely lost: 0 bytes in 0 blocks
+==1031300==    indirectly lost: 0 bytes in 0 blocks
+==1031300==      possibly lost: 0 bytes in 0 blocks
+
+For some context, I am running R4.2.2. My goal was to run valgrind on the
+latest version of my spatPomp package. A memory leak was detected by
+rhub::check_with_valgrind(). I then tracked down the problem by running
+valgrind locally and in the end it seemed to come down to a problem with
+png(). This was used in the spatPomp unit tests while testing the plot
+method. I can use pdf() instead, but the point here is to report the issue
+in case it is not known.
+
+I'm new to R package development and happy to accept any advice.
+
+Thanks,
+Ed
+
+Edward L. Ionides
+Associate Chair for Undergraduate Studies and Professor,
+Department of Statistics, University of Michigan
+1085 South University, Ann Arbor, MI 48109-1107
+email: ionides at umich.edu
+phone: 734 615 3332
+office: 453 West Hall
+
+	[[alternative HTML version deleted]]
+
+
+From deep@y@n@@@rk@r @end|ng |rom gm@||@com  Mon Jan 16 15:49:38 2023
+From: deep@y@n@@@rk@r @end|ng |rom gm@||@com (Deepayan Sarkar)
+Date: Mon, 16 Jan 2023 20:19:38 +0530
+Subject: [Rd] Recycling in arithmetic operations involving zero-length
+ vectors
+In-Reply-To: <42313a53-c0b2-e673-2eae-ee93477af02a@gmail.com>
+References: <81b28da2-a549-eff5-c13e-95b1b5e55b16@gmail.com>
+ <314EC34E-7214-4037-9E18-A7E8AE7AD9E5@comcast.net>
+ <42313a53-c0b2-e673-2eae-ee93477af02a@gmail.com>
+Message-ID: <CADfFDC42zPw_RQN3oMiPnxTjS+DFchyZ6Sh5r-77mmhcYS4sRg@mail.gmail.com>
+
+On Mon, Jan 16, 2023 at 7:28 PM Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+>
+> On 16/01/2023 6:55 a.m., David Winsemius wrote:
+> >
+> >
+> > Sent from my iPhone
+> >
+> >> On Jan 16, 2023, at 6:11 PM, Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+> >>
+> >> ?On 16/01/2023 5:23 a.m., Roland Fu? wrote:
+> >>> Dear R-core,
+> >>> The language definition is very clear:
+> >>> "As from R 1.4.0, any arithmetic operation involving a zero-length
+> >>> vector has a zero-length result."
+> >>> Thus, `1 + numeric()` returns `numeric(0)`. However, I don't find this
+> >>> very intuitive because usually the shorter vector is recycled to the
+> >>> length of the longer vector. Would it be possible to throw at least a
+> >>> warning for such cases? I don't expect them to be intended by most users.
+> >>> Best regards,
+> >>
+> >> The previous paragraph says "If the length of the longer vector is not a multiple of the shorter one, a warning is given."  Since 1 is not a multiple of 0, that implies a warning should be given here.
+> >>
+> >> However, R 1.4.0 was released more than 20 years ago, so I would guess there are lots of packages intentionally using this.  For example, it's a way to propagate bad inputs through a long calculation that allows a single test at the end.
+> >>
+> >> And even unintentional uses are unlikely to lead to problematic results:  numeric(0) is usually a pretty clear signal that something is wrong.
+> >>
+> >> So I'd suggest a documentation change: "As from R 1.4.0, any arithmetic operation involving a zero-length vector has a zero-length result *without a warning*."
+> >
+> > I doubt that a documentation change will help very much. Roland is responding here with his and my surprise at the lack of a warning after witnessing my answer to an R newb Q where the impression at seeing ?numeric(0) was understood as the value 0. I suggested that many interpretations were possible and that a warning was given for NA generation. I stand with Roland in thinking a warning is appropriate.
+>
+> I didn't see this exchange, but I don't understand "a warning was given
+> for NA generation".  We don't get a warning for 1 + NA.  Do you mean
+> you'd like to get one?
+>
+> In any case, I think your anecdote illustrates a different problem:
+> printing numeric() as numeric(0) confused a beginning user.  I've also
+> seen people get confused by that.
+>
+> Perhaps the change should be to the way numeric(0) is printed, but  that
+> would also have consequences, since some people test the way output is
+> printed.
+>
+> Or perhaps we should just recognize that it's in the nature of being a
+> beginning user to be confused sometimes, and just help them to grow out
+> of that stage.
+>
+> Before a change like one of these is made, someone should make it in a
+> local copy, then run R CMD check on every package on CRAN to see how
+> disruptive it is.  Maybe adding a warning() will uncover so few
+> intentional uses that fixing them is worthwhile.
+
+To even do that, we would have to first decide which "cases" should
+produce a warning.
+
+Let's say `1 + x` should give a warning when x = numeric(0). Then
+should `x^2` also produce a warning? Should `x^0.5`? Should `sqrt(x)`?
+Should `log(x)`?
+
+-Deepayan
+
+> The trouble is, running checks across CRAN is a very resource-intensive
+> exercise, and analyzing the results is a very developer-intensive
+> exercise.  I'm sure the doc change is easier.
+>
+> Duncan Murdoch
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From Andre@G||||bert @end|ng |rom chu-rouen@|r  Mon Jan 16 16:53:25 2023
+From: Andre@G||||bert @end|ng |rom chu-rouen@|r (GILLIBERT, Andre)
+Date: Mon, 16 Jan 2023 15:53:25 +0000
+Subject: [Rd] Recycling in arithmetic operations involving zero-length
+ vectors
+In-Reply-To: <CADfFDC42zPw_RQN3oMiPnxTjS+DFchyZ6Sh5r-77mmhcYS4sRg@mail.gmail.com>
+References: <81b28da2-a549-eff5-c13e-95b1b5e55b16@gmail.com>
+ <314EC34E-7214-4037-9E18-A7E8AE7AD9E5@comcast.net>
+ <42313a53-c0b2-e673-2eae-ee93477af02a@gmail.com>
+ <CADfFDC42zPw_RQN3oMiPnxTjS+DFchyZ6Sh5r-77mmhcYS4sRg@mail.gmail.com>
+Message-ID: <69dcf7e5858b4c839dab1497275a1fea@chu-rouen.fr>
+
+Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+
+> To even do that, we would have to first decide which "cases" should produce a warning.
+
+> Let's say `1 + x` should give a warning when x = numeric(0). Then should `x^2` also produce a warning? Should `x^0.5`? Should `sqrt(x)`?
+> Should `log(x)`?
+
+
+The most probable errors would be in functions taking two arguments (e.g. `+`) and for which one argument has length >= 2 while the other has length 0.
+
+In my experience, most code with accidental zero-length propagations (e.g. typo in data_frame$field) quickly lead to errors, that are easy to debug (except for beginners), and so, do not need a warning.
+
+The only cases where zero-length propagation is really dangerous in my experience is in code using an aggregating function like sum(), all() or any(), because it silently returns a valid value for a zero-length argument. Emitting warnings for sum(numeric(0)) would probably have too many false positives but a (length >= 2) vs (length == 0) warning for common binary operators could sometimes catch the issue before it reaches the aggregating function.
+
+-- 
+Sincerely
+Andr? GILLIBERT
+
