@@ -3891,3 +3891,728 @@ The only cases where zero-length propagation is really dangerous in my experienc
 Sincerely
 Andr? GILLIBERT
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Tue Jan 17 09:33:26 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Tue, 17 Jan 2023 09:33:26 +0100
+Subject: [Rd] Bug or feature?
+In-Reply-To: <e9e812c035874cf28f309c64c3016be9@chu-rouen.fr>
+References: <e9e812c035874cf28f309c64c3016be9@chu-rouen.fr>
+Message-ID: <25542.23894.330252.313672@stat.math.ethz.ch>
+
+>>>>> GILLIBERT, Andre 
+>>>>>     on Sat, 14 Jan 2023 16:05:31 +0000 writes:
+
+    > Dear developers,
+    > I found an inconsistency in the predict.lm() function between offset and non-offset terms of the formula, but I am not sure whether that is intentional or a bug.
+
+
+    > The problem can be shown in a simple example:
+
+    > mod <- local({
+    >   y <- rep(0,10)
+    >   x <- rep(c(0,1), each=5)
+    >   list(lm(y ~ x), lm(y ~ offset(x)))
+    > })
+    > # works fine, using the x variable of the local environment
+    > predict(mod[[1]], newdata=data.frame(z=1:10))
+    > # error 'x' not found, because it seeks x in the global environment
+    > predict(mod[[2]], newdata=data.frame(z=1:10))
+
+    > I would expect either both predict() to use the local x
+    > variable or the global x variable, but the current
+    > behavior is inconsistent.
+
+    > In the worse case, both variables may exist but refer to
+    > different data, which seems to be very dangerous in my
+    > opinion.
+
+    > The problem becomes obvious from the source code of model.frame.default() and predict.lm()
+
+    > predict.lm() calls model.frame()
+
+    > For a non-offset variable, the source code of model.frame.default shows:
+
+
+    > variables <- eval(predvars, data, env)
+
+
+    > Where env is the environment of the formula parameter.
+
+    > Consequently, non-offset variables are evaluated in the context of the data frame, then in the environment of the formula/terms of the model.
+
+
+    > For offset variables, the source code of predict.lm() contains:
+
+    > eval(attr(tt, "variables")[[i + 1]], newdata)
+
+
+    > It is not executed in the environment of the formula/terms of the model.
+
+
+    > The inconsistency could easily be fixed by a patch to predict.lm() by replacing eval(attr(tt, "variables")[[i + 1]], newdata) by eval(attr(tt, "variables")[[i + 1]], newdata, environment(Terms))
+
+    > The same modification would have to be done two lines after:
+
+    > offset <- offset + eval(object$call$offset, newdata, environment(Terms))
+
+    > However, fixing this inconsistency could break code that rely on the old behavior.
+
+    > What do you think of that?
+
+As I've worked last week on the  bugzilla issue about
+predict.lm(), recently,
+   https://bugs.r-project.org/bugzilla/show_bug.cgi?id=16158
+
+and before that on another small detail there,
+I indeed had noticed -- just from code reading -- 
+that there seem to be several small inconsistencies in
+predict.lm();  also, between the two branches  se.fit=FALSE vs  se.fit=TRUE
+
+In the mean time, you have filed a new bugzilla isse about this,
+
+   https://bugs.r-project.org/show_bug.cgi?id=18456
+
+so we (and everyone interested) will continue the discussion
+there.
+
+Thank you for contributing to make R better by this!
+
+Best regards,
+Martin
+
+
+    > --
+
+    > Sincerely
+    > Andr? GILLIBERT
+
+--
+Martin Maechler
+ETH Zurich  and  R Core team
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Tue Jan 17 10:55:51 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Tue, 17 Jan 2023 10:55:51 +0100
+Subject: [Rd] memory leak in png()
+In-Reply-To: <CAN=OUeXJvTtQL4fC3mSjcocMV+quAKONX-kW6sKPe0poy93Zsg@mail.gmail.com>
+References: <CAN=OUeXJvTtQL4fC3mSjcocMV+quAKONX-kW6sKPe0poy93Zsg@mail.gmail.com>
+Message-ID: <25542.28839.791709.198130@stat.math.ethz.ch>
+
+>>>>> Edward Ionides 
+>>>>>     on Mon, 16 Jan 2023 09:04:49 -0500 writes:
+
+    > Hi all,
+
+    > Yesterday I discovered what seems to me like a memory leak in png() so I'm
+    > reporting it in case that is helpful. Here is a small reproducible example:
+
+    > R -d "valgrind --tool=memcheck --track-origins=yes --leak-check=full"
+    > --vanilla -e "png(filename='p.png'); plot(1:10); dev.off()"
+    > ## HAS LEAK
+    > ==1021711== LEAK SUMMARY:
+    > ==1021711==    definitely lost: 9,216 bytes in 30 blocks
+    > ==1021711==    indirectly lost: 19,370 bytes in 838 blocks
+    > ==1021711==      possibly lost: 3,868 bytes in 8 blocks
+
+    > R -d "valgrind --tool=memcheck --track-origins=yes --leak-check=full"
+    > --vanilla -e "pdf(file='p.pdf'); plot(1:10); dev.off()"
+    > ## NO LEAK
+    > ==1031300== LEAK SUMMARY:
+    > ==1031300==    definitely lost: 0 bytes in 0 blocks
+    > ==1031300==    indirectly lost: 0 bytes in 0 blocks
+    > ==1031300==      possibly lost: 0 bytes in 0 blocks
+
+I can reproduce, although I need to have the memcheck options in ~/.valgrindrc
+The same happens if grid-based graphics is used and for the
+latest R-devel :
+
+R-devel -d valgrind --vanilla -e 'png("p.png");lattice::xyplot(1~1);dev.off()'
+
+Using  png() shows leak
+using  pdf()  is fine (0 bytes lost)
+
+
+Looking at the full report (--leak-check=full  --track-origins=true
+as 2 lines in ~/.valgrindrc ) I see several origins tracked to
+internal malloc code,
+but then also e.g.,
+
+==1410108== 96 bytes in 1 blocks are possibly lost in loss record 700 of 3,037
+==1410108==    at 0x484A464: calloc (vg_replace_malloc.c:1328)
+==1410108==    by 0x159EA3A0: g_malloc0 (gmem.c:155)
+==1410108==    by 0x15A3AB8C: g_rc_box_alloc_full.constprop.0 (grcbox.c:234)
+==1410108==    by 0x1600A6C9: UnknownInlinedFun (pangofc-fontmap.c:899)
+==1410108==    by 0x1600A6C9: UnknownInlinedFun (pangofc-fontmap.c:2145)
+==1410108==    by 0x1600A6C9: pango_fc_font_map_load_fontset (pangofc-fontmap.c:2245)
+==1410108==    by 0x158E7474: UnknownInlinedFun (itemize.c:892)
+==1410108==    by 0x158E7474: UnknownInlinedFun (itemize.c:952)
+==1410108==    by 0x158E7474: pango_itemize_with_font (itemize.c:1564)
+==1410108==    by 0x158FA89E: pango_layout_check_lines.part.0.lto_priv.0 (pango-layout.c:4894)
+==1410108==    by 0x158EF4DB: UnknownInlinedFun (pango-layout.c:4786)
+==1410108==    by 0x158EF4DB: pango_layout_get_line (pango-layout.c:1715)
+==1410108==    by 0x1B5E441F: PG_text_extents (cairoFns.c:1487)
+==1410108==    by 0x1B5E441F: PangoCairo_StrWidth (cairoFns.c:1565)
+==1410108==    by 0x4CEBE6: GEStrWidth (engine.c:2615)
+==1410108==    by 0x4CEBE6: GEStrWidth (engine.c:2578)
+==1410108==    by 0x1BE12D11: textRect (util.c:198)
+==1410108==    by 0x1BDFAF19: gridText (grid.c:3740)
+==1410108==    by 0x1BE01FAB: L_textBounds (grid.c:3892)
+
+which (from the bottom up) shows  package grid C code,
+then R main but infrastructure for grDevices ("GEStrWidth (engine.c)")  and
+subdirectory grDevices/src/cairo/cairoFns.c
+and then goes into system cairo or pangocairo libraries,
+which here (Linux Fedora 36) are (I thik)
+
+	libpangocairo-1.0.so.0 
+	libpango-1.0.so.0 
+
+{as they are stripped, I don't know how to check }
+
+To *fix* this I also have to defer to others.
+
+Thank you for the report,
+Martin
+
+--
+Martin Maechler
+ETH Zurich  and  R Core team
+
+
+    > For some context, I am running R4.2.2. My goal was to run valgrind on the
+    > latest version of my spatPomp package. A memory leak was detected by
+    > rhub::check_with_valgrind(). I then tracked down the problem by running
+    > valgrind locally and in the end it seemed to come down to a problem with
+    > png(). This was used in the spatPomp unit tests while testing the plot
+    > method. I can use pdf() instead, but the point here is to report the issue
+    > in case it is not known.
+
+    > I'm new to R package development and happy to accept any advice.
+
+    > Thanks,
+    > Ed
+
+    > Edward L. Ionides
+    > Associate Chair for Undergraduate Studies and Professor,
+    > Department of Statistics, University of Michigan
+    > 1085 South University, Ann Arbor, MI 48109-1107
+    > email: ionides at umich.edu
+    > phone: 734 615 3332
+    > office: 453 West Hall
+
+    > [[alternative HTML version deleted]]
+
+    > ______________________________________________
+    > R-devel at r-project.org mailing list
+    > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Tue Jan 17 11:37:13 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Tue, 17 Jan 2023 11:37:13 +0100
+Subject: [Rd] memory leak in png()
+In-Reply-To: <25542.28839.791709.198130@stat.math.ethz.ch>
+References: <CAN=OUeXJvTtQL4fC3mSjcocMV+quAKONX-kW6sKPe0poy93Zsg@mail.gmail.com>
+ <25542.28839.791709.198130@stat.math.ethz.ch>
+Message-ID: <25542.31321.810219.230879@stat.math.ethz.ch>
+
+Note that  cairo_pdf()  also suffers from the same leak
+.. as to be expected once you notice that much of the cairo
+device handling uses common code.
+... 
+.. and then, when you are aware that on Linux, the default
+interactive device is x11() and its default type is *also*
+"cairo" { possibly not on the Mac, according to ?x11 }
+then, when I try, I even get almost the same valgrind report for
+"the standard" graphics device:
+
+(excerpt + final summary)
+
+=1429846== 8,943 (512 direct, 8,431 indirect) bytes in 1 blocks are definitely lost in loss record 2,316 of 3,250
+==1429846==    at 0x484A6AF: realloc (vg_replace_malloc.c:1437)
+==1429846==    by 0x16036BD8: FcPatternObjectInsertElt (fcpat.c:516)
+==1429846==    by 0x1603AD40: FcPatternObjectAddWithBinding (fcpat.c:711)
+==1429846==    by 0x16031E1F: UnknownInlinedFun (fcpat.c:738)
+==1429846==    by 0x16031E1F: UnknownInlinedFun (fcpat.c:884)
+==1429846==    by 0x16031E1F: FcDefaultSubstitute (fcdefault.c:302)
+==1429846==    by 0x1600A49D: UnknownInlinedFun (pangofc-fontmap.c:2066)
+==1429846==    by 0x1600A49D: UnknownInlinedFun (pangofc-fontmap.c:2143)
+==1429846==    by 0x1600A49D: pango_fc_font_map_load_fontset (pangofc-fontmap.c:2245)
+==1429846==    by 0x158E7474: UnknownInlinedFun (itemize.c:892)
+==1429846==    by 0x158E7474: UnknownInlinedFun (itemize.c:952)
+==1429846==    by 0x158E7474: pango_itemize_with_font (itemize.c:1564)
+==1429846==    by 0x158FA89E: pango_layout_check_lines.part.0.lto_priv.0 (pango-layout.c:4894)
+==1429846==    by 0x158EF4DB: UnknownInlinedFun (pango-layout.c:4786)
+==1429846==    by 0x158EF4DB: pango_layout_get_line (pango-layout.c:1715)
+==1429846==    by 0x15715ACF: PG_text_extents (cairoFns.c:1487)
+==1429846==    by 0x15715ACF: PangoCairo_StrWidth (cairoFns.c:1565)
+==1429846==    by 0x4CEBE6: GEStrWidth (engine.c:2615)
+==1429846==    by 0x4CEBE6: GEStrWidth (engine.c:2578)
+==1429846==    by 0x1C228D11: textRect (util.c:198)
+==1429846==    by 0x1C210F19: gridText (grid.c:3740)
+==1429846== 
+
+    [....................]
+    [....................]
+
+LEAK SUMMARY:
+==1429846==    definitely lost: 6,656 bytes in 10 blocks
+==1429846==    indirectly lost: 43,645 bytes in 1,871 blocks
+==1429846==      possibly lost: 4,676 bytes in 17 blocks
+==1429846==    still reachable: 87,821,522 bytes in 31,863 blocks
+==1429846==                       of which reachable via heuristic:
+==1429846==                         newarray           : 4,264 bytes in 1 blocks
+==1429846==         suppressed: 0 bytes in 0 blocks
+==1429846== Reachable blocks (those to which a pointer was found) are not shown.
+==1429846== To see them, rerun with: --leak-check=full --show-leak-kinds=all
+==1429846== 
+==1429846== For lists of detected and suppressed errors, rerun with: -s
+==1429846== ERROR SUMMARY: 13 errors from 13 contexts (suppressed: 0 from 0)
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Tue Jan 17 14:06:04 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 17 Jan 2023 08:06:04 -0500
+Subject: [Rd] memory leak in png()
+In-Reply-To: <25542.28839.791709.198130@stat.math.ethz.ch>
+References: <CAN=OUeXJvTtQL4fC3mSjcocMV+quAKONX-kW6sKPe0poy93Zsg@mail.gmail.com>
+ <25542.28839.791709.198130@stat.math.ethz.ch>
+Message-ID: <d48e82e9-064f-d6a1-0a73-1e16f8ce1dd2@gmail.com>
+
+I don't have a valgrind-capable version of R, but I'd be interested to 
+see whether this is a one-time loss, or repeated.  That is, do you get a 
+much bigger loss from running the lossy code in a loop like this?
+
+  for (i in 1:100) { png(filename='p.png'); plot(1:10); dev.off() }
+
+Duncan Murdoch
+
+
+On 17/01/2023 4:55 a.m., Martin Maechler wrote:
+>>>>>> Edward Ionides
+>>>>>>      on Mon, 16 Jan 2023 09:04:49 -0500 writes:
+> 
+>      > Hi all,
+> 
+>      > Yesterday I discovered what seems to me like a memory leak in png() so I'm
+>      > reporting it in case that is helpful. Here is a small reproducible example:
+> 
+>      > R -d "valgrind --tool=memcheck --track-origins=yes --leak-check=full"
+>      > --vanilla -e "png(filename='p.png'); plot(1:10); dev.off()"
+>      > ## HAS LEAK
+>      > ==1021711== LEAK SUMMARY:
+>      > ==1021711==    definitely lost: 9,216 bytes in 30 blocks
+>      > ==1021711==    indirectly lost: 19,370 bytes in 838 blocks
+>      > ==1021711==      possibly lost: 3,868 bytes in 8 blocks
+> 
+>      > R -d "valgrind --tool=memcheck --track-origins=yes --leak-check=full"
+>      > --vanilla -e "pdf(file='p.pdf'); plot(1:10); dev.off()"
+>      > ## NO LEAK
+>      > ==1031300== LEAK SUMMARY:
+>      > ==1031300==    definitely lost: 0 bytes in 0 blocks
+>      > ==1031300==    indirectly lost: 0 bytes in 0 blocks
+>      > ==1031300==      possibly lost: 0 bytes in 0 blocks
+> 
+> I can reproduce, although I need to have the memcheck options in ~/.valgrindrc
+> The same happens if grid-based graphics is used and for the
+> latest R-devel :
+> 
+> R-devel -d valgrind --vanilla -e 'png("p.png");lattice::xyplot(1~1);dev.off()'
+> 
+> Using  png() shows leak
+> using  pdf()  is fine (0 bytes lost)
+> 
+> 
+> Looking at the full report (--leak-check=full  --track-origins=true
+> as 2 lines in ~/.valgrindrc ) I see several origins tracked to
+> internal malloc code,
+> but then also e.g.,
+> 
+> ==1410108== 96 bytes in 1 blocks are possibly lost in loss record 700 of 3,037
+> ==1410108==    at 0x484A464: calloc (vg_replace_malloc.c:1328)
+> ==1410108==    by 0x159EA3A0: g_malloc0 (gmem.c:155)
+> ==1410108==    by 0x15A3AB8C: g_rc_box_alloc_full.constprop.0 (grcbox.c:234)
+> ==1410108==    by 0x1600A6C9: UnknownInlinedFun (pangofc-fontmap.c:899)
+> ==1410108==    by 0x1600A6C9: UnknownInlinedFun (pangofc-fontmap.c:2145)
+> ==1410108==    by 0x1600A6C9: pango_fc_font_map_load_fontset (pangofc-fontmap.c:2245)
+> ==1410108==    by 0x158E7474: UnknownInlinedFun (itemize.c:892)
+> ==1410108==    by 0x158E7474: UnknownInlinedFun (itemize.c:952)
+> ==1410108==    by 0x158E7474: pango_itemize_with_font (itemize.c:1564)
+> ==1410108==    by 0x158FA89E: pango_layout_check_lines.part.0.lto_priv.0 (pango-layout.c:4894)
+> ==1410108==    by 0x158EF4DB: UnknownInlinedFun (pango-layout.c:4786)
+> ==1410108==    by 0x158EF4DB: pango_layout_get_line (pango-layout.c:1715)
+> ==1410108==    by 0x1B5E441F: PG_text_extents (cairoFns.c:1487)
+> ==1410108==    by 0x1B5E441F: PangoCairo_StrWidth (cairoFns.c:1565)
+> ==1410108==    by 0x4CEBE6: GEStrWidth (engine.c:2615)
+> ==1410108==    by 0x4CEBE6: GEStrWidth (engine.c:2578)
+> ==1410108==    by 0x1BE12D11: textRect (util.c:198)
+> ==1410108==    by 0x1BDFAF19: gridText (grid.c:3740)
+> ==1410108==    by 0x1BE01FAB: L_textBounds (grid.c:3892)
+> 
+> which (from the bottom up) shows  package grid C code,
+> then R main but infrastructure for grDevices ("GEStrWidth (engine.c)")  and
+> subdirectory grDevices/src/cairo/cairoFns.c
+> and then goes into system cairo or pangocairo libraries,
+> which here (Linux Fedora 36) are (I thik)
+> 
+> 	libpangocairo-1.0.so.0
+> 	libpango-1.0.so.0
+> 
+> {as they are stripped, I don't know how to check }
+> 
+> To *fix* this I also have to defer to others.
+> 
+> Thank you for the report,
+> Martin
+> 
+> --
+> Martin Maechler
+> ETH Zurich  and  R Core team
+> 
+> 
+>      > For some context, I am running R4.2.2. My goal was to run valgrind on the
+>      > latest version of my spatPomp package. A memory leak was detected by
+>      > rhub::check_with_valgrind(). I then tracked down the problem by running
+>      > valgrind locally and in the end it seemed to come down to a problem with
+>      > png(). This was used in the spatPomp unit tests while testing the plot
+>      > method. I can use pdf() instead, but the point here is to report the issue
+>      > in case it is not known.
+> 
+>      > I'm new to R package development and happy to accept any advice.
+> 
+>      > Thanks,
+>      > Ed
+> 
+>      > Edward L. Ionides
+>      > Associate Chair for Undergraduate Studies and Professor,
+>      > Department of Statistics, University of Michigan
+>      > 1085 South University, Ann Arbor, MI 48109-1107
+>      > email: ionides at umich.edu
+>      > phone: 734 615 3332
+>      > office: 453 West Hall
+> 
+>      > [[alternative HTML version deleted]]
+> 
+>      > ______________________________________________
+>      > R-devel at r-project.org mailing list
+>      > https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From t|m@t@y|or @end|ng |rom h|ddene|eph@nt@@co@uk  Tue Jan 17 14:39:01 2023
+From: t|m@t@y|or @end|ng |rom h|ddene|eph@nt@@co@uk (Tim Taylor)
+Date: Tue, 17 Jan 2023 13:39:01 +0000
+Subject: [Rd] memory leak in png()
+In-Reply-To: <d48e82e9-064f-d6a1-0a73-1e16f8ce1dd2@gmail.com>
+References: <CAN=OUeXJvTtQL4fC3mSjcocMV+quAKONX-kW6sKPe0poy93Zsg@mail.gmail.com>
+ <25542.28839.791709.198130@stat.math.ethz.ch>
+ <d48e82e9-064f-d6a1-0a73-1e16f8ce1dd2@gmail.com>
+Message-ID: <63a393be-a868-cb50-436d-4e464c39ea5a@hiddenelephants.co.uk>
+
+On 17/01/2023 13:06, Duncan Murdoch wrote:
+> I don't have a valgrind-capable version of R, but I'd be interested to 
+> see whether this is a one-time loss, or repeated.? That is, do you get a 
+> much bigger loss from running the lossy code in a loop like this?
+> 
+>  ?for (i in 1:100) { png(filename='p.png'); plot(1:10); dev.off() }
+> 
+> Duncan Murdoch
+
+Duncan - Not that I'm seeing
+
+Rdevel -d valgrind --vanilla -e " for (i in 1:1) {png(filename='p.png'); 
+plot(1:10); dev.off()}"
+
+==63291== LEAK SUMMARY:
+==63291==    definitely lost: 2,560 bytes in 4 blocks
+==63291==    indirectly lost: 17,710 bytes in 762 blocks
+==63291==      possibly lost: 1,820 bytes in 8 blocks
+==63291==    still reachable: 52,177,408 bytes in 21,282 blocks
+==63291==                       of which reachable via heuristic:
+==63291==                         newarray           : 4,264 bytes in 1 
+blocks
+==63291==         suppressed: 0 bytes in 0 blocks
+
+Rdevel -d valgrind --vanilla -e " for (i in 1:100) 
+{png(filename='p.png'); plot(1:10); dev.off()}"
+
+==63464== LEAK SUMMARY:
+==63464==    definitely lost: 2,560 bytes in 4 blocks
+==63464==    indirectly lost: 17,710 bytes in 762 blocks
+==63464==      possibly lost: 1,820 bytes in 8 blocks
+==63464==    still reachable: 56,072,939 bytes in 19,283 blocks
+==63464==                       of which reachable via heuristic:
+==63464==                         newarray           : 4,264 bytes in 1 
+blocks
+==63464==         suppressed: 0 bytes in 0 blocks
+
+Tim
+
+> 
+> 
+> On 17/01/2023 4:55 a.m., Martin Maechler wrote:
+>>>>>>> Edward Ionides
+>>>>>>> ???? on Mon, 16 Jan 2023 09:04:49 -0500 writes:
+>>
+>> ???? > Hi all,
+>>
+>> ???? > Yesterday I discovered what seems to me like a memory leak in 
+>> png() so I'm
+>> ???? > reporting it in case that is helpful. Here is a small 
+>> reproducible example:
+>>
+>> ???? > R -d "valgrind --tool=memcheck --track-origins=yes 
+>> --leak-check=full"
+>> ???? > --vanilla -e "png(filename='p.png'); plot(1:10); dev.off()"
+>> ???? > ## HAS LEAK
+>> ???? > ==1021711== LEAK SUMMARY:
+>> ???? > ==1021711==??? definitely lost: 9,216 bytes in 30 blocks
+>> ???? > ==1021711==??? indirectly lost: 19,370 bytes in 838 blocks
+>> ???? > ==1021711==????? possibly lost: 3,868 bytes in 8 blocks
+>>
+>> ???? > R -d "valgrind --tool=memcheck --track-origins=yes 
+>> --leak-check=full"
+>> ???? > --vanilla -e "pdf(file='p.pdf'); plot(1:10); dev.off()"
+>> ???? > ## NO LEAK
+>> ???? > ==1031300== LEAK SUMMARY:
+>> ???? > ==1031300==??? definitely lost: 0 bytes in 0 blocks
+>> ???? > ==1031300==??? indirectly lost: 0 bytes in 0 blocks
+>> ???? > ==1031300==????? possibly lost: 0 bytes in 0 blocks
+>>
+>> I can reproduce, although I need to have the memcheck options in 
+>> ~/.valgrindrc
+>> The same happens if grid-based graphics is used and for the
+>> latest R-devel :
+>>
+>> R-devel -d valgrind --vanilla -e 
+>> 'png("p.png");lattice::xyplot(1~1);dev.off()'
+>>
+>> Using? png() shows leak
+>> using? pdf()? is fine (0 bytes lost)
+>>
+>>
+>> Looking at the full report (--leak-check=full? --track-origins=true
+>> as 2 lines in ~/.valgrindrc ) I see several origins tracked to
+>> internal malloc code,
+>> but then also e.g.,
+>>
+>> ==1410108== 96 bytes in 1 blocks are possibly lost in loss record 700 
+>> of 3,037
+>> ==1410108==??? at 0x484A464: calloc (vg_replace_malloc.c:1328)
+>> ==1410108==??? by 0x159EA3A0: g_malloc0 (gmem.c:155)
+>> ==1410108==??? by 0x15A3AB8C: g_rc_box_alloc_full.constprop.0 
+>> (grcbox.c:234)
+>> ==1410108==??? by 0x1600A6C9: UnknownInlinedFun (pangofc-fontmap.c:899)
+>> ==1410108==??? by 0x1600A6C9: UnknownInlinedFun (pangofc-fontmap.c:2145)
+>> ==1410108==??? by 0x1600A6C9: pango_fc_font_map_load_fontset 
+>> (pangofc-fontmap.c:2245)
+>> ==1410108==??? by 0x158E7474: UnknownInlinedFun (itemize.c:892)
+>> ==1410108==??? by 0x158E7474: UnknownInlinedFun (itemize.c:952)
+>> ==1410108==??? by 0x158E7474: pango_itemize_with_font (itemize.c:1564)
+>> ==1410108==??? by 0x158FA89E: 
+>> pango_layout_check_lines.part.0.lto_priv.0 (pango-layout.c:4894)
+>> ==1410108==??? by 0x158EF4DB: UnknownInlinedFun (pango-layout.c:4786)
+>> ==1410108==??? by 0x158EF4DB: pango_layout_get_line (pango-layout.c:1715)
+>> ==1410108==??? by 0x1B5E441F: PG_text_extents (cairoFns.c:1487)
+>> ==1410108==??? by 0x1B5E441F: PangoCairo_StrWidth (cairoFns.c:1565)
+>> ==1410108==??? by 0x4CEBE6: GEStrWidth (engine.c:2615)
+>> ==1410108==??? by 0x4CEBE6: GEStrWidth (engine.c:2578)
+>> ==1410108==??? by 0x1BE12D11: textRect (util.c:198)
+>> ==1410108==??? by 0x1BDFAF19: gridText (grid.c:3740)
+>> ==1410108==??? by 0x1BE01FAB: L_textBounds (grid.c:3892)
+>>
+>> which (from the bottom up) shows? package grid C code,
+>> then R main but infrastructure for grDevices ("GEStrWidth 
+>> (engine.c)")? and
+>> subdirectory grDevices/src/cairo/cairoFns.c
+>> and then goes into system cairo or pangocairo libraries,
+>> which here (Linux Fedora 36) are (I thik)
+>>
+>> ????libpangocairo-1.0.so.0
+>> ????libpango-1.0.so.0
+>>
+>> {as they are stripped, I don't know how to check }
+>>
+>> To *fix* this I also have to defer to others.
+>>
+>> Thank you for the report,
+>> Martin
+>>
+>> -- 
+>> Martin Maechler
+>> ETH Zurich? and? R Core team
+>>
+>>
+>> ???? > For some context, I am running R4.2.2. My goal was to run 
+>> valgrind on the
+>> ???? > latest version of my spatPomp package. A memory leak was 
+>> detected by
+>> ???? > rhub::check_with_valgrind(). I then tracked down the problem by 
+>> running
+>> ???? > valgrind locally and in the end it seemed to come down to a 
+>> problem with
+>> ???? > png(). This was used in the spatPomp unit tests while testing 
+>> the plot
+>> ???? > method. I can use pdf() instead, but the point here is to 
+>> report the issue
+>> ???? > in case it is not known.
+>>
+>> ???? > I'm new to R package development and happy to accept any advice.
+>>
+>> ???? > Thanks,
+>> ???? > Ed
+>>
+>> ???? > Edward L. Ionides
+>> ???? > Associate Chair for Undergraduate Studies and Professor,
+>> ???? > Department of Statistics, University of Michigan
+>> ???? > 1085 South University, Ann Arbor, MI 48109-1107
+>> ???? > email: ionides at umich.edu
+>> ???? > phone: 734 615 3332
+>> ???? > office: 453 West Hall
+>>
+>> ???? > [[alternative HTML version deleted]]
+>>
+>> ???? > ______________________________________________
+>> ???? > R-devel at r-project.org mailing list
+>> ???? > https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Tue Jan 17 15:06:50 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Tue, 17 Jan 2023 15:06:50 +0100
+Subject: [Rd] memory leak in png()
+In-Reply-To: <63a393be-a868-cb50-436d-4e464c39ea5a@hiddenelephants.co.uk>
+References: <CAN=OUeXJvTtQL4fC3mSjcocMV+quAKONX-kW6sKPe0poy93Zsg@mail.gmail.com>
+ <25542.28839.791709.198130@stat.math.ethz.ch>
+ <d48e82e9-064f-d6a1-0a73-1e16f8ce1dd2@gmail.com>
+ <63a393be-a868-cb50-436d-4e464c39ea5a@hiddenelephants.co.uk>
+Message-ID: <25542.43898.189650.616798@stat.math.ethz.ch>
+
+>>>>> Tim Taylor 
+>>>>>     on Tue, 17 Jan 2023 13:39:01 +0000 writes:
+
+    > On 17/01/2023 13:06, Duncan Murdoch wrote:
+    >> I don't have a valgrind-capable version of R, but I'd be interested to 
+    >> see whether this is a one-time loss, or repeated.? That is, do you get a 
+    >> much bigger loss from running the lossy code in a loop like this?
+    >> 
+    >> ?for (i in 1:100) { png(filename='p.png'); plot(1:10); dev.off() }
+    >> 
+    >> Duncan Murdoch
+
+    > Duncan - Not that I'm seeing
+
+> Duncan - Not that I'm seeing
+> 
+> Rdevel -d valgrind --vanilla -e " for (i in 1:1) {png(filename='p.png'); 
+> plot(1:10); dev.off()}"
+> 
+> ==63291== LEAK SUMMARY:
+> ==63291==    definitely lost: 2,560 bytes in 4 blocks
+> ==63291==    indirectly lost: 17,710 bytes in 762 blocks
+> ==63291==      possibly lost: 1,820 bytes in 8 blocks
+> ==63291==    still reachable: 52,177,408 bytes in 21,282 blocks
+> ==63291==                       of which reachable via heuristic:
+> ==63291==                         newarray           : 4,264 bytes in 1 
+> blocks
+> ==63291==         suppressed: 0 bytes in 0 blocks
+> 
+> Rdevel -d valgrind --vanilla -e " for (i in 1:100) 
+> {png(filename='p.png'); plot(1:10); dev.off()}"
+> 
+> ==63464== LEAK SUMMARY:
+> ==63464==    definitely lost: 2,560 bytes in 4 blocks
+> ==63464==    indirectly lost: 17,710 bytes in 762 blocks
+> ==63464==      possibly lost: 1,820 bytes in 8 blocks
+> ==63464==    still reachable: 56,072,939 bytes in 19,283 blocks
+> ==63464==                       of which reachable via heuristic:
+> ==63464==                         newarray           : 4,264 bytes in 1 
+> blocks
+> ==63464==         suppressed: 0 bytes in 0 blocks
+> 
+> Tim
+
+
+Thank you very much, Duncan and Tim.
+Indeed someone else mentioned to me privately that they thought
+these were "once in an R session"-losses, and hence not at all
+problematic:
+
+There are several places in the R sources (written in C),
+where *static* (fixed size) buffers originally are not allocated
+and once they are used are allocated and then used for the rest
+of the R session.
+
+It's comparable to not having all base packages loaded in
+your R session when you start up: Then they do *not* use any
+memory (and startup time) resources, and if you really need
+them, load the namespaces and possibly even attach the package
+to search().
+
+That is perfectly valid smart use of resources from within R,
+and indeed a feature and not a bug.
+
+Martin
+
+
+From pd@|gd @end|ng |rom gm@||@com  Tue Jan 17 16:41:14 2023
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Tue, 17 Jan 2023 16:41:14 +0100
+Subject: [Rd] Recycling in arithmetic operations involving zero-length
+ vectors
+In-Reply-To: <69dcf7e5858b4c839dab1497275a1fea@chu-rouen.fr>
+References: <81b28da2-a549-eff5-c13e-95b1b5e55b16@gmail.com>
+ <314EC34E-7214-4037-9E18-A7E8AE7AD9E5@comcast.net>
+ <42313a53-c0b2-e673-2eae-ee93477af02a@gmail.com>
+ <CADfFDC42zPw_RQN3oMiPnxTjS+DFchyZ6Sh5r-77mmhcYS4sRg@mail.gmail.com>
+ <69dcf7e5858b4c839dab1497275a1fea@chu-rouen.fr>
+Message-ID: <68C62199-DD2E-404C-8B7A-114B96B759B0@gmail.com>
+
+Actually, sum(), all(), any(), prod() all return a _carefully considered_ result in the case of an empty vector. The sum over a disjoint union of sets should be the sum of the sums over each set, so if a set is empty, its contribution to the sum must be zero. Similarly, the product over an empty set is 1. Logical aggregate all() should be stable for "&" and any() for "|", hence all(logical(0))==TRUE and any(logical(0))==FALSE. 
+
+-pd
+
+> On 16 Jan 2023, at 16:53 , GILLIBERT, Andre <Andre.Gillibert at chu-rouen.fr> wrote:
+> 
+> Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+> 
+>> To even do that, we would have to first decide which "cases" should produce a warning.
+> 
+>> Let's say `1 + x` should give a warning when x = numeric(0). Then should `x^2` also produce a warning? Should `x^0.5`? Should `sqrt(x)`?
+>> Should `log(x)`?
+> 
+> 
+> The most probable errors would be in functions taking two arguments (e.g. `+`) and for which one argument has length >= 2 while the other has length 0.
+> 
+> In my experience, most code with accidental zero-length propagations (e.g. typo in data_frame$field) quickly lead to errors, that are easy to debug (except for beginners), and so, do not need a warning.
+> 
+> The only cases where zero-length propagation is really dangerous in my experience is in code using an aggregating function like sum(), all() or any(), because it silently returns a valid value for a zero-length argument. Emitting warnings for sum(numeric(0)) would probably have too many false positives but a (length >= 2) vs (length == 0) warning for common binary operators could sometimes catch the issue before it reaches the aggregating function.
+> 
+> -- 
+> Sincerely
+> Andr? GILLIBERT
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
