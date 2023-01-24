@@ -6489,3 +6489,128 @@ Antoine Lucas.
 	[[alternative HTML version deleted]]
 
 
+From edd @end|ng |rom deb|@n@org  Sun Jan 22 05:17:45 2023
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Sat, 21 Jan 2023 22:17:45 -0600
+Subject: [Rd] Object are not destroy while using error (Rf_error)
+In-Reply-To: <CAM98rvT631sXXO4A6hcmNq7V_dK6Sqehjng3cspHeW9WZo2-OA@mail.gmail.com>
+References: <CAM98rvT631sXXO4A6hcmNq7V_dK6Sqehjng3cspHeW9WZo2-OA@mail.gmail.com>
+Message-ID: <25548.47337.944917.442829@rob.eddelbuettel.com>
+
+
+Antoine,
+
+I think there are few things going on here.  One is that actual _R_ objects
+may only get destroyed when gc() gets called.  Which we applications writer
+do not control.  Another thing that may have an effect is the use of .C()
+which we all more or less moved away from.  Anyway, if we make your example a
+proper C++ one with proper C++ scope (by trivial Rcpp wrapping for ease, but
+that should not be a requirement) we see the four message you desire:
+
+
+#### Code
+
+#include <Rcpp/Lightest>
+
+static int count = 0;
+
+class A {
+public:
+  A(){  printf("c %d\n", count);
+    count++;  }
+
+  ~A(){count--;
+    printf("d %d\n", count);  }
+};
+
+// [[Rcpp::export]]
+void testAL(){
+  A a;
+  {
+    A b;
+  }
+  Rcpp::stop("does not write [d 0]");
+}
+
+/*** R
+testAL()
+*/
+
+
+#### Output
+
+> Rcpp::sourceCpp("/tmp/ctorDemo.cpp")
+
+> testAL()
+c 0
+c 1
+d 1
+d 0
+Error in eval(ei, envir) : does not write [d 0]
+> 
+
+
+Hope this helps,  Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From yugong @end|ng |rom out|ook@com  Sun Jan 22 07:37:45 2023
+From: yugong @end|ng |rom out|ook@com (yu gong)
+Date: Sun, 22 Jan 2023 06:37:45 +0000
+Subject: [Rd] about RGui HighDPI awareness on windows
+In-Reply-To: <TYAP286MB026815B87A3D07F03A9A2570D1C59@TYAP286MB0268.JPNP286.PROD.OUTLOOK.COM>
+References: <TYAP286MB026815B87A3D07F03A9A2570D1C59@TYAP286MB0268.JPNP286.PROD.OUTLOOK.COM>
+Message-ID: <TYAP286MB026853E9B8D6412586742774D1CB9@TYAP286MB0268.JPNP286.PROD.OUTLOOK.COM>
+
+Continually working on this,  System DPI awareness implemented improved and almost finished.
+
+Now the modify includes: Window, Dialogs and Toolbar implemented use graphapp. which related to Multiple places in the R windows front end and R base package and modules. Now most of them modified to DPI awareness(some of them, surprisingly DPI awareness ready, do not need to mod,) .
+
+I test on two PCS168-dpi and 192 dpi, RGUI windows(include console, editor, pagers), dialogs (include download, repo related , preference), and most important, plotting Windows, All of them work smoothly on my test PCS.
+
+The patch url is https://github.com/armgong/misc-r-patch/blob/main/dpi-c-code.diff and two test picture of my PCS are also in the repo.
+
+Looking forward to any feedback or feedback from you.
+
+Best regards,
+Yu Gong
+
+
+
+
+________________________________
+From: R-devel <r-devel-bounces at r-project.org> on behalf of yu gong <yugong at outlook.com>
+Sent: Friday, January 20, 2023 17:23
+To: r-devel at r-project.org <r-devel at r-project.org>
+Subject: [Rd] about RGui HighDPI awareness on windows
+
+Dear all:
+
+Now RGui on windows no HighDPI awareness.try add HighDPI awareness to RGui in last  two days.
+
+I write an initial POC(just for verify and only SystemDPI awareness  partial implemented) , try to mod graphapp used in  R  to implemented DPI scaling.
+it seems works on my laptop , but need  further test.
+
+So I post the patch https://github.com/armgong/misc-r-patch/blob/main/dpi-c-code.diff
+
+if you interested in this ,please read or  try the patch.
+
+Looking forward to hear your thoughts about this patch.
+
+Best regards,
+Yu Gong
+
+
+
+
+        [[alternative HTML version deleted]]
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+	[[alternative HTML version deleted]]
+
+
