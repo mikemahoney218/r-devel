@@ -6614,3 +6614,91 @@ https://stat.ethz.ch/mailman/listinfo/r-devel
 	[[alternative HTML version deleted]]
 
 
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Mon Jan 23 11:06:49 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Mon, 23 Jan 2023 11:06:49 +0100
+Subject: [Rd] Object are not destroy while using error (Rf_error)
+In-Reply-To: <CAM98rvT631sXXO4A6hcmNq7V_dK6Sqehjng3cspHeW9WZo2-OA@mail.gmail.com>
+References: <CAM98rvT631sXXO4A6hcmNq7V_dK6Sqehjng3cspHeW9WZo2-OA@mail.gmail.com>
+Message-ID: <7c3fb07a-6e38-81b7-ba41-b5cf709a9cc7@gmail.com>
+
+
+On 1/21/23 16:55, Antoine Lucas wrote:
+> Dear all,
+>
+> I try to understand why on my computer I do not clear all data with this
+> code:
+>
+>
+> #include <R.h>
+> static int count = 0;
+>
+> class A {
+> public:
+>    A(){  printf("c %d\n", count);
+>      count++;  }
+>
+>    ~A(){count--;
+>      printf("d %d\n", count);  }
+> };
+>
+> extern "C" {
+>    void testAL(){
+>      A a;
+>      {
+>        A b;
+>      }
+>      error("does not write [d 0]");
+>    }
+> }
+>
+> To run with R: I build  gcc -shared -I/opt/R-202301/lib/R/include/
+> myError.cpp -o myError.so
+>
+> then in R: dyn.load("myError.so")
+> .C("testAL")
+>
+> This writes c0, c1, d1 but not d0.
+> If I comment line "error", I does write latest d0.
+>
+> How could I get all my objects destroy while sending en error message to R ?
+
+The problem is that Rf_error() uses a long jump, which unwinds the C++ 
+frames without calling destructors. Using the C API of R from C++ code 
+is tricky because of this incompatibility of C long jumps with C++ 
+destructors.
+
+Technically, you need to protect all calls from C++ to R against long 
+jumps. There is an API for that, see R_UnwindProtect in 6.12 of "Writing 
+R Extensions". So, your wrapper will get called in case of a long jump 
+and will handle it in a way compatible with your C++ frames (possibly by 
+throwing a C++ exception).
+
+Similarly, you should not throw C++ exceptions over R frames on the 
+stack, because R's meta-data about long jump targets on its stacks would 
+go out of sync, causing a crash later. You again would have to convert 
+C++ exceptions to long jumps.
+
+So, in your example where you use the R API to only trigger an R error, 
+you could instead throw a C++ exception, and catch it later, below all 
+your C++ code but before unwinding could potentially reach R frames. And 
+there you could call Rf_error().
+
+Best
+Tomas
+
+(this is related: 
+https://blog.r-project.org/2019/03/28/use-of-c-in-packages )
+
+>
+> Regards,
+>
+> Antoine Lucas.
+>
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
