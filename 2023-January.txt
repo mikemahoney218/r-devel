@@ -6702,3 +6702,275 @@ https://blog.r-project.org/2019/03/28/use-of-c-in-packages )
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From d@rm@t46 @end|ng |rom uwo@c@  Wed Jan 25 15:59:37 2023
+From: d@rm@t46 @end|ng |rom uwo@c@ (Dave Armstrong)
+Date: Wed, 25 Jan 2023 09:59:37 -0500
+Subject: [Rd] Potential bug in fitted.nls
+Message-ID: <B45032AC-FCF7-423A-8202-76F3AB25B310@uwo.ca>
+
+Dear Colleagues,
+
+I recently answered [this question]() on StackOverflow that identified 
+what seems to be unusual behaviour with `stats:::nls.fitted()`. In 
+particular, a null model returns a single fitted value rather than a 
+vector of the same fitted value of `length(y)`.  The documentation 
+doesn?t make it seem like this is the intended behaviour, so I?m not 
+sure if it?s a bug, a ?Wishlist? item or something that is working 
+as intended even though it seems unusual to me.  I looked through the 
+bug reporting page on the R project website and it suggested contacting 
+the R-devel list in cases where the behaviour is not obviously a bug to 
+see whether others find the behaviour equally unusual and I should 
+submit a Wishlist item through Bugzilla.
+
+Below is a reprex that shows how the fitted values of a model with just 
+a single parameter is length 1, but if I multiply that constant by a 
+vector of ones, then the fitted values are of `length(y)`.  Is this 
+something that should be reported?
+
+``` r
+dat <- 
+data.frame(y=c(80,251,304,482,401,141,242,221,304,243,544,669,638),
+                   ones = rep(1, 13))
+mNull1 <- nls(y ~ a, data=dat, start=c(a=mean(dat$y)))
+fitted(mNull1)
+#> [1] 347.6923
+#> attr(,"label")
+#> [1] "Fitted values"
+
+mNull2 <- nls(y ~ a*ones, data=dat, start=c(a=mean(dat$y)))
+fitted(mNull2)
+#>  [1] 347.6923 347.6923 347.6923 347.6923 347.6923 347.6923 347.6923 
+347.6923
+#>  [9] 347.6923 347.6923 347.6923 347.6923 347.6923
+#> attr(,"label")
+#> [1] "Fitted values"
+```
+
+Created on 2023-01-25 by the [reprex 
+package](https://reprex.tidyverse.org) (v2.0.1)
+	[[alternative HTML version deleted]]
+
+
+From pro|jcn@@h @end|ng |rom gm@||@com  Thu Jan 26 14:50:09 2023
+From: pro|jcn@@h @end|ng |rom gm@||@com (J C Nash)
+Date: Thu, 26 Jan 2023 08:50:09 -0500
+Subject: [Rd] Potential bug in fitted.nls
+In-Reply-To: <B45032AC-FCF7-423A-8202-76F3AB25B310@uwo.ca>
+References: <B45032AC-FCF7-423A-8202-76F3AB25B310@uwo.ca>
+Message-ID: <ec9f5e8c-25c2-2229-84c0-2488ab8b2ad4@gmail.com>
+
+FWIW, nlsr::nlxb() gives same answers.
+
+JN
+
+On 2023-01-25 09:59, Dave Armstrong wrote:
+> Dear Colleagues,
+> 
+> I recently answered [this question]() on StackOverflow that identified
+> what seems to be unusual behaviour with `stats:::nls.fitted()`. In
+> particular, a null model returns a single fitted value rather than a
+> vector of the same fitted value of `length(y)`.  The documentation
+> doesn?t make it seem like this is the intended behaviour, so I?m not
+> sure if it?s a bug, a ?Wishlist? item or something that is working
+> as intended even though it seems unusual to me.  I looked through the
+> bug reporting page on the R project website and it suggested contacting
+> the R-devel list in cases where the behaviour is not obviously a bug to
+> see whether others find the behaviour equally unusual and I should
+> submit a Wishlist item through Bugzilla.
+> 
+> Below is a reprex that shows how the fitted values of a model with just
+> a single parameter is length 1, but if I multiply that constant by a
+> vector of ones, then the fitted values are of `length(y)`.  Is this
+> something that should be reported?
+> 
+> ``` r
+> dat <-
+> data.frame(y=c(80,251,304,482,401,141,242,221,304,243,544,669,638),
+>                     ones = rep(1, 13))
+> mNull1 <- nls(y ~ a, data=dat, start=c(a=mean(dat$y)))
+> fitted(mNull1)
+> #> [1] 347.6923
+> #> attr(,"label")
+> #> [1] "Fitted values"
+> 
+> mNull2 <- nls(y ~ a*ones, data=dat, start=c(a=mean(dat$y)))
+> fitted(mNull2)
+> #>  [1] 347.6923 347.6923 347.6923 347.6923 347.6923 347.6923 347.6923
+> 347.6923
+> #>  [9] 347.6923 347.6923 347.6923 347.6923 347.6923
+> #> attr(,"label")
+> #> [1] "Fitted values"
+> ```
+> 
+> Created on 2023-01-25 by the [reprex
+> package](https://reprex.tidyverse.org) (v2.0.1)
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From w||||@mwdun|@p @end|ng |rom gm@||@com  Thu Jan 26 18:55:00 2023
+From: w||||@mwdun|@p @end|ng |rom gm@||@com (Bill Dunlap)
+Date: Thu, 26 Jan 2023 09:55:00 -0800
+Subject: [Rd] Potential bug in fitted.nls
+In-Reply-To: <B45032AC-FCF7-423A-8202-76F3AB25B310@uwo.ca>
+References: <B45032AC-FCF7-423A-8202-76F3AB25B310@uwo.ca>
+Message-ID: <CAHqSRuRxt7RfzN4o1YGr34rfCK7gpY88MrVXUOw2FmDmzJJzaw@mail.gmail.com>
+
+Doesn't nls() expect that the lengths of vectors on both sides of the
+formula match (if both are supplied)?  Perhaps it should check for that.
+
+-Bill
+
+On Thu, Jan 26, 2023 at 12:17 AM Dave Armstrong <darmst46 at uwo.ca> wrote:
+
+> Dear Colleagues,
+>
+> I recently answered [this question]() on StackOverflow that identified
+> what seems to be unusual behaviour with `stats:::nls.fitted()`. In
+> particular, a null model returns a single fitted value rather than a
+> vector of the same fitted value of `length(y)`.  The documentation
+> doesn?t make it seem like this is the intended behaviour, so I?m not
+> sure if it?s a bug, a ?Wishlist? item or something that is working
+> as intended even though it seems unusual to me.  I looked through the
+> bug reporting page on the R project website and it suggested contacting
+> the R-devel list in cases where the behaviour is not obviously a bug to
+> see whether others find the behaviour equally unusual and I should
+> submit a Wishlist item through Bugzilla.
+>
+> Below is a reprex that shows how the fitted values of a model with just
+> a single parameter is length 1, but if I multiply that constant by a
+> vector of ones, then the fitted values are of `length(y)`.  Is this
+> something that should be reported?
+>
+> ``` r
+> dat <-
+> data.frame(y=c(80,251,304,482,401,141,242,221,304,243,544,669,638),
+>                    ones = rep(1, 13))
+> mNull1 <- nls(y ~ a, data=dat, start=c(a=mean(dat$y)))
+> fitted(mNull1)
+> #> [1] 347.6923
+> #> attr(,"label")
+> #> [1] "Fitted values"
+>
+> mNull2 <- nls(y ~ a*ones, data=dat, start=c(a=mean(dat$y)))
+> fitted(mNull2)
+> #>  [1] 347.6923 347.6923 347.6923 347.6923 347.6923 347.6923 347.6923
+> 347.6923
+> #>  [9] 347.6923 347.6923 347.6923 347.6923 347.6923
+> #> attr(,"label")
+> #> [1] "Fitted values"
+> ```
+>
+> Created on 2023-01-25 by the [reprex
+> package](https://reprex.tidyverse.org) (v2.0.1)
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From pro|jcn@@h @end|ng |rom gm@||@com  Thu Jan 26 19:44:38 2023
+From: pro|jcn@@h @end|ng |rom gm@||@com (J C Nash)
+Date: Thu, 26 Jan 2023 13:44:38 -0500
+Subject: [Rd] Potential bug in fitted.nls
+In-Reply-To: <CAHqSRuRxt7RfzN4o1YGr34rfCK7gpY88MrVXUOw2FmDmzJJzaw@mail.gmail.com>
+References: <B45032AC-FCF7-423A-8202-76F3AB25B310@uwo.ca>
+ <CAHqSRuRxt7RfzN4o1YGr34rfCK7gpY88MrVXUOw2FmDmzJJzaw@mail.gmail.com>
+Message-ID: <6a528089-ca9d-3a9f-8924-008d2f88ee96@gmail.com>
+
+nls() actually uses different modeling formulas depending on the 'algorithm', and
+there is, in my view as a long time nonlinear modeling person, an unfortunate
+structural issue that likely cannot be resolved simply. This is because for nonlinear
+modeling programs we really should be using explicit model statements
+e.g., a linear model should be y ~ a * x + b where x is the (independent)
+variable and a and b are parameters. But we put in y ~ x as per lm().
+Partially linear approaches and indexed parameter models add complexity and
+inconsistency. We're pushing structures beyond their design.
+
+This is one of the topics in a paper currently undergoing
+final edit on "Improving nls()" that came out of a Google Summer of Code project.
+The desired improvements in nls() were mostly frustrated by entanglements in the code,
+but they have led to a lot of tweaks to package nlsr. Perhaps someone more facile
+with the intricacies of R internals can succeed. For the paper and nlsr,
+all the bits should get sent to CRAN and elsewhere in the next month or so,
+(co-author is newly started on a Ph D) but if anyone is anxious to try, they can email
+me. The nlsr code has been stable for several months, but some documentation still
+being considered.
+
+Sorting out how to deal with the model expression for nls() and related tools
+is a worthwhile goal, but not one that can be settled here. It could make a good
+review project for a senior undergrad or master's level, and I'd be happy to
+join the discussion.
+
+Cheers, JN
+
+
+On 2023-01-26 12:55, Bill Dunlap wrote:
+> Doesn't nls() expect that the lengths of vectors on both sides of the
+> formula match (if both are supplied)?  Perhaps it should check for that.
+> 
+> -Bill
+> 
+> On Thu, Jan 26, 2023 at 12:17 AM Dave Armstrong <darmst46 at uwo.ca> wrote:
+> 
+>> Dear Colleagues,
+>>
+>> I recently answered [this question]() on StackOverflow that identified
+>> what seems to be unusual behaviour with `stats:::nls.fitted()`. In
+>> particular, a null model returns a single fitted value rather than a
+>> vector of the same fitted value of `length(y)`.  The documentation
+>> doesn?t make it seem like this is the intended behaviour, so I?m not
+>> sure if it?s a bug, a ?Wishlist? item or something that is working
+>> as intended even though it seems unusual to me.  I looked through the
+>> bug reporting page on the R project website and it suggested contacting
+>> the R-devel list in cases where the behaviour is not obviously a bug to
+>> see whether others find the behaviour equally unusual and I should
+>> submit a Wishlist item through Bugzilla.
+>>
+>> Below is a reprex that shows how the fitted values of a model with just
+>> a single parameter is length 1, but if I multiply that constant by a
+>> vector of ones, then the fitted values are of `length(y)`.  Is this
+>> something that should be reported?
+>>
+>> ``` r
+>> dat <-
+>> data.frame(y=c(80,251,304,482,401,141,242,221,304,243,544,669,638),
+>>                     ones = rep(1, 13))
+>> mNull1 <- nls(y ~ a, data=dat, start=c(a=mean(dat$y)))
+>> fitted(mNull1)
+>> #> [1] 347.6923
+>> #> attr(,"label")
+>> #> [1] "Fitted values"
+>>
+>> mNull2 <- nls(y ~ a*ones, data=dat, start=c(a=mean(dat$y)))
+>> fitted(mNull2)
+>> #>  [1] 347.6923 347.6923 347.6923 347.6923 347.6923 347.6923 347.6923
+>> 347.6923
+>> #>  [9] 347.6923 347.6923 347.6923 347.6923 347.6923
+>> #> attr(,"label")
+>> #> [1] "Fitted values"
+>> ```
+>>
+>> Created on 2023-01-25 by the [reprex
+>> package](https://reprex.tidyverse.org) (v2.0.1)
+>>          [[alternative HTML version deleted]]
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
