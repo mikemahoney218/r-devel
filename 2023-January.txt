@@ -6974,3 +6974,538 @@ On 2023-01-26 12:55, Bill Dunlap wrote:
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Mon Jan 30 23:01:56 2023
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Mon, 30 Jan 2023 14:01:56 -0800
+Subject: [Rd] Sys.getenv(): Error in substring(x,
+ m + 1L) : invalid multibyte string at '<ff>' if an environment
+ variable contains \xFF
+Message-ID: <CAFDcVCRW_x8tx9Gz-Z4+=PMv_5NpsUr78=Aia6h19_WMXozrww@mail.gmail.com>
+
+/Hello.
+
+SUMMARY:
+$ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv()"
+Error in substring(x, m + 1L) : invalid multibyte string at '<ff>'
+
+$ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv('BOOM')"
+[1] "\xff"
+
+BACKGROUND:
+I launch R through an Son of Grid Engine (SGE) scheduler, where the R
+process is launched on a compute host via  'qrsh', which part of SGE.
+Without going into details, 'mpirun' is also involved. Regardless, in
+this process, an 'qrsh'-specific environment variable 'QRSH_COMMAND'
+is set automatically.  The value of this variable comprise of a string
+with \xff (ASCII 255) injected between the words.  This is by design
+of SGE [1].  Here is an example of what this environment variable may
+look like:
+
+QRSH_COMMAND= orted\xff--hnp-topo-sig\xff2N:2S:32L3:128L2:128L1:128C:256H:x86_64\xff-mca\xffess\xff\"env\"\xff-mca\xfforte_ess_jobid\xff\"3473342464\"\xff-mca\xfforte_ess_vpid\xff1\xff-mca\xfforte_ess_num_procs\xff\"3\"\xff-mca\xfforte_hnp_uri\xff\"3473342464.0;tcp://192.168.1.13:50847\"\xff-mca\xffplm\xff\"rsh\"\xff-mca\xfforte_tag_output\xff\"1\"\xff--tree-spawn"
+
+where each \xff is a single byte 255=0xFF=\xFF.
+
+
+ISSUE:
+An environment variable with embedded 0xFF bytes in its value causes
+calls to Sys.getenv() to produce an error when running R in a UTF-8
+locale. Here is a minimal example on Linux:
+
+$ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv()"
+Error in substring(x, m + 1L) : invalid multibyte string at '<ff>'
+Calls: Sys.getenv -> substring
+In addition: Warning message:
+In regexpr("=", x, fixed = TRUE) :
+  input string 134 is invalid in this locale
+Execution halted
+
+
+WORKAROUND:
+The workaround is to (1) identify any environment variables with
+invalid UTF-8 symbols, and (2) prune or unset those variables before
+launching R, e.g. in my SGE case, launching R using:
+
+QRSH_COMMAND= Rscript --vanilla -e "Sys.getenv()"
+
+avoid the problem.  Having to unset/modify environment variables
+because R doesn't like them, see a bit of an ad-hoc hack to me.  Also,
+if you are not aware of this problem, or not a savvy R user, it can be
+quite tricky to track down the above error message, especially if
+Sys.getenv() is called deep down in some package dependency.
+
+
+DISCUSSION/SUGGESTION/ASK:
+My suggestion would be to make Sys.getenv() robust against any type of
+byte values in environment variable strings.
+
+The error occurs in Sys.getenv() from:
+
+        x <- .Internal(Sys.getenv(character(), ""))
+        m <- regexpr("=", x, fixed = TRUE)  ## produces a warning
+        n <- substring(x, 1L, m - 1L)
+        v <- substring(x, m + 1L)  ## produces the error
+
+I know too little about string encodings, so I'm not sure what the
+best approach would be here, but maybe falling back to parsing strings
+that are invalid in the current locale using the C locale would be
+reasonable?  Maybe Sys.getenv() should always use the C locale for
+this. It looks like Sys.getenv(name) does this, e.g.
+
+$ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv('BOOM')"
+[1] "\xff"
+
+I'd appreciate any comments and suggestions. I'm happy to file a bug
+report on BugZilla, if this is a bug.
+
+Henrik
+
+[1] https://github.com/gridengine/gridengine/blob/master/source/clients/qrsh/qrsh_starter.c#L462-L466
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue Jan 31 01:04:17 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 31 Jan 2023 01:04:17 +0100
+Subject: [Rd] Sys.getenv(): Error in substring(x,
+ m + 1L) : invalid multibyte string at '<ff>' if an environment
+ variable contains \xFF
+In-Reply-To: <CAFDcVCRW_x8tx9Gz-Z4+=PMv_5NpsUr78=Aia6h19_WMXozrww@mail.gmail.com>
+References: <CAFDcVCRW_x8tx9Gz-Z4+=PMv_5NpsUr78=Aia6h19_WMXozrww@mail.gmail.com>
+Message-ID: <5dcb9875-d0c7-7f95-0450-54740cce0156@gmail.com>
+
+
+On 1/30/23 23:01, Henrik Bengtsson wrote:
+> /Hello.
+>
+> SUMMARY:
+> $ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv()"
+> Error in substring(x, m + 1L) : invalid multibyte string at '<ff>'
+>
+> $ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv('BOOM')"
+> [1] "\xff"
+>
+> BACKGROUND:
+> I launch R through an Son of Grid Engine (SGE) scheduler, where the R
+> process is launched on a compute host via  'qrsh', which part of SGE.
+> Without going into details, 'mpirun' is also involved. Regardless, in
+> this process, an 'qrsh'-specific environment variable 'QRSH_COMMAND'
+> is set automatically.  The value of this variable comprise of a string
+> with \xff (ASCII 255) injected between the words.  This is by design
+> of SGE [1].  Here is an example of what this environment variable may
+> look like:
+>
+> QRSH_COMMAND= orted\xff--hnp-topo-sig\xff2N:2S:32L3:128L2:128L1:128C:256H:x86_64\xff-mca\xffess\xff\"env\"\xff-mca\xfforte_ess_jobid\xff\"3473342464\"\xff-mca\xfforte_ess_vpid\xff1\xff-mca\xfforte_ess_num_procs\xff\"3\"\xff-mca\xfforte_hnp_uri\xff\"3473342464.0;tcp://192.168.1.13:50847\"\xff-mca\xffplm\xff\"rsh\"\xff-mca\xfforte_tag_output\xff\"1\"\xff--tree-spawn"
+>
+> where each \xff is a single byte 255=0xFF=\xFF.
+>
+>
+> ISSUE:
+> An environment variable with embedded 0xFF bytes in its value causes
+> calls to Sys.getenv() to produce an error when running R in a UTF-8
+> locale. Here is a minimal example on Linux:
+>
+> $ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv()"
+> Error in substring(x, m + 1L) : invalid multibyte string at '<ff>'
+> Calls: Sys.getenv -> substring
+> In addition: Warning message:
+> In regexpr("=", x, fixed = TRUE) :
+>    input string 134 is invalid in this locale
+> Execution halted
+>
+>
+> WORKAROUND:
+> The workaround is to (1) identify any environment variables with
+> invalid UTF-8 symbols, and (2) prune or unset those variables before
+> launching R, e.g. in my SGE case, launching R using:
+>
+> QRSH_COMMAND= Rscript --vanilla -e "Sys.getenv()"
+>
+> avoid the problem.  Having to unset/modify environment variables
+> because R doesn't like them, see a bit of an ad-hoc hack to me.  Also,
+> if you are not aware of this problem, or not a savvy R user, it can be
+> quite tricky to track down the above error message, especially if
+> Sys.getenv() is called deep down in some package dependency.
+>
+>
+> DISCUSSION/SUGGESTION/ASK:
+> My suggestion would be to make Sys.getenv() robust against any type of
+> byte values in environment variable strings.
+>
+> The error occurs in Sys.getenv() from:
+>
+>          x <- .Internal(Sys.getenv(character(), ""))
+>          m <- regexpr("=", x, fixed = TRUE)  ## produces a warning
+>          n <- substring(x, 1L, m - 1L)
+>          v <- substring(x, m + 1L)  ## produces the error
+>
+> I know too little about string encodings, so I'm not sure what the
+> best approach would be here, but maybe falling back to parsing strings
+> that are invalid in the current locale using the C locale would be
+> reasonable?  Maybe Sys.getenv() should always use the C locale for
+> this. It looks like Sys.getenv(name) does this, e.g.
+>
+> $ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv('BOOM')"
+> [1] "\xff"
+>
+> I'd appreciate any comments and suggestions. I'm happy to file a bug
+> report on BugZilla, if this is a bug.
+This discussion comes from Python: https://bugs.python.org/issue4006
+(it says Python skips such environment variables)
+
+The problem of invalid strings in environment variables is a similar to 
+the problem of invalid strings in file names. Both variables and file 
+names are something people want to use as strings in programs, scripts, 
+texts, but at the same time these may in theory not be valid strings. 
+Working with (potentially) invalid strings (almost) transparently is 
+much harder than with valid strings; even if R decided to do that, it 
+would be hard to implement and take long and only work for some 
+operations, most will still throw errors. In addition, in practice 
+invalid strings are almost always due to an error, particularly so in 
+file names or environment variables. Such errors are often worth 
+catching (wrong encoding declaration, etc), even though perhaps not always.
+
+In practice, this instance can only be properly fixed at the source, [1] 
+should not do this. split_command() will run into problems with 
+different software, not just R.
+
+There should be a way to split the commands in ASCII (using some sort of 
+quoting/escaping). Using \xFF is flawed also simply because it may be 
+present in the commands, if we followed the same logic of that every 
+byte is fine. So the code is buggy even regardless of multi-byte encodings.
+
+Re difficulty to debug, I think the error message is clear and if 
+packages catch and hide errors, that'd be bad design of such packages, R 
+couldn't really do much about that. This needs to be fixed at [1].
+
+Tomas
+
+>
+> Henrik
+>
+> [1] https://github.com/gridengine/gridengine/blob/master/source/clients/qrsh/qrsh_starter.c#L462-L466
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Tue Jan 31 01:27:52 2023
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Tue, 31 Jan 2023 13:27:52 +1300
+Subject: [Rd] Sys.getenv(): Error in substring(x,
+ m + 1L) : invalid multibyte string at '<ff>' if an environment
+ variable contains \xFF
+In-Reply-To: <5dcb9875-d0c7-7f95-0450-54740cce0156@gmail.com>
+References: <CAFDcVCRW_x8tx9Gz-Z4+=PMv_5NpsUr78=Aia6h19_WMXozrww@mail.gmail.com>
+ <5dcb9875-d0c7-7f95-0450-54740cce0156@gmail.com>
+Message-ID: <DA8B179E-C19C-42F7-91E3-E1C07453D79C@R-project.org>
+
+Tomas,
+
+I think you're not addressing the actual issue which is a clear regression in Sys.getenv() [because it used to work and still works for single env var, but not a list] and the cryptic error due to that regression (caused by changes in R-devel). So in either case, Sys.getenv needs fixing (i.e., this should really go to the bugzilla). Its behavior is currently inconsistent.
+
+The quoted Python discussion diverges very quickly into file name discussions, but I think that is not relevant here - environment variables are essentially data "blobs" that have application-specific meaning. They just chose to drop them because they didn't want to make a decision.
+
+I don't have a strong opinion on this, but Sys.getenv("FOO") and Sys.getenv()[["FOO"]] should not yield two different results. I would argue that if we want to make specific checks, we should make them conditional - even if the default is to add them. Again, the error is due to the implementation of Sys.getenv() breaking in R-devel, not due to any design decision.
+
+Cheers,
+Simon
+
+
+> On Jan 31, 2023, at 1:04 PM, Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+> 
+> 
+> On 1/30/23 23:01, Henrik Bengtsson wrote:
+>> /Hello.
+>> 
+>> SUMMARY:
+>> $ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv()"
+>> Error in substring(x, m + 1L) : invalid multibyte string at '<ff>'
+>> 
+>> $ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv('BOOM')"
+>> [1] "\xff"
+>> 
+>> BACKGROUND:
+>> I launch R through an Son of Grid Engine (SGE) scheduler, where the R
+>> process is launched on a compute host via  'qrsh', which part of SGE.
+>> Without going into details, 'mpirun' is also involved. Regardless, in
+>> this process, an 'qrsh'-specific environment variable 'QRSH_COMMAND'
+>> is set automatically.  The value of this variable comprise of a string
+>> with \xff (ASCII 255) injected between the words.  This is by design
+>> of SGE [1].  Here is an example of what this environment variable may
+>> look like:
+>> 
+>> QRSH_COMMAND= orted\xff--hnp-topo-sig\xff2N:2S:32L3:128L2:128L1:128C:256H:x86_64\xff-mca\xffess\xff\"env\"\xff-mca\xfforte_ess_jobid\xff\"3473342464\"\xff-mca\xfforte_ess_vpid\xff1\xff-mca\xfforte_ess_num_procs\xff\"3\"\xff-mca\xfforte_hnp_uri\xff\"3473342464.0;tcp://192.168.1.13:50847\"\xff-mca\xffplm\xff\"rsh\"\xff-mca\xfforte_tag_output\xff\"1\"\xff--tree-spawn"
+>> 
+>> where each \xff is a single byte 255=0xFF=\xFF.
+>> 
+>> 
+>> ISSUE:
+>> An environment variable with embedded 0xFF bytes in its value causes
+>> calls to Sys.getenv() to produce an error when running R in a UTF-8
+>> locale. Here is a minimal example on Linux:
+>> 
+>> $ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv()"
+>> Error in substring(x, m + 1L) : invalid multibyte string at '<ff>'
+>> Calls: Sys.getenv -> substring
+>> In addition: Warning message:
+>> In regexpr("=", x, fixed = TRUE) :
+>>   input string 134 is invalid in this locale
+>> Execution halted
+>> 
+>> 
+>> WORKAROUND:
+>> The workaround is to (1) identify any environment variables with
+>> invalid UTF-8 symbols, and (2) prune or unset those variables before
+>> launching R, e.g. in my SGE case, launching R using:
+>> 
+>> QRSH_COMMAND= Rscript --vanilla -e "Sys.getenv()"
+>> 
+>> avoid the problem.  Having to unset/modify environment variables
+>> because R doesn't like them, see a bit of an ad-hoc hack to me.  Also,
+>> if you are not aware of this problem, or not a savvy R user, it can be
+>> quite tricky to track down the above error message, especially if
+>> Sys.getenv() is called deep down in some package dependency.
+>> 
+>> 
+>> DISCUSSION/SUGGESTION/ASK:
+>> My suggestion would be to make Sys.getenv() robust against any type of
+>> byte values in environment variable strings.
+>> 
+>> The error occurs in Sys.getenv() from:
+>> 
+>>         x <- .Internal(Sys.getenv(character(), ""))
+>>         m <- regexpr("=", x, fixed = TRUE)  ## produces a warning
+>>         n <- substring(x, 1L, m - 1L)
+>>         v <- substring(x, m + 1L)  ## produces the error
+>> 
+>> I know too little about string encodings, so I'm not sure what the
+>> best approach would be here, but maybe falling back to parsing strings
+>> that are invalid in the current locale using the C locale would be
+>> reasonable?  Maybe Sys.getenv() should always use the C locale for
+>> this. It looks like Sys.getenv(name) does this, e.g.
+>> 
+>> $ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv('BOOM')"
+>> [1] "\xff"
+>> 
+>> I'd appreciate any comments and suggestions. I'm happy to file a bug
+>> report on BugZilla, if this is a bug.
+> This discussion comes from Python: https://bugs.python.org/issue4006
+> (it says Python skips such environment variables)
+> 
+> The problem of invalid strings in environment variables is a similar to the problem of invalid strings in file names. Both variables and file names are something people want to use as strings in programs, scripts, texts, but at the same time these may in theory not be valid strings. Working with (potentially) invalid strings (almost) transparently is much harder than with valid strings; even if R decided to do that, it would be hard to implement and take long and only work for some operations, most will still throw errors. In addition, in practice invalid strings are almost always due to an error, particularly so in file names or environment variables. Such errors are often worth catching (wrong encoding declaration, etc), even though perhaps not always.
+> 
+> In practice, this instance can only be properly fixed at the source, [1] should not do this. split_command() will run into problems with different software, not just R.
+> 
+> There should be a way to split the commands in ASCII (using some sort of quoting/escaping). Using \xFF is flawed also simply because it may be present in the commands, if we followed the same logic of that every byte is fine. So the code is buggy even regardless of multi-byte encodings.
+> 
+> Re difficulty to debug, I think the error message is clear and if packages catch and hide errors, that'd be bad design of such packages, R couldn't really do much about that. This needs to be fixed at [1].
+> 
+> Tomas
+> 
+>> 
+>> Henrik
+>> 
+>> [1] https://github.com/gridengine/gridengine/blob/master/source/clients/qrsh/qrsh_starter.c#L462-L466
+>> 
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Tue Jan 31 02:11:28 2023
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Mon, 30 Jan 2023 17:11:28 -0800
+Subject: [Rd] Sys.getenv(): Error in substring(x,
+ m + 1L) : invalid multibyte string at '<ff>' if an environment
+ variable contains \xFF
+In-Reply-To: <DA8B179E-C19C-42F7-91E3-E1C07453D79C@R-project.org>
+References: <CAFDcVCRW_x8tx9Gz-Z4+=PMv_5NpsUr78=Aia6h19_WMXozrww@mail.gmail.com>
+ <5dcb9875-d0c7-7f95-0450-54740cce0156@gmail.com>
+ <DA8B179E-C19C-42F7-91E3-E1C07453D79C@R-project.org>
+Message-ID: <CAFDcVCSe+HQxh=ug1gfJO9gn_0CuUSFebLH=C_73d0x5vgQ-Pw@mail.gmail.com>
+
+Thanks for the quick replies.
+
+For me, the main issue is that the value of an environment variable
+can causes errors in R.  Say that there's an environment variable that
+is used as a raw data blob (as Simon mentions) and where that data is
+flavor of the day. Then, this would affect R in a random,
+non-predictable way.  Unless it can be argued that environment
+variables must not contain random bytes, I argue that R needs to be
+robust against this.  If not, we're effectively asking everyone to use
+tryCatch() whenever calling Sys.getenv().  Even so, they wouldn't not
+be able to query *all* environment variables, or even know which they
+are, because Sys.getenv() gives an error.  So, I think the only
+reasonable thing to do is to make Sys.getenv() robust against this.
+
+One alternative is to have Sys.getenv() (1) detect for which
+environment variables this happens, (2) produce an informative warning
+that R cannot represent the value correctly, and (3) either drop it,
+or return an adjusted value (e.g. NA_character_).  Something like:
+
+> envs <- Sys.getenv()
+Warning message:
+Environment variable 'BOOM' was dropped, because its
+value cannot be represented as a string in R
+
+As you see from my examples below, R used to drop such environment
+variables in R (< 4.1.0).
+
+Simon, your comment saying it used to work, maybe me look back at
+older versions of R.  Although I didn't say so, I used R 4.2.2 in my
+original report.  It looks like it was in R 4.1.0 that this started to
+fail.  I get:
+
+# R 2.15.0 - R 3.1.0
+$ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv()['BOOM']"
+<NA>
+  NA
+Warning message:
+In strsplit(.Internal(Sys.getenv(character(), "")), "=", fixed = TRUE) :
+  input string 8 is invalid in this locale
+
+# R 3.2.0 - R 4.0.4
+$ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv()['BOOM']"
+NA                      NA
+Warning message:
+In strsplit(.Internal(Sys.getenv(character(), "")), "=", fixed = TRUE) :
+  input string 137 is invalid in this locale
+
+# R 4.1.0 - ...
+$ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv()['BOOM']"
+Error in substring(x, m + 1L) : invalid multibyte string at '<ff>'
+Calls: Sys.getenv -> substring
+In addition: Warning message:
+In regexpr("=", x, fixed = TRUE) :
+  input string 137 is invalid in this locale
+Execution halted
+
+/Henrik
+
+On Mon, Jan 30, 2023 at 4:27 PM Simon Urbanek
+<simon.urbanek at r-project.org> wrote:
+>
+> Tomas,
+>
+> I think you're not addressing the actual issue which is a clear regression in Sys.getenv() [because it used to work and still works for single env var, but not a list] and the cryptic error due to that regression (caused by changes in R-devel). So in either case, Sys.getenv needs fixing (i.e., this should really go to the bugzilla). Its behavior is currently inconsistent.
+>
+> The quoted Python discussion diverges very quickly into file name discussions, but I think that is not relevant here - environment variables are essentially data "blobs" that have application-specific meaning. They just chose to drop them because they didn't want to make a decision.
+>
+> I don't have a strong opinion on this, but Sys.getenv("FOO") and Sys.getenv()[["FOO"]] should not yield two different results. I would argue that if we want to make specific checks, we should make them conditional - even if the default is to add them. Again, the error is due to the implementation of Sys.getenv() breaking in R-devel, not due to any design decision.
+>
+> Cheers,
+> Simon
+>
+>
+> > On Jan 31, 2023, at 1:04 PM, Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+> >
+> >
+> > On 1/30/23 23:01, Henrik Bengtsson wrote:
+> >> /Hello.
+> >>
+> >> SUMMARY:
+> >> $ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv()"
+> >> Error in substring(x, m + 1L) : invalid multibyte string at '<ff>'
+> >>
+> >> $ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv('BOOM')"
+> >> [1] "\xff"
+> >>
+> >> BACKGROUND:
+> >> I launch R through an Son of Grid Engine (SGE) scheduler, where the R
+> >> process is launched on a compute host via  'qrsh', which part of SGE.
+> >> Without going into details, 'mpirun' is also involved. Regardless, in
+> >> this process, an 'qrsh'-specific environment variable 'QRSH_COMMAND'
+> >> is set automatically.  The value of this variable comprise of a string
+> >> with \xff (ASCII 255) injected between the words.  This is by design
+> >> of SGE [1].  Here is an example of what this environment variable may
+> >> look like:
+> >>
+> >> QRSH_COMMAND= orted\xff--hnp-topo-sig\xff2N:2S:32L3:128L2:128L1:128C:256H:x86_64\xff-mca\xffess\xff\"env\"\xff-mca\xfforte_ess_jobid\xff\"3473342464\"\xff-mca\xfforte_ess_vpid\xff1\xff-mca\xfforte_ess_num_procs\xff\"3\"\xff-mca\xfforte_hnp_uri\xff\"3473342464.0;tcp://192.168.1.13:50847\"\xff-mca\xffplm\xff\"rsh\"\xff-mca\xfforte_tag_output\xff\"1\"\xff--tree-spawn"
+> >>
+> >> where each \xff is a single byte 255=0xFF=\xFF.
+> >>
+> >>
+> >> ISSUE:
+> >> An environment variable with embedded 0xFF bytes in its value causes
+> >> calls to Sys.getenv() to produce an error when running R in a UTF-8
+> >> locale. Here is a minimal example on Linux:
+> >>
+> >> $ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv()"
+> >> Error in substring(x, m + 1L) : invalid multibyte string at '<ff>'
+> >> Calls: Sys.getenv -> substring
+> >> In addition: Warning message:
+> >> In regexpr("=", x, fixed = TRUE) :
+> >>   input string 134 is invalid in this locale
+> >> Execution halted
+> >>
+> >>
+> >> WORKAROUND:
+> >> The workaround is to (1) identify any environment variables with
+> >> invalid UTF-8 symbols, and (2) prune or unset those variables before
+> >> launching R, e.g. in my SGE case, launching R using:
+> >>
+> >> QRSH_COMMAND= Rscript --vanilla -e "Sys.getenv()"
+> >>
+> >> avoid the problem.  Having to unset/modify environment variables
+> >> because R doesn't like them, see a bit of an ad-hoc hack to me.  Also,
+> >> if you are not aware of this problem, or not a savvy R user, it can be
+> >> quite tricky to track down the above error message, especially if
+> >> Sys.getenv() is called deep down in some package dependency.
+> >>
+> >>
+> >> DISCUSSION/SUGGESTION/ASK:
+> >> My suggestion would be to make Sys.getenv() robust against any type of
+> >> byte values in environment variable strings.
+> >>
+> >> The error occurs in Sys.getenv() from:
+> >>
+> >>         x <- .Internal(Sys.getenv(character(), ""))
+> >>         m <- regexpr("=", x, fixed = TRUE)  ## produces a warning
+> >>         n <- substring(x, 1L, m - 1L)
+> >>         v <- substring(x, m + 1L)  ## produces the error
+> >>
+> >> I know too little about string encodings, so I'm not sure what the
+> >> best approach would be here, but maybe falling back to parsing strings
+> >> that are invalid in the current locale using the C locale would be
+> >> reasonable?  Maybe Sys.getenv() should always use the C locale for
+> >> this. It looks like Sys.getenv(name) does this, e.g.
+> >>
+> >> $ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv('BOOM')"
+> >> [1] "\xff"
+> >>
+> >> I'd appreciate any comments and suggestions. I'm happy to file a bug
+> >> report on BugZilla, if this is a bug.
+> > This discussion comes from Python: https://bugs.python.org/issue4006
+> > (it says Python skips such environment variables)
+> >
+> > The problem of invalid strings in environment variables is a similar to the problem of invalid strings in file names. Both variables and file names are something people want to use as strings in programs, scripts, texts, but at the same time these may in theory not be valid strings. Working with (potentially) invalid strings (almost) transparently is much harder than with valid strings; even if R decided to do that, it would be hard to implement and take long and only work for some operations, most will still throw errors. In addition, in practice invalid strings are almost always due to an error, particularly so in file names or environment variables. Such errors are often worth catching (wrong encoding declaration, etc), even though perhaps not always.
+> >
+> > In practice, this instance can only be properly fixed at the source, [1] should not do this. split_command() will run into problems with different software, not just R.
+> >
+> > There should be a way to split the commands in ASCII (using some sort of quoting/escaping). Using \xFF is flawed also simply because it may be present in the commands, if we followed the same logic of that every byte is fine. So the code is buggy even regardless of multi-byte encodings.
+> >
+> > Re difficulty to debug, I think the error message is clear and if packages catch and hide errors, that'd be bad design of such packages, R couldn't really do much about that. This needs to be fixed at [1].
+> >
+> > Tomas
+> >
+> >>
+> >> Henrik
+> >>
+> >> [1] https://github.com/gridengine/gridengine/blob/master/source/clients/qrsh/qrsh_starter.c#L462-L466
+> >>
+> >> ______________________________________________
+> >> R-devel at r-project.org mailing list
+> >> https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+>
+
+
