@@ -7509,3 +7509,1101 @@ On Mon, Jan 30, 2023 at 4:27 PM Simon Urbanek
 >
 
 
+From @|mon@urb@nek @end|ng |rom R-project@org  Tue Jan 31 06:01:07 2023
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Tue, 31 Jan 2023 18:01:07 +1300
+Subject: [Rd] Sys.getenv(): Error in substring(x,
+ m + 1L) : invalid multibyte string at '<ff>' if an environment
+ variable contains \xFF
+In-Reply-To: <CAFDcVCSe+HQxh=ug1gfJO9gn_0CuUSFebLH=C_73d0x5vgQ-Pw@mail.gmail.com>
+References: <CAFDcVCRW_x8tx9Gz-Z4+=PMv_5NpsUr78=Aia6h19_WMXozrww@mail.gmail.com>
+ <5dcb9875-d0c7-7f95-0450-54740cce0156@gmail.com>
+ <DA8B179E-C19C-42F7-91E3-E1C07453D79C@R-project.org>
+ <CAFDcVCSe+HQxh=ug1gfJO9gn_0CuUSFebLH=C_73d0x5vgQ-Pw@mail.gmail.com>
+Message-ID: <682337DD-ADF0-4AF4-906A-C409CAEF530C@R-project.org>
+
+Ah, sorry, this is my bad - I was trying on an older version of R and it seemed to work, but it was apparently my fault for not setting the environment variable correctly in that test, so I take the regression comment back (I had the recent encoding changes in mind so). I still think it may be worth thinking about what we want it to do - the inconsistency is still true:
+
+> Sys.getenv("BOOM")
+[1] "\xff"
+> Sys.getenv()[["BOOM"]]
+Error in substring(x, m + 1L) : invalid multibyte string at '<ff>'
+In addition: Warning message:
+In regexpr("=", x, fixed = TRUE) : input string 2 is invalid in this locale
+
+so the rest of my comments stand ;).
+
+Thanks,
+Simon
+
+
+> On Jan 31, 2023, at 2:11 PM, Henrik Bengtsson <henrik.bengtsson at gmail.com> wrote:
+> 
+> Thanks for the quick replies.
+> 
+> For me, the main issue is that the value of an environment variable
+> can causes errors in R.  Say that there's an environment variable that
+> is used as a raw data blob (as Simon mentions) and where that data is
+> flavor of the day. Then, this would affect R in a random,
+> non-predictable way.  Unless it can be argued that environment
+> variables must not contain random bytes, I argue that R needs to be
+> robust against this.  If not, we're effectively asking everyone to use
+> tryCatch() whenever calling Sys.getenv().  Even so, they wouldn't not
+> be able to query *all* environment variables, or even know which they
+> are, because Sys.getenv() gives an error.  So, I think the only
+> reasonable thing to do is to make Sys.getenv() robust against this.
+> 
+> One alternative is to have Sys.getenv() (1) detect for which
+> environment variables this happens, (2) produce an informative warning
+> that R cannot represent the value correctly, and (3) either drop it,
+> or return an adjusted value (e.g. NA_character_).  Something like:
+> 
+>> envs <- Sys.getenv()
+> Warning message:
+> Environment variable 'BOOM' was dropped, because its
+> value cannot be represented as a string in R
+> 
+> As you see from my examples below, R used to drop such environment
+> variables in R (< 4.1.0).
+> 
+> Simon, your comment saying it used to work, maybe me look back at
+> older versions of R.  Although I didn't say so, I used R 4.2.2 in my
+> original report.  It looks like it was in R 4.1.0 that this started to
+> fail.  I get:
+> 
+> # R 2.15.0 - R 3.1.0
+> $ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv()['BOOM']"
+> <NA>
+>  NA
+> Warning message:
+> In strsplit(.Internal(Sys.getenv(character(), "")), "=", fixed = TRUE) :
+>  input string 8 is invalid in this locale
+> 
+> # R 3.2.0 - R 4.0.4
+> $ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv()['BOOM']"
+> NA                      NA
+> Warning message:
+> In strsplit(.Internal(Sys.getenv(character(), "")), "=", fixed = TRUE) :
+>  input string 137 is invalid in this locale
+> 
+> # R 4.1.0 - ...
+> $ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv()['BOOM']"
+> Error in substring(x, m + 1L) : invalid multibyte string at '<ff>'
+> Calls: Sys.getenv -> substring
+> In addition: Warning message:
+> In regexpr("=", x, fixed = TRUE) :
+>  input string 137 is invalid in this locale
+> Execution halted
+> 
+> /Henrik
+> 
+> On Mon, Jan 30, 2023 at 4:27 PM Simon Urbanek
+> <simon.urbanek at r-project.org> wrote:
+>> 
+>> Tomas,
+>> 
+>> I think you're not addressing the actual issue which is a clear regression in Sys.getenv() [because it used to work and still works for single env var, but not a list] and the cryptic error due to that regression (caused by changes in R-devel). So in either case, Sys.getenv needs fixing (i.e., this should really go to the bugzilla). Its behavior is currently inconsistent.
+>> 
+>> The quoted Python discussion diverges very quickly into file name discussions, but I think that is not relevant here - environment variables are essentially data "blobs" that have application-specific meaning. They just chose to drop them because they didn't want to make a decision.
+>> 
+>> I don't have a strong opinion on this, but Sys.getenv("FOO") and Sys.getenv()[["FOO"]] should not yield two different results. I would argue that if we want to make specific checks, we should make them conditional - even if the default is to add them. Again, the error is due to the implementation of Sys.getenv() breaking in R-devel, not due to any design decision.
+>> 
+>> Cheers,
+>> Simon
+>> 
+>> 
+>>> On Jan 31, 2023, at 1:04 PM, Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+>>> 
+>>> 
+>>> On 1/30/23 23:01, Henrik Bengtsson wrote:
+>>>> /Hello.
+>>>> 
+>>>> SUMMARY:
+>>>> $ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv()"
+>>>> Error in substring(x, m + 1L) : invalid multibyte string at '<ff>'
+>>>> 
+>>>> $ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv('BOOM')"
+>>>> [1] "\xff"
+>>>> 
+>>>> BACKGROUND:
+>>>> I launch R through an Son of Grid Engine (SGE) scheduler, where the R
+>>>> process is launched on a compute host via  'qrsh', which part of SGE.
+>>>> Without going into details, 'mpirun' is also involved. Regardless, in
+>>>> this process, an 'qrsh'-specific environment variable 'QRSH_COMMAND'
+>>>> is set automatically.  The value of this variable comprise of a string
+>>>> with \xff (ASCII 255) injected between the words.  This is by design
+>>>> of SGE [1].  Here is an example of what this environment variable may
+>>>> look like:
+>>>> 
+>>>> QRSH_COMMAND= orted\xff--hnp-topo-sig\xff2N:2S:32L3:128L2:128L1:128C:256H:x86_64\xff-mca\xffess\xff\"env\"\xff-mca\xfforte_ess_jobid\xff\"3473342464\"\xff-mca\xfforte_ess_vpid\xff1\xff-mca\xfforte_ess_num_procs\xff\"3\"\xff-mca\xfforte_hnp_uri\xff\"3473342464.0;tcp://192.168.1.13:50847\"\xff-mca\xffplm\xff\"rsh\"\xff-mca\xfforte_tag_output\xff\"1\"\xff--tree-spawn"
+>>>> 
+>>>> where each \xff is a single byte 255=0xFF=\xFF.
+>>>> 
+>>>> 
+>>>> ISSUE:
+>>>> An environment variable with embedded 0xFF bytes in its value causes
+>>>> calls to Sys.getenv() to produce an error when running R in a UTF-8
+>>>> locale. Here is a minimal example on Linux:
+>>>> 
+>>>> $ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv()"
+>>>> Error in substring(x, m + 1L) : invalid multibyte string at '<ff>'
+>>>> Calls: Sys.getenv -> substring
+>>>> In addition: Warning message:
+>>>> In regexpr("=", x, fixed = TRUE) :
+>>>>  input string 134 is invalid in this locale
+>>>> Execution halted
+>>>> 
+>>>> 
+>>>> WORKAROUND:
+>>>> The workaround is to (1) identify any environment variables with
+>>>> invalid UTF-8 symbols, and (2) prune or unset those variables before
+>>>> launching R, e.g. in my SGE case, launching R using:
+>>>> 
+>>>> QRSH_COMMAND= Rscript --vanilla -e "Sys.getenv()"
+>>>> 
+>>>> avoid the problem.  Having to unset/modify environment variables
+>>>> because R doesn't like them, see a bit of an ad-hoc hack to me.  Also,
+>>>> if you are not aware of this problem, or not a savvy R user, it can be
+>>>> quite tricky to track down the above error message, especially if
+>>>> Sys.getenv() is called deep down in some package dependency.
+>>>> 
+>>>> 
+>>>> DISCUSSION/SUGGESTION/ASK:
+>>>> My suggestion would be to make Sys.getenv() robust against any type of
+>>>> byte values in environment variable strings.
+>>>> 
+>>>> The error occurs in Sys.getenv() from:
+>>>> 
+>>>>        x <- .Internal(Sys.getenv(character(), ""))
+>>>>        m <- regexpr("=", x, fixed = TRUE)  ## produces a warning
+>>>>        n <- substring(x, 1L, m - 1L)
+>>>>        v <- substring(x, m + 1L)  ## produces the error
+>>>> 
+>>>> I know too little about string encodings, so I'm not sure what the
+>>>> best approach would be here, but maybe falling back to parsing strings
+>>>> that are invalid in the current locale using the C locale would be
+>>>> reasonable?  Maybe Sys.getenv() should always use the C locale for
+>>>> this. It looks like Sys.getenv(name) does this, e.g.
+>>>> 
+>>>> $ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv('BOOM')"
+>>>> [1] "\xff"
+>>>> 
+>>>> I'd appreciate any comments and suggestions. I'm happy to file a bug
+>>>> report on BugZilla, if this is a bug.
+>>> This discussion comes from Python: https://bugs.python.org/issue4006
+>>> (it says Python skips such environment variables)
+>>> 
+>>> The problem of invalid strings in environment variables is a similar to the problem of invalid strings in file names. Both variables and file names are something people want to use as strings in programs, scripts, texts, but at the same time these may in theory not be valid strings. Working with (potentially) invalid strings (almost) transparently is much harder than with valid strings; even if R decided to do that, it would be hard to implement and take long and only work for some operations, most will still throw errors. In addition, in practice invalid strings are almost always due to an error, particularly so in file names or environment variables. Such errors are often worth catching (wrong encoding declaration, etc), even though perhaps not always.
+>>> 
+>>> In practice, this instance can only be properly fixed at the source, [1] should not do this. split_command() will run into problems with different software, not just R.
+>>> 
+>>> There should be a way to split the commands in ASCII (using some sort of quoting/escaping). Using \xFF is flawed also simply because it may be present in the commands, if we followed the same logic of that every byte is fine. So the code is buggy even regardless of multi-byte encodings.
+>>> 
+>>> Re difficulty to debug, I think the error message is clear and if packages catch and hide errors, that'd be bad design of such packages, R couldn't really do much about that. This needs to be fixed at [1].
+>>> 
+>>> Tomas
+>>> 
+>>>> 
+>>>> Henrik
+>>>> 
+>>>> [1] https://github.com/gridengine/gridengine/blob/master/source/clients/qrsh/qrsh_starter.c#L462-L466
+>>>> 
+>>>> ______________________________________________
+>>>> R-devel at r-project.org mailing list
+>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>> 
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>> 
+>> 
+> 
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Tue Jan 31 09:48:20 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Tue, 31 Jan 2023 11:48:20 +0300
+Subject: [Rd] Sys.getenv(): Error in substring(x,
+ m + 1L) : invalid multibyte string at '<ff>' if an environment
+ variable contains \xFF
+In-Reply-To: <CAFDcVCRW_x8tx9Gz-Z4+=PMv_5NpsUr78=Aia6h19_WMXozrww@mail.gmail.com>
+References: <CAFDcVCRW_x8tx9Gz-Z4+=PMv_5NpsUr78=Aia6h19_WMXozrww@mail.gmail.com>
+Message-ID: <20230131114820.4a5300bd@arachnoid>
+
+Can we use the "bytes" encoding for such environment variables invalid
+in the current locale? The following patch preserves CE_NATIVE for
+strings valid in the current UTF-8 or multibyte locale (or
+non-multibyte strings) but sets CE_BYTES for those that are invalid:
+
+Index: src/main/sysutils.c
+===================================================================
+--- src/main/sysutils.c	(revision 83731)
++++ src/main/sysutils.c	(working copy)
+@@ -393,8 +393,16 @@
+ 	char **e;
+ 	for (i = 0, e = environ; *e != NULL; i++, e++);
+ 	PROTECT(ans = allocVector(STRSXP, i));
+-	for (i = 0, e = environ; *e != NULL; i++, e++)
+-	    SET_STRING_ELT(ans, i, mkChar(*e));
++	for (i = 0, e = environ; *e != NULL; i++, e++) {
++	    cetype_t enc = known_to_be_latin1 ? CE_LATIN1 :
++	        known_to_be_utf8 ? CE_UTF8 :
++	        CE_NATIVE;
++	    if (
++	        (utf8locale && !utf8Valid(*e))
++	        || (mbcslocale && !mbcsValid(*e))
++	    ) enc = CE_BYTES;
++	    SET_STRING_ELT(ans, i, mkCharCE(*e, enc));
++	}
+ #endif
+     } else {
+ 	PROTECT(ans = allocVector(STRSXP, i));
+@@ -416,11 +424,14 @@
+ 	    if (s == NULL)
+ 		SET_STRING_ELT(ans, j, STRING_ELT(CADR(args), 0));
+ 	    else {
+-		SEXP tmp;
+-		if(known_to_be_latin1) tmp = mkCharCE(s, CE_LATIN1);
+-		else if(known_to_be_utf8) tmp = mkCharCE(s, CE_UTF8);
+-		else tmp = mkChar(s);
+-		SET_STRING_ELT(ans, j, tmp);
++		cetype_t enc = known_to_be_latin1 ? CE_LATIN1 :
++		    known_to_be_utf8 ? CE_UTF8 :
++		    CE_NATIVE;
++		if (
++		    (utf8locale && !utf8Valid(s))
++		    || (mbcslocale && !mbcsValid(s))
++		) enc = CE_BYTES;
++		SET_STRING_ELT(ans, j, mkCharCE(s, enc));
+ 	    }
+ #endif
+ 	}
+
+Here are the potential problems with this approach:
+
+ * I don't know whether known_to_be_utf8 can disagree with utf8locale.
+   known_to_be_utf8 was the original condition for setting CE_UTF8 on
+   the string. I also need to detect non-UTF-8 multibyte locales, so
+   I'm checking for utf8locale and mbcslocale. Perhaps I should be more
+   careful and test for (enc == CE_UTF8) || (utf8locale && enc ==
+   CE_NATIVE) instead of just utf8locale.
+
+ * I have verified that Sys.getenv() doesn't crash with UTF-8-invalid
+   strings in the environment with this patch applied, but now
+   print.Dlist does, because formatDL wants to compute the width of the
+   string which has the 'bytes' encoding. If this is a good way to
+   solve the problem, I can work on suggesting a fix for formatDL to
+   avoid the error.
+
+-- 
+Best regards,
+Ivan
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue Jan 31 10:44:55 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 31 Jan 2023 10:44:55 +0100
+Subject: [Rd] Sys.getenv(): Error in substring(x,
+ m + 1L) : invalid multibyte string at '<ff>' if an environment
+ variable contains \xFF
+In-Reply-To: <DA8B179E-C19C-42F7-91E3-E1C07453D79C@R-project.org>
+References: <CAFDcVCRW_x8tx9Gz-Z4+=PMv_5NpsUr78=Aia6h19_WMXozrww@mail.gmail.com>
+ <5dcb9875-d0c7-7f95-0450-54740cce0156@gmail.com>
+ <DA8B179E-C19C-42F7-91E3-E1C07453D79C@R-project.org>
+Message-ID: <1ec7019e-c654-c197-cefc-f855db39c65f@gmail.com>
+
+On 1/31/23 01:27, Simon Urbanek wrote:
+> Tomas,
+>
+> I think you're not addressing the actual issue which is a clear regression in Sys.getenv() [because it used to work and still works for single env var, but not a list] and the cryptic error due to that regression (caused by changes in R-devel). So in either case, Sys.getenv needs fixing (i.e., this should really go to the bugzilla). Its behavior is currently inconsistent.
+>
+> The quoted Python discussion diverges very quickly into file name discussions, but I think that is not relevant here - environment variables are essentially data "blobs" that have application-specific meaning. They just chose to drop them because they didn't want to make a decision.
+
+Well, yes, dropping such variables is a hack/work-around, but I would 
+not rule that out from consideration. It would be good to have a look 
+hat even other language runtimes do, but I can understand dropping them 
+from getenv() a work-around allowing such environment variables to exist 
+and be inherited by child processes, without breaking what happens in R 
+(the language runtime at hand), makes some sense.
+
+The times when we could have (almost) arbitrary bytes in blobs are over, 
+one has to choose and separate the two. Going back to that we allow 
+blobs in multi-byte strings without special treatment is not possible. 
+That's a common thing, not just for R, we can't just "stop checking" as 
+before.
+
+R has also the "bytes" encoding which can be used to work with 
+non-strings (encoding agnostic operations on non-ASCII data), and there 
+have been a number of improvements that are now ready in R-devel. In 
+theory, of course, getenv() could allow also to return the results as 
+"bytes" for those who insist they want to treat environment variables 
+with invalid strings. That would be technically possible, but could not 
+be made the default: people would have to opt-in for that by an argument 
+to the function. I am not sure it is worth it, it would not do what 
+Henrik is asking for, but it is possible and would be a conceptually 
+sound solution allowing people to use such variables (with newly written 
+code for it that cannot just use the values as "normal" strings), or to 
+save the whole environment profile.
+
+Some of us have spent very long time debating how to go further dealing 
+with invalid strings, and it will still take time to decide and reach a 
+consensus. It is a very hard problem with serious consequences and 
+limitations. In principle one possible solution is to ban invalid 
+strings fully, completely, don't allow them to be created. Another 
+technically valid position is to allow invalid sequences in UTF-8 
+strings and support a subset of string operations in them, while 
+throwing errors in other (probably only after/when/if R can rely on that 
+UTF-8 is always the native encoding). Another approach discussed was 
+what some of the regular expressions do, when invalid strings 
+automatically become "bytes", to some extent it is the current behavior 
+of some regex operations. The improvements for "bytes" encoding handling 
+so far in R-devel a consequence of what we have already agreed on.
+
+So, it is not hard today to find inconsistencies in R in that some 
+functions check for string validity while others don't. It is simply 
+because we have not yet gone all the way to a solution to this big 
+problem. getenv() is just one of the many.
+
+In case of getenv(), indeed, it is because of how it is implemented, it 
+wraps OS functions and the OS don't require string validity. Btw Windows 
+have both a single-byte and multi-byte variant of the environment 
+profile which may disagree. R is not at the source of this problem, it 
+is the operating systems which couldn't (yet?) find the decision and 
+where the ambiguity remains.
+
+In practice, so far, the problem is small, because [1] (reported by 
+Henrik) is behavior due to an obvious design bug in other software, and 
+luckily this is rare.
+
+> I don't have a strong opinion on this, but Sys.getenv("FOO") and Sys.getenv()[["FOO"]] should not yield two different results. I would argue that if we want to make specific checks, we should make them conditional - even if the default is to add them. Again, the error is due to the implementation of Sys.getenv() breaking in R-devel, not due to any design decision.
+
+The key design decision (and common one) behind is that environment 
+variables are strings.
+
+Tomas
+> Cheers,
+> Simon
+>
+>
+>> On Jan 31, 2023, at 1:04 PM, Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+>>
+>>
+>> On 1/30/23 23:01, Henrik Bengtsson wrote:
+>>> /Hello.
+>>>
+>>> SUMMARY:
+>>> $ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv()"
+>>> Error in substring(x, m + 1L) : invalid multibyte string at '<ff>'
+>>>
+>>> $ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv('BOOM')"
+>>> [1] "\xff"
+>>>
+>>> BACKGROUND:
+>>> I launch R through an Son of Grid Engine (SGE) scheduler, where the R
+>>> process is launched on a compute host via  'qrsh', which part of SGE.
+>>> Without going into details, 'mpirun' is also involved. Regardless, in
+>>> this process, an 'qrsh'-specific environment variable 'QRSH_COMMAND'
+>>> is set automatically.  The value of this variable comprise of a string
+>>> with \xff (ASCII 255) injected between the words.  This is by design
+>>> of SGE [1].  Here is an example of what this environment variable may
+>>> look like:
+>>>
+>>> QRSH_COMMAND= orted\xff--hnp-topo-sig\xff2N:2S:32L3:128L2:128L1:128C:256H:x86_64\xff-mca\xffess\xff\"env\"\xff-mca\xfforte_ess_jobid\xff\"3473342464\"\xff-mca\xfforte_ess_vpid\xff1\xff-mca\xfforte_ess_num_procs\xff\"3\"\xff-mca\xfforte_hnp_uri\xff\"3473342464.0;tcp://192.168.1.13:50847\"\xff-mca\xffplm\xff\"rsh\"\xff-mca\xfforte_tag_output\xff\"1\"\xff--tree-spawn"
+>>>
+>>> where each \xff is a single byte 255=0xFF=\xFF.
+>>>
+>>>
+>>> ISSUE:
+>>> An environment variable with embedded 0xFF bytes in its value causes
+>>> calls to Sys.getenv() to produce an error when running R in a UTF-8
+>>> locale. Here is a minimal example on Linux:
+>>>
+>>> $ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv()"
+>>> Error in substring(x, m + 1L) : invalid multibyte string at '<ff>'
+>>> Calls: Sys.getenv -> substring
+>>> In addition: Warning message:
+>>> In regexpr("=", x, fixed = TRUE) :
+>>>    input string 134 is invalid in this locale
+>>> Execution halted
+>>>
+>>>
+>>> WORKAROUND:
+>>> The workaround is to (1) identify any environment variables with
+>>> invalid UTF-8 symbols, and (2) prune or unset those variables before
+>>> launching R, e.g. in my SGE case, launching R using:
+>>>
+>>> QRSH_COMMAND= Rscript --vanilla -e "Sys.getenv()"
+>>>
+>>> avoid the problem.  Having to unset/modify environment variables
+>>> because R doesn't like them, see a bit of an ad-hoc hack to me.  Also,
+>>> if you are not aware of this problem, or not a savvy R user, it can be
+>>> quite tricky to track down the above error message, especially if
+>>> Sys.getenv() is called deep down in some package dependency.
+>>>
+>>>
+>>> DISCUSSION/SUGGESTION/ASK:
+>>> My suggestion would be to make Sys.getenv() robust against any type of
+>>> byte values in environment variable strings.
+>>>
+>>> The error occurs in Sys.getenv() from:
+>>>
+>>>          x <- .Internal(Sys.getenv(character(), ""))
+>>>          m <- regexpr("=", x, fixed = TRUE)  ## produces a warning
+>>>          n <- substring(x, 1L, m - 1L)
+>>>          v <- substring(x, m + 1L)  ## produces the error
+>>>
+>>> I know too little about string encodings, so I'm not sure what the
+>>> best approach would be here, but maybe falling back to parsing strings
+>>> that are invalid in the current locale using the C locale would be
+>>> reasonable?  Maybe Sys.getenv() should always use the C locale for
+>>> this. It looks like Sys.getenv(name) does this, e.g.
+>>>
+>>> $ BOOM=$'\xFF' LC_ALL=en_US.UTF-8 Rscript --vanilla -e "Sys.getenv('BOOM')"
+>>> [1] "\xff"
+>>>
+>>> I'd appreciate any comments and suggestions. I'm happy to file a bug
+>>> report on BugZilla, if this is a bug.
+>> This discussion comes from Python: https://bugs.python.org/issue4006
+>> (it says Python skips such environment variables)
+>>
+>> The problem of invalid strings in environment variables is a similar to the problem of invalid strings in file names. Both variables and file names are something people want to use as strings in programs, scripts, texts, but at the same time these may in theory not be valid strings. Working with (potentially) invalid strings (almost) transparently is much harder than with valid strings; even if R decided to do that, it would be hard to implement and take long and only work for some operations, most will still throw errors. In addition, in practice invalid strings are almost always due to an error, particularly so in file names or environment variables. Such errors are often worth catching (wrong encoding declaration, etc), even though perhaps not always.
+>>
+>> In practice, this instance can only be properly fixed at the source, [1] should not do this. split_command() will run into problems with different software, not just R.
+>>
+>> There should be a way to split the commands in ASCII (using some sort of quoting/escaping). Using \xFF is flawed also simply because it may be present in the commands, if we followed the same logic of that every byte is fine. So the code is buggy even regardless of multi-byte encodings.
+>>
+>> Re difficulty to debug, I think the error message is clear and if packages catch and hide errors, that'd be bad design of such packages, R couldn't really do much about that. This needs to be fixed at [1].
+>>
+>> Tomas
+>>
+>>> Henrik
+>>>
+>>> [1] https://github.com/gridengine/gridengine/blob/master/source/clients/qrsh/qrsh_starter.c#L462-L466
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue Jan 31 10:53:21 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 31 Jan 2023 10:53:21 +0100
+Subject: [Rd] Sys.getenv(): Error in substring(x,
+ m + 1L) : invalid multibyte string at '<ff>' if an environment
+ variable contains \xFF
+In-Reply-To: <20230131114820.4a5300bd@arachnoid>
+References: <CAFDcVCRW_x8tx9Gz-Z4+=PMv_5NpsUr78=Aia6h19_WMXozrww@mail.gmail.com>
+ <20230131114820.4a5300bd@arachnoid>
+Message-ID: <bd05619e-ea0c-4b52-29cc-336dfb09ff5b@gmail.com>
+
+
+On 1/31/23 09:48, Ivan Krylov wrote:
+> Can we use the "bytes" encoding for such environment variables invalid
+> in the current locale? The following patch preserves CE_NATIVE for
+> strings valid in the current UTF-8 or multibyte locale (or
+> non-multibyte strings) but sets CE_BYTES for those that are invalid:
+>
+> Index: src/main/sysutils.c
+> ===================================================================
+> --- src/main/sysutils.c	(revision 83731)
+> +++ src/main/sysutils.c	(working copy)
+> @@ -393,8 +393,16 @@
+>   	char **e;
+>   	for (i = 0, e = environ; *e != NULL; i++, e++);
+>   	PROTECT(ans = allocVector(STRSXP, i));
+> -	for (i = 0, e = environ; *e != NULL; i++, e++)
+> -	    SET_STRING_ELT(ans, i, mkChar(*e));
+> +	for (i = 0, e = environ; *e != NULL; i++, e++) {
+> +	    cetype_t enc = known_to_be_latin1 ? CE_LATIN1 :
+> +	        known_to_be_utf8 ? CE_UTF8 :
+> +	        CE_NATIVE;
+> +	    if (
+> +	        (utf8locale && !utf8Valid(*e))
+> +	        || (mbcslocale && !mbcsValid(*e))
+> +	    ) enc = CE_BYTES;
+> +	    SET_STRING_ELT(ans, i, mkCharCE(*e, enc));
+> +	}
+>   #endif
+>       } else {
+>   	PROTECT(ans = allocVector(STRSXP, i));
+> @@ -416,11 +424,14 @@
+>   	    if (s == NULL)
+>   		SET_STRING_ELT(ans, j, STRING_ELT(CADR(args), 0));
+>   	    else {
+> -		SEXP tmp;
+> -		if(known_to_be_latin1) tmp = mkCharCE(s, CE_LATIN1);
+> -		else if(known_to_be_utf8) tmp = mkCharCE(s, CE_UTF8);
+> -		else tmp = mkChar(s);
+> -		SET_STRING_ELT(ans, j, tmp);
+> +		cetype_t enc = known_to_be_latin1 ? CE_LATIN1 :
+> +		    known_to_be_utf8 ? CE_UTF8 :
+> +		    CE_NATIVE;
+> +		if (
+> +		    (utf8locale && !utf8Valid(s))
+> +		    || (mbcslocale && !mbcsValid(s))
+> +		) enc = CE_BYTES;
+> +		SET_STRING_ELT(ans, j, mkCharCE(s, enc));
+>   	    }
+>   #endif
+>   	}
+>
+> Here are the potential problems with this approach:
+>
+>   * I don't know whether known_to_be_utf8 can disagree with utf8locale.
+>     known_to_be_utf8 was the original condition for setting CE_UTF8 on
+>     the string. I also need to detect non-UTF-8 multibyte locales, so
+>     I'm checking for utf8locale and mbcslocale. Perhaps I should be more
+>     careful and test for (enc == CE_UTF8) || (utf8locale && enc ==
+>     CE_NATIVE) instead of just utf8locale.
+>
+>   * I have verified that Sys.getenv() doesn't crash with UTF-8-invalid
+>     strings in the environment with this patch applied, but now
+>     print.Dlist does, because formatDL wants to compute the width of the
+>     string which has the 'bytes' encoding. If this is a good way to
+>     solve the problem, I can work on suggesting a fix for formatDL to
+>     avoid the error.
+
+Thanks, indeed, type instability is a big problem of the approach "turn 
+invalid strings to bytes". It is something what is historically being 
+done in regular expression operations, but it is brittle and not user 
+friendly: writing code to be agnostic to whether we are dealing with 
+"bytes" or a regular string is very tedious. Pieces of type instability 
+come also from that ASCII strings are always flagged "native" (never 
+"bytes"). Last year I had to revert a big change which broke existing 
+code by introducing some more of this instability due to better dealing 
+with invalid strings in regular expressions. I've made some additions to 
+R-devel allowing to better deal with such instability but it is still a 
+pain and existing code has to be changed (and made more complicated).
+
+So, I don't think this is the way to go.
+
+Tomas
+
+
+>
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Tue Jan 31 11:50:31 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Tue, 31 Jan 2023 11:50:31 +0100
+Subject: [Rd] Sys.getenv(): Error in substring(x,
+ m + 1L) : invalid multibyte string at '<ff>' if an environment
+ variable contains \xFF
+In-Reply-To: <bd05619e-ea0c-4b52-29cc-336dfb09ff5b@gmail.com>
+References: <CAFDcVCRW_x8tx9Gz-Z4+=PMv_5NpsUr78=Aia6h19_WMXozrww@mail.gmail.com>
+ <20230131114820.4a5300bd@arachnoid>
+ <bd05619e-ea0c-4b52-29cc-336dfb09ff5b@gmail.com>
+Message-ID: <25560.62071.118339.286744@stat.math.ethz.ch>
+
+>>>>> Tomas Kalibera 
+>>>>>     on Tue, 31 Jan 2023 10:53:21 +0100 writes:
+
+    > On 1/31/23 09:48, Ivan Krylov wrote:
+    >> Can we use the "bytes" encoding for such environment variables invalid
+    >> in the current locale? The following patch preserves CE_NATIVE for
+    >> strings valid in the current UTF-8 or multibyte locale (or
+    >> non-multibyte strings) but sets CE_BYTES for those that are invalid:
+    >> 
+    >> Index: src/main/sysutils.c
+    >> ===================================================================
+    >> --- src/main/sysutils.c	(revision 83731)
+.....
+    >> 
+    >> Here are the potential problems with this approach:
+    >> 
+    >> * I don't know whether known_to_be_utf8 can disagree with utf8locale.
+    >> known_to_be_utf8 was the original condition for setting CE_UTF8 on
+    >> the string. I also need to detect non-UTF-8 multibyte locales, so
+    >> I'm checking for utf8locale and mbcslocale. Perhaps I should be more
+    >> careful and test for (enc == CE_UTF8) || (utf8locale && enc ==
+    >> CE_NATIVE) instead of just utf8locale.
+    >> 
+    >> * I have verified that Sys.getenv() doesn't crash with UTF-8-invalid
+    >> strings in the environment with this patch applied, but now
+    >> print.Dlist does, because formatDL wants to compute the width of the
+    >> string which has the 'bytes' encoding. If this is a good way to
+    >> solve the problem, I can work on suggesting a fix for formatDL to
+    >> avoid the error.
+
+    > Thanks, indeed, type instability is a big problem of the approach "turn 
+    > invalid strings to bytes". It is something what is historically being 
+    > done in regular expression operations, but it is brittle and not user 
+    > friendly: writing code to be agnostic to whether we are dealing with 
+    > "bytes" or a regular string is very tedious. Pieces of type instability 
+    > come also from that ASCII strings are always flagged "native" (never 
+    > "bytes"). Last year I had to revert a big change which broke existing 
+    > code by introducing some more of this instability due to better dealing 
+    > with invalid strings in regular expressions. I've made some additions to 
+    > R-devel allowing to better deal with such instability but it is still a 
+    > pain and existing code has to be changed (and made more complicated).
+
+    > So, I don't think this is the way to go.
+
+    > Tomas
+
+hmm.., that's a pity; I had hoped it was a pragmatic and valid strategy,
+but of course you are right that type stability is really a
+valid goal....
+
+In general, what about behaving close to "old R" and replace all such
+strings by  NA_character_  (and typically raising one warning)?
+This would keep the result a valid character vector, just with some NA entries.
+
+Specifically for  Sys.getenv(),  I still think Simon has a very
+valid point of "requiring" (of our design) that 
+Sys.getenv()[["BOOM"]]  {double `[[`} should be the same as
+Sys.getenv("BOOM")  
+
+Also, as typical R user, I'd definitely want to be able to get all the valid
+environment variables, even if there are one or more invalid
+ones. ... and similarly in other cases, it may be a cheap
+strategy to replace invalid strings ("string" in the sense of 
+length 1 STRSXP, i.e., in R, a "character" of length 1) by
+NA_character_  and keep all valid parts of the character vector
+in a valid encoding.
+
+- - - - - -
+
+In addition to the above cheap "replace by NA"-strategy, 
+and at least once R is "all UTF-8", we could
+also consider a more expensive strategy that would try to
+replace invalid characters/byte-sequences by one specific valid UTF-8
+character, i.e., glyph (think of a special version of "?") that
+we would designate as replacement for "invalid-in-current-encoding".
+
+Probably such a glyph already exists and we have seen it used in
+some console's output when having to print such things.
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Tue Jan 31 12:23:08 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 31 Jan 2023 06:23:08 -0500
+Subject: [Rd] Sys.getenv(): Error in substring(x,
+ m + 1L) : invalid multibyte string at '<ff>' if an environment
+ variable contains \xFF
+In-Reply-To: <25560.62071.118339.286744@stat.math.ethz.ch>
+References: <CAFDcVCRW_x8tx9Gz-Z4+=PMv_5NpsUr78=Aia6h19_WMXozrww@mail.gmail.com>
+ <20230131114820.4a5300bd@arachnoid>
+ <bd05619e-ea0c-4b52-29cc-336dfb09ff5b@gmail.com>
+ <25560.62071.118339.286744@stat.math.ethz.ch>
+Message-ID: <4ce86c7e-020f-4616-628a-a5b3bf325bd5@gmail.com>
+
+On 31/01/2023 5:50 a.m., Martin Maechler wrote:
+>>>>>> Tomas Kalibera
+>>>>>>      on Tue, 31 Jan 2023 10:53:21 +0100 writes:
+> 
+>      > On 1/31/23 09:48, Ivan Krylov wrote:
+>      >> Can we use the "bytes" encoding for such environment variables invalid
+>      >> in the current locale? The following patch preserves CE_NATIVE for
+>      >> strings valid in the current UTF-8 or multibyte locale (or
+>      >> non-multibyte strings) but sets CE_BYTES for those that are invalid:
+>      >>
+>      >> Index: src/main/sysutils.c
+>      >> ===================================================================
+>      >> --- src/main/sysutils.c	(revision 83731)
+> .....
+>      >>
+>      >> Here are the potential problems with this approach:
+>      >>
+>      >> * I don't know whether known_to_be_utf8 can disagree with utf8locale.
+>      >> known_to_be_utf8 was the original condition for setting CE_UTF8 on
+>      >> the string. I also need to detect non-UTF-8 multibyte locales, so
+>      >> I'm checking for utf8locale and mbcslocale. Perhaps I should be more
+>      >> careful and test for (enc == CE_UTF8) || (utf8locale && enc ==
+>      >> CE_NATIVE) instead of just utf8locale.
+>      >>
+>      >> * I have verified that Sys.getenv() doesn't crash with UTF-8-invalid
+>      >> strings in the environment with this patch applied, but now
+>      >> print.Dlist does, because formatDL wants to compute the width of the
+>      >> string which has the 'bytes' encoding. If this is a good way to
+>      >> solve the problem, I can work on suggesting a fix for formatDL to
+>      >> avoid the error.
+> 
+>      > Thanks, indeed, type instability is a big problem of the approach "turn
+>      > invalid strings to bytes". It is something what is historically being
+>      > done in regular expression operations, but it is brittle and not user
+>      > friendly: writing code to be agnostic to whether we are dealing with
+>      > "bytes" or a regular string is very tedious. Pieces of type instability
+>      > come also from that ASCII strings are always flagged "native" (never
+>      > "bytes"). Last year I had to revert a big change which broke existing
+>      > code by introducing some more of this instability due to better dealing
+>      > with invalid strings in regular expressions. I've made some additions to
+>      > R-devel allowing to better deal with such instability but it is still a
+>      > pain and existing code has to be changed (and made more complicated).
+> 
+>      > So, I don't think this is the way to go.
+> 
+>      > Tomas
+> 
+> hmm.., that's a pity; I had hoped it was a pragmatic and valid strategy,
+> but of course you are right that type stability is really a
+> valid goal....
+> 
+> In general, what about behaving close to "old R" and replace all such
+> strings by  NA_character_  (and typically raising one warning)?
+> This would keep the result a valid character vector, just with some NA entries.
+> 
+> Specifically for  Sys.getenv(),  I still think Simon has a very
+> valid point of "requiring" (of our design) that
+> Sys.getenv()[["BOOM"]]  {double `[[`} should be the same as
+> Sys.getenv("BOOM")
+> 
+> Also, as typical R user, I'd definitely want to be able to get all the valid
+> environment variables, even if there are one or more invalid
+> ones. ... and similarly in other cases, it may be a cheap
+> strategy to replace invalid strings ("string" in the sense of
+> length 1 STRSXP, i.e., in R, a "character" of length 1) by
+> NA_character_  and keep all valid parts of the character vector
+> in a valid encoding.
+> 
+> - - - - - -
+> 
+> In addition to the above cheap "replace by NA"-strategy,
+> and at least once R is "all UTF-8", we could
+> also consider a more expensive strategy that would try to
+> replace invalid characters/byte-sequences by one specific valid UTF-8
+> character, i.e., glyph (think of a special version of "?") that
+> we would designate as replacement for "invalid-in-current-encoding".
+> 
+> Probably such a glyph already exists and we have seen it used in
+> some console's output when having to print such things.
+
+I think it is U+FFFD, described here:
+
+https://www.fileformat.info/info/unicode/char/fffd/index.htm
+
+Duncan Murdoch
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue Jan 31 12:51:56 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 31 Jan 2023 12:51:56 +0100
+Subject: [Rd] Sys.getenv(): Error in substring(x,
+ m + 1L) : invalid multibyte string at '<ff>' if an environment
+ variable contains \xFF
+In-Reply-To: <25560.62071.118339.286744@stat.math.ethz.ch>
+References: <CAFDcVCRW_x8tx9Gz-Z4+=PMv_5NpsUr78=Aia6h19_WMXozrww@mail.gmail.com>
+ <20230131114820.4a5300bd@arachnoid>
+ <bd05619e-ea0c-4b52-29cc-336dfb09ff5b@gmail.com>
+ <25560.62071.118339.286744@stat.math.ethz.ch>
+Message-ID: <d315b21c-dfdc-0e96-d65f-5ca84e93d696@gmail.com>
+
+
+On 1/31/23 11:50, Martin Maechler wrote:
+>>>>>> Tomas Kalibera
+>>>>>>      on Tue, 31 Jan 2023 10:53:21 +0100 writes:
+>      > On 1/31/23 09:48, Ivan Krylov wrote:
+>      >> Can we use the "bytes" encoding for such environment variables invalid
+>      >> in the current locale? The following patch preserves CE_NATIVE for
+>      >> strings valid in the current UTF-8 or multibyte locale (or
+>      >> non-multibyte strings) but sets CE_BYTES for those that are invalid:
+>      >>
+>      >> Index: src/main/sysutils.c
+>      >> ===================================================================
+>      >> --- src/main/sysutils.c	(revision 83731)
+> .....
+>      >>
+>      >> Here are the potential problems with this approach:
+>      >>
+>      >> * I don't know whether known_to_be_utf8 can disagree with utf8locale.
+>      >> known_to_be_utf8 was the original condition for setting CE_UTF8 on
+>      >> the string. I also need to detect non-UTF-8 multibyte locales, so
+>      >> I'm checking for utf8locale and mbcslocale. Perhaps I should be more
+>      >> careful and test for (enc == CE_UTF8) || (utf8locale && enc ==
+>      >> CE_NATIVE) instead of just utf8locale.
+>      >>
+>      >> * I have verified that Sys.getenv() doesn't crash with UTF-8-invalid
+>      >> strings in the environment with this patch applied, but now
+>      >> print.Dlist does, because formatDL wants to compute the width of the
+>      >> string which has the 'bytes' encoding. If this is a good way to
+>      >> solve the problem, I can work on suggesting a fix for formatDL to
+>      >> avoid the error.
+>
+>      > Thanks, indeed, type instability is a big problem of the approach "turn
+>      > invalid strings to bytes". It is something what is historically being
+>      > done in regular expression operations, but it is brittle and not user
+>      > friendly: writing code to be agnostic to whether we are dealing with
+>      > "bytes" or a regular string is very tedious. Pieces of type instability
+>      > come also from that ASCII strings are always flagged "native" (never
+>      > "bytes"). Last year I had to revert a big change which broke existing
+>      > code by introducing some more of this instability due to better dealing
+>      > with invalid strings in regular expressions. I've made some additions to
+>      > R-devel allowing to better deal with such instability but it is still a
+>      > pain and existing code has to be changed (and made more complicated).
+>
+>      > So, I don't think this is the way to go.
+>
+>      > Tomas
+>
+> hmm.., that's a pity; I had hoped it was a pragmatic and valid strategy,
+> but of course you are right that type stability is really a
+> valid goal....
+>
+> In general, what about behaving close to "old R" and replace all such
+> strings by  NA_character_  (and typically raising one warning)?
+> This would keep the result a valid character vector, just with some NA entries.
+>
+> Specifically for  Sys.getenv(),  I still think Simon has a very
+> valid point of "requiring" (of our design) that
+> Sys.getenv()[["BOOM"]]  {double `[[`} should be the same as
+> Sys.getenv("BOOM")
+>
+> Also, as typical R user, I'd definitely want to be able to get all the valid
+> environment variables, even if there are one or more invalid
+> ones. ... and similarly in other cases, it may be a cheap
+> strategy to replace invalid strings ("string" in the sense of
+> length 1 STRSXP, i.e., in R, a "character" of length 1) by
+> NA_character_  and keep all valid parts of the character vector
+> in a valid encoding.
+In case of specifically getenv(), yes, we could return NA for variables 
+containing invalid strings, both when obtaining a value for a single 
+variable and for multiple, partially matching undocumented and 
+unintentional behavior R had before 4.1, and making getenv(var) and 
+getenv()[[var]] consistent even with invalid strings.? Once we decide on 
+how to deal with invalid strings in general, we can change this again 
+accordingly, breaking code for people who depend on these things (but so 
+far I only know about this one case). Perhaps this would be a logical 
+alternative to the Python approach that would be more suitable for R 
+(given we have NAs and given that we happened to have that somewhat 
+similar alternative before). Conceptually it is about the same thing as 
+omitting the variable in Python: R users would not be able to use such 
+variables, but if they don't touch them, they could be inherited to 
+child processes, etc.
+
+> - - - - - -
+>
+> In addition to the above cheap "replace by NA"-strategy,
+> and at least once R is "all UTF-8", we could
+> also consider a more expensive strategy that would try to
+> replace invalid characters/byte-sequences by one specific valid UTF-8
+> character, i.e., glyph (think of a special version of "?") that
+> we would designate as replacement for "invalid-in-current-encoding".
+>
+> Probably such a glyph already exists and we have seen it used in
+> some console's output when having to print such things.
+
+This is part of the big discussion where we couldn't find a consensus, 
+and I think this happened so recently that it is too early for opening 
+it again. Also, we are not yet to where we could assume UTF-8 is always 
+the native encoding. As you know my currently preferred solution is to 
+allow invalid portions of UTF-8 and treat them in individual functions: 
+often one can proceed with invalid UTF-8 bytes as usual (e.g. copying, 
+concatenation, search), in some function one has to use a special 
+algorithm (e.g. regular expressions, PCRE2 supports that, in some cases 
+one would substitute characters, in some cases one would throw an 
+error). As strings are immutable in R, validity checks could be done 
+once for each string. This would in many cases allow for UTF-8 strings 
+with bits of errors to "go through" R without triggering errors. We 
+didn't have such options with other multi-byte encodings, but UTF-8 is 
+designed so that this is possible.
+
+Substituting by various escapes "<U+..>", "??", etc, is something we 
+already do in R in some cases, but it cannot be the default mechanism 
+for dealing with invalid strings, e.g. file names are a prime example of 
+where it doesn't work and indeed there are libraries for dealing with 
+file names as special entities.
+
+As you probably know part of the problem is also that invalid strings 
+that are "tolerated" by OSes, file names and environment variables, can 
+"originally" be in different "encodings". Sorry for these many quotes, 
+but simplifying a lot on Unix file systems often uses byte-sequences for 
+file names (even though applications often assume it is UTF-8) and on 
+Windows sequences of 16-bit words (sometimes understood as UCS-2, but 
+not necessarily valid UTF-16). With environment variables, this came so 
+far that you can have a narrow and wide version which may not directly 
+correspond (and I've not investigated the details yet, see documentation 
+for _wenviron etc). In R, particularly on Windows, we can never get 
+completely rid of the UTF-16 and the wide character interface, so in 
+some cases, we would want to "convert invalid strings" between 
+encodings, which of course doesn't make sense and most likely will be 
+the case where invalid strings would cause errors. These things are so 
+complicated that, while it is not my currently preferred solution, I 
+understand the position that we ban invalid strings fully and keep them 
+banned in R even when UTF-8 is the only supported native encoding.
+
+Tomas
+
+
+From pd@|gd @end|ng |rom gm@||@com  Tue Jan 31 14:37:02 2023
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Tue, 31 Jan 2023 14:37:02 +0100
+Subject: [Rd] Sys.getenv(): Error in substring(x,
+ m + 1L) : invalid multibyte string at '<ff>' if an environment
+ variable contains \xFF
+In-Reply-To: <d315b21c-dfdc-0e96-d65f-5ca84e93d696@gmail.com>
+References: <CAFDcVCRW_x8tx9Gz-Z4+=PMv_5NpsUr78=Aia6h19_WMXozrww@mail.gmail.com>
+ <20230131114820.4a5300bd@arachnoid>
+ <bd05619e-ea0c-4b52-29cc-336dfb09ff5b@gmail.com>
+ <25560.62071.118339.286744@stat.math.ethz.ch>
+ <d315b21c-dfdc-0e96-d65f-5ca84e93d696@gmail.com>
+Message-ID: <55225194-BE87-4A8B-82A3-A1B958EBAA9E@gmail.com>
+
+
+
+> On 31 Jan 2023, at 12:51 , Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+> 
+> 
+> On 1/31/23 11:50, Martin Maechler wrote:
+<snippage>
+>> hmm.., that's a pity; I had hoped it was a pragmatic and valid strategy,
+>> but of course you are right that type stability is really a
+>> valid goal....
+>> 
+>> In general, what about behaving close to "old R" and replace all such
+>> strings by  NA_character_  (and typically raising one warning)?
+>> This would keep the result a valid character vector, just with some NA entries.
+>> 
+>> Specifically for  Sys.getenv(),  I still think Simon has a very
+>> valid point of "requiring" (of our design) that
+>> Sys.getenv()[["BOOM"]]  {double `[[`} should be the same as
+>> Sys.getenv("BOOM")
+>> 
+>> Also, as typical R user, I'd definitely want to be able to get all the valid
+>> environment variables, even if there are one or more invalid
+>> ones. ... and similarly in other cases, it may be a cheap
+>> strategy to replace invalid strings ("string" in the sense of
+>> length 1 STRSXP, i.e., in R, a "character" of length 1) by
+>> NA_character_  and keep all valid parts of the character vector
+>> in a valid encoding.
+> In case of specifically getenv(), yes, we could return NA for variables containing invalid strings, both when obtaining a value for a single variable and for multiple, partially matching undocumented and unintentional behavior R had before 4.1, and making getenv(var) and getenv()[[var]] consistent even with invalid strings.  Once we decide on how to deal with invalid strings in general, we can change this again accordingly, breaking code for people who depend on these things (but so far I only know about this one case). Perhaps this would be a logical alternative to the Python approach that would be more suitable for R (given we have NAs and given that we happened to have that somewhat similar alternative before). Conceptually it is about the same thing as omitting the variable in Python: R users would not be able to use such variables, but if they don't touch them, they could be inherited to child processes, etc.
+<more snippage>
+
+Hum, I'm out of my waters here, but offhand I would be wary about approaches that lead to loss of information. Presumably someone will sooner or later actually want to deal with the content of an environment variable with invalid bytes inside. I.e. it would be preferable to keep the content and mark the encoding as something not-multibyte.
+
+In fact this is almost what happens (for me...) if I just add Encoding(x) <- "bytes" for the return value of .Internal(Sys.getenv(character(), "")):
+
+> Sys.getenv()[["BOOM"]]
+[1] "\\xff"
+> Encoding(Sys.getenv())
+ [1] "unknown" "unknown" "bytes"   "unknown" "unknown" "unknown" "unknown"
+ [8] "unknown" "unknown" "unknown" "unknown" "unknown" "unknown" "unknown"
+...
+
+but I suppose that breaks if I have environment variables that actually _are_ utf8, because only plain-ASCII becomes "unknown"? And nchar(Sys.getenv()) also does not work.
+
+(And of course I agree that the QRSH thing is Just Wrong; people using 0xff as a separator between utf8 strings deserve the same fate as those who used comma separation between numbers with decimal commas.)
+
+-pd
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue Jan 31 15:34:39 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 31 Jan 2023 15:34:39 +0100
+Subject: [Rd] Sys.getenv(): Error in substring(x,
+ m + 1L) : invalid multibyte string at '<ff>' if an environment
+ variable contains \xFF
+In-Reply-To: <55225194-BE87-4A8B-82A3-A1B958EBAA9E@gmail.com>
+References: <CAFDcVCRW_x8tx9Gz-Z4+=PMv_5NpsUr78=Aia6h19_WMXozrww@mail.gmail.com>
+ <20230131114820.4a5300bd@arachnoid>
+ <bd05619e-ea0c-4b52-29cc-336dfb09ff5b@gmail.com>
+ <25560.62071.118339.286744@stat.math.ethz.ch>
+ <d315b21c-dfdc-0e96-d65f-5ca84e93d696@gmail.com>
+ <55225194-BE87-4A8B-82A3-A1B958EBAA9E@gmail.com>
+Message-ID: <6f75b6be-e714-6422-979e-63ed38356500@gmail.com>
+
+
+On 1/31/23 14:37, peter dalgaard wrote:
+>
+>> On 31 Jan 2023, at 12:51 , Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+>>
+>>
+>> On 1/31/23 11:50, Martin Maechler wrote:
+> <snippage>
+>>> hmm.., that's a pity; I had hoped it was a pragmatic and valid strategy,
+>>> but of course you are right that type stability is really a
+>>> valid goal....
+>>>
+>>> In general, what about behaving close to "old R" and replace all such
+>>> strings by  NA_character_  (and typically raising one warning)?
+>>> This would keep the result a valid character vector, just with some NA entries.
+>>>
+>>> Specifically for  Sys.getenv(),  I still think Simon has a very
+>>> valid point of "requiring" (of our design) that
+>>> Sys.getenv()[["BOOM"]]  {double `[[`} should be the same as
+>>> Sys.getenv("BOOM")
+>>>
+>>> Also, as typical R user, I'd definitely want to be able to get all the valid
+>>> environment variables, even if there are one or more invalid
+>>> ones. ... and similarly in other cases, it may be a cheap
+>>> strategy to replace invalid strings ("string" in the sense of
+>>> length 1 STRSXP, i.e., in R, a "character" of length 1) by
+>>> NA_character_  and keep all valid parts of the character vector
+>>> in a valid encoding.
+>> In case of specifically getenv(), yes, we could return NA for variables containing invalid strings, both when obtaining a value for a single variable and for multiple, partially matching undocumented and unintentional behavior R had before 4.1, and making getenv(var) and getenv()[[var]] consistent even with invalid strings.  Once we decide on how to deal with invalid strings in general, we can change this again accordingly, breaking code for people who depend on these things (but so far I only know about this one case). Perhaps this would be a logical alternative to the Python approach that would be more suitable for R (given we have NAs and given that we happened to have that somewhat similar alternative before). Conceptually it is about the same thing as omitting the variable in Python: R users would not be able to use such variables, but if they don't touch them, they could be inherited to child processes, etc.
+> <more snippage>
+>
+> Hum, I'm out of my waters here, but offhand I would be wary about approaches that lead to loss of information. Presumably someone will sooner or later actually want to deal with the content of an environment variable with invalid bytes inside. I.e. it would be preferable to keep the content and mark the encoding as something not-multibyte.
+>
+> In fact this is almost what happens (for me...) if I just add Encoding(x) <- "bytes" for the return value of .Internal(Sys.getenv(character(), "")):
+>
+>> Sys.getenv()[["BOOM"]]
+> [1] "\\xff"
+>> Encoding(Sys.getenv())
+>   [1] "unknown" "unknown" "bytes"   "unknown" "unknown" "unknown" "unknown"
+>   [8] "unknown" "unknown" "unknown" "unknown" "unknown" "unknown" "unknown"
+> ...
+>
+> but I suppose that breaks if I have environment variables that actually _are_ utf8, because only plain-ASCII becomes "unknown"? And nchar(Sys.getenv()) also does not work.
+
+Yes, that way you would get even valid UTF-8 strings represented as 
+"bytes". But that is not the main problem. It would technically be 
+possible to keep valid strings in the native encoding (typically UTF-8) 
+as "native", but only those invalid as "bytes", as Ivan also suggested.
+
+But the key problem is that it breaks because of that "type 
+instability": other string functions later will start failing on 
+"bytes", resulting in a mess.
+
+We could provide new API (e.g. argument "useBytes=TRUE") which would 
+provide all variables as "bytes" (all-ASCII would be "native" per how 
+"bytes" works) and let the users decide whether they want to use iconv() 
+to turn some of them into strings, how to do such conversions (e.g. 
+error, warn, substitute NA, substitute something else). That would allow 
+working with such variables. That would be probably a "clean" solution 
+at least for POSIX system but I doubt anyone would use that. For Windows 
+it would still be questionable (due to the two environment profiles in 
+two different encodings, which may not match).
+
+> (And of course I agree that the QRSH thing is Just Wrong; people using 0xff as a separator between utf8 strings deserve the same fate as those who used comma separation between numbers with decimal commas.)
+
+Indeed.
+
+And then I am afraid I have to make my position stronger based on 
+reading more what Windows do. Their API clearly implies that variables 
+are strings, because it automatically converts them between "wide" and 
+"multi-byte". An application can have both of these profiles, then the C 
+runtime manages both, and they may get out of sync and the documentation 
+explicitly warns about confusion due to that some characters cannot be 
+converted to some encodings.
+
+Also, the Windows approach that environment values are strings is 
+"compatible" with that different applications on Windows may and often 
+do use different native encoding (some use UTF-8 such as R, but some use 
+the legacy encoding, e.g. Latin1, but a multi-byte encoding for other 
+languages). Imagine that an application running in the legacy encoding 
+sets an environment variable to a valid non-ASCII string. And then you 
+run R and it tries to read that variable. It works due to encoding 
+conversions. When the strings are valid.... (and yes, when the mapping 
+is 1-1, but that's another matter)
+
+So, at least on Windows, environment variables clearly are strings, not 
+blobs.
+
+Tomas
+>
+> -pd
+>
+
+
