@@ -1,0 +1,88 @@
+From kry|ov@r00t @end|ng |rom gm@||@com  Sun Feb  5 14:04:25 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Sun, 5 Feb 2023 16:04:25 +0300
+Subject: [Rd] R2HTML doesn't split paragraphs originating from
+ \Sexpr[results=rd]
+Message-ID: <20230205160425.1e35a036@Tarkus>
+
+Hello,
+
+Here's an example that renders correctly using Rd2txt / Rd2latex / R
+CMD Rd2pdf, but has problems under Rd2HTML:
+
+\name{foo}
+\title{foo}
+\section{foo}{
+  This should be on a separate paragraph
+
+  This should be on a separate paragraph
+
+  This should be on a separate paragraph
+
+  \Sexpr[stage=render,results=rd]{
+    paste(
+      rep('Sexpr: This should be on a separate paragraph', 3),
+      collapse = '\n\n'
+    )
+  }
+}
+
+For the text I've typed manually, there are <p>...</p> tags splitting
+the text separated by empty lines into paragraphs. The \Sexpr return
+value only has newlines, which joints the paragraphs together:
+
+<p>This should be on a separate paragraph
+</p>
+<p>This should be on a separate paragraph
+</p>
+<p>This should be on a separate paragraph
+</p>
+<p>Sexpr: This should be on a separate paragraph
+
+Sexpr: This should be on a separate paragraph
+
+Sexpr: This should be on a separate paragraph
+</p>
+
+addParaBreaks() is prevented from closing the paragraph tag because
+tools:::isBlankLineRd() returns FALSE for blank lines produced by a
+\Sexpr. This happens because utils:::getSrcByte() not 1 for these blank
+lines. That, in turn, is because the source reference for \Sexpr values
+is the whole \Sexpr tag:
+
+# blank line from a \Sexpr
+Rd[[3]][[2]][[9]][[2]]
+# [1] "\n"
+# attr(,"Rd_tag")
+# [1] "TEXT"
+getSrcref(Rd[[3]][[2]][[9]][[2]])
+# \Sexpr[stage=render,results=rd]{
+#   paste(
+#     rep('Sexpr: This should be on a separate paragraph', 3),
+#     collapse = '\n\n'
+#   )
+# }
+
+# artisanal hand-crafted blank line
+Rd[[3]][[2]][[7]]
+# [1] "\n"
+# attr(,"Rd_tag")
+# [1] "TEXT"
+summary(getSrcref(Rd[[3]][[2]][[7]]))
+# <srcref: file "~/foo.Rd" chars 9:1 to 9:1>
+
+I think I understand that tools:::isBlankLineRd requires
+utils:::getSrcByte(x) == 1L because it may be called on things like
+"\\eqn{0}\n" where the terminal "\n" might otherwise be considered a
+"blank line". How to reconcile isBlankLineRd with blank lines not
+directly originating from Rd source?
+
+Rd2latex might have a similar problem (its addParaBreaks() checks for
+isBlankLineRd()), but then it works anyway because Rd rules for
+paragraph breaks on blank lines are the same as in LaTeX.
+
+-- 
+Best regards,
+Ivan
+
+
