@@ -86,3 +86,527 @@ Best regards,
 Ivan
 
 
+From @nto|ne@|@br| @end|ng |rom gm@||@com  Mon Feb  6 15:42:51 2023
+From: @nto|ne@|@br| @end|ng |rom gm@||@com (Antoine Fabri)
+Date: Mon, 6 Feb 2023 15:42:51 +0100
+Subject: [Rd] Unnecessary note when import only used in arg definition
+Message-ID: <CAEKh8ujzyH=Lhd49yc58=1Q4MxiGbjFpfQ13Rp+dEUQFA0Yr8g@mail.gmail.com>
+
+Dear r-devel,
+
+When a package is only used in an argument definition, e.g :
+
+
+f <- function(test = testthat::is_testing()) {
+
+  if (test) 1 else 2
+
+}
+
+
+R CMD CHECK gives us a note: "Namespace in Imports field not imported from:
+'testthat'"
+
+
+This incites me to remove the package from the Imports field but that'll
+make my package brittle.
+
+
+I noted I'm not the first one having the issue (
+https://github.com/r-lib/devtools/issues/2456 ) and I've seen some
+workarounds too, in particular Hadley Wickham suggests in 'R packages' to
+use the following construct :
+
+
+ignore_unused_imports <- *function*() {
+
+  aaapkg::aaa_fun
+
+}
+
+
+That's far from obvious though, and not very satisfying.
+
+Are there any downside to removing this note in this scenario? it makes
+little sense to me and incites wrong behaviour AFAIU.
+
+
+Thanks,
+
+
+Antoine
+
+	[[alternative HTML version deleted]]
+
+
+From kev|nu@hey @end|ng |rom gm@||@com  Mon Feb  6 19:03:07 2023
+From: kev|nu@hey @end|ng |rom gm@||@com (Kevin Ushey)
+Date: Mon, 6 Feb 2023 10:03:07 -0800
+Subject: [Rd] Unnecessary note when import only used in arg definition
+In-Reply-To: <CAEKh8ujzyH=Lhd49yc58=1Q4MxiGbjFpfQ13Rp+dEUQFA0Yr8g@mail.gmail.com>
+References: <CAEKh8ujzyH=Lhd49yc58=1Q4MxiGbjFpfQ13Rp+dEUQFA0Yr8g@mail.gmail.com>
+Message-ID: <CAJXgQP0NhMQYRNqy8SfS4jN-kcVKFinJG4bxfROX_BEbBt5L+Q@mail.gmail.com>
+
+Hi Antoine,
+
+Maybe I'm misunderstanding, but I think the warning is saying that
+you've declared the package dependency in the DESCRIPTION file, but
+you haven't actually imported the package (or any functions) in your
+package NAMESPACE file?
+
+I put together an example package that I think satisfies the point
+you're describing, and I don't see any R CMD check warnings (using R
+4.2.2).
+
+https://github.com/kevinushey/imports.example
+
+As I understand it, if you declare a package dependency in the
+DESCRIPTION file, you need to clarify how you're using the package in
+the NAMESPACE file -- e.g. what symbols you want to import, and so on.
+
+Best,
+Kevin
+
+On Mon, Feb 6, 2023 at 6:43 AM Antoine Fabri <antoine.fabri at gmail.com> wrote:
+>
+> Dear r-devel,
+>
+> When a package is only used in an argument definition, e.g :
+>
+>
+> f <- function(test = testthat::is_testing()) {
+>
+>   if (test) 1 else 2
+>
+> }
+>
+>
+> R CMD CHECK gives us a note: "Namespace in Imports field not imported from:
+> 'testthat'"
+>
+>
+> This incites me to remove the package from the Imports field but that'll
+> make my package brittle.
+>
+>
+> I noted I'm not the first one having the issue (
+> https://github.com/r-lib/devtools/issues/2456 ) and I've seen some
+> workarounds too, in particular Hadley Wickham suggests in 'R packages' to
+> use the following construct :
+>
+>
+> ignore_unused_imports <- *function*() {
+>
+>   aaapkg::aaa_fun
+>
+> }
+>
+>
+> That's far from obvious though, and not very satisfying.
+>
+> Are there any downside to removing this note in this scenario? it makes
+> little sense to me and incites wrong behaviour AFAIU.
+>
+>
+> Thanks,
+>
+>
+> Antoine
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Mon Feb  6 19:59:27 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Mon, 6 Feb 2023 13:59:27 -0500
+Subject: [Rd] Unnecessary note when import only used in arg definition
+In-Reply-To: <CAJXgQP0NhMQYRNqy8SfS4jN-kcVKFinJG4bxfROX_BEbBt5L+Q@mail.gmail.com>
+References: <CAEKh8ujzyH=Lhd49yc58=1Q4MxiGbjFpfQ13Rp+dEUQFA0Yr8g@mail.gmail.com>
+ <CAJXgQP0NhMQYRNqy8SfS4jN-kcVKFinJG4bxfROX_BEbBt5L+Q@mail.gmail.com>
+Message-ID: <e02220d8-9806-09dd-aee3-665479704d6d@gmail.com>
+
+I think the usual rule is that a qualified use of a package is 
+sufficient to suppress the warning without any entry in the NAMESPACE 
+file.  So if there isn't something else going on, Antoine's example 
+illustrates a bug (or at least an inconsistency) in the check code.
+
+Here's a version of your example that doesn't import anything from rlang 
+using the NAMESPACE, but uses it in code:
+
+   https://github.com/dmurdoch/imports.example/tree/explicituse
+
+And here's one like Antoine's, where the only use is in a default value:
+
+   https://github.com/dmurdoch/imports.example/tree/defaultvalue
+
+The first one tests clean, the second one gives the note he was talking 
+about:
+
+  ? checking dependencies in R code ... NOTE
+    Namespace in Imports field not imported from: ?rlang?
+      All declared Imports should be used.
+
+Duncan
+
+On 06/02/2023 1:03 p.m., Kevin Ushey wrote:
+> Hi Antoine,
+> 
+> Maybe I'm misunderstanding, but I think the warning is saying that
+> you've declared the package dependency in the DESCRIPTION file, but
+> you haven't actually imported the package (or any functions) in your
+> package NAMESPACE file?
+> 
+> I put together an example package that I think satisfies the point
+> you're describing, and I don't see any R CMD check warnings (using R
+> 4.2.2).
+> 
+> https://github.com/kevinushey/imports.example
+> 
+> As I understand it, if you declare a package dependency in the
+> DESCRIPTION file, you need to clarify how you're using the package in
+> the NAMESPACE file -- e.g. what symbols you want to import, and so on.
+> 
+> Best,
+> Kevin
+> 
+> On Mon, Feb 6, 2023 at 6:43 AM Antoine Fabri <antoine.fabri at gmail.com> wrote:
+>>
+>> Dear r-devel,
+>>
+>> When a package is only used in an argument definition, e.g :
+>>
+>>
+>> f <- function(test = testthat::is_testing()) {
+>>
+>>    if (test) 1 else 2
+>>
+>> }
+>>
+>>
+>> R CMD CHECK gives us a note: "Namespace in Imports field not imported from:
+>> 'testthat'"
+>>
+>>
+>> This incites me to remove the package from the Imports field but that'll
+>> make my package brittle.
+>>
+>>
+>> I noted I'm not the first one having the issue (
+>> https://github.com/r-lib/devtools/issues/2456 ) and I've seen some
+>> workarounds too, in particular Hadley Wickham suggests in 'R packages' to
+>> use the following construct :
+>>
+>>
+>> ignore_unused_imports <- *function*() {
+>>
+>>    aaapkg::aaa_fun
+>>
+>> }
+>>
+>>
+>> That's far from obvious though, and not very satisfying.
+>>
+>> Are there any downside to removing this note in this scenario? it makes
+>> little sense to me and incites wrong behaviour AFAIU.
+>>
+>>
+>> Thanks,
+>>
+>>
+>> Antoine
+>>
+>>          [[alternative HTML version deleted]]
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Mon Feb  6 20:31:31 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Mon, 6 Feb 2023 14:31:31 -0500
+Subject: [Rd] Unnecessary note when import only used in arg definition
+In-Reply-To: <e02220d8-9806-09dd-aee3-665479704d6d@gmail.com>
+References: <CAEKh8ujzyH=Lhd49yc58=1Q4MxiGbjFpfQ13Rp+dEUQFA0Yr8g@mail.gmail.com>
+ <CAJXgQP0NhMQYRNqy8SfS4jN-kcVKFinJG4bxfROX_BEbBt5L+Q@mail.gmail.com>
+ <e02220d8-9806-09dd-aee3-665479704d6d@gmail.com>
+Message-ID: <3f099c2c-9b6c-f5f8-5e3e-c7d656be95de@gmail.com>
+
+On 06/02/2023 1:59 p.m., Duncan Murdoch wrote:
+> I think the usual rule is that a qualified use of a package is
+> sufficient to suppress the warning without any entry in the NAMESPACE
+> file.  So if there isn't something else going on, Antoine's example
+> illustrates a bug (or at least an inconsistency) in the check code.
+
+Here's where the problem arises:
+
+https://github.com/r-devel/r-svn/blob/7a2207dad15b8eed8c3d1c5cc49f29d431c289bd/src/library/tools/R/QC.R#L2105
+
+with code
+
+   if(is.call(e) || is.expression(e)) {
+
+While examining a function definition, the arguments are stored in a 
+pairlist.  The test is looking for a call or an expression, and a 
+pairlist isn't any of those, so it skips over it.  I think it would work 
+properly if that line was changed to
+
+   if(is.call(e) || is.expression(e) || is.pairlist(e)) {
+
+because then it would iterate over the arguments, and would find the use 
+of a package in a default value.
+
+Duncan Murdoch
+
+> 
+> Here's a version of your example that doesn't import anything from rlang
+> using the NAMESPACE, but uses it in code:
+> 
+>     https://github.com/dmurdoch/imports.example/tree/explicituse
+> 
+> And here's one like Antoine's, where the only use is in a default value:
+> 
+>     https://github.com/dmurdoch/imports.example/tree/defaultvalue
+> 
+> The first one tests clean, the second one gives the note he was talking
+> about:
+> 
+>    ? checking dependencies in R code ... NOTE
+>      Namespace in Imports field not imported from: ?rlang?
+>        All declared Imports should be used.
+> 
+> Duncan
+> 
+> On 06/02/2023 1:03 p.m., Kevin Ushey wrote:
+>> Hi Antoine,
+>>
+>> Maybe I'm misunderstanding, but I think the warning is saying that
+>> you've declared the package dependency in the DESCRIPTION file, but
+>> you haven't actually imported the package (or any functions) in your
+>> package NAMESPACE file?
+>>
+>> I put together an example package that I think satisfies the point
+>> you're describing, and I don't see any R CMD check warnings (using R
+>> 4.2.2).
+>>
+>> https://github.com/kevinushey/imports.example
+>>
+>> As I understand it, if you declare a package dependency in the
+>> DESCRIPTION file, you need to clarify how you're using the package in
+>> the NAMESPACE file -- e.g. what symbols you want to import, and so on.
+>>
+>> Best,
+>> Kevin
+>>
+>> On Mon, Feb 6, 2023 at 6:43 AM Antoine Fabri <antoine.fabri at gmail.com> wrote:
+>>>
+>>> Dear r-devel,
+>>>
+>>> When a package is only used in an argument definition, e.g :
+>>>
+>>>
+>>> f <- function(test = testthat::is_testing()) {
+>>>
+>>>     if (test) 1 else 2
+>>>
+>>> }
+>>>
+>>>
+>>> R CMD CHECK gives us a note: "Namespace in Imports field not imported from:
+>>> 'testthat'"
+>>>
+>>>
+>>> This incites me to remove the package from the Imports field but that'll
+>>> make my package brittle.
+>>>
+>>>
+>>> I noted I'm not the first one having the issue (
+>>> https://github.com/r-lib/devtools/issues/2456 ) and I've seen some
+>>> workarounds too, in particular Hadley Wickham suggests in 'R packages' to
+>>> use the following construct :
+>>>
+>>>
+>>> ignore_unused_imports <- *function*() {
+>>>
+>>>     aaapkg::aaa_fun
+>>>
+>>> }
+>>>
+>>>
+>>> That's far from obvious though, and not very satisfying.
+>>>
+>>> Are there any downside to removing this note in this scenario? it makes
+>>> little sense to me and incites wrong behaviour AFAIU.
+>>>
+>>>
+>>> Thanks,
+>>>
+>>>
+>>> Antoine
+>>>
+>>>           [[alternative HTML version deleted]]
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Mon Feb  6 21:47:16 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Mon, 6 Feb 2023 15:47:16 -0500
+Subject: [Rd] Unnecessary note when import only used in arg definition
+In-Reply-To: <3f099c2c-9b6c-f5f8-5e3e-c7d656be95de@gmail.com>
+References: <CAEKh8ujzyH=Lhd49yc58=1Q4MxiGbjFpfQ13Rp+dEUQFA0Yr8g@mail.gmail.com>
+ <CAJXgQP0NhMQYRNqy8SfS4jN-kcVKFinJG4bxfROX_BEbBt5L+Q@mail.gmail.com>
+ <e02220d8-9806-09dd-aee3-665479704d6d@gmail.com>
+ <3f099c2c-9b6c-f5f8-5e3e-c7d656be95de@gmail.com>
+Message-ID: <62b0a67b-2ce1-5adf-783b-0b462b8f7490@gmail.com>
+
+On 06/02/2023 2:31 p.m., Duncan Murdoch wrote:
+> On 06/02/2023 1:59 p.m., Duncan Murdoch wrote:
+>> I think the usual rule is that a qualified use of a package is
+>> sufficient to suppress the warning without any entry in the NAMESPACE
+>> file.  So if there isn't something else going on, Antoine's example
+>> illustrates a bug (or at least an inconsistency) in the check code.
+> 
+> Here's where the problem arises:
+> 
+> https://github.com/r-devel/r-svn/blob/7a2207dad15b8eed8c3d1c5cc49f29d431c289bd/src/library/tools/R/QC.R#L2105
+
+Whoops, I think that's the wrong location.  I think this is the right one:
+
+ 
+https://github.com/r-devel/r-svn/blob/7a2207dad15b8eed8c3d1c5cc49f29d431c289bd/src/library/tools/R/QC.R#L5754
+
+There are two similar functions in that big source file.
+
+Duncan Murdoch
+
+> with code
+> 
+>     if(is.call(e) || is.expression(e)) {
+> 
+> While examining a function definition, the arguments are stored in a
+> pairlist.  The test is looking for a call or an expression, and a
+> pairlist isn't any of those, so it skips over it.  I think it would work
+> properly if that line was changed to
+> 
+>     if(is.call(e) || is.expression(e) || is.pairlist(e)) {
+> 
+> because then it would iterate over the arguments, and would find the use
+> of a package in a default value.
+> 
+> Duncan Murdoch
+> 
+>>
+>> Here's a version of your example that doesn't import anything from rlang
+>> using the NAMESPACE, but uses it in code:
+>>
+>>      https://github.com/dmurdoch/imports.example/tree/explicituse
+>>
+>> And here's one like Antoine's, where the only use is in a default value:
+>>
+>>      https://github.com/dmurdoch/imports.example/tree/defaultvalue
+>>
+>> The first one tests clean, the second one gives the note he was talking
+>> about:
+>>
+>>     ? checking dependencies in R code ... NOTE
+>>       Namespace in Imports field not imported from: ?rlang?
+>>         All declared Imports should be used.
+>>
+>> Duncan
+>>
+>> On 06/02/2023 1:03 p.m., Kevin Ushey wrote:
+>>> Hi Antoine,
+>>>
+>>> Maybe I'm misunderstanding, but I think the warning is saying that
+>>> you've declared the package dependency in the DESCRIPTION file, but
+>>> you haven't actually imported the package (or any functions) in your
+>>> package NAMESPACE file?
+>>>
+>>> I put together an example package that I think satisfies the point
+>>> you're describing, and I don't see any R CMD check warnings (using R
+>>> 4.2.2).
+>>>
+>>> https://github.com/kevinushey/imports.example
+>>>
+>>> As I understand it, if you declare a package dependency in the
+>>> DESCRIPTION file, you need to clarify how you're using the package in
+>>> the NAMESPACE file -- e.g. what symbols you want to import, and so on.
+>>>
+>>> Best,
+>>> Kevin
+>>>
+>>> On Mon, Feb 6, 2023 at 6:43 AM Antoine Fabri <antoine.fabri at gmail.com> wrote:
+>>>>
+>>>> Dear r-devel,
+>>>>
+>>>> When a package is only used in an argument definition, e.g :
+>>>>
+>>>>
+>>>> f <- function(test = testthat::is_testing()) {
+>>>>
+>>>>      if (test) 1 else 2
+>>>>
+>>>> }
+>>>>
+>>>>
+>>>> R CMD CHECK gives us a note: "Namespace in Imports field not imported from:
+>>>> 'testthat'"
+>>>>
+>>>>
+>>>> This incites me to remove the package from the Imports field but that'll
+>>>> make my package brittle.
+>>>>
+>>>>
+>>>> I noted I'm not the first one having the issue (
+>>>> https://github.com/r-lib/devtools/issues/2456 ) and I've seen some
+>>>> workarounds too, in particular Hadley Wickham suggests in 'R packages' to
+>>>> use the following construct :
+>>>>
+>>>>
+>>>> ignore_unused_imports <- *function*() {
+>>>>
+>>>>      aaapkg::aaa_fun
+>>>>
+>>>> }
+>>>>
+>>>>
+>>>> That's far from obvious though, and not very satisfying.
+>>>>
+>>>> Are there any downside to removing this note in this scenario? it makes
+>>>> little sense to me and incites wrong behaviour AFAIU.
+>>>>
+>>>>
+>>>> Thanks,
+>>>>
+>>>>
+>>>> Antoine
+>>>>
+>>>>            [[alternative HTML version deleted]]
+>>>>
+>>>> ______________________________________________
+>>>> R-devel at r-project.org mailing list
+>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+
+
