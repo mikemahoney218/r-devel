@@ -1837,3 +1837,109 @@ Tomas
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From c@@rd|@g@bor @end|ng |rom gm@||@com  Fri Feb 10 15:00:55 2023
+From: c@@rd|@g@bor @end|ng |rom gm@||@com (=?UTF-8?B?R8OhYm9yIENzw6FyZGk=?=)
+Date: Fri, 10 Feb 2023 15:00:55 +0100
+Subject: [Rd] R-devel does not compile on OpenSUSE 15.4
+In-Reply-To: <CABtg=KnTn+QUei+4oxPBL=So2x2i7PEXTPfdrH17AqWv6K5BGg@mail.gmail.com>
+References: <CABtg=KnTn+QUei+4oxPBL=So2x2i7PEXTPfdrH17AqWv6K5BGg@mail.gmail.com>
+Message-ID: <CABtg=KkcuxkWOKC8yHHxZsS0sheGx3O0wbE1GiHc9v9Y-t9yCA@mail.gmail.com>
+
+I think this was possibly a typo (ALL_FCLAGS vs ALL_FCFLAGS), plus
+those flags were never set for src/modules/lapack. Hence, this seems
+like a better fix, that also adds the flags to src/extra/blas.
+
+Best,
+Gabor
+
+diff --git a/src/extra/blas/Makefile.in b/src/extra/blas/Makefile.in
+index 3661416..c9b53e2 100644
+--- a/src/extra/blas/Makefile.in
++++ b/src/extra/blas/Makefile.in
+@@ -17,7 +17,7 @@ include $(top_builddir)/Makeconf
+
+ ALL_CFLAGS = $(ALL_CFLAGS_LO)
+ ALL_FFLAGS = $(ALL_FFLAGS_LO)
+-ALL_FCLAGS = $(ALL_FFLAGS_LO)
++ALL_FCFLAGS = $(ALL_FFLAGS_LO)
+
+ SOURCES = blas00.c blas.f cmplxblas.f blas2.f90 cmplxblas2.f90
+
+diff --git a/src/modules/lapack/Makefile.in b/src/modules/lapack/Makefile.in
+index 8e593ea..e35c956 100644
+--- a/src/modules/lapack/Makefile.in
++++ b/src/modules/lapack/Makefile.in
+@@ -15,6 +15,10 @@ include $(top_builddir)/Makeconf
+ .f90.o:
+        $(FC) $(ALL_FCFLAGS) -c @FCFLAGS_f90@ $< -o $@
+
++ALL_CFLAGS = $(ALL_CFLAGS_LO)
++ALL_FFLAGS = $(ALL_FFLAGS_LO)
++ALL_FCFLAGS = $(ALL_FFLAGS_LO)
++
+ SOURCES_C = Lapack.c @USE_VECLIB_G95FIX_TRUE@ vecLibg95c.c
+ SOURCES_F = @USE_VECLIB_G95FIX_TRUE@ vecLibg95f.f
+
+On Wed, Feb 8, 2023 at 2:03 PM G?bor Cs?rdi <csardi.gabor at gmail.com> wrote:
+>
+> More precisely the built-in Lapack module. AFAICT this is because the
+> f90 files are not compiled with -fpic. My output:
+>
+> make[4]: Entering directory '/tmp/R-devel/src/modules/lapack'
+> gfortran -fpic  -g -O2 -msse2 -mfpmath=sse  -c dlamch.f -o dlamch.o
+> gfortran  -fpic  -g -O2  -c dlapack.f -o dlapack.o
+> gfortran  -fpic  -g -O2  -c cmplx.f -o cmplx.o
+> gfortran  -c  la_constants.f90 -o la_constants.o
+> gfortran  -c  dlartg.f90 -o dlartg.o
+> gfortran  -c  la_xisnan.f90 -o la_xisnan.o
+> gfortran  -c  dlassq.f90 -o dlassq.o
+> gfortran  -c  zlartg.f90 -o zlartg.o
+> gfortran  -c  zlassq.f90 -o zlassq.o
+> gcc -shared -fopenmp -L/usr/local/lib64 -o libRlapack.so dlamch.o
+> dlapack.o cmplx.o dlartg.o dlassq.o la_constants.o la_xisnan.o
+> zlartg.o zlassq.o   -L"../../../lib" -lRblas -lgfortran -lm -lquadmath
+> /usr/lib64/gcc/x86_64-suse-linux/7/../../../../x86_64-suse-linux/bin/ld:
+> zlassq.o: warning: relocation against `__la_xisnan_MOD_disnan' in
+> read-only section `.text'
+> /usr/lib64/gcc/x86_64-suse-linux/7/../../../../x86_64-suse-linux/bin/ld:
+> dlassq.o: relocation R_X86_64_PC32 against symbol
+> `__la_xisnan_MOD_disnan' can not be used when making a shared object;
+> recompile with -fPIC
+> /usr/lib64/gcc/x86_64-suse-linux/7/../../../../x86_64-suse-linux/bin/ld:
+> final link failed: bad value
+> collect2: error: ld returned 1 exit status
+>
+> If I update src/modules/lapack/Makefile.in to add $(FPICFLAGS) to the
+> .f90 compilation, then all is good. I assume you would also want to
+> add -g and -O2 here, so probably some other variable is better than
+> $(FPICFLAGS).
+>
+> FYI,
+> Gabor
+
+
+From t@r@@@z@kh@rko @end|ng |rom uzh@ch  Fri Feb 10 17:00:44 2023
+From: t@r@@@z@kh@rko @end|ng |rom uzh@ch (Taras Zakharko)
+Date: Fri, 10 Feb 2023 17:00:44 +0100
+Subject: [Rd] A delayedAssign() variant for quoted expressions
+Message-ID: <DF104F0E-5EF2-4014-976C-2CD9B0AE8EB6@uzh.ch>
+
+It is sometimes useful to create a promise using a constructed expression, but delayedAssign will always substitute the expression argument. I am currently using this pattern to achieve this:
+
+expr <- bquote(?)
+eval(call("delayedAssign", x, expr, eval.env = eval_env))
+
+But it would be nice if base R already had a function that takes quoted promise body. It could be named delayedAssign0 or delayedAssignq (similar to evalq). The definition of such function would be trivial (just remove substitute from delayedAssign):
+
+function (x, value, eval.env = parent.frame(1), assign.env = parent.frame(1)) .Internal(delayedAssign(x, substitute(value), eval.env, assign.env))
+
+Maybe R maintainers could consider adding this function? I would be happy to submit a patch. 
+
+Best, 
+
+Taras
+
+
+	[[alternative HTML version deleted]]
+
+
