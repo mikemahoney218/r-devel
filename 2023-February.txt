@@ -1943,3 +1943,415 @@ Taras
 	[[alternative HTML version deleted]]
 
 
+From @pencer@gr@ve@ @end|ng |rom prod@y@e@com  Sat Feb 11 06:38:55 2023
+From: @pencer@gr@ve@ @end|ng |rom prod@y@e@com (Spencer Graves)
+Date: Fri, 10 Feb 2023 23:38:55 -0600
+Subject: [Rd] scan(..., skip=1e11): infinite loop; cannot interrupt
+Message-ID: <acf79875-5042-1db1-5283-836dedd7f8a0@prodsyse.com>
+
+Hello, All:
+
+
+	  I have a 4.54 GB file that I'm trying to read in chunks using 
+"scan(..., skip=__)".  It works as expected for small values of "skip" 
+but goes into an infinite loop for "skip=1e11" and similar large values 
+of skip:  I cannot even interrupt it;  I must kill R.  Below please find 
+sessionInfo() with a toy example.
+
+
+	  My real problem is a large corrupted Thunderbird email file.  It's 
+file type "Mork", which is mostly standard characters with "\n" between 
+records of varying length.
+
+
+	  Is there some other function in R that allows me to read chunks of a 
+large file like this?
+
+
+	  Thanks,
+	  Spencer Graves
+
+
+writeLines(as.character(1:11), 'tstNums.txt')
+(Tst2 <- scan('tstNums.txt', n=12, skip=5))
+# works: 6 7 8 9 10 11
+(Tst13 <- scan('tstNums.txt', n=12, skip=13))
+# works: numeric(0)
+(tst1e11 <- scan('tst.txt', n=12, skip=1e11))
+# Goes into an infinite loop that I cannot even interrupt.
+# I must kill R and start over.
+
+
+sessionInfo()
+R version 4.2.2 (2022-10-31)
+Platform: x86_64-apple-darwin17.0 (64-bit)
+Running under: macOS Big Sur 11.7.3
+
+Matrix products: default
+LAPACK: 
+/Library/Frameworks/R.framework/Versions/4.2/Resources/lib/libRlapack.dylib
+
+locale:
+[1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base
+
+loaded via a namespace (and not attached):
+  [1] compiler_4.2.2  fastmap_1.1.0   cli_3.6.0       htmltools_0.5.4
+  [5] tools_4.2.2     rstudioapi_0.14 yaml_2.3.6      rmarkdown_2.20
+  [9] knitr_1.41      xfun_0.36       digest_0.6.31   rlang_1.0.6
+[13] evaluate_0.20
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Sat Feb 11 09:33:16 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Sat, 11 Feb 2023 11:33:16 +0300
+Subject: [Rd] scan(..., skip=1e11): infinite loop; cannot interrupt
+In-Reply-To: <acf79875-5042-1db1-5283-836dedd7f8a0@prodsyse.com>
+References: <acf79875-5042-1db1-5283-836dedd7f8a0@prodsyse.com>
+Message-ID: <20230211113316.44dd813a@Tarkus>
+
+
+On Fri, 10 Feb 2023 23:38:55 -0600
+Spencer Graves <spencer.graves at prodsyse.com> wrote:
+
+> I have a 4.54 GB file that I'm trying to read in chunks using 
+> "scan(..., skip=__)".  It works as expected for small values of
+> "skip" but goes into an infinite loop for "skip=1e11" and similar
+> large values of skip:  I cannot even interrupt it;  I must kill R.
+
+Skipping lines is done by two nested loops. The outer loop counts the
+lines to skip; the inner loop reads characters until it encounters a
+newline or end of file. The outer loop doesn't check for EOF and keeps
+asking for more characters until the inner loop runs at least once for
+every line it wants to skip. The following patch should avoid the
+wait in such cases:
+
+--- src/main/scan.c	(revision 83797)
++++ src/main/scan.c	(working copy)
+@@ -835,7 +835,7 @@
+ attribute_hidden SEXP do_scan(SEXP call, SEXP op, SEXP args, SEXP rho)
+ {
+     SEXP ans, file, sep, what, stripwhite, dec, quotes, comstr;
+-    int c, flush, fill, blskip, multiline, escapes, skipNul;
++    int c = 0, flush, fill, blskip, multiline, escapes, skipNul;
+     R_xlen_t nmax, nlines, nskip;
+     const char *p, *encoding;
+     RCNTXT cntxt;
+@@ -952,7 +952,7 @@
+ 	    if(!data.con->canread)
+ 		error(_("cannot read from this connection"));
+ 	}
+-	for (R_xlen_t i = 0; i < nskip; i++) /* MBCS-safe */
++	for (R_xlen_t i = 0; i < nskip && c != R_EOF; i++) /* MBCS-safe */
+ 	    while ((c = scanchar(FALSE, &data)) != '\n' && c != R_EOF);
+     }
+ 
+
+Making it interruptible is a bit more work: we need to ensure that a
+valid context is set up and check regularly for an interrupt.
+
+--- src/main/scan.c	(revision 83797)
++++ src/main/scan.c	(working copy)
+@@ -835,7 +835,7 @@
+ attribute_hidden SEXP do_scan(SEXP call, SEXP op, SEXP args, SEXP rho)
+ {
+     SEXP ans, file, sep, what, stripwhite, dec, quotes, comstr;
+-    int c, flush, fill, blskip, multiline, escapes, skipNul;
++    int c = 0, flush, fill, blskip, multiline, escapes, skipNul;
+     R_xlen_t nmax, nlines, nskip;
+     const char *p, *encoding;
+     RCNTXT cntxt;
+@@ -952,8 +952,6 @@
+ 	    if(!data.con->canread)
+ 		error(_("cannot read from this connection"));
+ 	}
+-	for (R_xlen_t i = 0; i < nskip; i++) /* MBCS-safe */
+-	    while ((c = scanchar(FALSE, &data)) != '\n' && c != R_EOF);
+     }
+ 
+     ans = R_NilValue;		/* -Wall */
+@@ -966,6 +964,10 @@
+     cntxt.cend = &scan_cleanup;
+     cntxt.cenddata = &data;
+ 
++    if (ii) for (R_xlen_t i = 0, j = 0; i < nskip && c != R_EOF; i++) /* MBCS-safe */
++	while ((c = scanchar(FALSE, &data)) != '\n' && c != R_EOF)
++	    if (j++ % 10000 == 9999) R_CheckUserInterrupt();
++
+     switch (TYPEOF(what)) {
+     case LGLSXP:
+     case INTSXP:
+
+This way, even if you pour a Decanter of Endless Lines (e.g. mkfifo
+LINES; perl -E'print "A"x42 while 1;' > LINES) into scan(), it can
+still be interrupted, even if neither newline nor EOF ever arrives.
+(We never skip lines when reading from the console? I suppose it makes
+sense. I think this needs to be documented and can write a
+documentation patch.)
+
+If you actually have 1e11 lines in your file and would like to read it
+in chunks, it may help to use
+
+f <- file('...')
+chunk1 <- scan(f, n = n1, skip = nskip1)
+# the following will continue reading where chunk1 had ended
+chunk2 <- scan(f, n = n2, skip = nskip2)
+
+...in order to avoid having to skip over chunks you have already read,
+which otherwise makes the algorithm quadratic in number of lines
+instead of linear. (I couldn't determine whether you're already doing
+this, sorry.)
+
+Skipping a fixed number of lines is hard: since they have variable
+length, it's required to read every character in order to determine
+whether it starts a new line. With byte ranges, it would have been
+possible to use seek(), but not here.
+
+-- 
+Best regards,
+Ivan
+
+
+From D@v|d@C@Sterr@tt @end|ng |rom ed@@c@uk  Sat Feb 11 12:12:04 2023
+From: D@v|d@C@Sterr@tt @end|ng |rom ed@@c@uk (David Sterratt)
+Date: Sat, 11 Feb 2023 11:12:04 +0000
+Subject: [Rd] Unable to load Windows NETIO.SYS and WINSPOOL.DRV DLLs
+Message-ID: <64d8c5ea00cccbbd6bb7f92a506e97d2e9f5168a.camel@ed.ac.uk>
+
+I am trying to build the RGtk2 package
+(https://github.com/lawremi/RGtk2) using R-devel and only the libraries
+bundled with RTookl4.3 (currently RGtk2 is bundled with a compiled dll
+and requires GTK libraries to be downloaded after installation into R).
+
+I have used the instructions at
+https://cran.r-project.org/bin/windows/base/howto-R-4.2.html
+to create a Makevars.win file (appended, including description of how
+the PKG_LIBS have been set).
+
+The package can be installed, but the shared object created can't be
+loaded:
+
+   > library(RGtk2)
+   Error in inDL(x, as.logical(local), as.logical(now), ...) :
+     unable to load shared object 'C:/Users/David
+   Sterratt/AppData/Local/R/win-library/4.3/RGtk2/libs/x
+   64/RGtk2.dll':
+     LoadLibrary failure:  The specified module could not be found.
+
+WinDbg output reveals errors loading "NETIO.SYS" and "WINSPOOL.DRV"
+when running "library(RGtk2)":
+
+   0c64:0640 @ 44312812 - LdrpProcessWork - ERROR: Unable to load DLL:
+"NETIO.SYS", Parent Module: "C:\Users\David
+Sterratt\AppData\Local\R\win-library\4.3\RGtk2\libs\x64\RGtk2.dll",
+Status: 0xc0000135
+   ...
+   0c64:1e5c @ 44312812 - LdrpProcessWork - ERROR: Unable to load DLL:
+"WINSPOOL.DRV", Parent Module: "C:\Users\David
+Sterratt\AppData\Local\R\win-library\4.3\RGtk2\libs\x64\RGtk2.dll",
+Status: 0xc0000135
+   ...
+   0c64:00e4 @ 44312828 - LdrpProcessWork - ERROR: Unable to load DLL:
+"C:\Users\David Sterratt\AppData\Local\R\win-
+library\4.3\RGtk2\libs\x64\RGtk2.dll", Parent Module: "(null)", Status:
+0xc0000135
+
+I'm stuck at this point: I'm not a regular Windows User, and I've not
+been able to find any trustworthy advice online about how to deal with
+missing DLLs. Any help would be appreciated.
+
+There is an issue on Github about this issue with full output from
+WinDbg:
+https://github.com/lawremi/RGtk2/issues/9
+
+Best wishes,
+
+David
+
+* * *
+
+Contents of Makevars.win:
+
+# Use the linking_order script to determine library order
+# Install the latest version of R-devel from
+https://cran.r-project.org/
+# Install Rtools43 from https://cran.r-project.org/
+# Open the Rtools43 Bash shell
+## Set Paths to R and various tools
+# export PATH="/c/Program Files/R/R-devel/bin":$PATH
+# export PATH=/x86_64-w64-mingw32.static.posix/bin/:$PATH
+## Install pkg-config and add path
+# pacman -Syy pkg-config
+# PKG_CONFIG_PATH=/x86_64-w64-
+mingw32.static.posix/lib/pkgconfig/:$PKG_CONFIG_PATH
+
+# Install a package in R using install.pacakges(), which will set the
+personal library path
+# https://cran.r-project.org/bin/windows/base/howto-R-4.2.html
+#  ./linking_order/findLinkingOrder RGtk2/RGtk2/ /tmp/RGtk2.libs
+/c/rtools42/x86_64-w64-mingw32.static.posix/lib
+
+# pkg-config.exe --static --cflags  gtk+-2.0
+# Add these flags: -D_R_=1 -DUSE_R=1 -I. -I../inst/include
+PKG_CPPFLAGS = -I/usr/lib/mxe/usr/x86_64-w64-
+mingw32.static.posix/include/pango-1.0 -I/usr/lib/mxe/usr/x86_64-w64-
+mingw32.static.posix/include/gtk-2.0 -I/usr/lib/mxe/usr/x86_64-w64-
+mingw32.static.posix/lib/gtk-2.0/include -I/usr/lib/mxe/usr/x86_64-w64-
+mingw32.static.posix/include/atk-1.0 -I/usr/lib/mxe/usr/x86_64-w64-
+mingw32.static.posix/include -I/usr/lib/mxe/usr/x86_64-w64-
+mingw32.static.posix/include/cairo -I/usr/lib/mxe/usr/x86_64-w64-
+mingw32.static.posix/include/gdk-pixbuf-2.0 -DPCRE2_STATIC -
+I/usr/lib/mxe/usr/x86_64-w64-mingw32.static.posix/include/libpng16 -
+I/usr/lib/mxe/usr/x86_64-w64-mingw32.static.posix/include/harfbuzz -
+I/usr/lib/mxe/usr/x86_64-w64-mingw32.static.posix/include/fribidi -
+DFRIBIDI_LIB_STATIC -I/usr/lib/mxe/usr/x86_64-w64-
+mingw32.static.posix/include/freetype2 -I/usr/lib/mxe/usr/x86_64-w64-
+mingw32.static.posix/include/glib-2.0 -I/usr/lib/mxe/usr/x86_64-w64-
+mingw32.static.posix/lib/glib-2.0/include -I/usr/lib/mxe/usr/x86_64-
+w64-mingw32.static.posix/include/pixman-1 -pthread -mms-bitfields -
+D_R_=1 -DUSE_R=1 -I. -I../inst/include
+
+# Use the linking_order script to determine library order by setting
+# the PKG_LIBS below, then running (repeatedly)
+# ./linking_order/findLinkingOrder RGtk2/RGtk2/ /tmp/RGtk2.libs
+# PKG_LIBS = -Wl,--no-demangle $(shell cat /tmp/RGtk2.libs)
+
+# This is the set of PKG_LIBS found by findLinkingOrder
+# PKG_LIBS = -lgtk-win32-2.0 -lwinspool -lspoolss -lgdk-win32-2.0 -
+lcomdlg32 -lcomctl32 -latk-1.0 -lpangocairo-1.0 -lgdk_pixbuf-2.0 -
+lpangowin32-1.0 -lpangoft2-1.0 -lcairo -ldwrite -lpango-1.0 -lpixman-1
+-lmsimg32 -lfontconfig -lgio-2.0 -lfribidi -lexpat -lnetio -liphlpapi -
+lgobject-2.0 -lgmodule-2.0 -ldnsapi -lffi -lharfbuzz_too -lfreetype_too
+-lharfbuzz -lglib-2.0 -lfreetype -luuid -lpcre2-8 -lpng16 -lpng -lbz2 -
+lole32 -limm32 -lgdi32 -ltiff -lwebpdecoder -lwebp -llzma -ljpeg -
+lcfitsio -lzstd -lz -lintl -liconv -lwsock32 -lws2_32 -lshlwapi
+
+# There are duplicated symbols between -lcfitsio and -lz - remove -
+lcfitsio
+PKG_LIBS = -lgtk-win32-2.0 -lwinspool -lspoolss -lgdk-win32-2.0 -
+lcomdlg32 -lcomctl32 -latk-1.0 -lpangocairo-1.0 -lgdk_pixbuf-2.0 -
+lpangowin32-1.0 -lpangoft2-1.0 -lcairo -ldwrite -lpango-1.0 -lpixman-1
+-lmsimg32 -lfontconfig -lgio-2.0 -lfribidi -lexpat -lnetio -liphlpapi -
+lgobject-2.0 -lgmodule-2.0 -ldnsapi -lffi -lharfbuzz_too -lfreetype_too
+-lharfbuzz -lglib-2.0 -lfreetype -luuid -lpcre2-8 -lpng16 -lpng -lbz2 -
+lole32 -limm32 -lgdi32 -ltiff -lwebpdecoder -lwebp -llzma -ljpeg -lzstd
+-lz -lintl -liconv -lwsock32 -lws2_32 -lshlwapi
+
+
+--
+David Sterratt, Lecturer https://www.ed.ac.uk/profile/sterratt
+Institute for Adaptive and Neural Computation     tel: +44 131 651 1739
+School of Informatics, University of Edinburgh
+Appleton Tower, 11 Crichton Street, Edinburgh EH8 9LE, Scotland
+* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *
+BOOK: Principles of Computational Modelling in Neuroscience
+Sterratt, Graham, Gillies & Willshaw (CUP, 2011).
+http://www.compneuroprinciples.org
+
+
+
+The University of Edinburgh is a charitable body, registered in Scotland, with registration number SC005336. Is e buidheann carthannais a th? ann an Oilthigh Dh?n ?ideann, cl?raichte an Alba, ?ireamh cl?raidh SC005336.
+
+From pdev@|p|ne @end|ng |rom berke|ey@edu  Sat Feb 11 19:01:35 2023
+From: pdev@|p|ne @end|ng |rom berke|ey@edu (Perry de Valpine)
+Date: Sat, 11 Feb 2023 10:01:35 -0800
+Subject: [Rd] inconsistent use of optim's parscale in Hessian vs gradient
+Message-ID: <CABeTmqjnREecftHjosBg1X46J=uRmQuZbkzhqaSz3aEdZt3Vfw@mail.gmail.com>
+
+Dear r-devel:
+
+I noticed that optim's finite-element derivative approximations operate on
+par/parscale for the gradient (as documented in help(optim)) but on par for
+the Hessian. (The same goes for optimHess, which calls the same Hessian
+code.)  This seems odd, so I am wondering if it is intended.
+
+Maybe this is all well known, and thanks if all it takes is pointing me to
+any existing information on it.
+
+Here is an example (all toy values). When parscale has its default value of
+1, the issue doesn't arise.  By printing the input, we can see what grid
+points are being used.
+
+foo <- function(x) {print(x); x^4}
+.External2(stats:::C_optimhess, 1, foo, NULL, list(fnscale = 1, parscale =
+1, ndeps = 0.02))
+
+With parscale = 1 and ndeps = 0.02, the grid points for 2nd derivative at x
+= 1 are:
+x + 0.02, x - 0.02
+and then the grid points for the 1st derivative around each of those are
+x + 0.02 + 0.02, x + 0.02 - 0.02 for the first (around x + 0.02), and
+x - 0.02 + 0.02, x - 0.02 - 0.02 for the second (around x - 0.02).
+
+This all makes sense. There is no problem yet.  (There is one more function
+evaluation than needed, but that's not the point.)
+
+(BTW, I'm evaluating the Hessian at 1 instead of the optimum at 0 for
+illustration, but really it is just the grid points that illustrate the
+issue.)
+
+But with parscale != 1, we can see that the epsilons are used on different
+scales at different steps:
+
+.External2(stats:::C_optimhess, 1, foo, NULL, list(fnscale = 1, parscale =
+3, ndeps = 0.02))
+
+The grid points for the 2nd derivative at x = 1 are the same as above, so
+they are on the par scale:
+x + 0.02, x - 0.02
+but the grid points for the 1st derivatives then use par/parscale, giving
+x + 0.02 + 0.06, x + 0.02 - 0.06 for the first, and
+x - 0.02 + 0.06, x - 0.02 - 0.06 for the second
+
+The 0.06 increments are from 0.02 increments on par/parscale, which is then
+multiplied by parscale=3 before calling foo.  Is this intended?
+
+I believe the 2nd derivative increments on the scale of par occur at lines
+461-462 of src/library/stats/src/optim.c, in optimhess, and the 1st
+derivative increments on the scale of par/parscale occur at lines 138 and
+146 of the same file, in fmingr.
+
+A curious consequence in two dimensions is that the Hessian with respect to
+x[1] and then x[2] uses a different four grid points than the Hessian with
+respect to x[2] and then x[1], if they have different parscales.
+
+foo2 <- function(x) {print(x); sum(x^4)}
+.External2(stats:::C_optimhess, c(1,1), foo2,
+           NULL, list(fnscale = 1, parscale = c(3,2), ndeps = c(0.02,
+0.02)))
+
+This prints the input x values from 16 calls to foo2, comprising 4 calls
+for each of the 4 Hessian elements.
+
+The grid points for dx[1] dx[2] are lines 3-4 and 7-8 of the output, which
+are
+[1] 1.02 1.04
+[1] 1.02 0.96
+[1] 0.98 1.04
+[1] 0.98 0.96
+So the dx[1] steps are on par while the dx[2] steps are on par/parscale.
+
+The grid points for dx[2] dx[1] are lines 9-10 and 13-14 of the output,
+which are
+[1] 1.06 1.02
+[1] 0.94 1.02
+[1] 1.06 0.98
+[1] 0.94 0.98
+So the dx[2] steps are on par while the dx[1] steps are on par/parscale.
+
+The code on lines 472-477 of optim.c symmetrizes the two approximations of
+the same second derivative (from dx[1] dx[2] and dx[2] dx[1]) by
+averaging.  This may be helpful numerically in any case, but was it
+intended to be averaging over two potentially different grid schemes?
+
+That these are the grid points being used can be confirmed by direct
+computation and comparison to the value returned by optimHess.
+
+Thanks for any insight on this.
+Perry
+
+	[[alternative HTML version deleted]]
+
+
