@@ -2355,3 +2355,193 @@ Perry
 	[[alternative HTML version deleted]]
 
 
+From ch|r|com @end|ng |rom goog|e@com  Sun Feb 12 06:07:39 2023
+From: ch|r|com @end|ng |rom goog|e@com (Michael Chirico)
+Date: Sat, 11 Feb 2023 21:07:39 -0800
+Subject: [Rd] Line-terminal \ in character consants -- missing from ?Quotes ?
+Message-ID: <CAD7Bkx91sEPFAwSc_od5UgOZ7tW9=k43hRgWVi8srv2nnLgh9w@mail.gmail.com>
+
+I'm coming across some code that uses the fact the parser ignores a
+line-terminal '\', e.g.
+
+identical("\
+", "\n")
+# [1] TRUE
+
+x = "abc \
+def"
+y = "abc \ndef"
+identical(x, y)
+# [1] TRUE
+
+However:
+identical("\\n", "\n")
+# [1] FALSE
+
+This appears to be undocumented behavior; the closest thing I see in
+?Quotes suggests it should be an error:
+
+> Escaping a character not in the following table is an error.
+
+('\n' is in the table, but my understanding is the 'n' is what's being
+escaped v-a-v the "error", which seems confirmed by the third, FALSE,
+example above)
+
+Is this a bug, is the omission from ?Quotes a bug, or is this just
+undocumented behavior?
+
+Mike C
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sun Feb 12 12:38:28 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sun, 12 Feb 2023 06:38:28 -0500
+Subject: [Rd] 
+ Line-terminal \ in character consants -- missing from ?Quotes ?
+In-Reply-To: <CAD7Bkx91sEPFAwSc_od5UgOZ7tW9=k43hRgWVi8srv2nnLgh9w@mail.gmail.com>
+References: <CAD7Bkx91sEPFAwSc_od5UgOZ7tW9=k43hRgWVi8srv2nnLgh9w@mail.gmail.com>
+Message-ID: <2461a1f3-4be7-54df-a37c-3e789fb875cb@gmail.com>
+
+On 12/02/2023 12:07 a.m., Michael Chirico via R-devel wrote:
+> I'm coming across some code that uses the fact the parser ignores a
+> line-terminal '\', e.g.
+> 
+> identical("\
+> ", "\n")
+> # [1] TRUE
+> 
+> x = "abc \
+> def"
+> y = "abc \ndef"
+> identical(x, y)
+> # [1] TRUE
+> 
+> However:
+> identical("\\n", "\n")
+> # [1] FALSE
+> 
+> This appears to be undocumented behavior; the closest thing I see in
+> ?Quotes suggests it should be an error:
+> 
+>> Escaping a character not in the following table is an error.
+> 
+> ('\n' is in the table, but my understanding is the 'n' is what's being
+> escaped v-a-v the "error", which seems confirmed by the third, FALSE,
+> example above)
+> 
+> Is this a bug, is the omission from ?Quotes a bug, or is this just
+> undocumented behavior?
+
+In your first example, you have a backslash which says to escape the 
+next char.  The next char is a newline char.  The result is an escaped 
+newline, which apparently is a newline.
+
+The same thing happens in the second example.
+
+The third example is an escaped backslash, i.e. a backslash, followed by 
+n.  That's not the same as an escaped n, which gives a newline.
+
+So I think the behaviour might be reasonable.
+
+The thing I'd worry about is whether things are handled properly on 
+Windows, where the newline is two characters (CR LF).  It might be that 
+the backslash at the end of the line escapes the CR, and you get a \r 
+out of it instead of a \n.  But maybe not, the parser knows about CR LF 
+and internally converts it to \n, so if that happens early enough, 
+things would be fine.
+
+Duncan Murdoch
+
+
+From ch|r|com @end|ng |rom goog|e@com  Sun Feb 12 19:39:19 2023
+From: ch|r|com @end|ng |rom goog|e@com (Michael Chirico)
+Date: Sun, 12 Feb 2023 10:39:19 -0800
+Subject: [Rd] 
+ Line-terminal \ in character consants -- missing from ?Quotes ?
+In-Reply-To: <2461a1f3-4be7-54df-a37c-3e789fb875cb@gmail.com>
+References: <CAD7Bkx91sEPFAwSc_od5UgOZ7tW9=k43hRgWVi8srv2nnLgh9w@mail.gmail.com>
+ <2461a1f3-4be7-54df-a37c-3e789fb875cb@gmail.com>
+Message-ID: <CAD7Bkx-FxG_3i1Doszd5uYMA2ztfLyFYMWe6XEw4FZuGQ_jc0Q@mail.gmail.com>
+
+I'm still hung up on ?Quotes -- I can't see mention of 'newline' as a
+valid escape. It mentions the literal sequence '\' 'n', where 'n' is
+being escaped.
+
+Glanced at the parser blame and apparently the terminal '\' is the
+older behavior, and what I'm used to, i.e. literal newlines in char
+constants to make multi-line strings, is new (though still 20 years
+old):
+
+https://github.com/r-devel/r-svn/commit/bc3f20e4e686be556877bb6bd2882ae8029fd17f
+
+The NEWS entry there does say the same thing as you -- "escaping the
+newlines with backslashes".
+
+>From the parser, I think ?Quotes is just missing "newline" as being a
+valid escaped character, c.f.
+
+https://github.com/r-devel/r-svn/blob/f55b24945d56e824f124638c596b99887441354a/src/main/gram.y#L2823-L2830
+('\n' is treated like '\')
+https://github.com/r-devel/r-svn/blob/f55b24945d56e824f124638c596b99887441354a/src/main/gram.y#L2978-L3008
+('\n' is in the list of valid items after '\')
+
+I don't see any special handling for '\r', so there may be a gap in
+the R parser? Or I just don't understand what I'm reading in the
+parser :)
+
+Mike C
+
+On Sun, Feb 12, 2023 at 3:38 AM Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+>
+> On 12/02/2023 12:07 a.m., Michael Chirico via R-devel wrote:
+> > I'm coming across some code that uses the fact the parser ignores a
+> > line-terminal '\', e.g.
+> >
+> > identical("\
+> > ", "\n")
+> > # [1] TRUE
+> >
+> > x = "abc \
+> > def"
+> > y = "abc \ndef"
+> > identical(x, y)
+> > # [1] TRUE
+> >
+> > However:
+> > identical("\\n", "\n")
+> > # [1] FALSE
+> >
+> > This appears to be undocumented behavior; the closest thing I see in
+> > ?Quotes suggests it should be an error:
+> >
+> >> Escaping a character not in the following table is an error.
+> >
+> > ('\n' is in the table, but my understanding is the 'n' is what's being
+> > escaped v-a-v the "error", which seems confirmed by the third, FALSE,
+> > example above)
+> >
+> > Is this a bug, is the omission from ?Quotes a bug, or is this just
+> > undocumented behavior?
+>
+> In your first example, you have a backslash which says to escape the
+> next char.  The next char is a newline char.  The result is an escaped
+> newline, which apparently is a newline.
+>
+> The same thing happens in the second example.
+>
+> The third example is an escaped backslash, i.e. a backslash, followed by
+> n.  That's not the same as an escaped n, which gives a newline.
+>
+> So I think the behaviour might be reasonable.
+>
+> The thing I'd worry about is whether things are handled properly on
+> Windows, where the newline is two characters (CR LF).  It might be that
+> the backslash at the end of the line escapes the CR, and you get a \r
+> out of it instead of a \n.  But maybe not, the parser knows about CR LF
+> and internally converts it to \n, so if that happens early enough,
+> things would be fine.
+>
+> Duncan Murdoch
+>
+
+
