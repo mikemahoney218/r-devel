@@ -2545,3 +2545,379 @@ On Sun, Feb 12, 2023 at 3:38 AM Duncan Murdoch <murdoch.duncan at gmail.com> wro
 >
 
 
+From murdoch@dunc@n @end|ng |rom gm@||@com  Mon Feb 13 14:37:22 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Mon, 13 Feb 2023 08:37:22 -0500
+Subject: [Rd] An interesting chat with ChatGPT
+Message-ID: <3d7bd521-d670-4b90-6be4-a3528d726f5b@gmail.com>
+
+I was wondering which anchor would match in the regular expression 
+"(a)|(b)" if both "a" and "b" matches the target string.  What appears 
+to happen is that the first match wins, and that's how it is documented 
+in Python, but I was looking for docs on this in R.
+
+As far as I can see, the ?regex help page doesn't resolve this. So just 
+for fun, I decided to ask ChatGPT, and got an interesting response.  I 
+won't show the whole conversation here, but just some extracts:
+
+---------------------------------------
+Me:  In a regular expression in R, if both "a" and "b" match, which does 
+"(a)|(b)" match?  Please include authoritative references in your answer.
+
+ChatGPT: [long answer about grep]
+
+Me:  In grep(), it doesn't matter which of a or b matches.  It's only in 
+sub() or gsub() that it makes a difference.  Do you know an 
+authoritative reference that discusses those functions?
+
+ChatGPT:  [long irrelevant answer about sub and gsub, with a reference 
+to "R Cookbook" by P. Teetor.]
+
+Me:  Teetor's book is not authoritative, and the other reference doesn't 
+discuss ambiguous alternation.
+
+... finally we get to the interesting part ...
+
+ChatGPT: I apologize for the mistake in my previous answer.
+
+A more authoritative reference for the behavior of regular expressions 
+in R can be found in the official R documentation.
+
+Regarding the behavior of ambiguous alternation, the regex section of 
+the manual "An Introduction to R" explains it as follows:
+
+"When several alternatives are possible, the first alternative is 
+chosen, so it is important to specify alternatives in the order in which 
+they should be tried."
+
+Here is the reference for the official R documentation:
+
+     "An Introduction to R" manual: 
+https://cran.r-project.org/doc/manuals/r-release/R-intro.html#Regular-expression-facilities
+
+I hope this reference provides the information you were looking for.
+---------------------------------------
+
+
+All right, an authoritative answer!  The only problem is that *it 
+doesn't exist*.  There's no such anchor in that document.  R-intro isn't 
+a very rapidly changing document, so I could look at every change 
+recorded in svn, and that section has *never* existed.
+
+I guess ChatGPT is a pattern matching machine, and if such a question 
+had an answer, it would probably be in a location like that.  (I would 
+have guessed a help page like ?regex instead of R-intro, but I had just 
+told it that answer was wrong.)
+
+Duncan Murdoch
+
+
+From @eb@meyer @end|ng |rom |@u@de  Mon Feb 13 15:44:44 2023
+From: @eb@meyer @end|ng |rom |@u@de (Sebastian Meyer)
+Date: Mon, 13 Feb 2023 15:44:44 +0100
+Subject: [Rd] R2HTML doesn't split paragraphs originating from
+ \Sexpr[results=rd]
+In-Reply-To: <20230205160425.1e35a036@Tarkus>
+References: <20230205160425.1e35a036@Tarkus>
+Message-ID: <592b33e5-1bc4-f87b-7ff5-8293545eacbe@fau.de>
+
+I can confirm this is a bug, more specifically, a regression in R >= 
+3.6.0. I think a report in R's Bugzilla would be useful.
+
+A possible workaround seems to be to start the Rd-generating \Sexpr in 
+column 1 of the Rd file, so to remove the indentation before \Sexpr.
+
+AFAICS, fixing this will require tools:::processRdChunk() to keep two 
+types of source references for dynamically generated Rd code: the 
+effective "srcref" from parsing the Rd fragment, and the one that refers 
+to the source Sexpr block (possibly called "wholeSrcref"), to be used by 
+checkRd() in preference to "srcref" when reporting the location of Rd 
+problems.
+
+	Sebastian Meyer
+
+
+Am 05.02.23 um 14:04 schrieb Ivan Krylov:
+> Hello,
+> 
+> Here's an example that renders correctly using Rd2txt / Rd2latex / R
+> CMD Rd2pdf, but has problems under Rd2HTML:
+> 
+> \name{foo}
+> \title{foo}
+> \section{foo}{
+>    This should be on a separate paragraph
+> 
+>    This should be on a separate paragraph
+> 
+>    This should be on a separate paragraph
+> 
+>    \Sexpr[stage=render,results=rd]{
+>      paste(
+>        rep('Sexpr: This should be on a separate paragraph', 3),
+>        collapse = '\n\n'
+>      )
+>    }
+> }
+> 
+> For the text I've typed manually, there are <p>...</p> tags splitting
+> the text separated by empty lines into paragraphs. The \Sexpr return
+> value only has newlines, which joints the paragraphs together:
+> 
+> <p>This should be on a separate paragraph
+> </p>
+> <p>This should be on a separate paragraph
+> </p>
+> <p>This should be on a separate paragraph
+> </p>
+> <p>Sexpr: This should be on a separate paragraph
+> 
+> Sexpr: This should be on a separate paragraph
+> 
+> Sexpr: This should be on a separate paragraph
+> </p>
+> 
+> addParaBreaks() is prevented from closing the paragraph tag because
+> tools:::isBlankLineRd() returns FALSE for blank lines produced by a
+> \Sexpr. This happens because utils:::getSrcByte() not 1 for these blank
+> lines. That, in turn, is because the source reference for \Sexpr values
+> is the whole \Sexpr tag:
+> 
+> # blank line from a \Sexpr
+> Rd[[3]][[2]][[9]][[2]]
+> # [1] "\n"
+> # attr(,"Rd_tag")
+> # [1] "TEXT"
+> getSrcref(Rd[[3]][[2]][[9]][[2]])
+> # \Sexpr[stage=render,results=rd]{
+> #   paste(
+> #     rep('Sexpr: This should be on a separate paragraph', 3),
+> #     collapse = '\n\n'
+> #   )
+> # }
+> 
+> # artisanal hand-crafted blank line
+> Rd[[3]][[2]][[7]]
+> # [1] "\n"
+> # attr(,"Rd_tag")
+> # [1] "TEXT"
+> summary(getSrcref(Rd[[3]][[2]][[7]]))
+> # <srcref: file "~/foo.Rd" chars 9:1 to 9:1>
+> 
+> I think I understand that tools:::isBlankLineRd requires
+> utils:::getSrcByte(x) == 1L because it may be called on things like
+> "\\eqn{0}\n" where the terminal "\n" might otherwise be considered a
+> "blank line". How to reconcile isBlankLineRd with blank lines not
+> directly originating from Rd source?
+> 
+> Rd2latex might have a similar problem (its addParaBreaks() checks for
+> isBlankLineRd()), but then it works anyway because Rd rules for
+> paragraph breaks on blank lines are the same as in LaTeX.
+>
+
+
+From bor|@@@te|pe @end|ng |rom utoronto@c@  Mon Feb 13 16:54:43 2023
+From: bor|@@@te|pe @end|ng |rom utoronto@c@ (Boris Steipe)
+Date: Mon, 13 Feb 2023 15:54:43 +0000
+Subject: [Rd] An interesting chat with ChatGPT
+In-Reply-To: <3d7bd521-d670-4b90-6be4-a3528d726f5b@gmail.com>
+References: <3d7bd521-d670-4b90-6be4-a3528d726f5b@gmail.com>
+Message-ID: <3909C1CD-AC89-465F-81E2-98D46ECE01AA@utoronto.ca>
+
+Duncan -
+
+Indeed, this has now been well documented; I have called these constructions "Schr?dinger Facts", since they arise from a superposition of truths in the training data that collapse into an untruth when observed.
+
+   https://sentientsyllabus.substack.com/p/chatgpts-achilles-heel
+
+Now, the curious question is: why can it program. Why is its production of R-syntax less vulnerable to this effect than a literature quote, or reference? Maybe it has to do with the fact that in producing correct syntax there is a ground truth - errors just will not run. But I'm not sure.
+
+Regardless: it signals that we need a reinvigorated culture of validation. Actually ChatGPT will happily make test data for you. Whisvh. in a way, it judt did  ;-)
+
+
+Boris
+
+
+
+
+> On 2023-02-13, at 08:37, Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+> 
+> I was wondering which anchor would match in the regular expression "(a)|(b)" if both "a" and "b" matches the target string.  What appears to happen is that the first match wins, and that's how it is documented in Python, but I was looking for docs on this in R.
+> 
+> As far as I can see, the ?regex help page doesn't resolve this. So just for fun, I decided to ask ChatGPT, and got an interesting response.  I won't show the whole conversation here, but just some extracts:
+> 
+> ---------------------------------------
+> Me:  In a regular expression in R, if both "a" and "b" match, which does "(a)|(b)" match?  Please include authoritative references in your answer.
+> 
+> ChatGPT: [long answer about grep]
+> 
+> Me:  In grep(), it doesn't matter which of a or b matches.  It's only in sub() or gsub() that it makes a difference.  Do you know an authoritative reference that discusses those functions?
+> 
+> ChatGPT:  [long irrelevant answer about sub and gsub, with a reference to "R Cookbook" by P. Teetor.]
+> 
+> Me:  Teetor's book is not authoritative, and the other reference doesn't discuss ambiguous alternation.
+> 
+> ... finally we get to the interesting part ...
+> 
+> ChatGPT: I apologize for the mistake in my previous answer.
+> 
+> A more authoritative reference for the behavior of regular expressions in R can be found in the official R documentation.
+> 
+> Regarding the behavior of ambiguous alternation, the regex section of the manual "An Introduction to R" explains it as follows:
+> 
+> "When several alternatives are possible, the first alternative is chosen, so it is important to specify alternatives in the order in which they should be tried."
+> 
+> Here is the reference for the official R documentation:
+> 
+>    "An Introduction to R" manual: https://cran.r-project.org/doc/manuals/r-release/R-intro.html#Regular-expression-facilities
+> 
+> I hope this reference provides the information you were looking for.
+> ---------------------------------------
+> 
+> 
+> All right, an authoritative answer!  The only problem is that *it doesn't exist*.  There's no such anchor in that document.  R-intro isn't a very rapidly changing document, so I could look at every change recorded in svn, and that section has *never* existed.
+> 
+> I guess ChatGPT is a pattern matching machine, and if such a question had an answer, it would probably be in a location like that.  (I would have guessed a help page like ?regex instead of R-intro, but I had just told it that answer was wrong.)
+> 
+> Duncan Murdoch
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+--
+Boris Steipe MD, PhD
+
+Professor em.
+Department of Biochemistry 
+Temerty Faculty of Medicine
+University of Toronto
+
+
+
+
+From kev|n@r@coombe@ @end|ng |rom gm@||@com  Mon Feb 13 18:14:28 2023
+From: kev|n@r@coombe@ @end|ng |rom gm@||@com (Kevin Coombes)
+Date: Mon, 13 Feb 2023 12:14:28 -0500
+Subject: [Rd] An interesting chat with ChatGPT
+In-Reply-To: <3909C1CD-AC89-465F-81E2-98D46ECE01AA@utoronto.ca>
+References: <3d7bd521-d670-4b90-6be4-a3528d726f5b@gmail.com>
+ <3909C1CD-AC89-465F-81E2-98D46ECE01AA@utoronto.ca>
+Message-ID: <CAHJ+2V+bqqD5UZ_9yPT4H=bLPvPcDNkhOXtQ-1KCu7u6EiJ1xg@mail.gmail.com>
+
+Chat bots are like politicians, or talking dogs. The fact that they exist
+is interesting. But no same person would believe anything they say.
+
+On Mon, Feb 13, 2023, 10:58 AM Boris Steipe <boris.steipe at utoronto.ca>
+wrote:
+
+> Duncan -
+>
+> Indeed, this has now been well documented; I have called these
+> constructions "Schr?dinger Facts", since they arise from a superposition of
+> truths in the training data that collapse into an untruth when observed.
+>
+>    https://sentientsyllabus.substack.com/p/chatgpts-achilles-heel
+>
+> Now, the curious question is: why can it program. Why is its production of
+> R-syntax less vulnerable to this effect than a literature quote, or
+> reference? Maybe it has to do with the fact that in producing correct
+> syntax there is a ground truth - errors just will not run. But I'm not sure.
+>
+> Regardless: it signals that we need a reinvigorated culture of validation.
+> Actually ChatGPT will happily make test data for you. Whisvh. in a way, it
+> judt did  ;-)
+>
+>
+> Boris
+>
+>
+>
+>
+> > On 2023-02-13, at 08:37, Duncan Murdoch <murdoch.duncan at gmail.com>
+> wrote:
+> >
+> > I was wondering which anchor would match in the regular expression
+> "(a)|(b)" if both "a" and "b" matches the target string.  What appears to
+> happen is that the first match wins, and that's how it is documented in
+> Python, but I was looking for docs on this in R.
+> >
+> > As far as I can see, the ?regex help page doesn't resolve this. So just
+> for fun, I decided to ask ChatGPT, and got an interesting response.  I
+> won't show the whole conversation here, but just some extracts:
+> >
+> > ---------------------------------------
+> > Me:  In a regular expression in R, if both "a" and "b" match, which does
+> "(a)|(b)" match?  Please include authoritative references in your answer.
+> >
+> > ChatGPT: [long answer about grep]
+> >
+> > Me:  In grep(), it doesn't matter which of a or b matches.  It's only in
+> sub() or gsub() that it makes a difference.  Do you know an authoritative
+> reference that discusses those functions?
+> >
+> > ChatGPT:  [long irrelevant answer about sub and gsub, with a reference
+> to "R Cookbook" by P. Teetor.]
+> >
+> > Me:  Teetor's book is not authoritative, and the other reference doesn't
+> discuss ambiguous alternation.
+> >
+> > ... finally we get to the interesting part ...
+> >
+> > ChatGPT: I apologize for the mistake in my previous answer.
+> >
+> > A more authoritative reference for the behavior of regular expressions
+> in R can be found in the official R documentation.
+> >
+> > Regarding the behavior of ambiguous alternation, the regex section of
+> the manual "An Introduction to R" explains it as follows:
+> >
+> > "When several alternatives are possible, the first alternative is
+> chosen, so it is important to specify alternatives in the order in which
+> they should be tried."
+> >
+> > Here is the reference for the official R documentation:
+> >
+> >    "An Introduction to R" manual:
+> https://cran.r-project.org/doc/manuals/r-release/R-intro.html#Regular-expression-facilities
+> >
+> > I hope this reference provides the information you were looking for.
+> > ---------------------------------------
+> >
+> >
+> > All right, an authoritative answer!  The only problem is that *it
+> doesn't exist*.  There's no such anchor in that document.  R-intro isn't a
+> very rapidly changing document, so I could look at every change recorded in
+> svn, and that section has *never* existed.
+> >
+> > I guess ChatGPT is a pattern matching machine, and if such a question
+> had an answer, it would probably be in a location like that.  (I would have
+> guessed a help page like ?regex instead of R-intro, but I had just told it
+> that answer was wrong.)
+> >
+> > Duncan Murdoch
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+>
+> --
+> Boris Steipe MD, PhD
+>
+> Professor em.
+> Department of Biochemistry
+> Temerty Faculty of Medicine
+> University of Toronto
+>
+>
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
