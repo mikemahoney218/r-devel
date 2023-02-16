@@ -2921,3 +2921,212 @@ wrote:
 	[[alternative HTML version deleted]]
 
 
+From Andre@G||||bert @end|ng |rom chu-rouen@|r  Tue Feb 14 09:31:02 2023
+From: Andre@G||||bert @end|ng |rom chu-rouen@|r (GILLIBERT, Andre)
+Date: Tue, 14 Feb 2023 08:31:02 +0000
+Subject: [Rd] Documentation bug?
+Message-ID: <4d27638cae924911bcd282d4d0388a93@chu-rouen.fr>
+
+Dead R developers,
+
+In R-devel  2023-02-11 and older R versions, there is a note in the "lm {stats}" help page specifying that:
+> Offsets specified by offset will not be included in predictions by predict.lm<http://127.0.0.1:12534/library/stats/help/predict.lm>, whereas those specified by an offset term in the formula will be.
+
+However, the source code as well as basic tests seem to show that both types of offset terms are always used in predictions.
+a<-data.frame(off=1:4, outcome=4:1)
+mod<-lm(data=a, outcome~1, offset=off)
+coef(a) # intercept is zero
+predict(mod) # returns 1:4, which uses offset
+predict(mod, newdata=data.frame(off=c(3,2,5))) # returns c(3,2,5) which uses the new offset
+
+When looking at the history of R source code, this note seems to exist from R 1.0.0 while the source code of predict.lm already called eval(object$call$offset, newdata)
+https://github.com/SurajGupta/r-source/blob/1.0.0/src/library/base/R/lm.R
+https://github.com/SurajGupta/r-source/blob/1.0.0/src/library/base/man/lm.Rd
+
+Version 0.99.0 did not contain the note, but already had the call to eval(object$call$offset, newdata)
+https://github.com/SurajGupta/r-source/blob/0.99.0/src/library/base/man/lm.Rd
+https://github.com/SurajGupta/r-source/blob/0.99.0/src/library/base/R/lm.R
+
+The actual behavior of R seems to be sane to me, but unless I miss something, this looks like a documentation bug.
+It seems to have bugged someone before:
+https://stackoverflow.com/questions/71264495/why-is-predict-not-ignoring-my-offset-from-a-poisson-model-in-r-no-matter-how-i
+
+Digging deeper in R history, it seems that this note was also found in "glm {stats}" in R 1.0.0 but was removed in R 1.4.1. Maybe somebody forgot to remove it in "lm {stats}" too.
+
+--
+Sincerely
+Andr? GILLIBERT
+
+	[[alternative HTML version deleted]]
+
+
+From @eb@meyer @end|ng |rom |@u@de  Tue Feb 14 10:31:38 2023
+From: @eb@meyer @end|ng |rom |@u@de (Sebastian Meyer)
+Date: Tue, 14 Feb 2023 10:31:38 +0100
+Subject: [Rd] Documentation bug?
+In-Reply-To: <4d27638cae924911bcd282d4d0388a93@chu-rouen.fr>
+References: <4d27638cae924911bcd282d4d0388a93@chu-rouen.fr>
+Message-ID: <e67b70ef-dbcc-5598-d85a-5a6383892cdc@fau.de>
+
+Thanks. The note is indeed outdated since at least R 2.9.0 with NEWS
+
+     o	predict.lm() now works correctly when the fit had more than
+	one offset (possibly specified both in the formula and as an
+	argument).  This function is called by predict.glm(), so the
+	same isses are corrected there.
+
+It has now been removed from ?lm in r83832 in the trunk (ported to 
+R-patched).
+
+	Sebastian Meyer
+
+
+Am 14.02.23 um 09:31 schrieb GILLIBERT, Andre via R-devel:
+> Dead R developers,
+> 
+> In R-devel  2023-02-11 and older R versions, there is a note in the "lm {stats}" help page specifying that:
+>> Offsets specified by offset will not be included in predictions by predict.lm<http://127.0.0.1:12534/library/stats/help/predict.lm>, whereas those specified by an offset term in the formula will be.
+> 
+> However, the source code as well as basic tests seem to show that both types of offset terms are always used in predictions.
+> a<-data.frame(off=1:4, outcome=4:1)
+> mod<-lm(data=a, outcome~1, offset=off)
+> coef(a) # intercept is zero
+> predict(mod) # returns 1:4, which uses offset
+> predict(mod, newdata=data.frame(off=c(3,2,5))) # returns c(3,2,5) which uses the new offset
+> 
+> When looking at the history of R source code, this note seems to exist from R 1.0.0 while the source code of predict.lm already called eval(object$call$offset, newdata)
+> https://github.com/SurajGupta/r-source/blob/1.0.0/src/library/base/R/lm.R
+> https://github.com/SurajGupta/r-source/blob/1.0.0/src/library/base/man/lm.Rd
+> 
+> Version 0.99.0 did not contain the note, but already had the call to eval(object$call$offset, newdata)
+> https://github.com/SurajGupta/r-source/blob/0.99.0/src/library/base/man/lm.Rd
+> https://github.com/SurajGupta/r-source/blob/0.99.0/src/library/base/R/lm.R
+> 
+> The actual behavior of R seems to be sane to me, but unless I miss something, this looks like a documentation bug.
+> It seems to have bugged someone before:
+> https://stackoverflow.com/questions/71264495/why-is-predict-not-ignoring-my-offset-from-a-poisson-model-in-r-no-matter-how-i
+> 
+> Digging deeper in R history, it seems that this note was also found in "glm {stats}" in R 1.0.0 but was removed in R 1.4.1. Maybe somebody forgot to remove it in "lm {stats}" too.
+> 
+> --
+> Sincerely
+> Andr? GILLIBERT
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From H_R_O @end|ng |rom gmx@de  Tue Feb 14 12:11:33 2023
+From: H_R_O @end|ng |rom gmx@de (Roman Hille)
+Date: Tue, 14 Feb 2023 12:11:33 +0100
+Subject: [Rd] long path names (more than 260 chars) not working under
+ Windows OS, longPathAware missing in exe manifests?
+References: <f26b4adbcb5b47d6a0b4511147d3515c@steagextern.com>
+Message-ID: <trinity-452df670-bcac-49eb-8392-90eb9248cdee-1676373093807@3c-app-gmx-bs60>
+
+Can you help please?
+
+All file und dir funktions and also basename() do not work in R under Windows OS
+if the path is longer than?260?characters.
+The problem seems to be, that the manifest for all R executables do not have the longPathAware switch in the manifest.
+(The registry and or the group policy for the long path name support are enabled)
+
+This is the correct extension for the manifest of the executables.
+<ws2:longPathAware>true</ws2:longPathAware>
+
+Is it possible to add this into all manifests for windows executables?
+Or is ther an other opportunity?
+
+Snippet from Microsoft:
+
+<application xmlns="urn:schemas-microsoft-com:asm.v3">
+<windowsSettings xmlns:ws2="http://schemas.microsoft.com/SMI/2016/WindowsSettings">
+<ws2:longPathAware>true</ws2:longPathAware>
+</windowsSettings>
+</application>
+
+Roman
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue Feb 14 15:49:46 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 14 Feb 2023 15:49:46 +0100
+Subject: [Rd] long path names (more than 260 chars) not working under
+ Windows OS, longPathAware missing in exe manifests?
+In-Reply-To: <trinity-452df670-bcac-49eb-8392-90eb9248cdee-1676373093807@3c-app-gmx-bs60>
+References: <f26b4adbcb5b47d6a0b4511147d3515c@steagextern.com>
+ <trinity-452df670-bcac-49eb-8392-90eb9248cdee-1676373093807@3c-app-gmx-bs60>
+Message-ID: <26d849ec-ee03-7ac7-de9a-fee0aca4edd7@gmail.com>
+
+On 2/14/23 12:11, Roman Hille wrote:
+> Can you help please?
+>
+> All file und dir funktions and also basename() do not work in R under Windows OS
+> if the path is longer than?260?characters.
+> The problem seems to be, that the manifest for all R executables do not have the longPathAware switch in the manifest.
+> (The registry and or the group policy for the long path name support are enabled)
+>
+> This is the correct extension for the manifest of the executables.
+> <ws2:longPathAware>true</ws2:longPathAware>
+>
+> Is it possible to add this into all manifests for windows executables?
+> Or is ther an other opportunity?
+>
+> Snippet from Microsoft:
+>
+> <application xmlns="urn:schemas-microsoft-com:asm.v3">
+> <windowsSettings xmlns:ws2="http://schemas.microsoft.com/SMI/2016/WindowsSettings">
+> <ws2:longPathAware>true</ws2:longPathAware>
+> </windowsSettings>
+> </application>
+
+Declaring that R is long path aware is indeed easy, however, before we 
+can do this, we actually have to make it long path aware, which is a lot 
+of work. Incidentally it is work in progress, I've been working on that 
+in the last few weeks.
+
+Currently, neither R-devel nor any released version of R is long path 
+aware. One possible work-around is to use mapped drives to make the 
+paths shorter.
+
+Whenever possible, it is better to make the paths short, anyway, because 
+a number of other applications as well as some parts of Windows don't 
+support long paths. Very likely this will also be the case of 
+contributed packages. Indeed, and consequently, a number of users will 
+not enable long paths on their systems.
+
+Best
+Tomas
+
+>
+> Roman
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From ggrothend|eck @end|ng |rom gm@||@com  Tue Feb 14 19:45:39 2023
+From: ggrothend|eck @end|ng |rom gm@||@com (Gabor Grothendieck)
+Date: Tue, 14 Feb 2023 13:45:39 -0500
+Subject: [Rd] package.skeleton hello* files
+Message-ID: <CAP01uRmCD_1KDZ=qh7TCMjJCtTqra1JM0aw88JpwJ15p+JYSdQ@mail.gmail.com>
+
+Is there some way to avoid the automatic generation of hello* files in
+package.skeleton?
+I found that the following does it on Windows but then it does not
+create an R directory which I still
+want and also it gives warnings which I don't want.
+package.skeleton(code_files = "NUL")
+
+-- 
+Statistics & Software Consulting
+GKX Group, GKX Associates Inc.
+tel: 1-877-GKX-GROUP
+email: ggrothendieck at gmail.com
+
+
