@@ -3130,3 +3130,384 @@ tel: 1-877-GKX-GROUP
 email: ggrothendieck at gmail.com
 
 
+From Ben@Engber@ @end|ng |rom Be-Log|c@|@n|  Wed Feb 15 01:24:26 2023
+From: Ben@Engber@ @end|ng |rom Be-Log|c@|@n| (Ben Engbers)
+Date: Wed, 15 Feb 2023 01:24:26 +0100
+Subject: [Rd] Question on non-blocking socket
+Message-ID: <68ce63b0-7e91-6372-6926-59f3fcfffd25@Be-Logical.nl>
+
+Hi,
+
+December 27, 2021 I started a thread asking for help troubleshooting 
+non-blocking sockets.
+While developing the RBaseX client, I had issues with the authentication 
+process. It eventually turned out that a short break had to be inserted 
+in this process between sending the credentials to the server and 
+requesting the status. Tomas Kalibera put me on the right track by 
+drawing my attention to the 'socketSelect' function. I don't know 
+exactly the purpose of this function is (the function itself is 
+documented, but I can't find any information for which situations this 
+function should be called.) but it sufficed to call this function once 
+between sending and requesting.
+
+I have two questions.
+The first is where I can find R documentation on proper use of 
+non-blocking sockets and on the proper use of the socketSelect function?
+
+The second question is more focused on using non-blocking sockets in 
+general. Is it allowed to execute a read and a receive command 
+immediately after each other or must a short waiting loop be built in.
+I'm asking this because I'm running into the same problems in a C++ 
+project as I did with RBaseX.
+
+Ben Engbers
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Wed Feb 15 14:38:08 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Wed, 15 Feb 2023 14:38:08 +0100
+Subject: [Rd] Question on non-blocking socket
+In-Reply-To: <68ce63b0-7e91-6372-6926-59f3fcfffd25@Be-Logical.nl>
+References: <68ce63b0-7e91-6372-6926-59f3fcfffd25@Be-Logical.nl>
+Message-ID: <1ba5f439-c317-816f-ec0c-9bc03f38840b@gmail.com>
+
+
+On 2/15/23 01:24, Ben Engbers wrote:
+> Hi,
+>
+> December 27, 2021 I started a thread asking for help troubleshooting 
+> non-blocking sockets.
+> While developing the RBaseX client, I had issues with the 
+> authentication process. It eventually turned out that a short break 
+> had to be inserted in this process between sending the credentials to 
+> the server and requesting the status. Tomas Kalibera put me on the 
+> right track by drawing my attention to the 'socketSelect' function. I 
+> don't know exactly the purpose of this function is (the function 
+> itself is documented, but I can't find any information for which 
+> situations this function should be called.) but it sufficed to call 
+> this function once between sending and requesting.
+>
+> I have two questions.
+> The first is where I can find R documentation on proper use of 
+> non-blocking sockets and on the proper use of the socketSelect function?
+
+In addition to the demos I sent to you in that 2021 thread on 
+R-pkg-devel, you could also have a look at how it is used in R itself, 
+in the parallel package, in snowSOCK.R, to set up the snow cluster in 
+parallel. Some hints may be also found in the blog post 
+https://blog.r-project.org/2020/03/17/socket-connections-update/. But, 
+in principle, R API is just a thin layer on top of what the OS provides, 
+so general literature and tutorials on sockets should help, there should 
+be even textbooks used at CS universities in networking classes.
+
+Basically select() can tell you when data is ready (on input), when the 
+socket interface is able to accept more data (on output) or when there 
+is an incoming connection. In practice, you should not need any delays 
+to be inserted in your program to make it work - if that is needed, it 
+means that is an error in it (a race condition). If the program is 
+polling (checking in a loop whether something has already happened, and 
+then sleeping for a short while), the duration of the sleep may indeed 
+influence latency, but should not affect correctness - if it does, there 
+is an error.
+
+> The second question is more focused on using non-blocking sockets in 
+> general. Is it allowed to execute a read and a receive command 
+> immediately after each other or must a short waiting loop be built in.
+> I'm asking this because I'm running into the same problems in a C++ 
+> project as I did with RBaseX.
+
+No, in general there is no need to insert any delays between reads and 
+writes, they can actually happen concurrently. But these are general 
+networking questions, not the topic of this list.
+
+Best
+Tomas
+
+>
+> Ben Engbers
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Wed Feb 15 14:57:19 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Wed, 15 Feb 2023 16:57:19 +0300
+Subject: [Rd] Question on non-blocking socket
+In-Reply-To: <68ce63b0-7e91-6372-6926-59f3fcfffd25@Be-Logical.nl>
+References: <68ce63b0-7e91-6372-6926-59f3fcfffd25@Be-Logical.nl>
+Message-ID: <20230215165719.19becef1@arachnoid>
+
+? Wed, 15 Feb 2023 01:24:26 +0100
+Ben Engbers <Ben.Engbers at Be-Logical.nl> ?????:
+
+> where I can find R documentation on proper use of non-blocking
+> sockets and on the proper use of the socketSelect function?
+
+A useful guide to the Berkeley sockets API can be found at
+<https://beej.us/guide/bgnet/>. You'll have to translate between the C
+idioms and the R idioms, but it's better than having no guide at all.
+In particular, R spares you from having to figure out differently-sized
+struct sockaddr objects by converting them to string representations of
+the addresses (currently limited to IPv4).
+
+-- 
+Best regards,
+Ivan
+
+
+From er|c@bern@rd1 @end|ng |rom m|che||n@com  Wed Feb 15 16:21:26 2023
+From: er|c@bern@rd1 @end|ng |rom m|che||n@com (Eric Bernard)
+Date: Wed, 15 Feb 2023 15:21:26 +0000
+Subject: [Rd] =?windows-1252?q?End_of_Support_Date_of_Version_3_of_=93R?=
+ =?windows-1252?q?=94?=
+Message-ID: <PA4PR09MB4640DAA912FCA79DF20B27C8DAA39@PA4PR09MB4640.eurprd09.prod.outlook.com>
+
+
+Hello !
+
+Good day.
+
+I?d like to know what is the End of Support Date of Version 3 of ?R?.
+
+Thanks for your answer.
+
+Have a good day.
+
+Best Regards
+
+Eric Bernard
+DCTI/BS/EC
+
+Cordialement.
+
+Eric Bernard
+Michelin
+DCTI/BS/EC
+
+
+	[[alternative HTML version deleted]]
+
+
+From ben@engber@ @end|ng |rom gm@||@com  Wed Feb 15 16:44:05 2023
+From: ben@engber@ @end|ng |rom gm@||@com (Ben Engbers)
+Date: Wed, 15 Feb 2023 16:44:05 +0100
+Subject: [Rd] Question on non-blocking socket
+In-Reply-To: <1ba5f439-c317-816f-ec0c-9bc03f38840b@gmail.com>
+References: <68ce63b0-7e91-6372-6926-59f3fcfffd25@Be-Logical.nl>
+ <1ba5f439-c317-816f-ec0c-9bc03f38840b@gmail.com>
+Message-ID: <c7460122-2ee1-4f61-e0b5-b0626d407f6c@Be-Logical.nl>
+
+Hi
+
+Op 15-02-2023 om 14:38 schreef Tomas Kalibera:
+> On 2/15/23 01:24, Ben Engbers wrote:
+>> Hi,
+>>
+>> December 27, 2021 I started a thread asking for help troubleshooting 
+>> non-blocking sockets.
+..
+
+>> I have two questions.
+>> The first is where I can find R documentation on proper use of 
+>> non-blocking sockets and on the proper use of the socketSelect function?
+> 
+> In addition to the demos I sent to you in that 2021 thread on 
+> R-pkg-devel, you could also have a look at how it is used in R itself, 
+> in the parallel package, in snowSOCK.R, to set up the snow cluster in 
+> parallel. Some hints may be also found in the blog post 
+> https://blog.r-project.org/2020/03/17/socket-connections-update/. But, 
+> in principle, R API is just a thin layer on top of what the OS provides, 
+> so general literature and tutorials on sockets should help, there should 
+> be even textbooks used at CS universities in networking classes.
+Thanks for the suggestions!
+
+> Basically select() can tell you when data is ready (on input), when the 
+> socket interface is able to accept more data (on output) or when there 
+> is an incoming connection. In practice, you should not need any delays 
+> to be inserted in your program to make it work - if that is needed, it 
+> means that is an error in it (a race condition). If the program is 
+> polling (checking in a loop whether something has already happened, and 
+> then sleeping for a short while), the duration of the sleep may indeed 
+> influence latency, but should not affect correctness - if it does, there 
+> is an error.
+
+In RBaseX I first calculate an MD5 hash that is send to the server and 
+then I check the status byte that is returned by the server.
+
+writeBin(auth, private$conn)
+socketSelect(list(conn))
+Accepted <- readBin(conn, what = "raw", n = 1) == 0
+
+Without the second line, 'Accepted' is always FALSE. With this line it 
+is TRUE.
+
+BaseX provides example API's in several languages. I've looked at 
+several but indeed none uses any form of delay.
+All API's follow the same pattern, calculate a MD5, send it to the 
+server and check the status byte. So the server is not likely to enforce 
+a delay. So there is nothing left but to look for that racing condition ;-(
+
+Ben
+
+
+From m@rc_@chw@rtz @end|ng |rom me@com  Wed Feb 15 16:55:00 2023
+From: m@rc_@chw@rtz @end|ng |rom me@com (Marc Schwartz)
+Date: Wed, 15 Feb 2023 10:55:00 -0500
+Subject: [Rd] =?utf-8?q?End_of_Support_Date_of_Version_3_of_=E2=80=9CR?=
+ =?utf-8?b?4oCd?=
+In-Reply-To: <PA4PR09MB4640DAA912FCA79DF20B27C8DAA39@PA4PR09MB4640.eurprd09.prod.outlook.com>
+References: <PA4PR09MB4640DAA912FCA79DF20B27C8DAA39@PA4PR09MB4640.eurprd09.prod.outlook.com>
+Message-ID: <etPan.63ed0054.3f129855.3bdb@me.com>
+
+Hi,
+
+R's software development life cycle is documented here:
+
+??https://www.r-project.org/doc/R-SDLC.pdf
+
+This is available via the Certification link, under Documentation, on the main R Project web page:
+
+??https://www.r-project.org
+
+Section 4.4 of the document, on page 10, covers the release cycles, and section 4.6, on page 11, covers maintenance, support and retirement.
+
+Section 4.6 includes the following text at the end of that section on page 12:
+
+"The x.y.0 releases are maintained via a series of x.y.z patch releases. At a new x.y.0 version of R, the prior version is retired from formal support. R Core?s efforts are then focused on the new Release (and the on-going Development) version. No further development, bug fixes or patches are made available for the retired versions. Thus there is always only one current version of R. However, the SVN repository will allow older release branches to be reopened, should the need arise."
+
+
+Version 4.0.0 of R was released on April 24, 2020, thus ending formal support for version 3.x.x, with the last 3.x.x version being 3.6.3, which was released on February 29, 2020.
+
+Regards,
+
+Marc Schwartz
+
+
+On February 15, 2023 at 10:21:26 AM, Eric Bernard (eric.bernard1 at michelin.com (mailto:eric.bernard1 at michelin.com)) wrote:
+
+>
+> Hello !
+>
+> Good day.
+>
+> I'd like to know what is the End of Support Date of Version 3 of R.
+>
+> Thanks for your answer.
+>
+> Have a good day.
+>
+> Best Regards
+>
+> Eric Bernard
+> DCTI/BS/EC
+>
+> Cordialement.
+>
+> Eric Bernard
+> Michelin
+> DCTI/BS/EC
+>
+>
+> [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Wed Feb 15 17:17:24 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Wed, 15 Feb 2023 17:17:24 +0100
+Subject: [Rd] Question on non-blocking socket
+In-Reply-To: <c7460122-2ee1-4f61-e0b5-b0626d407f6c@Be-Logical.nl>
+References: <68ce63b0-7e91-6372-6926-59f3fcfffd25@Be-Logical.nl>
+ <1ba5f439-c317-816f-ec0c-9bc03f38840b@gmail.com>
+ <c7460122-2ee1-4f61-e0b5-b0626d407f6c@Be-Logical.nl>
+Message-ID: <d2424a96-d047-4216-a90b-5f49327eaa38@gmail.com>
+
+
+On 2/15/23 16:44, Ben Engbers wrote:
+> Hi
+>
+> Op 15-02-2023 om 14:38 schreef Tomas Kalibera:
+>> On 2/15/23 01:24, Ben Engbers wrote:
+>>> Hi,
+>>>
+>>> December 27, 2021 I started a thread asking for help troubleshooting 
+>>> non-blocking sockets.
+> ..
+>
+>>> I have two questions.
+>>> The first is where I can find R documentation on proper use of 
+>>> non-blocking sockets and on the proper use of the socketSelect 
+>>> function?
+>>
+>> In addition to the demos I sent to you in that 2021 thread on 
+>> R-pkg-devel, you could also have a look at how it is used in R 
+>> itself, in the parallel package, in snowSOCK.R, to set up the snow 
+>> cluster in parallel. Some hints may be also found in the blog post 
+>> https://blog.r-project.org/2020/03/17/socket-connections-update/. 
+>> But, in principle, R API is just a thin layer on top of what the OS 
+>> provides, so general literature and tutorials on sockets should help, 
+>> there should be even textbooks used at CS universities in networking 
+>> classes.
+> Thanks for the suggestions!
+>
+>> Basically select() can tell you when data is ready (on input), when 
+>> the socket interface is able to accept more data (on output) or when 
+>> there is an incoming connection. In practice, you should not need any 
+>> delays to be inserted in your program to make it work - if that is 
+>> needed, it means that is an error in it (a race condition). If the 
+>> program is polling (checking in a loop whether something has already 
+>> happened, and then sleeping for a short while), the duration of the 
+>> sleep may indeed influence latency, but should not affect correctness 
+>> - if it does, there is an error.
+>
+> In RBaseX I first calculate an MD5 hash that is send to the server and 
+> then I check the status byte that is returned by the server.
+>
+> writeBin(auth, private$conn)
+> socketSelect(list(conn))
+> Accepted <- readBin(conn, what = "raw", n = 1) == 0
+>
+> Without the second line, 'Accepted' is always FALSE. With this line it 
+> is TRUE.
+>
+> BaseX provides example API's in several languages. I've looked at 
+> several but indeed none uses any form of delay.
+> All API's follow the same pattern, calculate a MD5, send it to the 
+> server and check the status byte. So the server is not likely to 
+> enforce a delay. So there is nothing left but to look for that racing 
+> condition ;-(
+
+Without knowing more details, this looks ok. If you have a non-blocking 
+connection, and the server produces a response based on the client 
+request, the client has to take into account that it takes the server 
+some time to produce the response. Right, the sockets are full duplex 
+and so could be the communication protocol, but in this case it 
+apparently isn't, it is request/response.
+
+Without the second line, there would be a race condition between the 
+server sending a response and the client receiving it. With the second 
+line, the client waits for the server before it starts receiving. In 
+theory, one could be waiting for the response actively in a loop 
+(polling), but socketSelect() is better. Both ways would resolve the 
+race condition. Adding a single fixed-time wait, instead, would not 
+remove the race condition, because one can never be sure that the server 
+wouldn't take longer (apart from waiting too long most of the time).
+
+In the example you are waiting only for a single byte. But if the 
+response may be longer, one needs to take into account in the client 
+that not all bytes of the response may be available right away. One 
+would keep receiving the data in a loop, as they become available (e.g. 
+socketSelect() would tell), keep appending them to a buffer, and keep 
+looking for when they are complete.
+
+Tomas
+
+>
+> Ben
+
+
