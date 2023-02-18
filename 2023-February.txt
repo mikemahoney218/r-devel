@@ -3511,3 +3511,553 @@ Tomas
 > Ben
 
 
+From m@rk@c|ement@ @end|ng |rom k|@@e  Thu Feb 16 12:58:18 2023
+From: m@rk@c|ement@ @end|ng |rom k|@@e (Mark Clements)
+Date: Thu, 16 Feb 2023 11:58:18 +0000
+Subject: [Rd] User-defined RNG with the standalone Rmath library
+Message-ID: <GV3P280MB0001B9D723662634F5650DB1F0A09@GV3P280MB0001.SWEP280.PROD.OUTLOOK.COM>
+
+I have two questions about using a user-defined random number generator (RNG) with the standalone Rmath library. The default RNG with the standalone Rmath library is the Marsaglia-multicarry generator, which has poor properties. The "R Installation and Administration" manual, in the section "The standalone Rmath library", states that:
+
+```
+A little care is needed to use the random-number routines. You will need to supply the uniform random number generator
+
+    double unif_rand(void)
+
+or use the one supplied (and with a shared library or DLL you may have to use the one supplied, which is the Marsaglia-multicarry with an entry point
+
+    set_seed(unsigned int, unsigned int)
+
+to set its seeds).
+```
+
+I interpret this to mean that we cannot use a user-defined random number generator with "a shared library or DLL", which suggests using static linking.
+
+Question: are there any good examples of re-defining unif_rand() with the standalone Rmath library?
+
+As an example, we could set up a file test.c:
+
+  #define MATHLIB_STANDALONE
+  #include <Rmath.h>
+  #include <stdio.h>
+  double unif_rand(void) { return 0.5; }
+  int main() {
+    printf("%f\n", unif_rand());
+    printf("%f\n", runif(0, 1));
+    return 0;
+  }
+
+If we compile using -static, then we get the correct result (two values of 0.5):
+
+  gcc -static -o test test.c -lRmath -lm
+  ./test
+: 0.500000
+: 0.500000
+
+Question: does this code work for other users?
+
+Sincerely, Mark.
+
+
+N?r du skickar e-post till Karolinska Institutet (KI) inneb?r detta att KI kommer att behandla dina personuppgifter. H?r finns information om hur KI behandlar personuppgifter<https://ki.se/medarbetare/integritetsskyddspolicy>.
+
+
+Sending email to Karolinska Institutet (KI) will result in KI processing your personal data. You can read more about KI?s processing of personal data here<https://ki.se/en/staff/data-protection-policy>.
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Thu Feb 16 15:09:09 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Thu, 16 Feb 2023 17:09:09 +0300
+Subject: [Rd] Robustifying R_CleanTempDir a bit more
+Message-ID: <20230216170909.42e6894e@arachnoid>
+
+Hello,
+
+This is probably a very minor point, but R_CleanTempDir may still have
+a shell injection in it. I couldn't find a way to shoot the user in the
+foot in a significant way (by, say, accidentally removing ~), thanks to
+R disallowing spaces in the path, but if Sys_TempDir somehow acquires a
+value of "/tmp/';echo;'", R_CleanTempDir() will remove /tmp instead of
+its aptly-named subdirectory.
+
+While adding the single-quote symbol to the list of special symbols
+should suffice (it and the backslash being the only allowed ways to
+"un-quote" a single-quoted string), I would like to suggest solving the
+problem without the use of quoting:
+
+#include <spawn.h>
+
+char ** argv = { "rm", "-Rf", Sys_TempDir, NULL };
+posix_spawnp(NULL, "rm", NULL, NULL, argv, NULL);
+
+Are there Unix-like platforms on which R is intended to work that don't
+have posix_spawn()? Circa-2014 versions of both Solaris and OpenBSD
+seem to have it. Spawning the process manually by means of [v]fork()
+and exec() is probably not worth the maintainer effort required to
+perform it correctly.
+
+-- 
+Best regards,
+Ivan
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Thu Feb 16 15:43:40 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Thu, 16 Feb 2023 15:43:40 +0100
+Subject: [Rd] Robustifying R_CleanTempDir a bit more
+In-Reply-To: <20230216170909.42e6894e@arachnoid>
+References: <20230216170909.42e6894e@arachnoid>
+Message-ID: <9ec1ac5a-8e06-13f4-3753-283606707e9f@gmail.com>
+
+On 2/16/23 15:09, Ivan Krylov wrote:
+> Hello,
+>
+> This is probably a very minor point, but R_CleanTempDir may still have
+> a shell injection in it. I couldn't find a way to shoot the user in the
+> foot in a significant way (by, say, accidentally removing ~), thanks to
+> R disallowing spaces in the path, but if Sys_TempDir somehow acquires a
+> value of "/tmp/';echo;'", R_CleanTempDir() will remove /tmp instead of
+> its aptly-named subdirectory.
+Please see 83851 from earlier today which does a bit more of 
+robustification, and if you find any problem in it, please let me know.
+> While adding the single-quote symbol to the list of special symbols
+> should suffice (it and the backslash being the only allowed ways to
+> "un-quote" a single-quoted string), I would like to suggest solving the
+> problem without the use of quoting:
+>
+> #include <spawn.h>
+>
+> char ** argv = { "rm", "-Rf", Sys_TempDir, NULL };
+> posix_spawnp(NULL, "rm", NULL, NULL, argv, NULL);
+>
+> Are there Unix-like platforms on which R is intended to work that don't
+> have posix_spawn()? Circa-2014 versions of both Solaris and OpenBSD
+> seem to have it. Spawning the process manually by means of [v]fork()
+> and exec() is probably not worth the maintainer effort required to
+> perform it correctly.
+
+Yes, this is a good point and we have been thinking about spawn() as 
+well, and we are considering that. Re implementing, I also fear the cost 
+may be too high, thinking about the timeout support in system() I 
+implemented earlier, so essentially a system() replacement for Unix. The 
+details are complicated on Unix as well as on Windows. And re reusing 
+existing implementations, we will have to check they do exactly what we 
+need about signals, terminal, process groups, termination, input and 
+output, etc. It may also be that improving performance of R_unlink() 
+would be easier, as it is rather un-optimized now. So I just wanted to 
+buy time with (possibly temporary) fix in 83851.
+
+Thanks
+Tomas
+
+>
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Thu Feb 16 15:57:26 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Thu, 16 Feb 2023 15:57:26 +0100
+Subject: [Rd] Robustifying R_CleanTempDir a bit more
+In-Reply-To: <9ec1ac5a-8e06-13f4-3753-283606707e9f@gmail.com>
+References: <20230216170909.42e6894e@arachnoid>
+ <9ec1ac5a-8e06-13f4-3753-283606707e9f@gmail.com>
+Message-ID: <ed796689-0ef5-ac40-72e2-14f8898a3a9c@gmail.com>
+
+
+On 2/16/23 15:43, Tomas Kalibera wrote:
+> On 2/16/23 15:09, Ivan Krylov wrote:
+>> Hello,
+>>
+>> This is probably a very minor point, but R_CleanTempDir may still have
+>> a shell injection in it. I couldn't find a way to shoot the user in the
+>> foot in a significant way (by, say, accidentally removing ~), thanks to
+>> R disallowing spaces in the path, but if Sys_TempDir somehow acquires a
+>> value of "/tmp/';echo;'", R_CleanTempDir() will remove /tmp instead of
+>> its aptly-named subdirectory.
+> Please see 83851 from earlier today which does a bit more of 
+> robustification, and if you find any problem in it, please let me know.
+>> While adding the single-quote symbol to the list of special symbols
+>> should suffice (it and the backslash being the only allowed ways to
+>> "un-quote" a single-quoted string), 
+
+I've added the single quote now. Thanks for spotting that. This is a 
+temporary fix which may be later replaced by spawn or something else.
+
+Best
+Tomas
+
+>> I would like to suggest solving the
+>> problem without the use of quoting:
+>>
+>> #include <spawn.h>
+>>
+>> char ** argv = { "rm", "-Rf", Sys_TempDir, NULL };
+>> posix_spawnp(NULL, "rm", NULL, NULL, argv, NULL);
+>>
+>> Are there Unix-like platforms on which R is intended to work that don't
+>> have posix_spawn()? Circa-2014 versions of both Solaris and OpenBSD
+>> seem to have it. Spawning the process manually by means of [v]fork()
+>> and exec() is probably not worth the maintainer effort required to
+>> perform it correctly.
+>
+> Yes, this is a good point and we have been thinking about spawn() as 
+> well, and we are considering that. Re implementing, I also fear the 
+> cost may be too high, thinking about the timeout support in system() I 
+> implemented earlier, so essentially a system() replacement for Unix. 
+> The details are complicated on Unix as well as on Windows. And re 
+> reusing existing implementations, we will have to check they do 
+> exactly what we need about signals, terminal, process groups, 
+> termination, input and output, etc. It may also be that improving 
+> performance of R_unlink() would be easier, as it is rather 
+> un-optimized now. So I just wanted to buy time with (possibly 
+> temporary) fix in 83851.
+>
+> Thanks
+> Tomas
+>
+>>
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Thu Feb 16 16:03:59 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Thu, 16 Feb 2023 18:03:59 +0300
+Subject: [Rd] Robustifying R_CleanTempDir a bit more
+In-Reply-To: <9ec1ac5a-8e06-13f4-3753-283606707e9f@gmail.com>
+References: <20230216170909.42e6894e@arachnoid>
+ <9ec1ac5a-8e06-13f4-3753-283606707e9f@gmail.com>
+Message-ID: <20230216180359.56ef978e@arachnoid>
+
+Thanks for the quick reply!
+
+On Thu, 16 Feb 2023 15:43:40 +0100
+Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+
+> Please see 83851 from earlier today which does a bit more of 
+> robustification, and if you find any problem in it, please let me
+> know.
+
+83851 is an improvement, but it does let single quotes through,
+unfortunately, leading to my (contrived) example of "/tmp/';echo;'". 
+
+Given what you say about the temporary nature of the current fix,
+adding the single quote to the list of special symbols should be a good
+solution for now:
+
+--- src/main/platform.c	(revision 83851)
++++ src/main/platform.c	(working copy)
+@@ -1634,7 +1634,7 @@
+ 	/* On Solaris the working directory must be outside this one */
+ 	chdir(R_HomeDir());
+ #endif
+-	char *special = "\\`$\"\n";
++	char *special = "\\`$\"\n'";
+ 	int hasspecial = 0;
+ 	for(int i = 0; special[i] != '\0'; i++)
+ 	    if (strchr(Sys_TempDir, special[i])) {
+
+At least I don't see a way out once you disallow single quotes in the
+single-quoted string.
+
+-- 
+Best regards,
+Ivan
+
+
+From er|c@bern@rd1 @end|ng |rom m|che||n@com  Thu Feb 16 16:10:41 2023
+From: er|c@bern@rd1 @end|ng |rom m|che||n@com (Eric Bernard)
+Date: Thu, 16 Feb 2023 15:10:41 +0000
+Subject: [Rd] 
+ =?utf-8?q?=5BEXT=5D_Re=3A__End_of_Support_Date_of_Version_3?=
+ =?utf-8?b?IG9mIOKAnFLigJ0=?=
+In-Reply-To: <etPan.63ed0054.3f129855.3bdb@me.com>
+References: <PA4PR09MB4640DAA912FCA79DF20B27C8DAA39@PA4PR09MB4640.eurprd09.prod.outlook.com>
+ <etPan.63ed0054.3f129855.3bdb@me.com>
+Message-ID: <PA4PR09MB464064D4E064C7AC942295CADAA09@PA4PR09MB4640.eurprd09.prod.outlook.com>
+
+
+Thank you, Marc, for this detailed reply.
+
+De : Marc Schwartz <marc_schwartz at me.com>
+Envoy? : mercredi 15 f?vrier 2023 16:55
+? : Eric Bernard <eric.bernard1 at michelin.com>; r-devel at r-project.org
+Objet : [EXT] Re: [Rd] End of Support Date of Version 3 of ?R?
+
+Attention Exp?diteur externe Ne cliquez sur aucun lien et n?ouvrez aucune pi?ce jointe ? moins de faire confiance ? l?exp?diteur et de savoir que le contenu est s?r.
+
+Hi,
+
+R's software development life cycle is documented here:
+
+  https://www.r-project.org/doc/R-SDLC.pdf<https://www.r-project.org/doc/R-SDLC.pdf>
+
+This is available via the Certification link, under Documentation, on the main R Project web page:
+
+  https://www.r-project.org<https://www.r-project.org>
+
+Section 4.4 of the document, on page 10, covers the release cycles, and section 4.6, on page 11, covers maintenance, support and retirement.
+
+Section 4.6 includes the following text at the end of that section on page 12:
+
+"The x.y.0 releases are maintained via a series of x.y.z patch releases. At a new x.y.0 version of R, the prior version is retired from formal support. R Core?s efforts are then focused on the new Release (and the on-going Development) version. No further development, bug fixes or patches are made available for the retired versions. Thus there is always only one current version of R. However, the SVN repository will allow older release branches to be reopened, should the need arise."
+
+
+Version 4.0.0 of R was released on April 24, 2020, thus ending formal support for version 3.x.x, with the last 3.x.x version being 3.6.3, which was released on February 29, 2020.
+
+Regards,
+
+Marc Schwartz
+This email was screened for spam and malicious content but exercise caution anyway.
+
+
+
+
+On February 15, 2023 at 10:21:26 AM, Eric Bernard (eric.bernard1 at michelin.com<mailto:eric.bernard1 at michelin.com> (mailto:eric.bernard1 at michelin.com)) wrote:
+
+>
+> Hello !
+>
+> Good day.
+>
+> I'd like to know what is the End of Support Date of Version 3 of R.
+>
+> Thanks for your answer.
+>
+> Have a good day.
+>
+> Best Regards
+>
+> Eric Bernard
+> DCTI/BS/EC
+>
+> Cordialement.
+>
+> Eric Bernard
+> Michelin
+> DCTI/BS/EC
+>
+>
+> [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org<mailto:R-devel at r-project.org> mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel<https://stat.ethz.ch/mailman/listinfo/r-devel>
+
+	[[alternative HTML version deleted]]
+
+
+From ch@riie@g@o m@iii@g oii shikokuchuo@@et  Thu Feb 16 16:15:28 2023
+From: ch@riie@g@o m@iii@g oii shikokuchuo@@et (ch@riie@g@o m@iii@g oii shikokuchuo@@et)
+Date: Thu, 16 Feb 2023 15:15:28 +0000
+Subject: [Rd] Question on non-blocking socket
+In-Reply-To: <mailman.53207.7.1676545201.10299.r-devel@r-project.org>
+References: <mailman.53207.7.1676545201.10299.r-devel@r-project.org>
+Message-ID: <dbc2d2529a7fc161536fbe58b66ad5bb@shikokuchuo.net>
+
+> Date: Wed, 15 Feb 2023 01:24:26 +0100
+> From: Ben Engbers <Ben.Engbers at Be-Logical.nl>
+> To: r-devel at r-project.org
+> Subject: [Rd] Question on non-blocking socket
+> Message-ID: <68ce63b0-7e91-6372-6926-59f3fcfffd25 at Be-Logical.nl>
+> Content-Type: text/plain; charset="utf-8"; Format="flowed"
+> 
+> Hi,
+> 
+> December 27, 2021 I started a thread asking for help troubleshooting 
+> non-blocking sockets.
+> While developing the RBaseX client, I had issues with the authentication 
+> process. It eventually turned out that a short break had to be inserted 
+> in this process between sending the credentials to the server and 
+> requesting the status. Tomas Kalibera put me on the right track by 
+> drawing my attention to the 'socketSelect' function. I don't know 
+> exactly the purpose of this function is (the function itself is 
+> documented, but I can't find any information for which situations this 
+> function should be called.) but it sufficed to call this function once 
+> between sending and requesting.
+> 
+> I have two questions.
+> The first is where I can find R documentation on proper use of 
+> non-blocking sockets and on the proper use of the socketSelect function?
+> 
+> The second question is more focused on using non-blocking sockets in 
+> general. Is it allowed to execute a read and a receive command 
+> immediately after each other or must a short waiting loop be built in.
+> I'm asking this because I'm running into the same problems in a C++ 
+> project as I did with RBaseX.
+> 
+> Ben Engbers
+> 
+
+Hi Ben,
+
+For an easier experience with sockets, you may wish to have a look at the `nanonext` package. This wraps 'NNG' and is generally used for messaging over its own protocols (req/rep, pub/sub etc.), although you can also use it for HTTP and websockets.
+
+In any case, a low level stream interface allows connecting with arbitrary sockets. Using something like `s <- stream(dial = "tcp://0.0.0.0:5555")` substituting in the actual address. This would allow you greater flexibility in sending and receiving over the bytestream without worrying so much about order and timing as per your current experience.
+
+For example, a common pattern this allows for is doing an async receive `r <- recv_aio(s)`  before sending a request `send(s, "some request")`, and then query the receive result afterwards at `r$data`.
+
+I won't go into too much detail here, but as it is my own package, please feel free to reach out separately via email or github etc.
+
+Thanks,
+
+Charlie
+
+
+From j@g@nmn2 @end|ng |rom gm@||@com  Thu Feb 16 20:59:30 2023
+From: j@g@nmn2 @end|ng |rom gm@||@com (Mikael Jagan)
+Date: Thu, 16 Feb 2023 14:59:30 -0500
+Subject: [Rd] Regenerate m4/gettext.m4 with updated AM_GNU_GETTEXT?
+Message-ID: <2ff4f618-9dc2-89c3-d3a6-2a21c9cec05b@gmail.com>
+
+Currently, m4/gettext.m4 contains an old version of Autoconf macro
+AM_GNU_GETTEXT relying on internal symbols (e.g., _nl_expand_alias)
+to detect broken implementations of GNU gettext.  System libraries
+are searched for the internal symbols unconditionally, i.e., even
+when linking against a static GNU libintl, resulting in the following
+false positive in my config.log:
+
+
+     configure:53900: checking for GNU gettext in libintl
+     configure:53937: clang -o conftest  -g -O2 -Wall -pedantic 
+-mmacosx-version-min=11.0 -arch arm64 -falign-functions=8 
+-Wno-error=implicit-function-declaration -fPIC -DPCRE2_STATIC 
+-I/usr/local/include -I/opt/R/arm64/include -I/usr/local/include 
+-L/opt/R/arm64/lib -L/usr/local/lib conftest.c -L/usr/local/lib -lpcre2-8 -llzma 
+-lbz2 -lz -licucore -ldl -lm -liconv /usr/local/lib/libintl.a 
+/usr/local/lib/libiconv.a >&5
+     Undefined symbols for architecture arm64:
+       "__nl_expand_alias", referenced from:
+           _main in conftest-0e23fb.o
+     ld: symbol(s) not found for architecture arm64
+
+
+AM_GNU_GETTEXT was revised in the GNU gettext sources ~6 years ago
+to address this:
+
+
+     $ git log -1 b67399b
+     commit b67399b40bc5bf3165b09e6a095ec941d4b30a97
+     Author: Daiki Ueno <ueno at gnu.org>
+     Date:   Thu May 26 13:38:57 2016 +0900
+
+         m4: Rely less on internal symbols
+
+         * gettext-runtime/m4/gettext.m4 (AM_GNU_GETTEXT): Skip checks for the
+         internal symbols _nl_msg_cat_cntr, _nl_domain_bindings, and
+         _nl_expand_alias, if __GNU_GETTEXT_SUPPORTED_REVISION is defined.
+         Problem reported and fix suggested by Masanori Ogino in:
+         https://lists.gnu.org/archive/html/bug-gettext/2016-04/msg00000.html
+         The rationale behind this is: (1) those symbol checks are for detecting
+         certain broken implementations, namely NetBSD and Solaris 7, and
+         (2) __GNU_GETTEXT_SUPPORTED_REVISION is not defined in those
+         implementations, while it is defined on compatible implementations, such
+         as musl-libc which doesn't have those internal symbols.
+
+
+Can m4/gettext.m4 be regenerated from a sufficiently newer release
+of GNU gettext, without major disruption?
+
+Mikael
+
+
+From r@v|@v@r@dh@n @end|ng |rom jhu@edu  Fri Feb 17 00:37:26 2023
+From: r@v|@v@r@dh@n @end|ng |rom jhu@edu (Ravi Varadhan)
+Date: Thu, 16 Feb 2023 23:37:26 +0000
+Subject: [Rd] An interesting chat with ChatGPT
+In-Reply-To: <3909C1CD-AC89-465F-81E2-98D46ECE01AA@utoronto.ca>
+References: <3d7bd521-d670-4b90-6be4-a3528d726f5b@gmail.com>
+ <3909C1CD-AC89-465F-81E2-98D46ECE01AA@utoronto.ca>
+Message-ID: <SJ0PR01MB640066251848C9A55CD72058F2A09@SJ0PR01MB6400.prod.exchangelabs.com>
+
+ChatGPT provided an R code with error when I asked a question related to prediction of a new data point for linear mixed effects model.  So, it is not immune to coding mistakes!
+
+Ravi
+
+________________________________
+From: R-devel <r-devel-bounces at r-project.org> on behalf of Boris Steipe <boris.steipe at utoronto.ca>
+Sent: Monday, February 13, 2023 10:54 AM
+To: Duncan Murdoch <murdoch.duncan at gmail.com>
+Cc: r-devel <r-devel at r-project.org>
+Subject: Re: [Rd] An interesting chat with ChatGPT
+
+
+      External Email - Use Caution
+
+
+
+Duncan -
+
+Indeed, this has now been well documented; I have called these constructions "Schr?dinger Facts", since they arise from a superposition of truths in the training data that collapse into an untruth when observed.
+
+   https://nam02.safelinks.protection.outlook.com/?url=https%3A%2F%2Fsentientsyllabus.substack.com%2Fp%2Fchatgpts-achilles-heel&data=05%7C01%7Cravi.varadhan%40jhu.edu%7C1a6aecbbe3974b52595608db0ddb3271%7C9fa4f438b1e6473b803f86f8aedf0dec%7C0%7C0%7C638119007350695881%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=WM23AlyRohiQh5EqTqkTI2B%2BXTG38k%2BtfaRv7KQwybw%3D&reserved=0
+
+Now, the curious question is: why can it program. Why is its production of R-syntax less vulnerable to this effect than a literature quote, or reference? Maybe it has to do with the fact that in producing correct syntax there is a ground truth - errors just will not run. But I'm not sure.
+
+Regardless: it signals that we need a reinvigorated culture of validation. Actually ChatGPT will happily make test data for you. Whisvh. in a way, it judt did  ;-)
+
+
+Boris
+
+
+
+
+> On 2023-02-13, at 08:37, Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+>
+> I was wondering which anchor would match in the regular expression "(a)|(b)" if both "a" and "b" matches the target string.  What appears to happen is that the first match wins, and that's how it is documented in Python, but I was looking for docs on this in R.
+>
+> As far as I can see, the ?regex help page doesn't resolve this. So just for fun, I decided to ask ChatGPT, and got an interesting response.  I won't show the whole conversation here, but just some extracts:
+>
+> ---------------------------------------
+> Me:  In a regular expression in R, if both "a" and "b" match, which does "(a)|(b)" match?  Please include authoritative references in your answer.
+>
+> ChatGPT: [long answer about grep]
+>
+> Me:  In grep(), it doesn't matter which of a or b matches.  It's only in sub() or gsub() that it makes a difference.  Do you know an authoritative reference that discusses those functions?
+>
+> ChatGPT:  [long irrelevant answer about sub and gsub, with a reference to "R Cookbook" by P. Teetor.]
+>
+> Me:  Teetor's book is not authoritative, and the other reference doesn't discuss ambiguous alternation.
+>
+> ... finally we get to the interesting part ...
+>
+> ChatGPT: I apologize for the mistake in my previous answer.
+>
+> A more authoritative reference for the behavior of regular expressions in R can be found in the official R documentation.
+>
+> Regarding the behavior of ambiguous alternation, the regex section of the manual "An Introduction to R" explains it as follows:
+>
+> "When several alternatives are possible, the first alternative is chosen, so it is important to specify alternatives in the order in which they should be tried."
+>
+> Here is the reference for the official R documentation:
+>
+>    "An Introduction to R" manual: https://nam02.safelinks.protection.outlook.com/?url=https%3A%2F%2Fcran.r-project.org%2Fdoc%2Fmanuals%2Fr-release%2FR-intro.html%23Regular-expression-facilities&data=05%7C01%7Cravi.varadhan%40jhu.edu%7C1a6aecbbe3974b52595608db0ddb3271%7C9fa4f438b1e6473b803f86f8aedf0dec%7C0%7C0%7C638119007350695881%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=6MFKiZJ0nyDLmEDLcVxg%2Bm%2BYTe5lQixS2NIdZNCMecE%3D&reserved=0
+>
+> I hope this reference provides the information you were looking for.
+> ---------------------------------------
+>
+>
+> All right, an authoritative answer!  The only problem is that *it doesn't exist*.  There's no such anchor in that document.  R-intro isn't a very rapidly changing document, so I could look at every change recorded in svn, and that section has *never* existed.
+>
+> I guess ChatGPT is a pattern matching machine, and if such a question had an answer, it would probably be in a location like that.  (I would have guessed a help page like ?regex instead of R-intro, but I had just told it that answer was wrong.)
+>
+> Duncan Murdoch
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://nam02.safelinks.protection.outlook.com/?url=https%3A%2F%2Fstat.ethz.ch%2Fmailman%2Flistinfo%2Fr-devel&data=05%7C01%7Cravi.varadhan%40jhu.edu%7C1a6aecbbe3974b52595608db0ddb3271%7C9fa4f438b1e6473b803f86f8aedf0dec%7C0%7C0%7C638119007350695881%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=tcAowvYXOiEUYTN0K40pcLcag7YenH1cDa9%2FtLnOn6c%3D&reserved=0
+
+
+--
+Boris Steipe MD, PhD
+
+Professor em.
+Department of Biochemistry
+Temerty Faculty of Medicine
+University of Toronto
+
+
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://nam02.safelinks.protection.outlook.com/?url=https%3A%2F%2Fstat.ethz.ch%2Fmailman%2Flistinfo%2Fr-devel&data=05%7C01%7Cravi.varadhan%40jhu.edu%7C1a6aecbbe3974b52595608db0ddb3271%7C9fa4f438b1e6473b803f86f8aedf0dec%7C0%7C0%7C638119007350695881%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=tcAowvYXOiEUYTN0K40pcLcag7YenH1cDa9%2FtLnOn6c%3D&reserved=0
+
+	[[alternative HTML version deleted]]
+
+
