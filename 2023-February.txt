@@ -4061,3 +4061,303 @@ https://nam02.safelinks.protection.outlook.com/?url=https%3A%2F%2Fstat.ethz.ch%2
 	[[alternative HTML version deleted]]
 
 
+From ben@engber@ @end|ng |rom gm@||@com  Fri Feb 17 15:00:34 2023
+From: ben@engber@ @end|ng |rom gm@||@com (Ben Engbers)
+Date: Fri, 17 Feb 2023 15:00:34 +0100
+Subject: [Rd] Question on non-blocking socket
+In-Reply-To: <d2424a96-d047-4216-a90b-5f49327eaa38@gmail.com>
+References: <68ce63b0-7e91-6372-6926-59f3fcfffd25@Be-Logical.nl>
+ <1ba5f439-c317-816f-ec0c-9bc03f38840b@gmail.com>
+ <c7460122-2ee1-4f61-e0b5-b0626d407f6c@Be-Logical.nl>
+ <d2424a96-d047-4216-a90b-5f49327eaa38@gmail.com>
+Message-ID: <f27c5219-634c-8733-385f-1f8f7110cd07@Be-Logical.nl>
+
+Hi Tomas,
+
+Apparently, inserting some kind of socketSelect() is essential when 
+using non-blocking sockets and a client/erve architecture. That is at 
+least one thing that I have learned ;-).
+
+In C++, between sending and requesting, I inserted a call to this function:
+bool wait(int s) {
+   fd_set read_set;
+   struct timeval timeout {};
+   memset(&timeout, 0, sizeof(timeout));
+   bool done{};
+   while (!done ) {
+     FD_ZERO(&read_set);
+     FD_SET(s, &read_set);
+     int rc = select(s + 1, &read_set, NULL, NULL, &timeout);
+     done = (rc == 1) && FD_ISSET(s, &read_set);
+   };
+   return done;
+};
+
+Inserting this call was essential in solving my problem.
+
+Ben
+
+Op 15-02-2023 om 17:17 schreef Tomas Kalibera:
+> In the example you are waiting only for a single byte. But if the 
+> response may be longer, one needs to take into account in the client 
+> that not all bytes of the response may be available right away. One 
+> would keep receiving the data in a loop, as they become available (e.g. 
+> socketSelect() would tell), keep appending them to a buffer, and keep 
+> looking for when they are complete.
+> 
+> Tomas
+>> Ben
+
+
+From rb@er @end|ng |rom @t@u@edu  Fri Feb 17 16:05:04 2023
+From: rb@er @end|ng |rom @t@u@edu (Robert Baer)
+Date: Fri, 17 Feb 2023 09:05:04 -0600
+Subject: [Rd] An interesting chat with ChatGPT
+In-Reply-To: <CAHJ+2V+bqqD5UZ_9yPT4H=bLPvPcDNkhOXtQ-1KCu7u6EiJ1xg@mail.gmail.com>
+References: <3d7bd521-d670-4b90-6be4-a3528d726f5b@gmail.com>
+ <3909C1CD-AC89-465F-81E2-98D46ECE01AA@utoronto.ca>
+ <CAHJ+2V+bqqD5UZ_9yPT4H=bLPvPcDNkhOXtQ-1KCu7u6EiJ1xg@mail.gmail.com>
+Message-ID: <30a5d555-4da2-f95e-3e42-4e2ce3aa4025@atsu.edu>
+
+On 2/13/2023 11:14 AM, Kevin Coombes wrote:
+> Chat bots are like politicians, or talking dogs. The fact that they exist
+> is interesting. But no same person would believe anything they say.
+
+I think it is more appropriate to be a little less harsh, " no same 
+person would believe EVERYTHING they say"
+
+ ?What chatGPT (and politicians) say must be run through your own 
+personal filters and sanity checks ( just like the things even your 
+mother tells you.)? ;-)
+
+
+>
+> On Mon, Feb 13, 2023, 10:58 AM Boris Steipe <boris.steipe at utoronto.ca>
+> wrote:
+>
+>> Duncan -
+>>
+>> Indeed, this has now been well documented; I have called these
+>> constructions "Schr?dinger Facts", since they arise from a superposition of
+>> truths in the training data that collapse into an untruth when observed.
+>>
+>>     https://sentientsyllabus.substack.com/p/chatgpts-achilles-heel
+>>
+>> Now, the curious question is: why can it program. Why is its production of
+>> R-syntax less vulnerable to this effect than a literature quote, or
+>> reference? Maybe it has to do with the fact that in producing correct
+>> syntax there is a ground truth - errors just will not run. But I'm not sure.
+>>
+>> Regardless: it signals that we need a reinvigorated culture of validation.
+>> Actually ChatGPT will happily make test data for you. Whisvh. in a way, it
+>> judt did  ;-)
+>>
+>>
+>> Boris
+>>
+>>
+>>
+>>
+>>> On 2023-02-13, at 08:37, Duncan Murdoch <murdoch.duncan at gmail.com>
+>> wrote:
+>>> I was wondering which anchor would match in the regular expression
+>> "(a)|(b)" if both "a" and "b" matches the target string.  What appears to
+>> happen is that the first match wins, and that's how it is documented in
+>> Python, but I was looking for docs on this in R.
+>>> As far as I can see, the ?regex help page doesn't resolve this. So just
+>> for fun, I decided to ask ChatGPT, and got an interesting response.  I
+>> won't show the whole conversation here, but just some extracts:
+>>> ---------------------------------------
+>>> Me:  In a regular expression in R, if both "a" and "b" match, which does
+>> "(a)|(b)" match?  Please include authoritative references in your answer.
+>>> ChatGPT: [long answer about grep]
+>>>
+>>> Me:  In grep(), it doesn't matter which of a or b matches.  It's only in
+>> sub() or gsub() that it makes a difference.  Do you know an authoritative
+>> reference that discusses those functions?
+>>> ChatGPT:  [long irrelevant answer about sub and gsub, with a reference
+>> to "R Cookbook" by P. Teetor.]
+>>> Me:  Teetor's book is not authoritative, and the other reference doesn't
+>> discuss ambiguous alternation.
+>>> ... finally we get to the interesting part ...
+>>>
+>>> ChatGPT: I apologize for the mistake in my previous answer.
+>>>
+>>> A more authoritative reference for the behavior of regular expressions
+>> in R can be found in the official R documentation.
+>>> Regarding the behavior of ambiguous alternation, the regex section of
+>> the manual "An Introduction to R" explains it as follows:
+>>> "When several alternatives are possible, the first alternative is
+>> chosen, so it is important to specify alternatives in the order in which
+>> they should be tried."
+>>> Here is the reference for the official R documentation:
+>>>
+>>>     "An Introduction to R" manual:
+>> https://cran.r-project.org/doc/manuals/r-release/R-intro.html#Regular-expression-facilities
+>>> I hope this reference provides the information you were looking for.
+>>> ---------------------------------------
+>>>
+>>>
+>>> All right, an authoritative answer!  The only problem is that *it
+>> doesn't exist*.  There's no such anchor in that document.  R-intro isn't a
+>> very rapidly changing document, so I could look at every change recorded in
+>> svn, and that section has *never* existed.
+>>> I guess ChatGPT is a pattern matching machine, and if such a question
+>> had an answer, it would probably be in a location like that.  (I would have
+>> guessed a help page like ?regex instead of R-intro, but I had just told it
+>> that answer was wrong.)
+>>> Duncan Murdoch
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>> --
+>> Boris Steipe MD, PhD
+>>
+>> Professor em.
+>> Department of Biochemistry
+>> Temerty Faculty of Medicine
+>> University of Toronto
+>>
+>>
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+__________________________________________________
+Robert W. Baer, Ph.D.
+Professor of Physiolgy
+Kirksville College of Osteopathic Medicine
+A.T. Still University of Heallth Sciences
+800 W. Jefferson St.
+Kirksville, MO 63501
+P: 660-626-2322
+
+
+  
+
+              
+
+The ATSU Mission
+A.T. Still University of Health Sciences serves as a learning-centered university dedicated to preparing highly competent professionals through innovative academic programs with a commitment to continue its osteopathic heritage and focus on whole person healthcare, scholarship, community health, interprofessional education, diversity, and underserved populations.
+
+Proud recipient of INSIGHT Into Diversity?s 2017-19 Higher Education Excellence in Diversity Awards.
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Fri Feb 17 21:55:09 2023
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Sat, 18 Feb 2023 09:55:09 +1300
+Subject: [Rd] Question on non-blocking socket
+In-Reply-To: <f27c5219-634c-8733-385f-1f8f7110cd07@Be-Logical.nl>
+References: <68ce63b0-7e91-6372-6926-59f3fcfffd25@Be-Logical.nl>
+ <1ba5f439-c317-816f-ec0c-9bc03f38840b@gmail.com>
+ <c7460122-2ee1-4f61-e0b5-b0626d407f6c@Be-Logical.nl>
+ <d2424a96-d047-4216-a90b-5f49327eaa38@gmail.com>
+ <f27c5219-634c-8733-385f-1f8f7110cd07@Be-Logical.nl>
+Message-ID: <9A9D7965-6123-4160-8AE5-F056E79491A7@R-project.org>
+
+Ben,
+
+yes, by definition - non-blocking means that reads won't block and always return immediately (the point of non-blocking). The loop below is terrible as it will cause 100% CPU usage while it's spinning. It seems that you want to block so why are you using non-blocking mode? select() effectively gets you back to blocking mode, because it does the "block" that read() would normally do in blocking mode. Moreover select() allows you to block for a specified time (the point of the timeout argument) so if you want to wait, you should set the timeout - you should never use a spin loop without timeouts. Also there are many other conditions you should be handling - there may be an error on the socket or EINTR (you should call R's interrupt handler) or EAGAIN (which you do implicitly, but you can't tell it from an actual error).
+
+Sockets and I/O are quite complex matter - it's easy to get it wrong and create hard-to-detect bugs in you code unless you are an expert in it. It's one of the wheels you don't want to be reinventing.
+
+Cheers,
+Simon
+
+
+> On Feb 18, 2023, at 3:00 AM, Ben Engbers <ben.engbers at gmail.com> wrote:
+> 
+> Hi Tomas,
+> 
+> Apparently, inserting some kind of socketSelect() is essential when using non-blocking sockets and a client/erve architecture. That is at least one thing that I have learned ;-).
+> 
+> In C++, between sending and requesting, I inserted a call to this function:
+> bool wait(int s) {
+>  fd_set read_set;
+>  struct timeval timeout {};
+>  memset(&timeout, 0, sizeof(timeout));
+>  bool done{};
+>  while (!done ) {
+>    FD_ZERO(&read_set);
+>    FD_SET(s, &read_set);
+>    int rc = select(s + 1, &read_set, NULL, NULL, &timeout);
+>    done = (rc == 1) && FD_ISSET(s, &read_set);
+>  };
+>  return done;
+> };
+> 
+> Inserting this call was essential in solving my problem.
+> 
+> Ben
+> 
+> Op 15-02-2023 om 17:17 schreef Tomas Kalibera:
+>> In the example you are waiting only for a single byte. But if the response may be longer, one needs to take into account in the client that not all bytes of the response may be available right away. One would keep receiving the data in a loop, as they become available (e.g. socketSelect() would tell), keep appending them to a buffer, and keep looking for when they are complete.
+>> Tomas
+>>> Ben
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
+From k@||now@k|t @end|ng |rom gm@||@com  Fri Feb 17 21:36:14 2023
+From: k@||now@k|t @end|ng |rom gm@||@com (Tomasz Kalinowski)
+Date: Fri, 17 Feb 2023 15:36:14 -0500
+Subject: [Rd] Adding support for S7 to base R
+Message-ID: <CALWM=9b2izXXmLOQQOf4Ssg+11E5fdy5DfM4P2NqCPeBpLGSwg@mail.gmail.com>
+
+Dear R-devel,
+
+We are pleased to inform you that the R Consortium OOP Working Group
+has been making progress on the S7 (formerly named R7) package and are
+preparing to submit it to CRAN. The S7 package is a new OOP system
+designed to be a successor to S3 and S4.
+
+As part of that effort, the group has identified a minimal set of
+narrow changes to base R that would allow S7 to exist as a CRAN
+package. The changes, in general, enable S7 to use R language features
+that are presently limited to only S4.
+
+The proposed patches:
+
+-  make `@` an S3 generic.
+-  make `%*%` an S3 generic.
+-  enable double dispatch for S7.
+-  enable `inherits()` to accept `S7_class` objects.
+
+The diffs for the individual patches can be found here:
+
+%*%      - https://github.com/r-devel/r-svn/pull/105.diff
+inherits - https://github.com/r-devel/r-svn/pull/106.diff
+Ops      - https://github.com/r-devel/r-svn/pull/107.diff
+@        - https://github.com/r-devel/r-svn/pull/108.diff
+
+The repository for the S7 package can be found here:
+https://github.com/RConsortium/OOP-WG
+
+Your feedback is important to us, and we would be grateful for your
+input on these patches. We aim to ensure that S7 is a high-quality
+package that benefits the R community, while being mindful of not
+disrupting existing projects or introducing breaking changes. If you
+have any concerns or objections, please let us know. Your insights and
+suggestions will be instrumental in shaping the final version of these
+patches, and we appreciate your help in this process.
+
+Thank you for your attention and contributions.
+
+Best regards,
+Tomasz
+On behalf of the R Consortium OOP Working Group
+
+
