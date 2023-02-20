@@ -4361,3 +4361,282 @@ Tomasz
 On behalf of the R Consortium OOP Working Group
 
 
+From ggrothend|eck @end|ng |rom gm@||@com  Sat Feb 18 15:07:15 2023
+From: ggrothend|eck @end|ng |rom gm@||@com (Gabor Grothendieck)
+Date: Sat, 18 Feb 2023 09:07:15 -0500
+Subject: [Rd] summary.lm fails for difftime objects
+Message-ID: <CAP01uR=B6gNgAfsYVRzeJxVFLU2fjY7kOzGOC6De8sDyhrD1cg@mail.gmail.com>
+
+lm works with difftime objects but then if you try to get the summary
+it fails with an error:
+
+  fit <- lm(as.difftime(Time, units = "mins") ~ demand, BOD)
+  summary(fit)
+  ## Error in Ops.difftime((f - mean(f)), 2) :
+  ##  '^' not defined for "difftime" objects
+
+A number of other lm methods also fail, e.g. plot(fit), but others
+work, e.g. coef(fit), resid(fit)
+
+--
+Statistics & Software Consulting
+GKX Group, GKX Associates Inc.
+tel: 1-877-GKX-GROUP
+email: ggrothendieck at gmail.com
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sat Feb 18 15:15:44 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sat, 18 Feb 2023 09:15:44 -0500
+Subject: [Rd] Adding support for S7 to base R
+In-Reply-To: <CALWM=9b2izXXmLOQQOf4Ssg+11E5fdy5DfM4P2NqCPeBpLGSwg@mail.gmail.com>
+References: <CALWM=9b2izXXmLOQQOf4Ssg+11E5fdy5DfM4P2NqCPeBpLGSwg@mail.gmail.com>
+Message-ID: <54f67fc4-cbd1-3d87-45ce-a9a86d28fddb@gmail.com>
+
+I hadn't been aware of the S7 project, but I've read some of the online 
+docs about it.  It looks like a nice evolution of S3 & S4. I have a few 
+questions:
+
+Is the proposal is that these patches be included in the upcoming R 4.3.0?
+
+One minor thing missing from the docs (as far as I could see) is how 
+ambiguities in multi-dispatch are resolved.  For example, having class B 
+inherit from class A, and having methods defined for arguments of type 
+B, A and type A, B but not B, B, then passing a B, B pair to the 
+generic. Which method gets called, or does the ambiguity result in an error?
+
+Another (possibly quite major) omission from the documentation is how 
+documentation for classes, generics and methods would be handled.  Using 
+one of their examples, how would I find help on what this does: 
+`speak(dog(), french())`?
+
+Duncan Murdoch
+
+On 17/02/2023 3:36 p.m., Tomasz Kalinowski wrote:
+> Dear R-devel,
+> 
+> We are pleased to inform you that the R Consortium OOP Working Group
+> has been making progress on the S7 (formerly named R7) package and are
+> preparing to submit it to CRAN. The S7 package is a new OOP system
+> designed to be a successor to S3 and S4.
+> 
+> As part of that effort, the group has identified a minimal set of
+> narrow changes to base R that would allow S7 to exist as a CRAN
+> package. The changes, in general, enable S7 to use R language features
+> that are presently limited to only S4.
+> 
+> The proposed patches:
+> 
+> -  make `@` an S3 generic.
+> -  make `%*%` an S3 generic.
+> -  enable double dispatch for S7.
+> -  enable `inherits()` to accept `S7_class` objects.
+> 
+> The diffs for the individual patches can be found here:
+> 
+> %*%      - https://github.com/r-devel/r-svn/pull/105.diff
+> inherits - https://github.com/r-devel/r-svn/pull/106.diff
+> Ops      - https://github.com/r-devel/r-svn/pull/107.diff
+> @        - https://github.com/r-devel/r-svn/pull/108.diff
+> 
+> The repository for the S7 package can be found here:
+> https://github.com/RConsortium/OOP-WG
+> 
+> Your feedback is important to us, and we would be grateful for your
+> input on these patches. We aim to ensure that S7 is a high-quality
+> package that benefits the R community, while being mindful of not
+> disrupting existing projects or introducing breaking changes. If you
+> have any concerns or objections, please let us know. Your insights and
+> suggestions will be instrumental in shaping the final version of these
+> patches, and we appreciate your help in this process.
+> 
+> Thank you for your attention and contributions.
+> 
+> Best regards,
+> Tomasz
+> On behalf of the R Consortium OOP Working Group
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sat Feb 18 15:51:28 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sat, 18 Feb 2023 09:51:28 -0500
+Subject: [Rd] Adding support for S7 to base R
+In-Reply-To: <CALWM=9b2izXXmLOQQOf4Ssg+11E5fdy5DfM4P2NqCPeBpLGSwg@mail.gmail.com>
+References: <CALWM=9b2izXXmLOQQOf4Ssg+11E5fdy5DfM4P2NqCPeBpLGSwg@mail.gmail.com>
+Message-ID: <9d257ea4-d757-f88e-e9d0-383f8cc8b45b@gmail.com>
+
+One more comment:
+
+The utils::setBreakpoint() function should be updated to be able to set 
+breakpoints in S7 methods, or a substitute function should be added to 
+the S7 package.
+
+RStudio 2022.12.0+353 (not sure if that's the latest) also needs to be 
+taught how to do that, since it doesn't seem to use setBreakpoint.
+
+Duncan Murdoch
+
+
+From bbo|ker @end|ng |rom gm@||@com  Sat Feb 18 18:28:22 2023
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Sat, 18 Feb 2023 12:28:22 -0500
+Subject: [Rd] uniroot violates bounds?
+Message-ID: <c9dde79d-aa1b-f769-9a16-b13ce511400d@gmail.com>
+
+c1 <- 4469.822
+c2 <- 572.3413
+f <- function(x) { c1/x - c2/(1-x) }; uniroot(f, c(1e-6, 1))
+uniroot(f, c(1e-6, 1))
+
+
+    provides a root at -6.00e-05, which is outside of the specified 
+bounds.  The default value of the "extendInt" argument to uniroot() is 
+"no", as far as I can see ...
+
+$root
+[1] -6.003516e-05
+
+$f.root
+[1] -74453981
+
+$iter
+[1] 1
+
+$init.it
+[1] NA
+
+$estim.prec
+[1] 6.103516e-05
+
+
+   I suspect this fails because f(1) (value at the upper bound) is 
+infinite, although setting interval to c(0.01, 1) does work/give a 
+sensible answer ...  (works for a lower bound of 1e-4, fails for 1e-5 ...)
+
+   Setting the upper bound < 1 appears to avoid the problem.
+
+  For what it's worth, the result has an "init.it" component, but the 
+only thing the documentation says about it is " component ?init.it? was 
+added in R 3.1.0".
+
+   And, I think (?) that the 'trace' argument only produces any output 
+if the 'extendInt' option is enabled?
+
+   Inspired by 
+https://stackoverflow.com/questions/75494696/solving-a-system-of-non-linear-equations-with-only-one-unknown/75494955#75494955
+
+   cheers
+    Ben Bolker
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sat Feb 18 18:29:52 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sat, 18 Feb 2023 12:29:52 -0500
+Subject: [Rd] Adding support for S7 to base R
+In-Reply-To: <9d257ea4-d757-f88e-e9d0-383f8cc8b45b@gmail.com>
+References: <CALWM=9b2izXXmLOQQOf4Ssg+11E5fdy5DfM4P2NqCPeBpLGSwg@mail.gmail.com>
+ <9d257ea4-d757-f88e-e9d0-383f8cc8b45b@gmail.com>
+Message-ID: <9fea1857-e3fe-e0c4-5d31-702c482f320c@gmail.com>
+
+On 18/02/2023 9:51 a.m., Duncan Murdoch wrote:
+> One more comment:
+> 
+> The utils::setBreakpoint() function should be updated to be able to set
+> breakpoints in S7 methods, or a substitute function should be added to
+> the S7 package.
+> 
+> RStudio 2022.12.0+353 (not sure if that's the latest) also needs to be
+> taught how to do that, since it doesn't seem to use setBreakpoint.
+
+I took a look at updating setBreakpoint().  I can get findLineNum() to 
+work, but setBreakpoint() doesn't work because trace() doesn't work. 
+debug() doesn't work either:  it looks as though it is trying to treat 
+an S7 method as an S4 method.
+
+Will the already proposed changes help with debugging, or is that a 
+completely separate issue?
+
+Duncan Murdoch
+
+
+From pro|jcn@@h @end|ng |rom gm@||@com  Sat Feb 18 21:44:23 2023
+From: pro|jcn@@h @end|ng |rom gm@||@com (J C Nash)
+Date: Sat, 18 Feb 2023 15:44:23 -0500
+Subject: [Rd] uniroot violates bounds?
+In-Reply-To: <4a1e9fd8-2f39-ecba-9dff-dbac6cb17fdd@gmail.com>
+References: <4a1e9fd8-2f39-ecba-9dff-dbac6cb17fdd@gmail.com>
+Message-ID: <504a005d-6c7d-7704-ef39-691b028358e0@gmail.com>
+
+I wrote first cut at unirootR for Martin M and he revised and put in
+Rmpfr.
+
+The following extends Ben's example, but adds the unirootR with trace
+output.
+
+c1 <- 4469.822
+c2 <- 572.3413
+f <- function(x) { c1/x - c2/(1-x) }; uniroot(f, c(1e-6, 1))
+uniroot(f, c(1e-6, 1))
+library(Rmpfr)
+unirootR(f, c(1e-6, 1), extendInt="no", trace=1)
+
+This gives more detail on the iterations, and it looks like the Inf is the
+issue. But certainly we could do more to avoid "gotchas" like this. If
+someone is interested in some back and forth, I'd be happy to give it a
+try, but I think progress would be better with more than one contributor.
+
+Best,
+
+John Nash
+
+On 2023-02-18 12:28, Ben Bolker wrote:
+> c1 <- 4469.822
+> c2 <- 572.3413
+> f <- function(x) { c1/x - c2/(1-x) }; uniroot(f, c(1e-6, 1))
+> uniroot(f, c(1e-6, 1))
+> 
+> 
+>  ?? provides a root at -6.00e-05, which is outside of the specified bounds.? The default value of the "extendInt" 
+> argument to uniroot() is "no", as far as I can see ...
+> 
+> $root
+> [1] -6.003516e-05
+> 
+> $f.root
+> [1] -74453981
+> 
+> $iter
+> [1] 1
+> 
+> $init.it
+> [1] NA
+> 
+> $estim.prec
+> [1] 6.103516e-05
+> 
+> 
+>  ? I suspect this fails because f(1) (value at the upper bound) is infinite, although setting interval to c(0.01, 1) 
+> does work/give a sensible answer ...? (works for a lower bound of 1e-4, fails for 1e-5 ...)
+> 
+>  ? Setting the upper bound < 1 appears to avoid the problem.
+> 
+>  ?For what it's worth, the result has an "init.it" component, but the only thing the documentation says about it is " 
+> component ?init.it? was added in R 3.1.0".
+> 
+>  ? And, I think (?) that the 'trace' argument only produces any output if the 'extendInt' option is enabled?
+> 
+>  ? Inspired by 
+> https://stackoverflow.com/questions/75494696/solving-a-system-of-non-linear-equations-with-only-one-unknown/75494955#75494955
+> 
+>  ? cheers
+>  ?? Ben Bolker
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
