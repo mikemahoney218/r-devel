@@ -4640,3 +4640,291 @@ On 2023-02-18 12:28, Ben Bolker wrote:
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From me @end|ng |rom n|noh@rdt@com  Sun Feb 19 15:37:33 2023
+From: me @end|ng |rom n|noh@rdt@com (Nino Hardt)
+Date: Sun, 19 Feb 2023 15:37:33 +0100 (CET)
+Subject: [Rd] R: determine if `suppressMessages()` has been invoked
+Message-ID: <1288559080.1563727.1676817453276@webmail.strato.de>
+
+Hi all,
+ 
+I would like to create a function that detects if suppressMessages has been invoked upon running that same function. I was looking through {https://cran.r-project.org/doc/manuals/r-release/R-ints.html}, but I haven't found an answer. I do not understand **how** suppressMessages  works.
+ 
+I have not received an answer on SO (https://stackoverflow.com/questions/75036750/r-determine-if-suppressmessages-has-been-invoked), but it has been suggested I ask here.
+ 
+ 
+Nino
+ 
+ 
+	[[alternative HTML version deleted]]
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Sun Feb 19 18:01:37 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Sun, 19 Feb 2023 20:01:37 +0300
+Subject: [Rd] R: determine if `suppressMessages()` has been invoked
+In-Reply-To: <1288559080.1563727.1676817453276@webmail.strato.de>
+References: <1288559080.1563727.1676817453276@webmail.strato.de>
+Message-ID: <20230219200137.63f19d81@Tarkus>
+
+On Sun, 19 Feb 2023 15:37:33 +0100 (CET)
+Nino Hardt <me at ninohardt.com> wrote:
+
+> I would like to create a function that detects if suppressMessages
+> has been invoked upon running that same function. 
+
+Would you mind letting us know why? Just curious. Normally, I would
+just use message() for everything and let the users decide whether they
+want to see it.
+
+> I was looking through [R Internals], but I haven't found an answer. I
+> do not understand **how** suppressMessages works.
+
+It works by cooperating with message().
+
+message() itself works by trying to raise a "message" condition and
+providing a "muffleMessage" restart that does nothing. If the condition
+wasn't handled (the "muffleMessage" restart wasn't called by the
+handler), the text of the message is printed.
+
+In turn, suppressMessages() sets up a handler for conditions of class
+"message" that invokes the "muffleMessage" restart provided by
+message() itself above.
+
+We can use the fact that the availability of the "muffleMessage"
+restart is a documented detail and check whether signalling a "message"
+condition will call this restart:
+
+are_messages_suppressed <- function() withRestarts(
+ {
+  signalCondition(simpleMessage(''))
+  # we stay here if restart is not invoked
+  FALSE
+ },
+ muffleMessage = function()
+  # we jump here if restart is invoked
+  TRUE
+)
+are_messages_suppressed()
+# [1] FALSE
+suppressMessages(are_messages_suppressed())
+# [1] TRUE
+
+I don't think I understand handlers and restarts enough to explain them
+well, but the following link seems to be one of the defining documents
+for R's condition handling system:
+https://homepage.stat.uiowa.edu/~luke/R/exceptions/simpcond.html
+
+Hadley Wickham's Advanced R (first edition only) contains a good
+explanation of R's condition system:
+http://adv-r.had.co.nz/Exceptions-Debugging.html
+http://adv-r.had.co.nz/beyond-exception-handling.html
+
+(In my opinion, this could be a better question for R-help, since we
+ought to be using documented R APIs here.)
+
+-- 
+Best regards,
+Ivan
+
+
+From me @end|ng |rom n|noh@rdt@com  Sun Feb 19 18:45:55 2023
+From: me @end|ng |rom n|noh@rdt@com (Nino Hardt)
+Date: Sun, 19 Feb 2023 18:45:55 +0100 (CET)
+Subject: [Rd] R: determine if `suppressMessages()` has been invoked
+Message-ID: <717647429.1574291.1676828755719@webmail.strato.de>
+
+Awesome, this gets the job done.
+ 
+To answer your question:
+When using C or C++ via Rinside or within a package, those functions do not listen to suppressMessages, e.g. `Rprintf` keeps printing to the console. Since it's common to use wrapper functions in R anyway, they can run `are_messages_suppressed` and pass the information on to an explicit `verbose` argument of the C / C++ function.
+ 
+----- Original Mail -----
+Von: "Ivan Krylov" <krylov.r00t at gmail.com>
+An: "Nino Hardt" <me at ninohardt.com>
+CC: r-devel at r-project.org
+Gesendet: Sonntag, 19. Februar 2023 12:01:37
+Betreff: Re: [Rd] R: determine if `suppressMessages()` has been invoked
+On Sun, 19 Feb 2023 15:37:33 +0100 (CET)
+Nino Hardt <me at ninohardt.com> wrote:
+> I would like to create a function that detects if suppressMessages
+> has been invoked upon running that same function.
+Would you mind letting us know why? Just curious. Normally, I would
+just use message() for everything and let the users decide whether they
+want to see it.
+> I was looking through [R Internals], but I haven't found an answer. I
+> do not understand **how** suppressMessages works.
+It works by cooperating with message().
+message() itself works by trying to raise a "message" condition and
+providing a "muffleMessage" restart that does nothing. If the condition
+wasn't handled (the "muffleMessage" restart wasn't called by the
+handler), the text of the message is printed.
+In turn, suppressMessages() sets up a handler for conditions of class
+"message" that invokes the "muffleMessage" restart provided by
+message() itself above.
+We can use the fact that the availability of the "muffleMessage"
+restart is a documented detail and check whether signalling a "message"
+condition will call this restart:
+are_messages_suppressed <- function() withRestarts(
+{
+signalCondition(simpleMessage(''))
+# we stay here if restart is not invoked
+FALSE
+},
+muffleMessage = function()
+# we jump here if restart is invoked
+TRUE
+)
+are_messages_suppressed()
+# [1] FALSE
+suppressMessages(are_messages_suppressed())
+# [1] TRUE
+I don't think I understand handlers and restarts enough to explain them
+well, but the following link seems to be one of the defining documents
+for R's condition handling system:
+https://homepage.stat.uiowa.edu/~luke/R/exceptions/simpcond.html
+Hadley Wickham's Advanced R (first edition only) contains a good
+explanation of R's condition system:
+http://adv-r.had.co.nz/Exceptions-Debugging.html
+http://adv-r.had.co.nz/beyond-exception-handling.html
+(In my opinion, this could be a better question for R-help, since we
+ought to be using documented R APIs here.)
+-- 
+Best regards,
+Ivan
+	[[alternative HTML version deleted]]
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Sun Feb 19 20:11:15 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Sun, 19 Feb 2023 22:11:15 +0300
+Subject: [Rd] R: determine if `suppressMessages()` has been invoked
+In-Reply-To: <717647429.1574291.1676828755719@webmail.strato.de>
+References: <717647429.1574291.1676828755719@webmail.strato.de>
+Message-ID: <20230219221115.5cddcf9e@Tarkus>
+
+On Sun, 19 Feb 2023 18:45:55 +0100 (CET)
+Nino Hardt <me at ninohardt.com> wrote:
+
+> When using C or C++ via Rinside or within a package, those functions
+> do not listen to suppressMessages, e.g. `Rprintf` keeps printing to
+> the console. 
+
+True, Rprintf is really convenient, but it doesn't raise any conditions
+and just prints straight to the console. While calling R message() from
+C is possible, it doesn't format anything.
+
+There's a wishlist item for a C entry point for message() (I would
+argue that a "messagef" taking a format string would be even better),
+but it's waiting for someone with free time to implement it:
+https://bugs.r-project.org/show_bug.cgi?id=17612
+
+-- 
+Best regards,
+Ivan
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Sun Feb 19 23:43:46 2023
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Mon, 20 Feb 2023 11:43:46 +1300
+Subject: [Rd] determine if `suppressMessages()` has been invoked
+In-Reply-To: <717647429.1574291.1676828755719@webmail.strato.de>
+References: <717647429.1574291.1676828755719@webmail.strato.de>
+Message-ID: <EEB32EBB-9405-46B5-8AA6-86BC30D69226@R-project.org>
+
+Nino,
+
+that is the wrong way around as Ivan pointed out. Rprintf() is not the tool for this as explained. If you want messages, use them, it's easy to wrap it to C code:
+
+static void Rmessage(const char *msg) {
+    SEXP msg_sym = Rf_install("message");
+    SEXP msg_call = PROTECT(lang2(msg_sym, PROTECT(Rf_mkString(msg))));
+    Rf_eval(msg_call, R_BaseEnv);
+    UNPROTECT(2);
+}
+
+or the f version if needed:
+
+static void Rmessagef(const char *format, ...)
+{
+    char msg[512];
+    va_list(ap);
+    va_start(ap, format);
+    if (vsnprintf(msg, sizeof(msg), format, ap) >= sizeof(msg))
+        memcpy(msg + sizeof(msg) - 4, "...", 4);
+    Rmessage(msg);
+    va_end(ap);
+}
+
+Cheers,
+Simon
+
+
+> On 20/02/2023, at 6:45 AM, Nino Hardt <me at ninohardt.com> wrote:
+> 
+> Awesome, this gets the job done.
+> 
+> To answer your question:
+> When using C or C++ via Rinside or within a package, those functions do not listen to suppressMessages, e.g. `Rprintf` keeps printing to the console. Since it's common to use wrapper functions in R anyway, they can run `are_messages_suppressed` and pass the information on to an explicit `verbose` argument of the C / C++ function.
+> 
+> ----- Original Mail -----
+> Von: "Ivan Krylov" <krylov.r00t at gmail.com>
+> An: "Nino Hardt" <me at ninohardt.com>
+> CC: r-devel at r-project.org
+> Gesendet: Sonntag, 19. Februar 2023 12:01:37
+> Betreff: Re: [Rd] R: determine if `suppressMessages()` has been invoked
+> On Sun, 19 Feb 2023 15:37:33 +0100 (CET)
+> Nino Hardt <me at ninohardt.com> wrote:
+>> I would like to create a function that detects if suppressMessages
+>> has been invoked upon running that same function.
+> Would you mind letting us know why? Just curious. Normally, I would
+> just use message() for everything and let the users decide whether they
+> want to see it.
+>> I was looking through [R Internals], but I haven't found an answer. I
+>> do not understand **how** suppressMessages works.
+> It works by cooperating with message().
+> message() itself works by trying to raise a "message" condition and
+> providing a "muffleMessage" restart that does nothing. If the condition
+> wasn't handled (the "muffleMessage" restart wasn't called by the
+> handler), the text of the message is printed.
+> In turn, suppressMessages() sets up a handler for conditions of class
+> "message" that invokes the "muffleMessage" restart provided by
+> message() itself above.
+> We can use the fact that the availability of the "muffleMessage"
+> restart is a documented detail and check whether signalling a "message"
+> condition will call this restart:
+> are_messages_suppressed <- function() withRestarts(
+> {
+> signalCondition(simpleMessage(''))
+> # we stay here if restart is not invoked
+> FALSE
+> },
+> muffleMessage = function()
+> # we jump here if restart is invoked
+> TRUE
+> )
+> are_messages_suppressed()
+> # [1] FALSE
+> suppressMessages(are_messages_suppressed())
+> # [1] TRUE
+> I don't think I understand handlers and restarts enough to explain them
+> well, but the following link seems to be one of the defining documents
+> for R's condition handling system:
+> https://homepage.stat.uiowa.edu/~luke/R/exceptions/simpcond.html
+> Hadley Wickham's Advanced R (first edition only) contains a good
+> explanation of R's condition system:
+> http://adv-r.had.co.nz/Exceptions-Debugging.html
+> http://adv-r.had.co.nz/beyond-exception-handling.html
+> (In my opinion, this could be a better question for R-help, since we
+> ought to be using documented R APIs here.)
+> -- 
+> Best regards,
+> Ivan
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
