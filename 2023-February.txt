@@ -4928,3 +4928,272 @@ Simon
 > 
 
 
+From @oko| @end|ng |rom |n@@-tou|ou@e@|r  Mon Feb 20 10:59:22 2023
+From: @oko| @end|ng |rom |n@@-tou|ou@e@|r (Serguei Sokol)
+Date: Mon, 20 Feb 2023 10:59:22 +0100
+Subject: [Rd] uniroot violates bounds?
+In-Reply-To: <504a005d-6c7d-7704-ef39-691b028358e0@gmail.com>
+References: <4a1e9fd8-2f39-ecba-9dff-dbac6cb17fdd@gmail.com>
+ <504a005d-6c7d-7704-ef39-691b028358e0@gmail.com>
+Message-ID: <5d51a7d0-c5d4-79c7-9232-689cba374385@insa-toulouse.fr>
+
+Le 18/02/2023 ? 21:44, J C Nash a ?crit?:
+> I wrote first cut at unirootR for Martin M and he revised and put in
+> Rmpfr.
+>
+> The following extends Ben's example, but adds the unirootR with trace
+> output.
+>
+> c1 <- 4469.822
+> c2 <- 572.3413
+> f <- function(x) { c1/x - c2/(1-x) }; uniroot(f, c(1e-6, 1))
+> uniroot(f, c(1e-6, 1))
+> library(Rmpfr)
+> unirootR(f, c(1e-6, 1), extendInt="no", trace=1)
+>
+> This gives more detail on the iterations, and it looks like the Inf is 
+> the
+> issue. But certainly we could do more to avoid "gotchas" like this. If
+> someone is interested in some back and forth, I'd be happy to give it a
+> try, but I think progress would be better with more than one contributor.
+For me, the following fix makes the job :
+
+--- nlm.R.old??? 2018-09-25 10:44:49.000000000 +0200
++++ nlm.R??? 2023-02-20 10:46:39.893542531 +0100
+@@ -143,14 +143,14 @@
+
+ ???? if(check.conv) {
+ ???? val <- tryCatch(.External2(C_zeroin2, function(arg) f(arg, ...),
+-??? ??? ??? ??? ?? lower, upper, f.lower, f.upper,
++??? ??? ??? ??? ?? lower, upper, f.low., f.upp.,
+ ???? ??? ??? ??? ?? tol, as.integer(maxiter)),
+ ???? ??? ??? warning = function(w)w)
+ ???? if(inherits(val, "warning"))
+ ???? ??? stop("convergence problem in zero finding: ", 
+conditionMessage(val))
+ ???? } else {
+ ???? val <- .External2(C_zeroin2, function(arg) f(arg, ...),
+-??? ??? ??? ? lower, upper, f.lower, f.upper,
++??? ??? ??? ? lower, upper, f.low., f.upp.,
+ ???? ??? ??? ? tol, as.integer(maxiter))
+ ???? }
+ ???? iter <- as.integer(val[2L])
+
+
+Best,
+Serguei.
+
+>
+> Best,
+>
+> John Nash
+>
+> On 2023-02-18 12:28, Ben Bolker wrote:
+>> c1 <- 4469.822
+>> c2 <- 572.3413
+>> f <- function(x) { c1/x - c2/(1-x) }; uniroot(f, c(1e-6, 1))
+>> uniroot(f, c(1e-6, 1))
+>>
+>>
+>> ??? provides a root at -6.00e-05, which is outside of the specified 
+>> bounds.? The default value of the "extendInt" argument to uniroot() 
+>> is "no", as far as I can see ...
+>>
+>> $root
+>> [1] -6.003516e-05
+>>
+>> $f.root
+>> [1] -74453981
+>>
+>> $iter
+>> [1] 1
+>>
+>> $init.it
+>> [1] NA
+>>
+>> $estim.prec
+>> [1] 6.103516e-05
+>>
+>>
+>> ?? I suspect this fails because f(1) (value at the upper bound) is 
+>> infinite, although setting interval to c(0.01, 1) does work/give a 
+>> sensible answer ...? (works for a lower bound of 1e-4, fails for 1e-5 
+>> ...)
+>>
+>> ?? Setting the upper bound < 1 appears to avoid the problem.
+>>
+>> ??For what it's worth, the result has an "init.it" component, but the 
+>> only thing the documentation says about it is " component ?init.it? 
+>> was added in R 3.1.0".
+>>
+>> ?? And, I think (?) that the 'trace' argument only produces any 
+>> output if the 'extendInt' option is enabled?
+>>
+>> ?? Inspired by 
+>> https://stackoverflow.com/questions/75494696/solving-a-system-of-non-linear-equations-with-only-one-unknown/75494955#75494955
+>>
+>> ?? cheers
+>> ??? Ben Bolker
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Mon Feb 20 19:25:02 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Mon, 20 Feb 2023 19:25:02 +0100
+Subject: [Rd] uniroot violates bounds?
+In-Reply-To: <5d51a7d0-c5d4-79c7-9232-689cba374385@insa-toulouse.fr>
+References: <4a1e9fd8-2f39-ecba-9dff-dbac6cb17fdd@gmail.com>
+ <504a005d-6c7d-7704-ef39-691b028358e0@gmail.com>
+ <5d51a7d0-c5d4-79c7-9232-689cba374385@insa-toulouse.fr>
+Message-ID: <25587.47870.208722.124282@stat.math.ethz.ch>
+
+>>>>> Serguei Sokol via R-devel 
+>>>>>     on Mon, 20 Feb 2023 10:59:22 +0100 writes:
+
+    > Le 18/02/2023 ? 21:44, J C Nash a ?crit?:
+    >> I wrote first cut at unirootR for Martin M and he revised and put in
+    >> Rmpfr.
+    >> 
+    >> The following extends Ben's example, but adds the unirootR with trace
+    >> output.
+    >> 
+    >> c1 <- 4469.822
+    >> c2 <- 572.3413
+    >> f <- function(x) { c1/x - c2/(1-x) }; uniroot(f, c(1e-6, 1))
+    >> uniroot(f, c(1e-6, 1))
+    >> library(Rmpfr)
+    >> unirootR(f, c(1e-6, 1), extendInt="no", trace=1)
+    >> 
+    >> This gives more detail on the iterations, and it looks like the Inf is 
+    >> the
+    >> issue. But certainly we could do more to avoid "gotchas" like this. If
+    >> someone is interested in some back and forth, I'd be happy to give it a
+    >> try, but I think progress would be better with more than one contributor.
+    > For me, the following fix makes the job :
+
+    > --- nlm.R.old??? 2018-09-25 10:44:49.000000000 +0200
+    > +++ nlm.R    2023-02-20 10:46:39.893542531 +0100
+    > @@ -143,14 +143,14 @@
+
+    >      if(check.conv) {
+    >      val <- tryCatch(.External2(C_zeroin2, function(arg) f(arg, ...),
+    > -                   lower, upper, f.lower, f.upper,
+    > +                   lower, upper, f.low., f.upp.,
+    >                     tol, as.integer(maxiter)),
+    >              warning = function(w)w)
+    >      if(inherits(val, "warning"))
+    >          stop("convergence problem in zero finding: ", 
+    > conditionMessage(val))
+    >      } else {
+    >      val <- .External2(C_zeroin2, function(arg) f(arg, ...),
+    > -              lower, upper, f.lower, f.upper,
+    > +              lower, upper, f.low., f.upp.,
+    >                tol, as.integer(maxiter))
+    >      }
+    >      iter <- as.integer(val[2L])
+
+
+    > Best,
+    > Serguei.
+
+Thank you, Ben, John and Serguei !
+
+Serguei's fix shows the way -- even though it is not sufficient in general:
+f.low. and f.upp.  may not be current after interval extensions
+in the doX case.
+
+But that's easy to amend, too.
+
+I will need to do a few more checks / code reading before I'm
+100% convinced that such a change is good to be committed,  but
+I'm pretty confident currently that it *is* ..
+
+
+(and read on:  Ben had some good further questions, below)
+
+
+    >> 
+    >> Best,
+    >> 
+    >> John Nash
+
+
+    >> On 2023-02-18 12:28, Ben Bolker wrote:
+    >>> c1 <- 4469.822
+    >>> c2 <- 572.3413
+    >>> f <- function(x) { c1/x - c2/(1-x) }; uniroot(f, c(1e-6, 1))
+    >>> uniroot(f, c(1e-6, 1))
+    >>> 
+    >>> 
+    >>>     provides a root at -6.00e-05, which is outside of the specified 
+    >>> bounds.  The default value of the "extendInt" argument to uniroot() 
+    >>> is "no", as far as I can see ...
+    >>> 
+    >>> $root
+    >>> [1] -6.003516e-05
+    >>> 
+    >>> $f.root
+    >>> [1] -74453981
+    >>> 
+    >>> $iter
+    >>> [1] 1
+    >>> 
+    >>> $init.it
+    >>> [1] NA
+    >>> 
+    >>> $estim.prec
+    >>> [1] 6.103516e-05
+    >>> 
+    >>>    I suspect this fails because f(1) (value at the upper bound) is 
+    >>> infinite, although setting interval to c(0.01, 1) does work/give a 
+    >>> sensible answer ...  (works for a lower bound of 1e-4, fails for 1e-5 
+    >>> ...)
+    >>> 
+    >>>    Setting the upper bound < 1 appears to avoid the problem.
+    >>> 
+    >>>   For what it's worth, the result has an "init.it" component, but the 
+    >>> only thing the documentation says about it is " component ?init.it? 
+    >>> was added in R 3.1.0".
+
+Yeah.. I had forgotten to document it when I added it, and a
+fellow R corer documented it "pro tem" and then we forgot about
+it.
+Indeed, it gives the number of "initial iterations" which means
+those were the search interval is extended, and "hence" it gives
+NA when there were no such initial iterations 
+
+    >>> 
+    >>>    And, I think (?) that the 'trace' argument only produces any 
+    >>> output if the 'extendInt' option is enabled?
+
+yes, that is true for regular uniroot()
+For {Rmpfr}'s unirootR(), however,
+
+there's another argument    verbose = as.logical(trace)
+so it is TRUE when trace is not 0
+and does print more.
+
+{And of course the nice thing about unirootR() is that it is
+ both pure R  *and* it works with arbitrary precision "mpfr" numbers}
+
+Martin
+ 
+    >>> 
+    >>>    Inspired by 
+    >>> https://stackoverflow.com/questions/75494696/solving-a-system-of-non-linear-equations-with-only-one-unknown/75494955#75494955
+    >>> 
+    >>>    cheers
+    >>>     Ben Bolker
+    >>> 
+    >>> ______________________________________________
+    >>> R-devel at r-project.org mailing list
+    >>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
