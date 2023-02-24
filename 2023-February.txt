@@ -5245,3 +5245,146 @@ N?r du skickar e-post till Karolinska Institutet (KI) inneb?r detta att KI komme
 
 Sending email to Karolinska Institutet (KI) will result in KI processing your personal data. You can read more about KI?s processing of personal data here<https://ki.se/en/staff/data-protection-policy>.
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Wed Feb 22 11:32:25 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Wed, 22 Feb 2023 11:32:25 +0100
+Subject: [Rd] uniroot violates bounds?
+In-Reply-To: <25587.47870.208722.124282@stat.math.ethz.ch>
+References: <4a1e9fd8-2f39-ecba-9dff-dbac6cb17fdd@gmail.com>
+ <504a005d-6c7d-7704-ef39-691b028358e0@gmail.com>
+ <5d51a7d0-c5d4-79c7-9232-689cba374385@insa-toulouse.fr>
+ <25587.47870.208722.124282@stat.math.ethz.ch>
+Message-ID: <25589.61241.39294.195005@stat.math.ethz.ch>
+
+
+>>>>> Martin Maechler on Mon, 20 Feb 2023 19:25:02 +0100 writes:
+
+>>>>> Serguei Sokol via R-devel 
+>>>>>     on Mon, 20 Feb 2023 10:59:22 +0100 writes:
+
+    >> Le 18/02/2023 ? 21:44, J C Nash a ?crit?:
+    >>> I wrote first cut at unirootR for Martin M and he revised and put in
+    >>> Rmpfr.
+    >>> 
+    >>> The following extends Ben's example, but adds the unirootR with trace
+    >>> output.
+    >>> 
+    >>> c1 <- 4469.822
+    >>> c2 <- 572.3413
+    >>> f <- function(x) { c1/x - c2/(1-x) }; uniroot(f, c(1e-6, 1))
+    >>> uniroot(f, c(1e-6, 1))
+    >>> library(Rmpfr)
+    >>> unirootR(f, c(1e-6, 1), extendInt="no", trace=1)
+    >>> 
+    >>> This gives more detail on the iterations, and it looks like the Inf is 
+    >>> the
+    >>> issue. But certainly we could do more to avoid "gotchas" like this. If
+    >>> someone is interested in some back and forth, I'd be happy to give it a
+    >>> try, but I think progress would be better with more than one contributor.
+    >> For me, the following fix makes the job :
+
+    >> --- nlm.R.old??? 2018-09-25 10:44:49.000000000 +0200
+    >> +++ nlm.R    2023-02-20 10:46:39.893542531 +0100
+    >> @@ -143,14 +143,14 @@
+
+    >>      if(check.conv) {
+    >>      val <- tryCatch(.External2(C_zeroin2, function(arg) f(arg, ...),
+    >> -                   lower, upper, f.lower, f.upper,
+    >> +                   lower, upper, f.low., f.upp.,
+    >>                     tol, as.integer(maxiter)),
+    >>              warning = function(w)w)
+    >>      if(inherits(val, "warning"))
+    >>          stop("convergence problem in zero finding: ", 
+    >> conditionMessage(val))
+    >>      } else {
+    >>      val <- .External2(C_zeroin2, function(arg) f(arg, ...),
+    >> -              lower, upper, f.lower, f.upper,
+    >> +              lower, upper, f.low., f.upp.,
+    >>                tol, as.integer(maxiter))
+    >>      }
+    >>      iter <- as.integer(val[2L])
+
+
+    >> Best,
+    >>  Serguei.
+
+> Thank you, Ben, John and Serguei !
+
+> Serguei's fix shows the way -- even though it is not sufficient in general:
+> f.low. and f.upp.  may not be current after interval extensions
+> in the doX case.
+
+> But that's easy to amend, too.
+
+> I will need to do a few more checks / code reading before I'm
+> 100% convinced that such a change is good to be committed,  but
+> I'm pretty confident currently that it *is* ..
+
+I have committed the changes to R-devel now
+
+------------------------------------------------------------------------
+r83889 | maechler | 2023-02-22 10:14:19 +0100 
+Changed paths:
+   M doc/NEWS.Rd
+   M src/library/stats/R/nlm.R
+   M src/library/stats/man/uniroot.Rd
+   M tests/reg-tests-1e.R
+
+uniroot() close to |f()| = Inf staying in interval
+------------------------------------------------------------------------
+
+... in the NEWS thanking Ben and Serguei.
+
+There's a small possibility that this did not only fix the bug,
+but has also very slightly changed uniroot() results in
+situations they were good already (so test code which over zealously
+compares previous with current results may trigger ..).
+but I think the extra safe guarding against +/- Inf values in
+f(.) is well worth it
+
+{The commit also improves the help page saying more about
+'init.it' in the result.}
+
+Martin
+
+
+From v@mch@|e @end|ng |rom gm@||@com  Wed Feb 22 23:05:59 2023
+From: v@mch@|e @end|ng |rom gm@||@com (Vanessa McHale)
+Date: Wed, 22 Feb 2023 17:05:59 -0500
+Subject: [Rd] dyn.load loads libraries/symbols at high addresses.
+Message-ID: <3994ce10-2b23-bc0f-e552-9689041543b5@gmail.com>
+
+Hello all,
+
+I am trying to write an interface for BQN 
+<https://mlochbaum.github.io/BQN/> and R
+
+However, even
+|
+dyn.load("/usr/local/lib/libcbqn.so"); .Call("bqn_init")|
+
+immediately fails on the BQN side, viz.
+
+|Failed to allocate memory for JIT 200 times; stopping trying||
+||CBQN interpreter entered unexpected state, exiting.
+
+|This is because BQN tries to allocate memory for a JIT near itself and 
+also in the lower 32 bits.|
+
+u64 near = (u64)&bqn_exec;
+u64 MAX_DIST = 1ULL<<30;
+mmap(NULL, sz, PROT_READ|PROT_WRITE|PROT_EXEC, 
+MAP_NORESERVE|MAP_PRIVATE|MAP_ANONYMOUS|MAP_32BIT, -1, 0);
+
+|However, |&bqn_exec| seems to be 0x7...||i.e. libcbqn.so is being 
+loaded to a high address. Why is this? Is there some way to request that 
+it and its symbols be loaded to lower addresses? I have never had this 
+happen when using dlopen and dlsym!|
+|
+Thanks!
+Vanessa McHale|
+|
+
+	[[alternative HTML version deleted]]
+
+
