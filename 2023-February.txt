@@ -5388,3 +5388,255 @@ Vanessa McHale|
 	[[alternative HTML version deleted]]
 
 
+From yut@n|@|n| @end|ng |rom gm@||@com  Thu Feb 23 03:27:21 2023
+From: yut@n|@|n| @end|ng |rom gm@||@com (Hiroaki Yutani)
+Date: Thu, 23 Feb 2023 11:27:21 +0900
+Subject: [Rd] Undocumented change of dirname("C:/") on R-devel on Windows
+Message-ID: <CALyqOb8-eihVs9FW2AcH42mOCwZj2gLsq=j1sNUSthnf0k7Zow@mail.gmail.com>
+
+Hi,
+
+I found dirname() behaves differently on R-devel on Windows. Since I'm not
+sure which behavior is right, let me ask here before filing this to R's
+Bigzilla.
+
+On R 4.2.2., we get
+
+    > dirname("C:/")
+    [1] "C:/"
+
+However, on R-devel (r83888), we get
+
+    > dirname("C:/")
+    [1] "."
+
+?dirname says 'dirname returns the part of the path up to but excluding the
+last path separator, or "." if there is no path separator,' but I don't see
+how the root path is supposed to be treated based on this rule (, whether
+it's WIndows or UNIX-alike).
+
+What should we expect as the return value of dirname("C:/")? I feel the
+current behavior on R 4.2.2 is right, but I'd like to confirm.
+
+Best,
+Yutani
+
+	[[alternative HTML version deleted]]
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Thu Feb 23 09:15:17 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Thu, 23 Feb 2023 09:15:17 +0100
+Subject: [Rd] 
+ Undocumented change of dirname("C:/") on R-devel on Windows
+In-Reply-To: <CALyqOb8-eihVs9FW2AcH42mOCwZj2gLsq=j1sNUSthnf0k7Zow@mail.gmail.com>
+References: <CALyqOb8-eihVs9FW2AcH42mOCwZj2gLsq=j1sNUSthnf0k7Zow@mail.gmail.com>
+Message-ID: <1db6ce6b-04f0-b890-c320-3e0cbc20a99f@gmail.com>
+
+
+On 2/23/23 03:27, Hiroaki Yutani wrote:
+> Hi,
+>
+> I found dirname() behaves differently on R-devel on Windows. Since I'm not
+> sure which behavior is right, let me ask here before filing this to R's
+> Bigzilla.
+>
+> On R 4.2.2., we get
+>
+>      > dirname("C:/")
+>      [1] "C:/"
+>
+> However, on R-devel (r83888), we get
+>
+>      > dirname("C:/")
+>      [1] "."
+>
+> ?dirname says 'dirname returns the part of the path up to but excluding the
+> last path separator, or "." if there is no path separator,' but I don't see
+> how the root path is supposed to be treated based on this rule (, whether
+> it's WIndows or UNIX-alike).
+Thanks for spotting the difference, I've reverted to the previous 
+behavior, the change was unintentional. If you spot any other suspicious 
+changes in behavior in file-system operations, please report.
+> What should we expect as the return value of dirname("C:/")? I feel the
+> current behavior on R 4.2.2 is right, but I'd like to confirm.
+
+I also think the old behavior is better, even though it could be argued 
+whether the "/" in "C:/" is a path separator or not, and whether it is 
+trailing or not. But the behavior is in line with Unix where dirname of 
+"/" is also "/". Msys2 would return "C:".
+
+If? "/" in "C:/" is a path separator but not a trailing path separator, 
+then basename("C:/") should probably be "" and not "C:", and this would 
+be in line with what R does on Unix. However, to be in line with Unix, I 
+think the basename of "C:/" should be "C:/". Yet, Msys2 returns "C:" 
+which is what R does now.
+
+So what these functions should do on Windows is definitely tricky. In 
+either case the behavior is now again as in R 4.2.2.
+
+Best
+Tomas
+
+>
+> Best,
+> Yutani
+>
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Thu Feb 23 09:48:21 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Thu, 23 Feb 2023 09:48:21 +0100
+Subject: [Rd] dyn.load loads libraries/symbols at high addresses.
+In-Reply-To: <3994ce10-2b23-bc0f-e552-9689041543b5@gmail.com>
+References: <3994ce10-2b23-bc0f-e552-9689041543b5@gmail.com>
+Message-ID: <8207ed5e-5ad9-408c-d1c9-6d00e1ba756b@gmail.com>
+
+
+On 2/22/23 23:05, Vanessa McHale wrote:
+> Hello all,
+>
+> I am trying to write an interface for BQN
+> <https://mlochbaum.github.io/BQN/> and R
+>
+> However, even
+> |
+> dyn.load("/usr/local/lib/libcbqn.so"); .Call("bqn_init")|
+>
+> immediately fails on the BQN side, viz.
+>
+> |Failed to allocate memory for JIT 200 times; stopping trying||
+> ||CBQN interpreter entered unexpected state, exiting.
+>
+> |This is because BQN tries to allocate memory for a JIT near itself and
+> also in the lower 32 bits.|
+>
+> u64 near = (u64)&bqn_exec;
+> u64 MAX_DIST = 1ULL<<30;
+> mmap(NULL, sz, PROT_READ|PROT_WRITE|PROT_EXEC,
+> MAP_NORESERVE|MAP_PRIVATE|MAP_ANONYMOUS|MAP_32BIT, -1, 0);
+>
+> |However, |&bqn_exec| seems to be 0x7...||i.e. libcbqn.so is being
+> loaded to a high address. Why is this? Is there some way to request that
+> it and its symbols be loaded to lower addresses? I have never had this
+> happen when using dlopen and dlsym!|
+
+R doesn't do anything special here, it uses also dlopen() and dlsym() on 
+Unix systems. I am not aware of a portable way to influence where the 
+library gets loaded at OS level, and certainly there is no such way in R.
+
+Best
+Tomas
+
+> |
+> Thanks!
+> Vanessa McHale|
+> |
+>
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From yut@n|@|n| @end|ng |rom gm@||@com  Thu Feb 23 12:12:53 2023
+From: yut@n|@|n| @end|ng |rom gm@||@com (Hiroaki Yutani)
+Date: Thu, 23 Feb 2023 20:12:53 +0900
+Subject: [Rd] 
+ Undocumented change of dirname("C:/") on R-devel on Windows
+In-Reply-To: <1db6ce6b-04f0-b890-c320-3e0cbc20a99f@gmail.com>
+References: <CALyqOb8-eihVs9FW2AcH42mOCwZj2gLsq=j1sNUSthnf0k7Zow@mail.gmail.com>
+ <1db6ce6b-04f0-b890-c320-3e0cbc20a99f@gmail.com>
+Message-ID: <CALyqOb8fuhNtO3QZVO75Zvb91EbV0ZgLvUPRyC6KkVYBWocUQw@mail.gmail.com>
+
+Thanks for the prompt response, I'll confirm it after the new R-devel
+binary is available.
+Also, thanks for the detailed explanation. I agree with you in general.
+
+> "/" in "C:/" is a path separator or not, and whether it is trailing or not
+
+It seems a Windows' path basically consists of two components; a drive
+specification (e.g., C:) and the directory structure within the drive. What
+I learned today is that both "C:/" and "C:" are valid path specifications,
+but refer to different locations; "C:" is not the root directory of the
+drive, but just a relative path [1]. So, I agree with you that the basename
+of "C:/" should be "C:/". However, at the same time, I don't feel this is
+worth a breaking change, so I think we can preserve the current (R 4.2.2)
+behavior.
+
+[1]:
+https://learn.microsoft.com/en-us/dotnet/standard/io/file-path-formats#apply-the-current-directory
+
+Best,
+Yutani
+
+2023?2?23?(?) 17:15 Tomas Kalibera <tomas.kalibera at gmail.com>:
+
+>
+> On 2/23/23 03:27, Hiroaki Yutani wrote:
+> > Hi,
+> >
+> > I found dirname() behaves differently on R-devel on Windows. Since I'm
+> not
+> > sure which behavior is right, let me ask here before filing this to R's
+> > Bigzilla.
+> >
+> > On R 4.2.2., we get
+> >
+> >      > dirname("C:/")
+> >      [1] "C:/"
+> >
+> > However, on R-devel (r83888), we get
+> >
+> >      > dirname("C:/")
+> >      [1] "."
+> >
+> > ?dirname says 'dirname returns the part of the path up to but excluding
+> the
+> > last path separator, or "." if there is no path separator,' but I don't
+> see
+> > how the root path is supposed to be treated based on this rule (, whether
+> > it's WIndows or UNIX-alike).
+> Thanks for spotting the difference, I've reverted to the previous
+> behavior, the change was unintentional. If you spot any other suspicious
+> changes in behavior in file-system operations, please report.
+> > What should we expect as the return value of dirname("C:/")? I feel the
+> > current behavior on R 4.2.2 is right, but I'd like to confirm.
+>
+> I also think the old behavior is better, even though it could be argued
+> whether the "/" in "C:/" is a path separator or not, and whether it is
+> trailing or not. But the behavior is in line with Unix where dirname of
+> "/" is also "/". Msys2 would return "C:".
+>
+> If  "/" in "C:/" is a path separator but not a trailing path separator,
+> then basename("C:/") should probably be "" and not "C:", and this would
+> be in line with what R does on Unix. However, to be in line with Unix, I
+> think the basename of "C:/" should be "C:/". Yet, Msys2 returns "C:"
+> which is what R does now.
+>
+> So what these functions should do on Windows is definitely tricky. In
+> either case the behavior is now again as in R 4.2.2.
+>
+> Best
+> Tomas
+>
+> >
+> > Best,
+> > Yutani
+> >
+> >       [[alternative HTML version deleted]]
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
