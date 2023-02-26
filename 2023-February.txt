@@ -5640,3 +5640,741 @@ Yutani
 	[[alternative HTML version deleted]]
 
 
+From yut@n|@|n| @end|ng |rom gm@||@com  Fri Feb 24 06:44:08 2023
+From: yut@n|@|n| @end|ng |rom gm@||@com (Hiroaki Yutani)
+Date: Fri, 24 Feb 2023 14:44:08 +0900
+Subject: [Rd] 
+ Undocumented change of dirname("C:/") on R-devel on Windows
+In-Reply-To: <CALyqOb8fuhNtO3QZVO75Zvb91EbV0ZgLvUPRyC6KkVYBWocUQw@mail.gmail.com>
+References: <CALyqOb8-eihVs9FW2AcH42mOCwZj2gLsq=j1sNUSthnf0k7Zow@mail.gmail.com>
+ <1db6ce6b-04f0-b890-c320-3e0cbc20a99f@gmail.com>
+ <CALyqOb8fuhNtO3QZVO75Zvb91EbV0ZgLvUPRyC6KkVYBWocUQw@mail.gmail.com>
+Message-ID: <CALyqOb8xCA182niry8_OudVw+xVpg=WiPCMsEQZTP=R7Wc2wzw@mail.gmail.com>
+
+I confirmed the revert fixed my failing test. Thanks!
+
+2023?2?23?(?) 20:12 Hiroaki Yutani <yutani.ini at gmail.com>:
+
+> Thanks for the prompt response, I'll confirm it after the new R-devel
+> binary is available.
+> Also, thanks for the detailed explanation. I agree with you in general.
+>
+> > "/" in "C:/" is a path separator or not, and whether it is trailing or
+> not
+>
+> It seems a Windows' path basically consists of two components; a drive
+> specification (e.g., C:) and the directory structure within the drive. What
+> I learned today is that both "C:/" and "C:" are valid path specifications,
+> but refer to different locations; "C:" is not the root directory of the
+> drive, but just a relative path [1]. So, I agree with you that the basename
+> of "C:/" should be "C:/". However, at the same time, I don't feel this is
+> worth a breaking change, so I think we can preserve the current (R 4.2.2)
+> behavior.
+>
+> [1]:
+> https://learn.microsoft.com/en-us/dotnet/standard/io/file-path-formats#apply-the-current-directory
+>
+> Best,
+> Yutani
+>
+> 2023?2?23?(?) 17:15 Tomas Kalibera <tomas.kalibera at gmail.com>:
+>
+>>
+>> On 2/23/23 03:27, Hiroaki Yutani wrote:
+>> > Hi,
+>> >
+>> > I found dirname() behaves differently on R-devel on Windows. Since I'm
+>> not
+>> > sure which behavior is right, let me ask here before filing this to R's
+>> > Bigzilla.
+>> >
+>> > On R 4.2.2., we get
+>> >
+>> >      > dirname("C:/")
+>> >      [1] "C:/"
+>> >
+>> > However, on R-devel (r83888), we get
+>> >
+>> >      > dirname("C:/")
+>> >      [1] "."
+>> >
+>> > ?dirname says 'dirname returns the part of the path up to but excluding
+>> the
+>> > last path separator, or "." if there is no path separator,' but I don't
+>> see
+>> > how the root path is supposed to be treated based on this rule (,
+>> whether
+>> > it's WIndows or UNIX-alike).
+>> Thanks for spotting the difference, I've reverted to the previous
+>> behavior, the change was unintentional. If you spot any other suspicious
+>> changes in behavior in file-system operations, please report.
+>> > What should we expect as the return value of dirname("C:/")? I feel the
+>> > current behavior on R 4.2.2 is right, but I'd like to confirm.
+>>
+>> I also think the old behavior is better, even though it could be argued
+>> whether the "/" in "C:/" is a path separator or not, and whether it is
+>> trailing or not. But the behavior is in line with Unix where dirname of
+>> "/" is also "/". Msys2 would return "C:".
+>>
+>> If  "/" in "C:/" is a path separator but not a trailing path separator,
+>> then basename("C:/") should probably be "" and not "C:", and this would
+>> be in line with what R does on Unix. However, to be in line with Unix, I
+>> think the basename of "C:/" should be "C:/". Yet, Msys2 returns "C:"
+>> which is what R does now.
+>>
+>> So what these functions should do on Windows is definitely tricky. In
+>> either case the behavior is now again as in R 4.2.2.
+>>
+>> Best
+>> Tomas
+>>
+>> >
+>> > Best,
+>> > Yutani
+>> >
+>> >       [[alternative HTML version deleted]]
+>> >
+>> > ______________________________________________
+>> > R-devel at r-project.org mailing list
+>> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+
+	[[alternative HTML version deleted]]
+
+
+From AHL27 @end|ng |rom p|tt@edu  Thu Feb 23 22:52:08 2023
+From: AHL27 @end|ng |rom p|tt@edu (Lakshman, Aidan H)
+Date: Thu, 23 Feb 2023 21:52:08 +0000
+Subject: [Rd] `dendrapply` Enhancements
+Message-ID: <BL0PR04MB47068D544F5A49315EF1D042D9AB9@BL0PR04MB4706.namprd04.prod.outlook.com>
+
+Hi everyone,
+
+My apologies if this isn?t the right place to submit this?I?m new to the R-devel community and still figuring out what is where.
+
+If people want to skip my writeup and just look at the code, I?ve made a repository for it here: https://github.com/ahl27/new_dendrapply/tree/master. I?m not quite sure how to integrate it into a fork of R-devel; the package structure is different from what I?m used to.
+
+I had written a slightly improved version of dendrapply for one of my research projects, and my advisor encouraged me to submit it to the R project. It took me longer than I expected, but I?ve finally gotten my implementation to be a drop-in replacement for `stats::dendrapply`. The man page for `stats::dendrapply` says ?The implementation is somewhat experimental and suggestions for enhancements (or nice examples of usage) are very welcome,? so I figured this had the potential to be a worthwhile contribution. I wanted to send it out to R-devel to see if this was something worth pursuing as an enhancement to R.
+
+The implementation I have is based in C, which I understand implies an increased burden of maintenance over pure R code. However, it does come with the following benefits:
+
+- Completely eliminates recursion, so no memory overhead from function calls or possibility of stack overflows (this was a major issue reported on some of the functions in one of our Bioconductor packages that previously used `dendrapply`).
+- Modest runtime improvement, around 2x on my computer (2021 MBP, 32GB RAM). I?m relatively confident this could be optimized more.
+- Seemingly significant reduction in memory reduction, still working on a robust benchmark. Suggestions for the best way to do that are welcome.
+- Support for applying functions with an inorder traversal (as in `stats::dendrapply`) as well as using a postorder traversal.
+
+This implementation was tested manually as well as running all the unit tests in `dendextend`, which comprises a lot of applications of `dendrapply`.
+
+The postorder traversal would be a significant new functionality to dendrapply, as it would allow for functions that use the child nodes to correctly execute. A toy example of this is something like:
+```
+exFunc <- function(x){
+  attr(x, 'newA') <- 'a'
+  if(is.null(attr(x, 'leaf'))){
+    cat(attr(x[[1]], 'newA'), attr(x[[2]], 'newA'))
+    cat('\n')
+  }
+  x
+})
+
+dendrapply(dend, exFunc)
+```
+
+With the current version of dendrapply, this prints nothing, but the postorder traversal version will print ?a? twice for each internal branch. If this would be a worthwhile addition, I can refactor the code for brevity and add a `how=c("in.order", "post.order")`, with the default value ?in.order? to maintain backwards compatibility. A preorder traversal version should also be possible, I just haven?t gotten to it yet.
+
+I think the runtime could be optimized more as well.
+
+Thank you in advance for looking at my code and offering feedback; I?m excited at the possibility of helping contribute to the R project! I?m happy to discuss more either here, on GitHub, or on the R Contributors Slack.
+
+Sincerely,
+Aidan Lakshman
+
+-----------------------
+Aidan Lakshman (he/him)<https://www.ahl27.com/>
+Doctoral Candidate, Wright Lab<https://www.wrightlabscience.com/>
+University of Pittsburgh School of Medicine
+Department of Biomedical Informatics
+ahl27 at pitt.edu
+(724) 612-9940
+
+
+	[[alternative HTML version deleted]]
+
+
+From tdhock5 @end|ng |rom gm@||@com  Fri Feb 24 12:57:00 2023
+From: tdhock5 @end|ng |rom gm@||@com (Toby Hocking)
+Date: Fri, 24 Feb 2023 04:57:00 -0700
+Subject: [Rd] `dendrapply` Enhancements
+In-Reply-To: <BL0PR04MB47068D544F5A49315EF1D042D9AB9@BL0PR04MB4706.namprd04.prod.outlook.com>
+References: <BL0PR04MB47068D544F5A49315EF1D042D9AB9@BL0PR04MB4706.namprd04.prod.outlook.com>
+Message-ID: <CALK03d1PWiA4tfbRkxMBU6tckhfB2JRGUmnuqh5ygLcCLHDXNw@mail.gmail.com>
+
+Hi Aidan, I think you are on the right email list.
+I'm not R-core, but this looks like an interesting/meaningful/significant
+contribution to base R.
+I'm not sure what the original dendrapply looks like in terms of code style
+(variable names/white space formatting/etc) but in my experience it is
+important that your code contribution makes minimal changes in that area.
+Did you hear about the R project sprint 2023?
+https://contributor.r-project.org/r-project-sprint-2023/ Your work falls
+into the "new developments" category so I think you could apply for that
+funding to participate.
+Toby
+
+On Fri, Feb 24, 2023 at 3:47 AM Lakshman, Aidan H <AHL27 at pitt.edu> wrote:
+
+> Hi everyone,
+>
+> My apologies if this isn?t the right place to submit this?I?m new to the
+> R-devel community and still figuring out what is where.
+>
+> If people want to skip my writeup and just look at the code, I?ve made a
+> repository for it here:
+> https://github.com/ahl27/new_dendrapply/tree/master. I?m not quite sure
+> how to integrate it into a fork of R-devel; the package structure is
+> different from what I?m used to.
+>
+> I had written a slightly improved version of dendrapply for one of my
+> research projects, and my advisor encouraged me to submit it to the R
+> project. It took me longer than I expected, but I?ve finally gotten my
+> implementation to be a drop-in replacement for `stats::dendrapply`. The man
+> page for `stats::dendrapply` says ?The implementation is somewhat
+> experimental and suggestions for enhancements (or nice examples of usage)
+> are very welcome,? so I figured this had the potential to be a worthwhile
+> contribution. I wanted to send it out to R-devel to see if this was
+> something worth pursuing as an enhancement to R.
+>
+> The implementation I have is based in C, which I understand implies an
+> increased burden of maintenance over pure R code. However, it does come
+> with the following benefits:
+>
+> - Completely eliminates recursion, so no memory overhead from function
+> calls or possibility of stack overflows (this was a major issue reported on
+> some of the functions in one of our Bioconductor packages that previously
+> used `dendrapply`).
+> - Modest runtime improvement, around 2x on my computer (2021 MBP, 32GB
+> RAM). I?m relatively confident this could be optimized more.
+> - Seemingly significant reduction in memory reduction, still working on a
+> robust benchmark. Suggestions for the best way to do that are welcome.
+> - Support for applying functions with an inorder traversal (as in
+> `stats::dendrapply`) as well as using a postorder traversal.
+>
+> This implementation was tested manually as well as running all the unit
+> tests in `dendextend`, which comprises a lot of applications of
+> `dendrapply`.
+>
+> The postorder traversal would be a significant new functionality to
+> dendrapply, as it would allow for functions that use the child nodes to
+> correctly execute. A toy example of this is something like:
+> ```
+> exFunc <- function(x){
+>   attr(x, 'newA') <- 'a'
+>   if(is.null(attr(x, 'leaf'))){
+>     cat(attr(x[[1]], 'newA'), attr(x[[2]], 'newA'))
+>     cat('\n')
+>   }
+>   x
+> })
+>
+> dendrapply(dend, exFunc)
+> ```
+>
+> With the current version of dendrapply, this prints nothing, but the
+> postorder traversal version will print ?a? twice for each internal branch.
+> If this would be a worthwhile addition, I can refactor the code for brevity
+> and add a `how=c("in.order", "post.order")`, with the default value
+> ?in.order? to maintain backwards compatibility. A preorder traversal
+> version should also be possible, I just haven?t gotten to it yet.
+>
+> I think the runtime could be optimized more as well.
+>
+> Thank you in advance for looking at my code and offering feedback; I?m
+> excited at the possibility of helping contribute to the R project! I?m
+> happy to discuss more either here, on GitHub, or on the R Contributors
+> Slack.
+>
+> Sincerely,
+> Aidan Lakshman
+>
+> -----------------------
+> Aidan Lakshman (he/him)<https://www.ahl27.com/>
+> Doctoral Candidate, Wright Lab<https://www.wrightlabscience.com/>
+> University of Pittsburgh School of Medicine
+> Department of Biomedical Informatics
+> ahl27 at pitt.edu
+> (724) 612-9940
+>
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From @|y@oh4 @end|ng |rom uc|@edu  Fri Feb 24 00:33:23 2023
+From: @|y@oh4 @end|ng |rom uc|@edu (Jane He)
+Date: Thu, 23 Feb 2023 15:33:23 -0800
+Subject: [Rd] Compilation Error when DEBUG_approx Toggled on in RISC-V
+Message-ID: <CAFKhkaxEmj8n7bLec9Lqs+JemM2ydmuRkrvTVL5gjD+0v4ua1A@mail.gmail.com>
+
+Hi all,
+
+While compiling R to RISC-V64 architecture and debugging in R's C source
+codes, I think I have found a small bug. Can anyone please verify whether
+it is a real bug?
+
+The possible bug lies in the file `R-4.2.2/src/library/stats/src/approx.c`
+in function `R_approxfun` around line 148:
+
+#ifdef DEBUG_approx
+    REprintf("R_approxfun(x,y, nxy = %.0f, .., nout = %.0f, method = %d,
+...)",
+    (double)nxy, (double)nout, Meth->kind);
+#endif
+
+However, there is no `Meth` defined in this function, causing a compilation
+error when `DEBUG_approx` is toggled on. The real `Meth` is actually
+defined in the `approx1` function, and the Meth seen here is probably a
+historical artifact that was never erased. To fix the error, I suggest
+changing `Meth->kind` to `method` in the `R_approxfun` function as follows:
+
+#ifdef DEBUG_approx
+    REprintf("R_approxfun(x,y, nxy = %.0f, .., nout = %.0f, method = %d,
+...)",
+    (double)nxy, (double)nout, method);
+#endif
+
+If this is really an error, I hope this small fix will be helpful to the R
+community.
+
+Thank you for your time and consideration.
+
+Best,
+Jane He
+
+_________
+University of California, Irvine
+Student of Master of Software Engineering
+2022-2023 cohort
+
+	[[alternative HTML version deleted]]
+
+
+From @|y@oh4 @end|ng |rom uc|@edu  Fri Feb 24 00:39:08 2023
+From: @|y@oh4 @end|ng |rom uc|@edu (Jane He)
+Date: Thu, 23 Feb 2023 15:39:08 -0800
+Subject: [Rd] Possible NA Propagation Failure in RISC-V64 CPU?
+Message-ID: <CAFKhkawZCNVPNhcOLebhQMUFUnC_tqyf_x3j7gD=2YKPn+hYRg@mail.gmail.com>
+
+Hi all,
+
+I am currently compiling R to RISC-V64 CPU and I think I have discovered a
+NA propagation failure.
+
+How R implements NA (not available) and NaN (not-a-number) is explained in
+detail here:
+https://stat.ethz.ch/pipermail/r-devel/2014-February/068380.html.
+
+In short, according to my understanding of R's convention, any calculation
+involving NA but no NaN should result in NA (called NA propagation), and
+any calculation involving NaN but no NA should result in NaN. Calculations
+involving both NA and NaN can result in either value.
+
+While many R functions handle this logic in their source codes, basic
+arithmetic operations such as +-/* throw it to the hardware to handle.
+However, the RISC-V64 CPU does not behave as expected, at least the CPU I
+am using (Starfive JH7100-7110).
+
+Here are the relevant bit patterns. From my understanding, as IEEE only
+regulates the bit patterns of NaN, R picks one of the bit patterns (ending
+with 07a2) and declares it as NA.
+
+# print_hex is a function to print the bit pattern in hex
+> print_hex(0.1)
+3fb999999999999a # same for RISC-V
+> print_hex(NaN)
+7ff8000000000000 # same for RISC-V
+> print_hex(NA)
+7ff00000000007a2 # same for RISC-V
+> print_hex(NA+1)
+7ff80000000007a2 # 7ff8000000000000 in RISC-V
+> print_hex(NA*1)
+7ff80000000007a2 # 7ff8000000000000 in RISC-V
+> print_hex(NaN*1)
+7ff8000000000000 # same for RISC-V
+
+
+Therefore, in RISC-V64, all basic arithmetic operations involving NA give
+NaN.
+
+> NA+1
+[1] NaN
+
+This failure in NA propagation may cause many R packages like mice to not
+work properly, and results in the `make check` test in the `stats` package
+to fail. Example from the make check test:
+
+xn <- 1:4
+yn <- c(1,NA,3:4)
+xout <- (1:9)/2
+data.frame(approx(xn,yn, xout, na.rm=FALSE, rule = 2)) # failure, some
+values should be NA but it turns out NaN
+
+I am reaching out to the R community looking for help in solving this
+problem. Does anyone around here have any hints or ideas on how to solve
+this issue?
+
+Currently, my hacky implementation is to stop the NA operand before it goes
+to the hardware and directly return NA as the output. However, this
+solution may penalize performance significantly, so I am looking for any
+alternative idea.
+
+Thank you for your time and consideration!
+
+Best regards,
+Jane He
+
+_________
+University of California, Irvine
+Student of Master of Software Engineering
+2022-2023 cohort
+
+	[[alternative HTML version deleted]]
+
+
+From AHL27 @end|ng |rom p|tt@edu  Fri Feb 24 13:42:52 2023
+From: AHL27 @end|ng |rom p|tt@edu (Lakshman, Aidan H)
+Date: Fri, 24 Feb 2023 12:42:52 +0000
+Subject: [Rd] `dendrapply` Enhancements
+In-Reply-To: <CALK03d1PWiA4tfbRkxMBU6tckhfB2JRGUmnuqh5ygLcCLHDXNw@mail.gmail.com>
+References: <BL0PR04MB47068D544F5A49315EF1D042D9AB9@BL0PR04MB4706.namprd04.prod.outlook.com>
+ <CALK03d1PWiA4tfbRkxMBU6tckhfB2JRGUmnuqh5ygLcCLHDXNw@mail.gmail.com>
+Message-ID: <BL0PR04MB4706A66884728B9419CEAE00D9A89@BL0PR04MB4706.namprd04.prod.outlook.com>
+
+Hi Toby,
+
+Thanks for your reply! I haven?t heard about the R project sprint, but I?ll definitely check it out. UK is going to be a little hard for me to get to funding-wise, but I?ll try to apply for funding.
+
+I appreciate your other comments. As far as coding style, I did do everything I could think of to make sure it?s a drop-in replacement for the current version with the default settings, so all the user-exposed arguments/variables should be identical. I used the conventions in https://github.com/wch/r-source/wiki/Contributing for commenting and whitespace, so hopefully that all looks okay. I?m realizing there may be some differences in tab widths, but I can fix that later today.
+
+-Aidan
+
+-----------------------
+Aidan Lakshman (he/him)<https://www.ahl27.com/>
+Doctoral Candidate, Wright Lab<https://www.wrightlabscience.com/>
+University of Pittsburgh School of Medicine
+Department of Biomedical Informatics
+ahl27 at pitt.edu
+(724) 612-9940
+
+
+From: Toby Hocking <tdhock5 at gmail.com>
+Date: Friday, February 24, 2023 at 06:57
+To: Lakshman, Aidan H <AHL27 at pitt.edu>
+Cc: R-devel at r-project.org <R-devel at r-project.org>
+Subject: Re: [Rd] `dendrapply` Enhancements
+Hi Aidan, I think you are on the right email list.
+I'm not R-core, but this looks like an interesting/meaningful/significant contribution to base R.
+I'm not sure what the original dendrapply looks like in terms of code style (variable names/white space formatting/etc) but in my experience it is important that your code contribution makes minimal changes in that area.
+Did you hear about the R project sprint 2023? https://contributor.r-project.org/r-project-sprint-2023/<https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fcontributor.r-project.org%2Fr-project-sprint-2023%2F&data=05%7C01%7CAHL27%40pitt.edu%7C41b702f139034cd7165608db165e4530%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638128366414606277%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=oB%2BBivUsBjIgBtZNU8mh%2Fz2rujD3bv9MbWdxqNtyUFk%3D&reserved=0> Your work falls into the "new developments" category so I think you could apply for that funding to participate.
+Toby
+
+On Fri, Feb 24, 2023 at 3:47 AM Lakshman, Aidan H <AHL27 at pitt.edu<mailto:AHL27 at pitt.edu>> wrote:
+Hi everyone,
+
+My apologies if this isn?t the right place to submit this?I?m new to the R-devel community and still figuring out what is where.
+
+If people want to skip my writeup and just look at the code, I?ve made a repository for it here: https://github.com/ahl27/new_dendrapply/tree/master<https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fgithub.com%2Fahl27%2Fnew_dendrapply%2Ftree%2Fmaster&data=05%7C01%7CAHL27%40pitt.edu%7C41b702f139034cd7165608db165e4530%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638128366414606277%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=QI%2B5t1C%2BJB15D8o8noZra4W87fgyITm12nluGN%2BFNoE%3D&reserved=0>. I?m not quite sure how to integrate it into a fork of R-devel; the package structure is different from what I?m used to.
+
+I had written a slightly improved version of dendrapply for one of my research projects, and my advisor encouraged me to submit it to the R project. It took me longer than I expected, but I?ve finally gotten my implementation to be a drop-in replacement for `stats::dendrapply`. The man page for `stats::dendrapply` says ?The implementation is somewhat experimental and suggestions for enhancements (or nice examples of usage) are very welcome,? so I figured this had the potential to be a worthwhile contribution. I wanted to send it out to R-devel to see if this was something worth pursuing as an enhancement to R.
+
+The implementation I have is based in C, which I understand implies an increased burden of maintenance over pure R code. However, it does come with the following benefits:
+
+- Completely eliminates recursion, so no memory overhead from function calls or possibility of stack overflows (this was a major issue reported on some of the functions in one of our Bioconductor packages that previously used `dendrapply`).
+- Modest runtime improvement, around 2x on my computer (2021 MBP, 32GB RAM). I?m relatively confident this could be optimized more.
+- Seemingly significant reduction in memory reduction, still working on a robust benchmark. Suggestions for the best way to do that are welcome.
+- Support for applying functions with an inorder traversal (as in `stats::dendrapply`) as well as using a postorder traversal.
+
+This implementation was tested manually as well as running all the unit tests in `dendextend`, which comprises a lot of applications of `dendrapply`.
+
+The postorder traversal would be a significant new functionality to dendrapply, as it would allow for functions that use the child nodes to correctly execute. A toy example of this is something like:
+```
+exFunc <- function(x){
+  attr(x, 'newA') <- 'a'
+  if(is.null(attr(x, 'leaf'))){
+    cat(attr(x[[1]], 'newA'), attr(x[[2]], 'newA'))
+    cat('\n')
+  }
+  x
+})
+
+dendrapply(dend, exFunc)
+```
+
+With the current version of dendrapply, this prints nothing, but the postorder traversal version will print ?a? twice for each internal branch. If this would be a worthwhile addition, I can refactor the code for brevity and add a `how=c("in.order", "post.order")`, with the default value ?in.order? to maintain backwards compatibility. A preorder traversal version should also be possible, I just haven?t gotten to it yet.
+
+I think the runtime could be optimized more as well.
+
+Thank you in advance for looking at my code and offering feedback; I?m excited at the possibility of helping contribute to the R project! I?m happy to discuss more either here, on GitHub, or on the R Contributors Slack.
+
+Sincerely,
+Aidan Lakshman
+
+-----------------------
+Aidan Lakshman (he/him)<https://www.ahl27.com/<https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fwww.ahl27.com%2F&data=05%7C01%7CAHL27%40pitt.edu%7C41b702f139034cd7165608db165e4530%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638128366414606277%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=7KUpJpdulSIzSXbpDJlyUV8pMJm%2BSVFvDOJTlVs9lhc%3D&reserved=0>>
+Doctoral Candidate, Wright Lab<https://www.wrightlabscience.com/<https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fwww.wrightlabscience.com%2F&data=05%7C01%7CAHL27%40pitt.edu%7C41b702f139034cd7165608db165e4530%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638128366414606277%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=JMgw%2BMiQ6xdp3OokToJ2nyyco%2BryiFH%2B9ap5iU3yJH8%3D&reserved=0>>
+University of Pittsburgh School of Medicine
+Department of Biomedical Informatics
+ahl27 at pitt.edu<mailto:ahl27 at pitt.edu>
+(724) 612-9940
+
+
+        [[alternative HTML version deleted]]
+
+______________________________________________
+R-devel at r-project.org<mailto:R-devel at r-project.org> mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel<https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fstat.ethz.ch%2Fmailman%2Flistinfo%2Fr-devel&data=05%7C01%7CAHL27%40pitt.edu%7C41b702f139034cd7165608db165e4530%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638128366414606277%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=I88%2FQhGHXDRS2yHqvh53k3MSWHSd5z2KBgORUHIxfG0%3D&reserved=0>
+
+	[[alternative HTML version deleted]]
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Fri Feb 24 14:02:02 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Fri, 24 Feb 2023 16:02:02 +0300
+Subject: [Rd] Possible NA Propagation Failure in RISC-V64 CPU?
+In-Reply-To: <CAFKhkawZCNVPNhcOLebhQMUFUnC_tqyf_x3j7gD=2YKPn+hYRg@mail.gmail.com>
+References: <CAFKhkawZCNVPNhcOLebhQMUFUnC_tqyf_x3j7gD=2YKPn+hYRg@mail.gmail.com>
+Message-ID: <20230224160202.08f68e11@Tarkus>
+
+On Thu, 23 Feb 2023 15:39:08 -0800
+Jane He <siyaoh4 at uci.edu> wrote:
+
+> In short, according to my understanding of R's convention, any
+> calculation involving NA but no NaN should result in NA (called NA
+> propagation), and any calculation involving NaN but no NA should
+> result in NaN. Calculations involving both NA and NaN can result in
+> either value.
+
+The ?NA help page already contains a warning that "future CPUs and/or
+compilers" may prevent NA from resulting in computations with NA. A
+similar problem has been encountered on Apple processors, but a
+workaround was found there:
+https://blog.r-project.org/2020/11/02/will-r-work-on-apple-silicon/#nanan-payload-propagation
+
+> This failure in NA propagation may cause many R packages like mice to
+> not work properly, and results in the `make check` test in the
+> `stats` package to fail.
+
+Perhaps the way forward is to update the tests.
+
+Regarding R packages, since is.na() is already documented to return
+TRUE for all NaNs, not only the NA value, it should be possible to make
+them work even if they currently fail.
+
+-- 
+Best regards,
+Ivan
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Fri Feb 24 14:09:00 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Fri, 24 Feb 2023 14:09:00 +0100
+Subject: [Rd] Possible NA Propagation Failure in RISC-V64 CPU?
+In-Reply-To: <CAFKhkawZCNVPNhcOLebhQMUFUnC_tqyf_x3j7gD=2YKPn+hYRg@mail.gmail.com>
+References: <CAFKhkawZCNVPNhcOLebhQMUFUnC_tqyf_x3j7gD=2YKPn+hYRg@mail.gmail.com>
+Message-ID: <b28f57ce-c8b2-67e5-33f8-484dc863da9d@gmail.com>
+
+
+On 2/24/23 00:39, Jane He wrote:
+> Hi all,
+>
+> I am currently compiling R to RISC-V64 CPU and I think I have discovered a
+> NA propagation failure.
+>
+> How R implements NA (not available) and NaN (not-a-number) is explained in
+> detail here:
+> https://stat.ethz.ch/pipermail/r-devel/2014-February/068380.html.
+>
+> In short, according to my understanding of R's convention, any calculation
+> involving NA but no NaN should result in NA (called NA propagation), and
+> any calculation involving NaN but no NA should result in NaN. Calculations
+> involving both NA and NaN can result in either value.
+>
+> While many R functions handle this logic in their source codes, basic
+> arithmetic operations such as +-/* throw it to the hardware to handle.
+> However, the RISC-V64 CPU does not behave as expected, at least the CPU I
+> am using (Starfive JH7100-7110).
+>
+> Here are the relevant bit patterns. From my understanding, as IEEE only
+> regulates the bit patterns of NaN, R picks one of the bit patterns (ending
+> with 07a2) and declares it as NA.
+>
+> # print_hex is a function to print the bit pattern in hex
+>> print_hex(0.1)
+> 3fb999999999999a # same for RISC-V
+>> print_hex(NaN)
+> 7ff8000000000000 # same for RISC-V
+>> print_hex(NA)
+> 7ff00000000007a2 # same for RISC-V
+>> print_hex(NA+1)
+> 7ff80000000007a2 # 7ff8000000000000 in RISC-V
+>> print_hex(NA*1)
+> 7ff80000000007a2 # 7ff8000000000000 in RISC-V
+>> print_hex(NaN*1)
+> 7ff8000000000000 # same for RISC-V
+>
+>
+> Therefore, in RISC-V64, all basic arithmetic operations involving NA give
+> NaN.
+>
+>> NA+1
+> [1] NaN
+>
+> This failure in NA propagation may cause many R packages like mice to not
+> work properly, and results in the `make check` test in the `stats` package
+> to fail. Example from the make check test:
+>
+> xn <- 1:4
+> yn <- c(1,NA,3:4)
+> xout <- (1:9)/2
+> data.frame(approx(xn,yn, xout, na.rm=FALSE, rule = 2)) # failure, some
+> values should be NA but it turns out NaN
+>
+> I am reaching out to the R community looking for help in solving this
+> problem. Does anyone around here have any hints or ideas on how to solve
+> this issue?
+>
+> Currently, my hacky implementation is to stop the NA operand before it goes
+> to the hardware and directly return NA as the output. However, this
+> solution may penalize performance significantly, so I am looking for any
+> alternative idea.
+>
+> Thank you for your time and consideration!
+
+Please see this bug report for a related discussion: 
+https://bugs.r-project.org/show_bug.cgi?id=18416
+
+This is a known problem and has been discussed a number of times before 
+RISC-V. Still, RISC-V is a bit unique architecture in that it 
+deliberately does not propagate NaN payloads at all and it cannot be 
+enabled. R's distinction of NA vs NaN however depends on that propagation.
+
+The propagation of NAs through computations in R is not reliable even on 
+other current platforms (due to what the hardware does, but also what 
+the compilers and libraries do, see e.g. ?NaN) and technically it is not 
+guaranteed and R packages are advised not to depend on it, but various 
+package checks and existing software adjusted to how the propagation 
+happens to work on widely used platforms, now probably mostly x86_64. 
+64-bit ARM is even a bit more friendly to R than that (when the CPU is 
+switched to such mode, which R does). If RISC-V supported such mode, R 
+would enable it as well, but it deliberately does not support it.
+
+Good defensive portable code would not depend on the propagation to 
+happen in hardware/compilers but add checks in software, if propagation 
+was needed. I doubt that the performance overhead would be too high if 
+done well, particularly for vectorized computations, but it will be 
+noticeable and in some cases may be high. This would have to include 
+special handling of data including NAs when they are passed to external 
+numerical libraries, which would be a lot of work to implement and 
+maintain, it seems unrealistic. At the same time there is no strong 
+incentive to do so: people who want the propagation seem to be 
+reasonably happy with how it happens to work on major platforms.
+
+For the current R to work well on RISC-V, really, the platform would 
+have to support the propagation, at least optionally, perhaps like 
+64-bit ARM. Unless major platforms in the future stop supporting the 
+propagation, I am skeptical anything major could change on the R side.
+
+Best
+Tomas
+
+
+>
+> Best regards,
+> Jane He
+>
+> _________
+> University of California, Irvine
+> Student of Master of Software Engineering
+> 2022-2023 cohort
+>
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Fri Feb 24 16:03:06 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Fri, 24 Feb 2023 16:03:06 +0100
+Subject: [Rd] Compilation Error when DEBUG_approx Toggled on in RISC-V
+In-Reply-To: <CAFKhkaxEmj8n7bLec9Lqs+JemM2ydmuRkrvTVL5gjD+0v4ua1A@mail.gmail.com>
+References: <CAFKhkaxEmj8n7bLec9Lqs+JemM2ydmuRkrvTVL5gjD+0v4ua1A@mail.gmail.com>
+Message-ID: <25592.53674.205050.596134@stat.math.ethz.ch>
+
+>>>>> Jane He 
+>>>>>     on Thu, 23 Feb 2023 15:33:23 -0800 writes:
+
+    > Hi all,
+
+    > While compiling R to RISC-V64 architecture and debugging in R's C source
+    > codes, I think I have found a small bug. Can anyone please verify whether
+    > it is a real bug?
+
+    > The possible bug lies in the file `R-4.2.2/src/library/stats/src/approx.c`
+    > in function `R_approxfun` around line 148:
+
+    > #ifdef DEBUG_approx
+    >    REprintf("R_approxfun(x,y, nxy = %.0f, .., nout = %.0f, method = %d, ...)",
+    >             (double)nxy, (double)nout, Meth->kind);
+    > #endif
+
+    > However, there is no `Meth` defined in this function, causing a compilation
+    > error when `DEBUG_approx` is toggled on. The real `Meth` is actually
+    > defined in the `approx1` function, and the Meth seen here is probably a
+    > historical artifact that was never erased. To fix the error, I suggest
+    > changing `Meth->kind` to `method` in the `R_approxfun` function as follows:
+
+    > #ifdef DEBUG_approx
+    > REprintf("R_approxfun(x,y, nxy = %.0f, .., nout = %.0f, method = %d,
+    > ...)",
+    > (double)nxy, (double)nout, method);
+    > #endif
+
+    > If this is really an error, I hope this small fix will be helpful to the R
+    > community.
+
+well,  you are right this has been a cut'n'paste thinko (almost
+surely by me) that has probably never shown but to the 0, 1, or
+2 people in the world who may have manually compiled *and*
+defined DEBUG_approx ..
+
+    > Thank you for your time and consideration.
+
+and to you, too!
+The fixed is part of the source now.
+
+
+Best,
+Martin
+
+    > Best,
+    > Jane He
+
+    > _________
+    > University of California, Irvine
+    > Student of Master of Software Engineering
+    > 2022-2023 cohort
+
+    > [[alternative HTML version deleted]]
+
+    > ______________________________________________
+    > R-devel at r-project.org mailing list
+    > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
