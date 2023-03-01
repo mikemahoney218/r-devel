@@ -6449,3 +6449,311 @@ Simon
 > 
 
 
+From x|e @end|ng |rom y|hu|@n@me  Mon Feb 27 17:02:50 2023
+From: x|e @end|ng |rom y|hu|@n@me (Yihui Xie)
+Date: Mon, 27 Feb 2023 10:02:50 -0600
+Subject: [Rd] 
+ Undocumented change of dirname("C:/") on R-devel on Windows
+In-Reply-To: <CALyqOb8xCA182niry8_OudVw+xVpg=WiPCMsEQZTP=R7Wc2wzw@mail.gmail.com>
+References: <CALyqOb8-eihVs9FW2AcH42mOCwZj2gLsq=j1sNUSthnf0k7Zow@mail.gmail.com>
+ <1db6ce6b-04f0-b890-c320-3e0cbc20a99f@gmail.com>
+ <CALyqOb8fuhNtO3QZVO75Zvb91EbV0ZgLvUPRyC6KkVYBWocUQw@mail.gmail.com>
+ <CALyqOb8xCA182niry8_OudVw+xVpg=WiPCMsEQZTP=R7Wc2wzw@mail.gmail.com>
+Message-ID: <CANROs4cp5K5ZC3F8UcZa8Togd4EyuRmBiMxQrq4Du2=Asc5pUQ@mail.gmail.com>
+
+Hi Tomas,
+
+There has been an R CMD check error with xfun and r-devel on Windows for a
+while:
+https://www.r-project.org/nosvn/R.check/r-devel-windows-x86_64/xfun-00check.html
+Basically it means that the following would return TRUE before:
+
+  normalizePath('a/b', mustWork = FALSE) == normalizePath('./a/b', mustWork
+= FALSE)
+
+but it became FALSE at some point in r-devel. I think 'a/b' and './a/b`
+should be treated as the same path. Does that make sense? Thanks!
+
+Regards,
+Yihui
+--
+https://yihui.org
+
+
+On Thu, Feb 23, 2023 at 11:44 PM Hiroaki Yutani <yutani.ini at gmail.com>
+wrote:
+
+> I confirmed the revert fixed my failing test. Thanks!
+>
+> 2023?2?23?(?) 20:12 Hiroaki Yutani <yutani.ini at gmail.com>:
+>
+> > Thanks for the prompt response, I'll confirm it after the new R-devel
+> > binary is available.
+> > Also, thanks for the detailed explanation. I agree with you in general.
+> >
+> > > "/" in "C:/" is a path separator or not, and whether it is trailing or
+> > not
+> >
+> > It seems a Windows' path basically consists of two components; a drive
+> > specification (e.g., C:) and the directory structure within the drive.
+> What
+> > I learned today is that both "C:/" and "C:" are valid path
+> specifications,
+> > but refer to different locations; "C:" is not the root directory of the
+> > drive, but just a relative path [1]. So, I agree with you that the
+> basename
+> > of "C:/" should be "C:/". However, at the same time, I don't feel this is
+> > worth a breaking change, so I think we can preserve the current (R 4.2.2)
+> > behavior.
+> >
+> > [1]:
+> >
+> https://learn.microsoft.com/en-us/dotnet/standard/io/file-path-formats#apply-the-current-directory
+> >
+> > Best,
+> > Yutani
+> >
+> > 2023?2?23?(?) 17:15 Tomas Kalibera <tomas.kalibera at gmail.com>:
+> >
+> >>
+> >> On 2/23/23 03:27, Hiroaki Yutani wrote:
+> >> > Hi,
+> >> >
+> >> > I found dirname() behaves differently on R-devel on Windows. Since I'm
+> >> not
+> >> > sure which behavior is right, let me ask here before filing this to
+> R's
+> >> > Bigzilla.
+> >> >
+> >> > On R 4.2.2., we get
+> >> >
+> >> >      > dirname("C:/")
+> >> >      [1] "C:/"
+> >> >
+> >> > However, on R-devel (r83888), we get
+> >> >
+> >> >      > dirname("C:/")
+> >> >      [1] "."
+> >> >
+> >> > ?dirname says 'dirname returns the part of the path up to but
+> excluding
+> >> the
+> >> > last path separator, or "." if there is no path separator,' but I
+> don't
+> >> see
+> >> > how the root path is supposed to be treated based on this rule (,
+> >> whether
+> >> > it's WIndows or UNIX-alike).
+> >> Thanks for spotting the difference, I've reverted to the previous
+> >> behavior, the change was unintentional. If you spot any other suspicious
+> >> changes in behavior in file-system operations, please report.
+> >> > What should we expect as the return value of dirname("C:/")? I feel
+> the
+> >> > current behavior on R 4.2.2 is right, but I'd like to confirm.
+> >>
+> >> I also think the old behavior is better, even though it could be argued
+> >> whether the "/" in "C:/" is a path separator or not, and whether it is
+> >> trailing or not. But the behavior is in line with Unix where dirname of
+> >> "/" is also "/". Msys2 would return "C:".
+> >>
+> >> If  "/" in "C:/" is a path separator but not a trailing path separator,
+> >> then basename("C:/") should probably be "" and not "C:", and this would
+> >> be in line with what R does on Unix. However, to be in line with Unix, I
+> >> think the basename of "C:/" should be "C:/". Yet, Msys2 returns "C:"
+> >> which is what R does now.
+> >>
+> >> So what these functions should do on Windows is definitely tricky. In
+> >> either case the behavior is now again as in R 4.2.2.
+> >>
+> >> Best
+> >> Tomas
+> >>
+> >> >
+> >> > Best,
+> >> > Yutani
+> >> >
+> >> >       [[alternative HTML version deleted]]
+> >> >
+> >> > ______________________________________________
+> >> > R-devel at r-project.org mailing list
+> >> > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >>
+> >
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Mon Feb 27 20:14:32 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Mon, 27 Feb 2023 20:14:32 +0100
+Subject: [Rd] 
+ Undocumented change of dirname("C:/") on R-devel on Windows
+In-Reply-To: <CANROs4cp5K5ZC3F8UcZa8Togd4EyuRmBiMxQrq4Du2=Asc5pUQ@mail.gmail.com>
+References: <CALyqOb8-eihVs9FW2AcH42mOCwZj2gLsq=j1sNUSthnf0k7Zow@mail.gmail.com>
+ <1db6ce6b-04f0-b890-c320-3e0cbc20a99f@gmail.com>
+ <CALyqOb8fuhNtO3QZVO75Zvb91EbV0ZgLvUPRyC6KkVYBWocUQw@mail.gmail.com>
+ <CALyqOb8xCA182niry8_OudVw+xVpg=WiPCMsEQZTP=R7Wc2wzw@mail.gmail.com>
+ <CANROs4cp5K5ZC3F8UcZa8Togd4EyuRmBiMxQrq4Du2=Asc5pUQ@mail.gmail.com>
+Message-ID: <a182c76a-02f1-2ede-5ded-0752e7a618bd@gmail.com>
+
+
+On 2/27/23 17:02, Yihui Xie wrote:
+> Hi Tomas,
+>
+> There has been an R CMD check error with xfun and r-devel on Windows 
+> for a while: 
+> https://www.r-project.org/nosvn/R.check/r-devel-windows-x86_64/xfun-00check.html 
+> Basically it means that the following would?return TRUE before:
+>
+> ? normalizePath('a/b', mustWork = FALSE) ==?normalizePath('./a/b', 
+> mustWork = FALSE)
+>
+> but it became FALSE at some point in r-devel. I think 'a/b' and 
+> './a/b` should be treated as the same path. Does?that make sense? Thanks!
+
+Thanks a lot for spotting and reporting this, fixed in R-devel. 
+Normalization of non-existent paths was broken.
+
+Best
+Tomas
+
+>
+> Regards,
+> Yihui
+> --
+> https://yihui.org
+>
+>
+> On Thu, Feb 23, 2023 at 11:44 PM Hiroaki Yutani <yutani.ini at gmail.com> 
+> wrote:
+>
+>     I confirmed the revert fixed my failing test. Thanks!
+>
+>     2023?2?23?(?) 20:12 Hiroaki Yutani <yutani.ini at gmail.com>:
+>
+>     > Thanks for the prompt response, I'll confirm it after the new
+>     R-devel
+>     > binary is available.
+>     > Also, thanks for the detailed explanation. I agree with you in
+>     general.
+>     >
+>     > > "/" in "C:/" is a path separator or not, and whether it is
+>     trailing or
+>     > not
+>     >
+>     > It seems a Windows' path basically consists of two components; a
+>     drive
+>     > specification (e.g., C:) and the directory structure within the
+>     drive. What
+>     > I learned today is that both "C:/" and "C:" are valid path
+>     specifications,
+>     > but refer to different locations; "C:" is not the root directory
+>     of the
+>     > drive, but just a relative path [1]. So, I agree with you that
+>     the basename
+>     > of "C:/" should be "C:/". However, at the same time, I don't
+>     feel this is
+>     > worth a breaking change, so I think we can preserve the current
+>     (R 4.2.2)
+>     > behavior.
+>     >
+>     > [1]:
+>     >
+>     https://learn.microsoft.com/en-us/dotnet/standard/io/file-path-formats#apply-the-current-directory
+>     >
+>     > Best,
+>     > Yutani
+>     >
+>     > 2023?2?23?(?) 17:15 Tomas Kalibera <tomas.kalibera at gmail.com>:
+>     >
+>     >>
+>     >> On 2/23/23 03:27, Hiroaki Yutani wrote:
+>     >> > Hi,
+>     >> >
+>     >> > I found dirname() behaves differently on R-devel on Windows.
+>     Since I'm
+>     >> not
+>     >> > sure which behavior is right, let me ask here before filing
+>     this to R's
+>     >> > Bigzilla.
+>     >> >
+>     >> > On R 4.2.2., we get
+>     >> >
+>     >> >? ? ? > dirname("C:/")
+>     >> >? ? ? [1] "C:/"
+>     >> >
+>     >> > However, on R-devel (r83888), we get
+>     >> >
+>     >> >? ? ? > dirname("C:/")
+>     >> >? ? ? [1] "."
+>     >> >
+>     >> > ?dirname says 'dirname returns the part of the path up to but
+>     excluding
+>     >> the
+>     >> > last path separator, or "." if there is no path separator,'
+>     but I don't
+>     >> see
+>     >> > how the root path is supposed to be treated based on this rule (,
+>     >> whether
+>     >> > it's WIndows or UNIX-alike).
+>     >> Thanks for spotting the difference, I've reverted to the previous
+>     >> behavior, the change was unintentional. If you spot any other
+>     suspicious
+>     >> changes in behavior in file-system operations, please report.
+>     >> > What should we expect as the return value of dirname("C:/")?
+>     I feel the
+>     >> > current behavior on R 4.2.2 is right, but I'd like to confirm.
+>     >>
+>     >> I also think the old behavior is better, even though it could
+>     be argued
+>     >> whether the "/" in "C:/" is a path separator or not, and
+>     whether it is
+>     >> trailing or not. But the behavior is in line with Unix where
+>     dirname of
+>     >> "/" is also "/". Msys2 would return "C:".
+>     >>
+>     >> If? "/" in "C:/" is a path separator but not a trailing path
+>     separator,
+>     >> then basename("C:/") should probably be "" and not "C:", and
+>     this would
+>     >> be in line with what R does on Unix. However, to be in line
+>     with Unix, I
+>     >> think the basename of "C:/" should be "C:/". Yet, Msys2 returns
+>     "C:"
+>     >> which is what R does now.
+>     >>
+>     >> So what these functions should do on Windows is definitely
+>     tricky. In
+>     >> either case the behavior is now again as in R 4.2.2.
+>     >>
+>     >> Best
+>     >> Tomas
+>     >>
+>     >> >
+>     >> > Best,
+>     >> > Yutani
+>     >> >
+>     >> >? ? ? ?[[alternative HTML version deleted]]
+>     >> >
+>     >> > ______________________________________________
+>     >> > R-devel at r-project.org mailing list
+>     >> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>     >>
+>     >
+>
+>     ? ? ? ? [[alternative HTML version deleted]]
+>
+>     ______________________________________________
+>     R-devel at r-project.org mailing list
+>     https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+	[[alternative HTML version deleted]]
+
+
