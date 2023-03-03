@@ -1,0 +1,1403 @@
+From ch|r|com @end|ng |rom goog|e@com  Wed Mar  1 10:36:02 2023
+From: ch|r|com @end|ng |rom goog|e@com (Michael Chirico)
+Date: Wed, 1 Mar 2023 01:36:02 -0800
+Subject: [Rd] tab-complete for non-syntactic names could attempt
+ backtick-wrapping
+Message-ID: <CAD7Bkx_=noLWcQLFps7HMxQw65e4_+3O=Rtr158ttgfnCbyskw@mail.gmail.com>
+
+Consider:
+
+x <- list(`a b` = 1)
+x$a<tab>
+
+(i.e., press the 'tab' key after typing 'x$a')
+
+The auto-complete mechanism will fill the buffer like so:
+x$a b
+
+This is not particularly helpful because this is now a syntax error.
+
+It seems to me there's a simple fix -- in
+utils:::specialCompletions(), we can wrap the result of
+utils:::specialOpCompletionsHelper() with backticks for non-syntactic
+names ([1]):
+
+comps <- specialOpCompletionsHelper(op, suffix, prefix)
+if (length(comps) == 0L) comps <- ""
++non_syntactic <- make.names(comps) != comps
++comps[non_syntactic] <- paste0("`", comps[non_syntactic], "`")
+sprintf("%s%s%s", prefix, op, comps)
+
+I'm somewhat surprised this hasn't come up before (I searched for
+'completeToken', 'specialCompletions', and
+'specialOpCompletionsHelper' here and on Bugzilla), so I'm checking
+with the list first if I'm missing anything before filing a patch.
+
+Mike C
+
+[1] https://github.com/r-devel/r-svn/blob/4657f65a377cb5ef318c6548bc264e3b0f9517a0/src/library/utils/R/completion.R#L536-L538
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Wed Mar  1 10:56:47 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Wed, 1 Mar 2023 12:56:47 +0300
+Subject: [Rd] tab-complete for non-syntactic names could attempt
+ backtick-wrapping
+In-Reply-To: <CAD7Bkx_=noLWcQLFps7HMxQw65e4_+3O=Rtr158ttgfnCbyskw@mail.gmail.com>
+References: <CAD7Bkx_=noLWcQLFps7HMxQw65e4_+3O=Rtr158ttgfnCbyskw@mail.gmail.com>
+Message-ID: <20230301125647.765cda59@arachnoid>
+
+? Wed, 1 Mar 2023 01:36:02 -0800
+Michael Chirico via R-devel <r-devel at r-project.org> ?????:
+
+> +comps[non_syntactic] <- paste0("`", comps[non_syntactic], "`")
+
+There are a few more corner cases. For example, comps could contain
+backticks (which should be escaped with backslashes) and backslashes
+(which should also be escaped). Thankfully, \uXXXX-style Unicode escape
+sequences are not currently supported inside backticks, and "escape the
+backslash" rule already takes care of them.
+
+The deparse() function already knows these rules:
+
+name <- 'hello world ` \\uFF'
+cat(deparse1(as.name(name), backtick=TRUE), '\n')
+# `hello world \` \\uFF`
+`hello world \` \\uFF` <- 'hello'
+`hello world \` \\uFF`
+# [1] "hello"
+
+-- 
+Best regards,
+Ivan
+
+
+From @|@ergbox @end|ng |rom gm@||@com  Wed Mar  1 01:19:00 2023
+From: @|@ergbox @end|ng |rom gm@||@com (Alexey Sergushichev)
+Date: Tue, 28 Feb 2023 18:19:00 -0600
+Subject: [Rd] Incorrect behavior of ks.test and psmirnov functions with
+ exact=TRUE
+Message-ID: <CAMGHQ95wXZ=LMVkUjDRsCJ_0P2VAbWnQrj-4_NvdXRGMuvVDvA@mail.gmail.com>
+
+HI,
+
+I've noticed what I think is an incorrect behavior of stats::psmirnov
+function and consequently of ks.test when run in an exact mode.
+
+For example:
+psmirnov(1, sizes=c(50, 50), z=1:100, two.sided = FALSE, lower.tail = F,
+exact=TRUE)
+
+produces 2.775558e-15
+
+However, the exact value should be 1/combination(100, 50), which is
+9.9e-30. While the absolute error is small, the relative error is huge, and
+it is not fixed by setting option log.p=T
+
+To compare, SciPy has a correct implementation in scipy.stats.ks_2samp:
+scipy.stats.ks_2samp(list(range(1,51)), list(range(51, 101)),
+alternative="greater", method="exact")
+returns 9.911653021418333e-30.
+
+I've tried to dig in a bit and the problem comes down to how the final
+value is calculated in psmirnov function:
+
+    if (log.p & !lower.tail)
+        return(log1p(-ret/exp(logdenom)))
+    if (!log.p & !lower.tail)
+        return(1 - ret/exp(logdenom))
+
+There exp(logdenom) is a relatively good (but not perfect) approximation of
+combination(100, 50) = 1.008913e+29, ret is also a good approximation of
+combination(100, 50)-1 = 1.008913e+29 but there is not enough double
+precision for 1 - ret/exp(logdenom) to capture 1/combination(100, 50).
+
+I don't have time to provide a fix, at least not now, but I think this
+behavior (good absolute error, but poor relative error for small values)
+should at least be mentioned in the manual of the methods psmirnov and/or
+ks.test
+
+Best,
+Alexey Sergushichev
+
+	[[alternative HTML version deleted]]
+
+
+From pd@me@ @end|ng |rom cb@@dk  Wed Mar  1 13:04:56 2023
+From: pd@me@ @end|ng |rom cb@@dk (Peter Dalgaard)
+Date: Wed, 1 Mar 2023 12:04:56 +0000
+Subject: [Rd] R 4.2.3 scheduled for March 15
+Message-ID: <0698828C-0FC0-421C-92DC-045717E4F7A2@cbs.dk>
+
+Full schedule available on developer.r-project.org in a short while.
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From @nto|ne@|@br| @end|ng |rom gm@||@com  Wed Mar  1 13:53:21 2023
+From: @nto|ne@|@br| @end|ng |rom gm@||@com (Antoine Fabri)
+Date: Wed, 1 Mar 2023 13:53:21 +0100
+Subject: [Rd] confusing all.equal output
+Message-ID: <CAEKh8uj-pp63WGDvG7YtsMqrMnqHUcWq0Ex2ObPxOPzEh3hLxQ@mail.gmail.com>
+
+dear r-devel,
+
+This has probably been forever like this but is this satisfying ?
+
+all.equal(c(1,NA,NA), c(1,NA,3))
+#> [1] "'is.NA' value mismatch: 1 in current 2 in target"
+
+is.NA() doesn't exist (is.na() does), and is.na() is never 1 or 2.
+
+In this example it's obvious that we're counting missing values, in a
+general situation I believe it isn't (we might understand it as the
+position of the first NA for instance).
+
+I would expect something like "'amount of missing values mismatch: 1 in
+current 2 in target"
+
+Thanks,
+
+Antoine
+
+	[[alternative HTML version deleted]]
+
+
+From ch|r|com @end|ng |rom goog|e@com  Wed Mar  1 17:48:08 2023
+From: ch|r|com @end|ng |rom goog|e@com (Michael Chirico)
+Date: Wed, 1 Mar 2023 08:48:08 -0800
+Subject: [Rd] tab-complete for non-syntactic names could attempt
+ backtick-wrapping
+In-Reply-To: <20230301125647.765cda59@arachnoid>
+References: <CAD7Bkx_=noLWcQLFps7HMxQw65e4_+3O=Rtr158ttgfnCbyskw@mail.gmail.com>
+ <20230301125647.765cda59@arachnoid>
+Message-ID: <CAD7Bkx-Mvh-3R62WARmSDqTwb94oCT9yLMzXAHVbZTU1xKTQfw@mail.gmail.com>
+
+Great suggestion! I've started a patch:
+https://bugs.r-project.org/show_bug.cgi?id=18479
+
+On Wed, Mar 1, 2023 at 1:56 AM Ivan Krylov <krylov.r00t at gmail.com> wrote:
+>
+> ? Wed, 1 Mar 2023 01:36:02 -0800
+> Michael Chirico via R-devel <r-devel at r-project.org> ?????:
+>
+> > +comps[non_syntactic] <- paste0("`", comps[non_syntactic], "`")
+>
+> There are a few more corner cases. For example, comps could contain
+> backticks (which should be escaped with backslashes) and backslashes
+> (which should also be escaped). Thankfully, \uXXXX-style Unicode escape
+> sequences are not currently supported inside backticks, and "escape the
+> backslash" rule already takes care of them.
+>
+> The deparse() function already knows these rules:
+>
+> name <- 'hello world ` \\uFF'
+> cat(deparse1(as.name(name), backtick=TRUE), '\n')
+> # `hello world \` \\uFF`
+> `hello world \` \\uFF` <- 'hello'
+> `hello world \` \\uFF`
+> # [1] "hello"
+>
+> --
+> Best regards,
+> Ivan
+
+
+From AHL27 @end|ng |rom p|tt@edu  Wed Mar  1 17:52:20 2023
+From: AHL27 @end|ng |rom p|tt@edu (Lakshman, Aidan H)
+Date: Wed, 1 Mar 2023 16:52:20 +0000
+Subject: [Rd] `dendrapply` Enhancements
+In-Reply-To: <BL0PR04MB4706A66884728B9419CEAE00D9A89@BL0PR04MB4706.namprd04.prod.outlook.com>
+References: <BL0PR04MB47068D544F5A49315EF1D042D9AB9@BL0PR04MB4706.namprd04.prod.outlook.com>
+ <CALK03d1PWiA4tfbRkxMBU6tckhfB2JRGUmnuqh5ygLcCLHDXNw@mail.gmail.com>
+ <BL0PR04MB4706A66884728B9419CEAE00D9A89@BL0PR04MB4706.namprd04.prod.outlook.com>
+Message-ID: <BL0PR04MB4706B185A345A98AB4AB829AD9AC9@BL0PR04MB4706.namprd04.prod.outlook.com>
+
+Just wanted to give an update on the status of this, since it?s been a couple days and I?ve had a chance to work on it a little more.
+
+Improvements:
+- Fixed a few bugs, added some more robust checking to ensure correct checking for leaf nodes
+- Corrected references to ?in-order? traversals, I actually meant ?pre-order?
+- Added new documentation, including some new examples to the ?Usage? section
+- Cleaned up some names/variables/identifiers
+- Added some additional code to have function accurately replicate a weird bug of `stats::dendrapply` that is used in CRAN packages. Full details are in my PR (linked below).
+
+
+I?ve integrated this into the svn mirror at r-devel/r-svn, and put out a PR at https://github.com/r-devel/r-svn/pull/111. Current PR is passing all build checks aside from Windows, which is throwing the error `Sorry, but: Error response from server: 500` while installing Miktex. I?m not sure what?s causing this, but it seems to be something aside from my code because it?s also crashing builds for other PRs.
+
+A link to the diff file is here: https://patch-diff.githubusercontent.com/raw/r-devel/r-svn/pull/111.diff
+
+Happy to open a Bugzilla report as well; this is enough code that a discussion is probably warranted, and Bugzilla may be an easier place to discuss compared to here. Also happy to discuss on the PR itself.
+
+Thank you to everyone that has taken a look at my code, I appreciate people taking the time to read through it.
+
+Sincerely,
+Aidan Lakshman
+
+-----------------------
+Aidan Lakshman (he/him)<https://www.ahl27.com/>
+Doctoral Candidate, Wright Lab<https://www.wrightlabscience.com/>
+University of Pittsburgh School of Medicine
+Department of Biomedical Informatics
+ahl27 at pitt.edu
+(724) 612-9940
+
+
+From: Lakshman, Aidan H <AHL27 at pitt.edu>
+Date: Friday, February 24, 2023 at 07:42
+To: Toby Hocking <tdhock5 at gmail.com>
+Cc: R-devel at r-project.org <R-devel at r-project.org>
+Subject: Re: [Rd] `dendrapply` Enhancements
+Hi Toby,
+
+Thanks for your reply! I haven?t heard about the R project sprint, but I?ll definitely check it out. UK is going to be a little hard for me to get to funding-wise, but I?ll try to apply for funding.
+
+I appreciate your other comments. As far as coding style, I did do everything I could think of to make sure it?s a drop-in replacement for the current version with the default settings, so all the user-exposed arguments/variables should be identical. I used the conventions in https://github.com/wch/r-source/wiki/Contributing for commenting and whitespace, so hopefully that all looks okay. I?m realizing there may be some differences in tab widths, but I can fix that later today.
+
+-Aidan
+
+-----------------------
+Aidan Lakshman (he/him)<https://www.ahl27.com/>
+Doctoral Candidate, Wright Lab<https://www.wrightlabscience.com/>
+University of Pittsburgh School of Medicine
+Department of Biomedical Informatics
+ahl27 at pitt.edu
+(724) 612-9940
+
+
+From: Toby Hocking <tdhock5 at gmail.com>
+Date: Friday, February 24, 2023 at 06:57
+To: Lakshman, Aidan H <AHL27 at pitt.edu>
+Cc: R-devel at r-project.org <R-devel at r-project.org>
+Subject: Re: [Rd] `dendrapply` Enhancements
+Hi Aidan, I think you are on the right email list.
+I'm not R-core, but this looks like an interesting/meaningful/significant contribution to base R.
+I'm not sure what the original dendrapply looks like in terms of code style (variable names/white space formatting/etc) but in my experience it is important that your code contribution makes minimal changes in that area.
+Did you hear about the R project sprint 2023? https://contributor.r-project.org/r-project-sprint-2023/<https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fcontributor.r-project.org%2Fr-project-sprint-2023%2F&data=05%7C01%7CAHL27%40pitt.edu%7C41b702f139034cd7165608db165e4530%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638128366414606277%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=oB%2BBivUsBjIgBtZNU8mh%2Fz2rujD3bv9MbWdxqNtyUFk%3D&reserved=0> Your work falls into the "new developments" category so I think you could apply for that funding to participate.
+Toby
+
+On Fri, Feb 24, 2023 at 3:47 AM Lakshman, Aidan H <AHL27 at pitt.edu<mailto:AHL27 at pitt.edu>> wrote:
+Hi everyone,
+
+My apologies if this isn?t the right place to submit this?I?m new to the R-devel community and still figuring out what is where.
+
+If people want to skip my writeup and just look at the code, I?ve made a repository for it here: https://github.com/ahl27/new_dendrapply/tree/master<https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fgithub.com%2Fahl27%2Fnew_dendrapply%2Ftree%2Fmaster&data=05%7C01%7CAHL27%40pitt.edu%7C41b702f139034cd7165608db165e4530%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638128366414606277%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=QI%2B5t1C%2BJB15D8o8noZra4W87fgyITm12nluGN%2BFNoE%3D&reserved=0>. I?m not quite sure how to integrate it into a fork of R-devel; the package structure is different from what I?m used to.
+
+I had written a slightly improved version of dendrapply for one of my research projects, and my advisor encouraged me to submit it to the R project. It took me longer than I expected, but I?ve finally gotten my implementation to be a drop-in replacement for `stats::dendrapply`. The man page for `stats::dendrapply` says ?The implementation is somewhat experimental and suggestions for enhancements (or nice examples of usage) are very welcome,? so I figured this had the potential to be a worthwhile contribution. I wanted to send it out to R-devel to see if this was something worth pursuing as an enhancement to R.
+
+The implementation I have is based in C, which I understand implies an increased burden of maintenance over pure R code. However, it does come with the following benefits:
+
+- Completely eliminates recursion, so no memory overhead from function calls or possibility of stack overflows (this was a major issue reported on some of the functions in one of our Bioconductor packages that previously used `dendrapply`).
+- Modest runtime improvement, around 2x on my computer (2021 MBP, 32GB RAM). I?m relatively confident this could be optimized more.
+- Seemingly significant reduction in memory reduction, still working on a robust benchmark. Suggestions for the best way to do that are welcome.
+- Support for applying functions with an inorder traversal (as in `stats::dendrapply`) as well as using a postorder traversal.
+
+This implementation was tested manually as well as running all the unit tests in `dendextend`, which comprises a lot of applications of `dendrapply`.
+
+The postorder traversal would be a significant new functionality to dendrapply, as it would allow for functions that use the child nodes to correctly execute. A toy example of this is something like:
+```
+exFunc <- function(x){
+  attr(x, 'newA') <- 'a'
+  if(is.null(attr(x, 'leaf'))){
+    cat(attr(x[[1]], 'newA'), attr(x[[2]], 'newA'))
+    cat('\n')
+  }
+  x
+})
+
+dendrapply(dend, exFunc)
+```
+
+With the current version of dendrapply, this prints nothing, but the postorder traversal version will print ?a? twice for each internal branch. If this would be a worthwhile addition, I can refactor the code for brevity and add a `how=c("in.order", "post.order")`, with the default value ?in.order? to maintain backwards compatibility. A preorder traversal version should also be possible, I just haven?t gotten to it yet.
+
+I think the runtime could be optimized more as well.
+
+Thank you in advance for looking at my code and offering feedback; I?m excited at the possibility of helping contribute to the R project! I?m happy to discuss more either here, on GitHub, or on the R Contributors Slack.
+
+Sincerely,
+Aidan Lakshman
+
+-----------------------
+Aidan Lakshman (he/him)<https://www.ahl27.com/<https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fwww.ahl27.com%2F&data=05%7C01%7CAHL27%40pitt.edu%7C41b702f139034cd7165608db165e4530%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638128366414606277%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=7KUpJpdulSIzSXbpDJlyUV8pMJm%2BSVFvDOJTlVs9lhc%3D&reserved=0>>
+Doctoral Candidate, Wright Lab<https://www.wrightlabscience.com/<https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fwww.wrightlabscience.com%2F&data=05%7C01%7CAHL27%40pitt.edu%7C41b702f139034cd7165608db165e4530%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638128366414606277%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=JMgw%2BMiQ6xdp3OokToJ2nyyco%2BryiFH%2B9ap5iU3yJH8%3D&reserved=0>>
+University of Pittsburgh School of Medicine
+Department of Biomedical Informatics
+ahl27 at pitt.edu<mailto:ahl27 at pitt.edu>
+(724) 612-9940
+
+
+        [[alternative HTML version deleted]]
+
+______________________________________________
+R-devel at r-project.org<mailto:R-devel at r-project.org> mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel<https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fstat.ethz.ch%2Fmailman%2Flistinfo%2Fr-devel&data=05%7C01%7CAHL27%40pitt.edu%7C41b702f139034cd7165608db165e4530%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638128366414606277%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=I88%2FQhGHXDRS2yHqvh53k3MSWHSd5z2KBgORUHIxfG0%3D&reserved=0>
+
+	[[alternative HTML version deleted]]
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Thu Mar  2 09:39:38 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Thu, 2 Mar 2023 11:39:38 +0300
+Subject: [Rd] tab-complete for non-syntactic names could attempt
+ backtick-wrapping
+In-Reply-To: <CAD7Bkx-Mvh-3R62WARmSDqTwb94oCT9yLMzXAHVbZTU1xKTQfw@mail.gmail.com>
+References: <CAD7Bkx_=noLWcQLFps7HMxQw65e4_+3O=Rtr158ttgfnCbyskw@mail.gmail.com>
+ <20230301125647.765cda59@arachnoid>
+ <CAD7Bkx-Mvh-3R62WARmSDqTwb94oCT9yLMzXAHVbZTU1xKTQfw@mail.gmail.com>
+Message-ID: <20230302113938.26be9522@Tarkus>
+
+There turn out to be a few more things to fix.
+
+One problem is easy to solve: vapply() needs a third argument
+specifying the type of the return value. (Can we have unit tests for
+tab completion?)
+
+The other problem is harder: `comps` defaults to an empty string, and
+you can't have a symbol consisting of an empty string, because this
+value is internally reserved for missing function arguments. I think
+you can return(paste0(prefix, op)) if length(comps) == 0L, but this is
+still somewhat worrying. R tries to prevent empty names, so I wouldn't
+expect specialOpCompletionsHelper() to return an empty string, but I
+can't prove it right now.
+
+On the other hand, x$'a string' is the same as x$`a string`. Could we
+just drop as.name() and keep the return value being a string literal?
+I'm not sure about this, either.
+
+-- 
+Best regards,
+Ivan
+
+
+From deep@y@n@@@rk@r @end|ng |rom gm@||@com  Thu Mar  2 10:03:03 2023
+From: deep@y@n@@@rk@r @end|ng |rom gm@||@com (Deepayan Sarkar)
+Date: Thu, 2 Mar 2023 14:33:03 +0530
+Subject: [Rd] tab-complete for non-syntactic names could attempt
+ backtick-wrapping
+In-Reply-To: <20230302113938.26be9522@Tarkus>
+References: <CAD7Bkx_=noLWcQLFps7HMxQw65e4_+3O=Rtr158ttgfnCbyskw@mail.gmail.com>
+ <20230301125647.765cda59@arachnoid>
+ <CAD7Bkx-Mvh-3R62WARmSDqTwb94oCT9yLMzXAHVbZTU1xKTQfw@mail.gmail.com>
+ <20230302113938.26be9522@Tarkus>
+Message-ID: <CADfFDC6CQRJ6fP2vSc+WKibccFN_j1jeKvgptF-Da15MWpomZQ@mail.gmail.com>
+
+On Thu, Mar 2, 2023 at 2:09?PM Ivan Krylov <krylov.r00t at gmail.com> wrote:
+>
+> There turn out to be a few more things to fix.
+>
+> One problem is easy to solve: vapply() needs a third argument
+> specifying the type of the return value. (Can we have unit tests for
+> tab completion?)
+
+There are tests in
+
+src/library/utils/tests/completion.R
+
+which should get run by make check-devel (which runs R CMD check on
+all base packages).
+
+> The other problem is harder: `comps` defaults to an empty string, and
+> you can't have a symbol consisting of an empty string, because this
+> value is internally reserved for missing function arguments. I think
+> you can return(paste0(prefix, op)) if length(comps) == 0L, but this is
+> still somewhat worrying. R tries to prevent empty names, so I wouldn't
+> expect specialOpCompletionsHelper() to return an empty string, but I
+> can't prove it right now.
+>
+> On the other hand, x$'a string' is the same as x$`a string`. Could we
+> just drop as.name() and keep the return value being a string literal?
+> I'm not sure about this, either.
+
+See my just-posted response on bugzilla for other issues to look out for.
+
+Best,
+-Deepayan
+
+> --
+> Best regards,
+> Ivan
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From ch|r|com @end|ng |rom goog|e@com  Thu Mar  2 10:37:09 2023
+From: ch|r|com @end|ng |rom goog|e@com (Michael Chirico)
+Date: Thu, 2 Mar 2023 01:37:09 -0800
+Subject: [Rd] tab-complete for non-syntactic names could attempt
+ backtick-wrapping
+In-Reply-To: <20230302113938.26be9522@Tarkus>
+References: <CAD7Bkx_=noLWcQLFps7HMxQw65e4_+3O=Rtr158ttgfnCbyskw@mail.gmail.com>
+ <20230301125647.765cda59@arachnoid>
+ <CAD7Bkx-Mvh-3R62WARmSDqTwb94oCT9yLMzXAHVbZTU1xKTQfw@mail.gmail.com>
+ <20230302113938.26be9522@Tarkus>
+Message-ID: <CAD7Bkx8YZgYo8bBoYegXQG+vcJmxbTSE+9uMOf8nZ2iOig0q7g@mail.gmail.com>
+
+I personally wouldn't like using a string, and this comment makes me
+think it's against the r-core preference as well:
+
+https://bugs.r-project.org/show_bug.cgi?id=18429#c1
+
+Thanks both for catching the sloppy mistake in vapply() :)
+
+Let's continue discussion on the bug/PR.
+
+On Thu, Mar 2, 2023 at 12:39 AM Ivan Krylov <krylov.r00t at gmail.com> wrote:
+>
+> There turn out to be a few more things to fix.
+>
+> One problem is easy to solve: vapply() needs a third argument
+> specifying the type of the return value. (Can we have unit tests for
+> tab completion?)
+>
+> The other problem is harder: `comps` defaults to an empty string, and
+> you can't have a symbol consisting of an empty string, because this
+> value is internally reserved for missing function arguments. I think
+> you can return(paste0(prefix, op)) if length(comps) == 0L, but this is
+> still somewhat worrying. R tries to prevent empty names, so I wouldn't
+> expect specialOpCompletionsHelper() to return an empty string, but I
+> can't prove it right now.
+>
+> On the other hand, x$'a string' is the same as x$`a string`. Could we
+> just drop as.name() and keep the return value being a string literal?
+> I'm not sure about this, either.
+>
+> --
+> Best regards,
+> Ivan
+
+
+From pd@|gd @end|ng |rom gm@||@com  Thu Mar  2 14:18:34 2023
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Thu, 2 Mar 2023 14:18:34 +0100
+Subject: [Rd] confusing all.equal output
+In-Reply-To: <CAEKh8uj-pp63WGDvG7YtsMqrMnqHUcWq0Ex2ObPxOPzEh3hLxQ@mail.gmail.com>
+References: <CAEKh8uj-pp63WGDvG7YtsMqrMnqHUcWq0Ex2ObPxOPzEh3hLxQ@mail.gmail.com>
+Message-ID: <0C58DB1A-E9CC-4CDC-9A06-9BCD3303409A@gmail.com>
+
+Yes... Also, of course, the sentence after colon does not the describe the cause of the mismatch, e.g.
+
+> all.equal(c(1,NA,NA), c(NA,NA,3))
+[1] "'is.NA' value mismatch: 2 in current 2 in target"
+
+could be confusing. 
+
+Perhaps "is.na() mismatch (2 positions)", with the count calculated as sum(is.na(current) != is.na(target)) instead? 
+
+Or you could give both off-diagonal elements of the confusion matrix:
+
+"target-only: 1, current-only: 1"
+
+but actually, the whole current/target terminology is somewhat unclear.
+
+-pd
+
+> On 1 Mar 2023, at 13:53 , Antoine Fabri <antoine.fabri at gmail.com> wrote:
+> 
+> dear r-devel,
+> 
+> This has probably been forever like this but is this satisfying ?
+> 
+> all.equal(c(1,NA,NA), c(1,NA,3))
+> #> [1] "'is.NA' value mismatch: 1 in current 2 in target"
+> 
+> is.NA() doesn't exist (is.na() does), and is.na() is never 1 or 2.
+> 
+> In this example it's obvious that we're counting missing values, in a
+> general situation I believe it isn't (we might understand it as the
+> position of the first NA for instance).
+> 
+> I would expect something like "'amount of missing values mismatch: 1 in
+> current 2 in target"
+> 
+> Thanks,
+> 
+> Antoine
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Thu Mar  2 15:47:50 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Thu, 2 Mar 2023 17:47:50 +0300
+Subject: [Rd] `dendrapply` Enhancements
+In-Reply-To: <BL0PR04MB4706B185A345A98AB4AB829AD9AC9@BL0PR04MB4706.namprd04.prod.outlook.com>
+References: <BL0PR04MB47068D544F5A49315EF1D042D9AB9@BL0PR04MB4706.namprd04.prod.outlook.com>
+ <CALK03d1PWiA4tfbRkxMBU6tckhfB2JRGUmnuqh5ygLcCLHDXNw@mail.gmail.com>
+ <BL0PR04MB4706A66884728B9419CEAE00D9A89@BL0PR04MB4706.namprd04.prod.outlook.com>
+ <BL0PR04MB4706B185A345A98AB4AB829AD9AC9@BL0PR04MB4706.namprd04.prod.outlook.com>
+Message-ID: <20230302174750.19c3b247@arachnoid>
+
+Dear Aidan Lakshman,
+
+To answer your implicit question, VECTOR_ELT() unclasses the nodes
+because it doesn't go through the stats:::`[[.dendrogram` method,
+instead dereferencing the data pointer directly.
+
+Other *apply functions in base R create a call to the `[[` operator,
+letting the language dispatch the generic call, allowing the method to
+assign a class to the return value. The following example is taken from
+src/main/apply.c:do_lapply():
+
+// prepare a call to FUN(X[[i]], ...)
+
+    SEXP isym = install("i");
+    SEXP tmp = PROTECT(lang3(R_Bracket2Symbol, X, isym));
+    SEXP R_fcall = PROTECT(lang3(FUN, tmp, R_DotsSymbol));
+    MARK_NOT_MUTABLE(R_fcall);
+
+// inside the loop: evaluate the call
+
+        tmp = R_forceAndCall(R_fcall, 1, rho);
+
+Not sure which way is faster, but it may make sense to try, and it's
+probably more correct in (contrived) cases where unclass(node)[[i]] is
+invalid because it relies on a hypothetical `[[.subclass-of-dendrogram`
+to restore some invariants.
+
+Would you mind telling me more about the following case?
+
+> if(!(inherits(res,c('dendrogram', 'list')))){
+>  res1 <- lapply(unclass(node), \(x) x)
+> }
+
+If you're looking to improve the performance, there might be a way to
+avoid the wrapper and this lapply(unclass(node), identity) call in it.
+
+-- 
+Best regards,
+Ivan
+
+
+From AHL27 @end|ng |rom p|tt@edu  Thu Mar  2 16:38:20 2023
+From: AHL27 @end|ng |rom p|tt@edu (Lakshman, Aidan H)
+Date: Thu, 2 Mar 2023 15:38:20 +0000
+Subject: [Rd] `dendrapply` Enhancements
+In-Reply-To: <20230302174750.19c3b247@arachnoid>
+References: <BL0PR04MB47068D544F5A49315EF1D042D9AB9@BL0PR04MB4706.namprd04.prod.outlook.com>
+ <CALK03d1PWiA4tfbRkxMBU6tckhfB2JRGUmnuqh5ygLcCLHDXNw@mail.gmail.com>
+ <BL0PR04MB4706A66884728B9419CEAE00D9A89@BL0PR04MB4706.namprd04.prod.outlook.com>
+ <BL0PR04MB4706B185A345A98AB4AB829AD9AC9@BL0PR04MB4706.namprd04.prod.outlook.com>
+ <20230302174750.19c3b247@arachnoid>
+Message-ID: <BL0PR04MB47069CCBD8C6EB57BB22533ED9B29@BL0PR04MB4706.namprd04.prod.outlook.com>
+
+Thanks for your reply!
+
+> To answer your implicit question, VECTOR_ELT() unclasses the nodes
+> because it doesn't go through the stats:::`[[.dendrogram` method,
+> instead dereferencing the data pointer directly.
+
+That?s roughly what I had suspected?I appreciate the clarification.
+
+To your point on other *apply functions, I wasn?t actually aware of that implementation, but it?s definitely a smarter way to do it. I?ll try later today/tomorrow to incorporate that method; it seems much better and more future-proof than my approach. Definitely agree with you with respect to cases where unclass(node)[[i]] is invalid. It may be slightly slower due to having to rely on R method dispatch, but I think the benefits outweigh the drawbacks in this case.
+
+> Would you mind telling me more about the following case?
+
+> > if(!(inherits(res,c('dendrogram', 'list')))){
+> >   res1 <- lapply(unclass(node), \(x) x)
+> > }
+
+> If you're looking to improve the performance, there might be a way to
+> avoid the wrapper and this lapply(unclass(node), identity) call in it.
+
+This was a product of trying to get performance to be the same as in the current method?I agree that it?s probably not the best way to do this. The use-case is when you apply a function to the dendrogram that doesn?t return a dendrogram object. One example is the one from reg-tests-1c.R:
+
+```
+D <- as.dendrogram(hclust(dist(cbind(setNames(c(0,1,4), LETTERS[1:3])))))
+
+dendrapply(D, labels))
+
+
+
+# Expected result:
+
+#
+# [[1]]
+
+# ?C?
+#
+# [[2]]
+# [[2]][[1]]
+# ?A?
+
+#
+
+# [[2]][[2]]
+
+# ?B?
+
+#
+
+# [[3]]
+
+# ?C?
+```
+
+Applying labels to the root node returns c(?C?, ?A?, ?B?), and if we convert that to a list, we get a length 3 list of length 1 character vectors. However, when traversing the dendrogram pre-order, this would break things, since then the first entry of the node is no longer a dendrogram object, it?s been replaced by a character vector. I had written it this way with the unclass so that I could replace entries that needed to be evaluated at child nodes with child nodes. For example, in this instance, after evaluating the function at the root, the tree would look like:
+
+```
+[[1]]
+<unclassed D[[1]]>
+
+[[2]]
+<unclassed D[[2]]>
+
+[[3]]
+?B?
+```
+
+To answer the question on why there?s an lapply(?, identity) call, I think I ended up doing it this way because I was having some issues with not getting the elements to populate correctly from the dendrogram. Looking back on it now, there?s definitely an easier way to do this that isn?t so hard to understand code-wise?.
+```
+if(!is.leaf(node)){
+      if(!is.list(res)){
+        res <- as.list(res)
+      }
+      res[seq_along(node)] <- node
+    }
+```
+That should perform almost identically and make more sense, with the added benefit that it doesn?t unclass the child nodes, so (when I also incorporate the other fix you suggested) we shouldn?t have any unexpected performance from functions relying on a hypothetical `subclass-of-dendrogram`. This implementation is also slightly faster due to no lapply call and is.list() over inherits(?).
+
+Result after applying to root node with this approach:
+```
+[[1]]
+D[[1]]
+
+[[2]]
+D[[2]]
+
+[[3]]
+?B?
+```
+Classes of D[[1]] and D[[2]] are preserved for future evaluations.
+
+Thanks for pointing this out, I?ll incorporate this into the code when I check the `[[` case later. If you have any other questions/comments/suggestions I would love to hear them! Happy to clarify further as well if I didn?t answer your questions fully.
+
+Sincerely,
+Aidan
+
+-----------------------
+Aidan Lakshman (he/him)<https://www.ahl27.com/>
+Doctoral Candidate, Wright Lab<https://www.wrightlabscience.com/>
+University of Pittsburgh School of Medicine
+Department of Biomedical Informatics
+ahl27 at pitt.edu
+(724) 612-9940
+
+
+From: Ivan Krylov <krylov.r00t at gmail.com>
+Date: Thursday, March 2, 2023 at 09:47
+To: Lakshman, Aidan H <AHL27 at pitt.edu>
+Cc: R-devel at r-project.org <R-devel at r-project.org>
+Subject: Re: [Rd] `dendrapply` Enhancements
+Dear Aidan Lakshman,
+
+To answer your implicit question, VECTOR_ELT() unclasses the nodes
+because it doesn't go through the stats:::`[[.dendrogram` method,
+instead dereferencing the data pointer directly.
+
+Other *apply functions in base R create a call to the `[[` operator,
+letting the language dispatch the generic call, allowing the method to
+assign a class to the return value. The following example is taken from
+src/main/apply.c:do_lapply():
+
+// prepare a call to FUN(X[[i]], ...)
+
+    SEXP isym = install("i");
+    SEXP tmp = PROTECT(lang3(R_Bracket2Symbol, X, isym));
+    SEXP R_fcall = PROTECT(lang3(FUN, tmp, R_DotsSymbol));
+    MARK_NOT_MUTABLE(R_fcall);
+
+// inside the loop: evaluate the call
+
+        tmp = R_forceAndCall(R_fcall, 1, rho);
+
+Not sure which way is faster, but it may make sense to try, and it's
+probably more correct in (contrived) cases where unclass(node)[[i]] is
+invalid because it relies on a hypothetical `[[.subclass-of-dendrogram`
+to restore some invariants.
+
+Would you mind telling me more about the following case?
+
+> if(!(inherits(res,c('dendrogram', 'list')))){
+>  res1 <- lapply(unclass(node), \(x) x)
+> }
+
+If you're looking to improve the performance, there might be a way to
+avoid the wrapper and this lapply(unclass(node), identity) call in it.
+
+--
+Best regards,
+Ivan
+
+	[[alternative HTML version deleted]]
+
+
+From @nto|ne@|@br| @end|ng |rom gm@||@com  Thu Mar  2 18:23:12 2023
+From: @nto|ne@|@br| @end|ng |rom gm@||@com (Antoine Fabri)
+Date: Thu, 2 Mar 2023 18:23:12 +0100
+Subject: [Rd] confusing all.equal output
+In-Reply-To: <0C58DB1A-E9CC-4CDC-9A06-9BCD3303409A@gmail.com>
+References: <CAEKh8uj-pp63WGDvG7YtsMqrMnqHUcWq0Ex2ObPxOPzEh3hLxQ@mail.gmail.com>
+ <0C58DB1A-E9CC-4CDC-9A06-9BCD3303409A@gmail.com>
+Message-ID: <CAEKh8ugAEttrCqNjgRDny9DQvQdfOpSqvbsyYNunE6d6+y7q8g@mail.gmail.com>
+
+Good points. I don't mind the terminology since target and current are the
+names of the arguments. As the function is already designed to stop at the
+first failing check we might not need to enumerate or count the mismatches,
+instead we could have "`NA` found in `target` but not in `current` at
+position <FIRST_MISMATCH>"
+
+	[[alternative HTML version deleted]]
+
+
+From w||||@mwdun|@p @end|ng |rom gm@||@com  Thu Mar  2 18:39:24 2023
+From: w||||@mwdun|@p @end|ng |rom gm@||@com (Bill Dunlap)
+Date: Thu, 2 Mar 2023 09:39:24 -0800
+Subject: [Rd] tab-complete for non-syntactic names could attempt
+ backtick-wrapping
+In-Reply-To: <20230302113938.26be9522@Tarkus>
+References: <CAD7Bkx_=noLWcQLFps7HMxQw65e4_+3O=Rtr158ttgfnCbyskw@mail.gmail.com>
+ <20230301125647.765cda59@arachnoid>
+ <CAD7Bkx-Mvh-3R62WARmSDqTwb94oCT9yLMzXAHVbZTU1xKTQfw@mail.gmail.com>
+ <20230302113938.26be9522@Tarkus>
+Message-ID: <CAHqSRuRaASWG-Dka76Vb4J9JXWJJKssN8ZfHjt=gQf6RmTaduQ@mail.gmail.com>
+
+x$`string` is not the same as x$'string'.  They may act similarly now, but
+they do not parse the same.
+
+> vapply(as.list(quote(list$`component`)), typeof, "")
+[1] "symbol" "symbol" "symbol"
+> vapply(as.list(quote(list$"component")), typeof, "")
+[1] "symbol"    "symbol"    "character"
+> vapply(as.list(quote(list$'component')), typeof, "")
+[1] "symbol"    "symbol"    "character"
+
+Single and double quoted character sequences do parse to the same thing
+(character) but backquoted ones parse to symbols (aka names).
+
+-Bill
+
+On Thu, Mar 2, 2023 at 12:39?AM Ivan Krylov <krylov.r00t at gmail.com> wrote:
+
+> There turn out to be a few more things to fix.
+>
+> One problem is easy to solve: vapply() needs a third argument
+> specifying the type of the return value. (Can we have unit tests for
+> tab completion?)
+>
+> The other problem is harder: `comps` defaults to an empty string, and
+> you can't have a symbol consisting of an empty string, because this
+> value is internally reserved for missing function arguments. I think
+> you can return(paste0(prefix, op)) if length(comps) == 0L, but this is
+> still somewhat worrying. R tries to prevent empty names, so I wouldn't
+> expect specialOpCompletionsHelper() to return an empty string, but I
+> can't prove it right now.
+>
+> On the other hand, x$'a string' is the same as x$`a string`. Could we
+> just drop as.name() and keep the return value being a string literal?
+> I'm not sure about this, either.
+>
+> --
+> Best regards,
+> Ivan
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From @nto|ne@|@br| @end|ng |rom gm@||@com  Thu Mar  2 18:49:52 2023
+From: @nto|ne@|@br| @end|ng |rom gm@||@com (Antoine Fabri)
+Date: Thu, 2 Mar 2023 18:49:52 +0100
+Subject: [Rd] transform.data.frame() ignores unnamed arguments when no named
+ argument is provided
+Message-ID: <CAEKh8ug=Vy=rDkqCEKnrGL4h7A7fPmF_zpcwq2CTybNmOTgNnw@mail.gmail.com>
+
+Dear r-devel,
+
+See below:
+
+
+transform(data.frame(a = 1), 2, 3)
+
+#>   a
+
+#> 1 1
+
+
+transform(data.frame(a = 1), b=2, 3)
+
+#>   a b X3
+
+#> 1 1 2  3
+
+
+We need a small modification to make it work consistently, see below:
+
+
+transform.data.frame <- function (`_data`, ...) {
+
+  e <- eval(substitute(list(...)), `_data`, parent.frame())
+
+  tags <- names(e)
+
+  ## NEW LINE -----------------------------------------------
+
+  if (is.null(tags)) tags <- character(length(e))
+
+  inx <- match(tags, names(`_data`))
+
+  matched <- !is.na(inx)
+
+  if (any(matched)) {
+
+    `_data`[inx[matched]] <- e[matched]
+
+    `_data` <- data.frame(`_data`)
+
+  }
+
+  if (!all(matched))
+
+    do.call("data.frame", c(list(`_data`), e[!matched]))
+
+  else `_data`
+
+}
+
+
+transform(data.frame(a = 1), 2, 3)
+
+#>   a X2 X3
+
+#> 1 1  2  3
+
+transform(data.frame(a = 1), b=2, 3)
+
+#>   a b X3
+
+#> 1 1 2  3
+
+
+Thanks,
+
+
+Antoine
+
+	[[alternative HTML version deleted]]
+
+
+From @vi@e@gross m@iii@g oii gm@ii@com  Thu Mar  2 19:30:42 2023
+From: @vi@e@gross m@iii@g oii gm@ii@com (@vi@e@gross m@iii@g oii gm@ii@com)
+Date: Thu, 2 Mar 2023 13:30:42 -0500
+Subject: [Rd] confusing all.equal output
+In-Reply-To: <CAEKh8ugAEttrCqNjgRDny9DQvQdfOpSqvbsyYNunE6d6+y7q8g@mail.gmail.com>
+References: <CAEKh8uj-pp63WGDvG7YtsMqrMnqHUcWq0Ex2ObPxOPzEh3hLxQ@mail.gmail.com>
+ <0C58DB1A-E9CC-4CDC-9A06-9BCD3303409A@gmail.com>
+ <CAEKh8ugAEttrCqNjgRDny9DQvQdfOpSqvbsyYNunE6d6+y7q8g@mail.gmail.com>
+Message-ID: <001d01d94d35$187fbb90$497f32b0$@gmail.com>
+
+I think if you step back, you can ask what the purpose of an error message
+is and who designs it.
+
+Is the message for the developer or others on their team or something an
+end-user knowing nothing about R will see.
+
+This reminds me a bit of legal mumbo jumbo that turns many reading it off as
+it keeps talking about the party of the first part or the plaintiff as
+compared to somewhat straighter talk.
+
+The scenario is that you are comparing two things. Their names are not
+things like "target" or "current" so even other programmers not involved in
+your code will pause and wonder.
+
+One view is to use phrases like first and second arguments/lists/whatever.
+You might talk about the one on the left (but using LHS is a bit opaque)
+versus the one on the right. 
+
+But sometimes it can be too verbose. Sometimes the error message is being
+generated not where everything is clear.
+
+So ideally you could say:
+
+WARNING Danger Will Robinson.
+Comparing two things for equality.
+Result finds mismatches.
+There were NA found on the (left or right) that were not matched on the
+other side.
+Number of such found: 2
+
+If you had a Systems Engineer write detailed requirements that included
+something a bit better than the example and the programmer was able to
+supply the data using the words and guidelines, it might fit some needs but
+maybe not satisfy other programmers. But there are human factors people
+whose job it is to help choose among alternatives and although they may not
+choose well, letting a programmer come up with whatever they feel like is
+generally worse. 
+
+Yes, in their microcosm centered on a dozen lines of code, "current" and
+"target" may have meaning. But are they the intended user of the product?
+
+-----Original Message-----
+From: R-devel <r-devel-bounces at r-project.org> On Behalf Of Antoine Fabri
+Sent: Thursday, March 2, 2023 12:23 PM
+To: peter dalgaard <pdalgd at gmail.com>
+Cc: R-devel <r-devel at r-project.org>
+Subject: Re: [Rd] confusing all.equal output
+
+Good points. I don't mind the terminology since target and current are the
+names of the arguments. As the function is already designed to stop at the
+first failing check we might not need to enumerate or count the mismatches,
+instead we could have "`NA` found in `target` but not in `current` at
+position <FIRST_MISMATCH>"
+
+	[[alternative HTML version deleted]]
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From pd@|gd @end|ng |rom gm@||@com  Thu Mar  2 19:47:59 2023
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Thu, 2 Mar 2023 19:47:59 +0100
+Subject: [Rd] confusing all.equal output
+In-Reply-To: <001d01d94d35$187fbb90$497f32b0$@gmail.com>
+References: <CAEKh8uj-pp63WGDvG7YtsMqrMnqHUcWq0Ex2ObPxOPzEh3hLxQ@mail.gmail.com>
+ <0C58DB1A-E9CC-4CDC-9A06-9BCD3303409A@gmail.com>
+ <CAEKh8ugAEttrCqNjgRDny9DQvQdfOpSqvbsyYNunE6d6+y7q8g@mail.gmail.com>
+ <001d01d94d35$187fbb90$497f32b0$@gmail.com>
+Message-ID: <B97B1379-B884-4DBF-A926-82789F81B93B@gmail.com>
+
+I believe the wording goes back to Martin Maechler many moons ago (AFAICT towards the end of the last millennium.)
+
+We might leave it to him to change it?
+
+- Peter D.
+
+> On 2 Mar 2023, at 19:30 , avi.e.gross at gmail.com wrote:
+> 
+> I think if you step back, you can ask what the purpose of an error message
+> is and who designs it.
+> 
+> Is the message for the developer or others on their team or something an
+> end-user knowing nothing about R will see.
+> 
+> This reminds me a bit of legal mumbo jumbo that turns many reading it off as
+> it keeps talking about the party of the first part or the plaintiff as
+> compared to somewhat straighter talk.
+> 
+> The scenario is that you are comparing two things. Their names are not
+> things like "target" or "current" so even other programmers not involved in
+> your code will pause and wonder.
+> 
+> One view is to use phrases like first and second arguments/lists/whatever.
+> You might talk about the one on the left (but using LHS is a bit opaque)
+> versus the one on the right. 
+> 
+> But sometimes it can be too verbose. Sometimes the error message is being
+> generated not where everything is clear.
+> 
+> So ideally you could say:
+> 
+> WARNING Danger Will Robinson.
+> Comparing two things for equality.
+> Result finds mismatches.
+> There were NA found on the (left or right) that were not matched on the
+> other side.
+> Number of such found: 2
+> 
+> If you had a Systems Engineer write detailed requirements that included
+> something a bit better than the example and the programmer was able to
+> supply the data using the words and guidelines, it might fit some needs but
+> maybe not satisfy other programmers. But there are human factors people
+> whose job it is to help choose among alternatives and although they may not
+> choose well, letting a programmer come up with whatever they feel like is
+> generally worse. 
+> 
+> Yes, in their microcosm centered on a dozen lines of code, "current" and
+> "target" may have meaning. But are they the intended user of the product?
+> 
+> -----Original Message-----
+> From: R-devel <r-devel-bounces at r-project.org> On Behalf Of Antoine Fabri
+> Sent: Thursday, March 2, 2023 12:23 PM
+> To: peter dalgaard <pdalgd at gmail.com>
+> Cc: R-devel <r-devel at r-project.org>
+> Subject: Re: [Rd] confusing all.equal output
+> 
+> Good points. I don't mind the terminology since target and current are the
+> names of the arguments. As the function is already designed to stop at the
+> first failing check we might not need to enumerate or count the mismatches,
+> instead we could have "`NA` found in `target` but not in `current` at
+> position <FIRST_MISMATCH>"
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From @eb@meyer @end|ng |rom |@u@de  Thu Mar  2 22:34:33 2023
+From: @eb@meyer @end|ng |rom |@u@de (Sebastian Meyer)
+Date: Thu, 2 Mar 2023 22:34:33 +0100
+Subject: [Rd] 
+ transform.data.frame() ignores unnamed arguments when no named
+ argument is provided
+In-Reply-To: <CAEKh8ug=Vy=rDkqCEKnrGL4h7A7fPmF_zpcwq2CTybNmOTgNnw@mail.gmail.com>
+References: <CAEKh8ug=Vy=rDkqCEKnrGL4h7A7fPmF_zpcwq2CTybNmOTgNnw@mail.gmail.com>
+Message-ID: <e9c6473a-a005-5236-a616-4c34b596e593@fau.de>
+
+Note that ?transform.data.frame says arguments need to be named, so you 
+are testing unspecified behaviour. I guess this falls in a similar 
+category as the note
+
+      If some of the values are not vectors of the appropriate length,
+      you deserve whatever you get!
+
+Experiments for a related Problem Report 
+(<https://bugs.r-project.org/show_bug.cgi?id=17890>) showed that 
+packages bravely ignore the caveats mentioned on the help page, 
+including to assume recycling the rows of the input data frame. I didn't 
+yet see any uses of unnamed arguments, though.
+
+That said, I agree that transform.data.frame() should be improved. Maybe 
+unnamed arguments should always be ignored with a warning. My feeling is 
+that these would more often be usage errors than intentional, e.g.:
+
+ > data.frame(a = 1) |> transform(b = 2, a + 2)  # "forgetting" a=
+   a b X3
+1 1 2  3
+
+I also think the implicit check.names=TRUE behaviour should be disabled. In
+
+ > list2DF(list(`A-1` = 1)) |> transform(B = 2)
+   A.1 B
+1   1 2
+
+transforming B should not touch the other columns.
+
+I'm less sure about some other forms of undocumented behaviour as 
+described in Comment 6 of the linked PR.
+
+	Sebastian Meyer
+
+
+Am 02.03.23 um 18:49 schrieb Antoine Fabri:
+> Dear r-devel,
+> 
+> See below:
+> 
+> 
+> transform(data.frame(a = 1), 2, 3)
+> 
+> #>   a
+> 
+> #> 1 1
+> 
+> 
+> transform(data.frame(a = 1), b=2, 3)
+> 
+> #>   a b X3
+> 
+> #> 1 1 2  3
+> 
+> 
+> We need a small modification to make it work consistently, see below:
+> 
+> 
+> transform.data.frame <- function (`_data`, ...) {
+> 
+>    e <- eval(substitute(list(...)), `_data`, parent.frame())
+> 
+>    tags <- names(e)
+> 
+>    ## NEW LINE -----------------------------------------------
+> 
+>    if (is.null(tags)) tags <- character(length(e))
+> 
+>    inx <- match(tags, names(`_data`))
+> 
+>    matched <- !is.na(inx)
+> 
+>    if (any(matched)) {
+> 
+>      `_data`[inx[matched]] <- e[matched]
+> 
+>      `_data` <- data.frame(`_data`)
+> 
+>    }
+> 
+>    if (!all(matched))
+> 
+>      do.call("data.frame", c(list(`_data`), e[!matched]))
+> 
+>    else `_data`
+> 
+> }
+> 
+> 
+> transform(data.frame(a = 1), 2, 3)
+> 
+> #>   a X2 X3
+> 
+> #> 1 1  2  3
+> 
+> transform(data.frame(a = 1), b=2, 3)
+> 
+> #>   a b X3
+> 
+> #> 1 1 2  3
+> 
+> 
+> Thanks,
+> 
+> 
+> Antoine
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @nto|ne@|@br| @end|ng |rom gm@||@com  Thu Mar  2 23:01:41 2023
+From: @nto|ne@|@br| @end|ng |rom gm@||@com (Antoine Fabri)
+Date: Thu, 2 Mar 2023 23:01:41 +0100
+Subject: [Rd] 
+ transform.data.frame() ignores unnamed arguments when no named
+ argument is provided
+In-Reply-To: <e9c6473a-a005-5236-a616-4c34b596e593@fau.de>
+References: <CAEKh8ug=Vy=rDkqCEKnrGL4h7A7fPmF_zpcwq2CTybNmOTgNnw@mail.gmail.com>
+ <e9c6473a-a005-5236-a616-4c34b596e593@fau.de>
+Message-ID: <CAEKh8uhE=JEWRvio1DqabZ4MyWM7p_7NCmVkQ_6k8Ovy6N22WA@mail.gmail.com>
+
+Thanks and good point about unspecified behavior. The way it behaves now
+(when it doesn't ignore) is more consistent with data.frame() though so I
+prefer that to a "warn and ignore" behaviour:
+
+data.frame(a = 1, b = 2, 3)
+
+#>   a b X3
+
+#> 1 1 2  3
+
+
+data.frame(a = 1, 2, 3)
+
+#>   a X2 X3
+
+#> 1 1  2  3
+
+
+(and in general warnings make for unpleasant debugging so I prefer when we
+don't add new ones if avoidable)
+
+
+playing a bit more with it, it would make sense to me that the following
+have the same output:
+
+
+coefficient <- 3
+
+
+data.frame(value1 = 5) |> transform(coefficient, value2 = coefficient *
+value1)
+
+#>   value1 X3 value2
+
+#> 1      5  3     15
+
+
+data.frame(value1 = 5, coefficient) |> transform(value2 = coefficient *
+value1)
+
+#>   value1 coefficient value2
+
+#> 1      5           3     15
+
+	[[alternative HTML version deleted]]
+
+
+From g@bembecker @end|ng |rom gm@||@com  Thu Mar  2 23:37:18 2023
+From: g@bembecker @end|ng |rom gm@||@com (Gabriel Becker)
+Date: Thu, 2 Mar 2023 14:37:18 -0800
+Subject: [Rd] 
+ transform.data.frame() ignores unnamed arguments when no named
+ argument is provided
+In-Reply-To: <CAEKh8uhE=JEWRvio1DqabZ4MyWM7p_7NCmVkQ_6k8Ovy6N22WA@mail.gmail.com>
+References: <CAEKh8ug=Vy=rDkqCEKnrGL4h7A7fPmF_zpcwq2CTybNmOTgNnw@mail.gmail.com>
+ <e9c6473a-a005-5236-a616-4c34b596e593@fau.de>
+ <CAEKh8uhE=JEWRvio1DqabZ4MyWM7p_7NCmVkQ_6k8Ovy6N22WA@mail.gmail.com>
+Message-ID: <CAD4oTHE43AFFkQFGrL5jDs9U5Jon99ZvYwTTt+6pT5A-2R-FhQ@mail.gmail.com>
+
+On Thu, Mar 2, 2023 at 2:02?PM Antoine Fabri <antoine.fabri at gmail.com>
+wrote:
+
+> Thanks and good point about unspecified behavior. The way it behaves now
+> (when it doesn't ignore) is more consistent with data.frame() though so I
+> prefer that to a "warn and ignore" behaviour:
+>
+> data.frame(a = 1, b = 2, 3)
+>
+> #>   a b X3
+>
+> #> 1 1 2  3
+>
+>
+> data.frame(a = 1, 2, 3)
+>
+> #>   a X2 X3
+>
+> #> 1 1  2  3
+>
+>
+> (and in general warnings make for unpleasant debugging so I prefer when we
+> don't add new ones if avoidable)
+>
+
+I find silence to be much more unpleasant in practice when debugging,
+myself, but that may be a personal preference.
+
+
+>
+>
+> playing a bit more with it, it would make sense to me that the following
+> have the same output:
+>
+>
+> coefficient <- 3
+>
+>
+> data.frame(value1 = 5) |> transform(coefficient, value2 = coefficient *
+> value1)
+>
+> #>   value1 X3 value2
+>
+> #> 1      5  3     15
+>
+>
+> data.frame(value1 = 5, coefficient) |> transform(value2 = coefficient *
+> value1)
+>
+> #>   value1 coefficient value2
+>
+> #> 1      5           3     15
+>
+>
+I'm not so sure. data.frame() is doing some substitute magic to get the
+column name coefficient there.
+
+> coefficient = 3
+
+> data.frame(value1 = 5, coefficient)
+
+  value1 coefficient
+
+1      5           3
+
+Beyond that these two pieces of code are doing subtly but crucially
+different things; in the latter, coefficient is a variable in the
+data.frame, and when transform resolves that symbol during calculation of
+value2, it *gets the column in the incoming data.frame*.
+
+In the former case, coefficient does not exist in the data.frame, so the
+symbol is being resolved somewhere else in the scope chain (in this case,
+the global environment).
+
+These happen to be the same, except for the column name , but we can see
+the difference if we change the code to
+
+> coefficient <- 3
+
+> data.frame(value1 = 5, coefficient = 4)  |> transform(value2 = value1 *
+coefficient)
+
+  value1 coefficient value2
+
+1      5           4     20
+
+> data.frame(value1 = 5) |> transform(coefficient = 4, value2 = value1 *
+coefficient)
+
+  value1 coefficient *value2*
+
+1      5           4     *15*
+
+Please note that another way this difference could rear its head is if
+these arent' directly one after eachother in a pipe:
+
+> coefficient <- 3
+
+> df1 <- data.frame(value1 = 5, coefficient)
+
+> coefficient <- 4
+
+> df2 <- data.frame(value1 = 5)
+
+> df1 |> transform(value2 = value1 * coefficient)
+
+  value1 coefficient value2
+
+1      5           3     15
+
+> df2 |> transform(coefficient, value2 = value1 * coefficient)
+
+  value1 X4 value2
+
+1      5  4     20
+
+
+Cause you know someday the place where you do that transform and the place
+where coefficient is initially set are gonna be far away from eachother, so
+whether you put coefficient into the incoming data, or don't will matter.
+
+
+Best,
+~G
+
+        [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
