@@ -1401,3 +1401,377 @@ Best,
 	[[alternative HTML version deleted]]
 
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Fri Mar  3 16:25:30 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Fri, 3 Mar 2023 16:25:30 +0100
+Subject: [Rd] 
+ transform.data.frame() ignores unnamed arguments when no named
+ argument is provided
+In-Reply-To: <CAD4oTHE43AFFkQFGrL5jDs9U5Jon99ZvYwTTt+6pT5A-2R-FhQ@mail.gmail.com>
+References: <CAEKh8ug=Vy=rDkqCEKnrGL4h7A7fPmF_zpcwq2CTybNmOTgNnw@mail.gmail.com>
+ <e9c6473a-a005-5236-a616-4c34b596e593@fau.de>
+ <CAEKh8uhE=JEWRvio1DqabZ4MyWM7p_7NCmVkQ_6k8Ovy6N22WA@mail.gmail.com>
+ <CAD4oTHE43AFFkQFGrL5jDs9U5Jon99ZvYwTTt+6pT5A-2R-FhQ@mail.gmail.com>
+Message-ID: <25602.4458.303335.397238@stat.math.ethz.ch>
+
+>>>>> Gabriel Becker 
+>>>>>     on Thu, 2 Mar 2023 14:37:18 -0800 writes:
+
+    > On Thu, Mar 2, 2023 at 2:02?PM Antoine Fabri
+    > <antoine.fabri at gmail.com> wrote:
+
+    >> Thanks and good point about unspecified behavior. The way
+    >> it behaves now (when it doesn't ignore) is more
+    >> consistent with data.frame() though so I prefer that to a
+    >> "warn and ignore" behaviour:
+    >> 
+    >> data.frame(a = 1, b = 2, 3)
+    >> 
+    >> #> a b X3
+    >> 
+    >> #> 1 1 2 3
+    >> 
+    >> 
+    >> data.frame(a = 1, 2, 3)
+    >> 
+    >> #> a X2 X3
+    >> 
+    >> #> 1 1 2 3
+    >> 
+    >> 
+    >> (and in general warnings make for unpleasant debugging so
+    >> I prefer when we don't add new ones if avoidable)
+    >> 
+
+    > I find silence to be much more unpleasant in practice when
+    > debugging, myself, but that may be a personal preference.
+
++1
+
+I also *strongly* disagree with the claim
+
+   " in general warnings make for unpleasant debugging "
+
+That may be true for beginners (for whom debugging is often not really
+feasible anyway ..), but somewhat experienced useRs should know
+
+about
+    options(warn = 1) # or
+    options(warn = 2) # plus  options(error = recover) #
+or
+    tryCatch( ...,  warning = ..)
+
+or  {even more}
+
+Martin
+
+--
+Martin Maechler
+ETH Zurich  and  R Core team
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Fri Mar  3 18:01:06 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Fri, 3 Mar 2023 18:01:06 +0100
+Subject: [Rd] confusing all.equal output
+In-Reply-To: <B97B1379-B884-4DBF-A926-82789F81B93B@gmail.com>
+References: <CAEKh8uj-pp63WGDvG7YtsMqrMnqHUcWq0Ex2ObPxOPzEh3hLxQ@mail.gmail.com>
+ <0C58DB1A-E9CC-4CDC-9A06-9BCD3303409A@gmail.com>
+ <CAEKh8ugAEttrCqNjgRDny9DQvQdfOpSqvbsyYNunE6d6+y7q8g@mail.gmail.com>
+ <001d01d94d35$187fbb90$497f32b0$@gmail.com>
+ <B97B1379-B884-4DBF-A926-82789F81B93B@gmail.com>
+Message-ID: <25602.10194.172872.572433@stat.math.ethz.ch>
+
+>>>>> peter dalgaard 
+>>>>>     on Thu, 2 Mar 2023 19:47:59 +0100 writes:
+
+    > I believe the wording goes back to Martin Maechler many
+    > moons ago (AFAICT towards the end of the last millennium.)
+    > We might leave it to him to change it?
+    > - Peter D.
+
+Thank you, Peter.
+
+Yes, this is *very* old.  I could claim that R users seem to get
+more and more confused over time, because nobody had ever
+complained for a quarter of a century .. (;-) ;-)
+
+I know I had been inspired by the all.equal() implementation of
+S-PLUS version 3.x (x = 4, IIRC) at the time, but then I also think
+that I have to take the "full blame" on this :
+
+Trying to think like myself "yesterday, when I was young ..",
+I guess the argumentation for using  is.NA  was what I
+considered helpful to the non experienced S / R user at the time:
+Everybody has seen 'NA' before (and they see it in their objects
+in this case) but only somewhat more experienced useRs would
+know about is.na(). .. and it may be that at the time I found it
+"slick" to combine the "NA" and "is.na" into  "is.NA" ...
+
+About the other wording and how the mismatches should be counted, I
+have no recollection.
+
+But indeed, already in 1999, i.e., before R 1.0.0 existed,
+that part of the code was
+
+    out <- is.na(target)
+    if(any(out != is.na(current)))
+	return(paste("`is.NA' value mismatches:", sum(is.na(current)),
+		     "in current,", sum(out), " in target"))
+
+- - - 
+
+Ok, now I need to work to commit a (completely orthogonal) change to
+all.equal.numeric()  which had been lying around with me for
+about a year at least... so I can start looking at your proposed
+changes ...
+
+Martin
+
+
+    >> On 2 Mar 2023, at 19:30 , avi.e.gross at gmail.com wrote:
+    >> 
+    >> I think if you step back, you can ask what the purpose of
+    >> an error message is and who designs it.
+    >> 
+    >> Is the message for the developer or others on their team
+    >> or something an end-user knowing nothing about R will
+    >> see.
+    >> 
+    >> This reminds me a bit of legal mumbo jumbo that turns
+    >> many reading it off as it keeps talking about the party
+    >> of the first part or the plaintiff as compared to
+    >> somewhat straighter talk.
+    >> 
+    >> The scenario is that you are comparing two things. Their
+    >> names are not things like "target" or "current" so even
+    >> other programmers not involved in your code will pause
+    >> and wonder.
+    >> 
+    >> One view is to use phrases like first and second
+    >> arguments/lists/whatever.  You might talk about the one
+    >> on the left (but using LHS is a bit opaque) versus the
+    >> one on the right.
+    >> 
+    >> But sometimes it can be too verbose. Sometimes the error
+    >> message is being generated not where everything is clear.
+    >> 
+    >> So ideally you could say:
+    >> 
+    >> WARNING Danger Will Robinson.  Comparing two things for
+    >> equality.  Result finds mismatches.  There were NA found
+    >> on the (left or right) that were not matched on the other
+    >> side.  Number of such found: 2
+    >> 
+    >> If you had a Systems Engineer write detailed requirements
+    >> that included something a bit better than the example and
+    >> the programmer was able to supply the data using the
+    >> words and guidelines, it might fit some needs but maybe
+    >> not satisfy other programmers. But there are human
+    >> factors people whose job it is to help choose among
+    >> alternatives and although they may not choose well,
+    >> letting a programmer come up with whatever they feel like
+    >> is generally worse.
+    >> 
+    >> Yes, in their microcosm centered on a dozen lines of
+    >> code, "current" and "target" may have meaning. But are
+    >> they the intended user of the product?
+    >> 
+    >> -----Original Message----- From: R-devel
+    >> <r-devel-bounces at r-project.org> On Behalf Of Antoine
+    >> Fabri Sent: Thursday, March 2, 2023 12:23 PM To: peter
+    >> dalgaard <pdalgd at gmail.com> Cc: R-devel
+    >> <r-devel at r-project.org> Subject: Re: [Rd] confusing
+    >> all.equal output
+    >> 
+    >> Good points. I don't mind the terminology since target
+    >> and current are the names of the arguments. As the
+    >> function is already designed to stop at the first failing
+    >> check we might not need to enumerate or count the
+    >> mismatches, instead we could have "`NA` found in `target`
+    >> but not in `current` at position <FIRST_MISMATCH>"
+    >> 
+    >> [[alternative HTML version deleted]]
+    >> 
+    >> ______________________________________________
+    >> R-devel at r-project.org mailing list
+    >> https://stat.ethz.ch/mailman/listinfo/r-devel
+    >> 
+    >> ______________________________________________
+    >> R-devel at r-project.org mailing list
+    >> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+    > -- 
+    > Peter Dalgaard, Professor, Center for Statistics,
+    > Copenhagen Business School Solbjerg Plads 3, 2000
+    > Frederiksberg, Denmark Phone: (+45)38153501 Office: A 4.23
+    > Email: pd.mes at cbs.dk Priv: PDalgd at gmail.com
+
+
+From @nto|ne@|@br| @end|ng |rom gm@||@com  Fri Mar  3 18:17:18 2023
+From: @nto|ne@|@br| @end|ng |rom gm@||@com (Antoine Fabri)
+Date: Fri, 3 Mar 2023 18:17:18 +0100
+Subject: [Rd] 
+ transform.data.frame() ignores unnamed arguments when no named
+ argument is provided
+In-Reply-To: <25602.4458.303335.397238@stat.math.ethz.ch>
+References: <CAEKh8ug=Vy=rDkqCEKnrGL4h7A7fPmF_zpcwq2CTybNmOTgNnw@mail.gmail.com>
+ <e9c6473a-a005-5236-a616-4c34b596e593@fau.de>
+ <CAEKh8uhE=JEWRvio1DqabZ4MyWM7p_7NCmVkQ_6k8Ovy6N22WA@mail.gmail.com>
+ <CAD4oTHE43AFFkQFGrL5jDs9U5Jon99ZvYwTTt+6pT5A-2R-FhQ@mail.gmail.com>
+ <25602.4458.303335.397238@stat.math.ethz.ch>
+Message-ID: <CAEKh8uh2pY5N98eufV2DX01wfCp++rMDSEPwXA-AUCogHBkDGA@mail.gmail.com>
+
+Let me expand a bit, I might have expressed myself poorly.
+
+ If there is a good reason for a warning I want a warning, and because I
+take them seriously I don't want my console cluttered with those that can
+be avoided. I strongly believe we should strive to make our code silent,
+and I like my console to tell me only what I need to know. In my opinion
+many warnings would be better designed as errors, sometimes with an
+argument to opt in the behaviour, or a documented way to work around. Some
+other warnings should just be documented behavior, because the behavior is
+not all that surprising.
+
+Some reasons why I find warnings hard to debug:
+- options(warn = 1) is not always enough to spot the source of the warning
+- options(warn = 2) fails at every warning, including the ones that are not
+interesting to the user and that they may not do anything about, in these
+cases you'll have to find a way to shut off the first to get to the second,
+and if it's packaged code that's not fun.
+- Unlike with errors, traceback() won't help.
+- tryCatch() will help you only if you call it at the right place, assuming
+you've found it.
+- We might also have many harmless warnings triggered through loops and
+hiding important ones.
+- When you are sure that you are OK with your code despite the warning, say
+`as.numeric(c("1", "2", "foo"))`, a workaround might be expensive (here we
+could use regex first to ditch the non numeric strings but who does that)
+so you're tempted to use `suppressWarnings()`, but then you might be
+suppressing other important warnings so you just made your code less safe
+because the developper wanted to make it safer (you might say it's on the
+user but still, we get suboptimal code that was avoidable).
+
+Of course I might miss some approaches that would make my experience of
+debugging warnings more pleasant.
+
+In our precise case I don't find the behavior surprising enough to warrant
+more precious red ink since it's close to what we get with data.frame(),
+and close to what we get with dplyr::mutate() FWIW, so I'd be personally
+happier to have this documented and work silently.
+
+Either way I appreciate you considering the problem.
+
+Thanks,
+
+Antoine
+
+	[[alternative HTML version deleted]]
+
+
+From bbo|ker @end|ng |rom gm@||@com  Fri Mar  3 21:58:30 2023
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Fri, 3 Mar 2023 15:58:30 -0500
+Subject: [Rd] 
+ transform.data.frame() ignores unnamed arguments when no named
+ argument is provided
+In-Reply-To: <CAEKh8uh2pY5N98eufV2DX01wfCp++rMDSEPwXA-AUCogHBkDGA@mail.gmail.com>
+References: <CAEKh8ug=Vy=rDkqCEKnrGL4h7A7fPmF_zpcwq2CTybNmOTgNnw@mail.gmail.com>
+ <e9c6473a-a005-5236-a616-4c34b596e593@fau.de>
+ <CAEKh8uhE=JEWRvio1DqabZ4MyWM7p_7NCmVkQ_6k8Ovy6N22WA@mail.gmail.com>
+ <CAD4oTHE43AFFkQFGrL5jDs9U5Jon99ZvYwTTt+6pT5A-2R-FhQ@mail.gmail.com>
+ <25602.4458.303335.397238@stat.math.ethz.ch>
+ <CAEKh8uh2pY5N98eufV2DX01wfCp++rMDSEPwXA-AUCogHBkDGA@mail.gmail.com>
+Message-ID: <CABghstT+5CX8f15X8zTFp_DgKGwe6g2F6=g9bJvworFhyLXHTQ@mail.gmail.com>
+
+   For what it's worth I think the increased emphasis on classed
+errors should help with this (i.e., it will be easier to filter out
+errors you know are false positives/irrelevant for your use case).
+
+On Fri, Mar 3, 2023 at 12:17?PM Antoine Fabri <antoine.fabri at gmail.com> wrote:
+>
+> Let me expand a bit, I might have expressed myself poorly.
+>
+>  If there is a good reason for a warning I want a warning, and because I
+> take them seriously I don't want my console cluttered with those that can
+> be avoided. I strongly believe we should strive to make our code silent,
+> and I like my console to tell me only what I need to know. In my opinion
+> many warnings would be better designed as errors, sometimes with an
+> argument to opt in the behaviour, or a documented way to work around. Some
+> other warnings should just be documented behavior, because the behavior is
+> not all that surprising.
+>
+> Some reasons why I find warnings hard to debug:
+> - options(warn = 1) is not always enough to spot the source of the warning
+> - options(warn = 2) fails at every warning, including the ones that are not
+> interesting to the user and that they may not do anything about, in these
+> cases you'll have to find a way to shut off the first to get to the second,
+> and if it's packaged code that's not fun.
+> - Unlike with errors, traceback() won't help.
+> - tryCatch() will help you only if you call it at the right place, assuming
+> you've found it.
+> - We might also have many harmless warnings triggered through loops and
+> hiding important ones.
+> - When you are sure that you are OK with your code despite the warning, say
+> `as.numeric(c("1", "2", "foo"))`, a workaround might be expensive (here we
+> could use regex first to ditch the non numeric strings but who does that)
+> so you're tempted to use `suppressWarnings()`, but then you might be
+> suppressing other important warnings so you just made your code less safe
+> because the developper wanted to make it safer (you might say it's on the
+> user but still, we get suboptimal code that was avoidable).
+>
+> Of course I might miss some approaches that would make my experience of
+> debugging warnings more pleasant.
+>
+> In our precise case I don't find the behavior surprising enough to warrant
+> more precious red ink since it's close to what we get with data.frame(),
+> and close to what we get with dplyr::mutate() FWIW, so I'd be personally
+> happier to have this documented and work silently.
+>
+> Either way I appreciate you considering the problem.
+>
+> Thanks,
+>
+> Antoine
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From p@kr|v|t@ky @end|ng |rom un@w@edu@@u  Sat Mar  4 01:21:48 2023
+From: p@kr|v|t@ky @end|ng |rom un@w@edu@@u (Pavel Krivitsky)
+Date: Sat, 4 Mar 2023 00:21:48 +0000
+Subject: [Rd] Augment base::replace(x, list,
+ value) to allow list= to be a predicate?
+Message-ID: <c450f50c118c8e4ca10acaf7b1fc40e7b205be57.camel@unsw.edu.au>
+
+Dear All,
+
+Currently, list= in base::replace(x, list, value) has to be an index
+vector. For me, at least, the most common use case is for list= to be
+some simple property of elements of x, e.g.,
+
+x <- c(1,2,NA,3)
+replace(x, is.na(x), 0)
+
+Particularly when using R pipes, which don't allow multiple
+substitutions, it would simplify many of such cases if list= could be a
+function that returns an index, e.g.,
+
+replace <- function (x, list, values, ...) {
+  # Here, list() refers to the argument, not the built-in.
+  if(is.function(list)) list <- list(x, ...)
+  x[list] <- values
+  x
+}
+
+Then, the following is possible:
+
+c(1,2,NA,3) |> replace(is.na, 0)
+
+			Any thoughts?
+			Pavel
+
