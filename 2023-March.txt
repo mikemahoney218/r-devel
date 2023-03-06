@@ -1775,3 +1775,258 @@ c(1,2,NA,3) |> replace(is.na, 0)
 			Any thoughts?
 			Pavel
 
+From @vi@e@gross m@iii@g oii gm@ii@com  Sat Mar  4 06:06:40 2023
+From: @vi@e@gross m@iii@g oii gm@ii@com (@vi@e@gross m@iii@g oii gm@ii@com)
+Date: Sat, 4 Mar 2023 00:06:40 -0500
+Subject: [Rd] 
+ transform.data.frame() ignores unnamed arguments when no named
+ argument is provided
+In-Reply-To: <25602.4458.303335.397238@stat.math.ethz.ch>
+References: <CAEKh8ug=Vy=rDkqCEKnrGL4h7A7fPmF_zpcwq2CTybNmOTgNnw@mail.gmail.com>
+ <e9c6473a-a005-5236-a616-4c34b596e593@fau.de>
+ <CAEKh8uhE=JEWRvio1DqabZ4MyWM7p_7NCmVkQ_6k8Ovy6N22WA@mail.gmail.com>
+ <CAD4oTHE43AFFkQFGrL5jDs9U5Jon99ZvYwTTt+6pT5A-2R-FhQ@mail.gmail.com>
+ <25602.4458.303335.397238@stat.math.ethz.ch>
+Message-ID: <012001d94e57$1b4c0b30$51e42190$@gmail.com>
+
+I am probably mistaken but it looks to me like the design of much of the data.frame infrastructure not only does not insist you give columns names, but even has all kinds of options such as check.names and fix.empty.names
+
+https://www.rdocumentation.org/packages/base/versions/3.6.2/topics/data.frame
+
+During the lifetime of a column, it can get removed, renamed, transfomed in many ways and so on. A data.frame read in from a file such as a .CSV often begins with temporary created names. 
+
+It is so common, that sometimes not giving a name is a choice and not in any way an error. I have seen some rather odd names in backticks that include spaces and seen duplicate names. The reality is you can index by column number two and maybe no actual name was needed by the one creating or modifying the data.
+
+Some placed warnings are welcome as they tend to reflect a possibly serious error.  But that error may not easily be at this point versus later in the game.  If later the program tries to access the misnamed column, then an error makes sense. Warnings, if overused, get old quickly and you regularly see code written to suppress startup messages or warnings because the same message shown every day becomes something you ignore mentally even if not suppressed. How many times has loading the tidyverse reminded me it is shadowing a few base R functions? How many times have I really cared?
+
+What makes some sense to me is to add an argument to some functions BEGGING to be shown the errors of your ways and turn that on as you wish, often after something has gone wrong.
+
+-----Original Message-----
+From: R-devel <r-devel-bounces at r-project.org> On Behalf Of Martin Maechler
+Sent: Friday, March 3, 2023 10:26 AM
+To: Gabriel Becker <gabembecker at gmail.com>
+Cc: Antoine Fabri <antoine.fabri at gmail.com>; R-devel <r-devel at r-project.org>
+Subject: Re: [Rd] transform.data.frame() ignores unnamed arguments when no named argument is provided
+
+>>>>> Gabriel Becker 
+>>>>>     on Thu, 2 Mar 2023 14:37:18 -0800 writes:
+
+    > On Thu, Mar 2, 2023 at 2:02?PM Antoine Fabri
+    > <antoine.fabri at gmail.com> wrote:
+
+    >> Thanks and good point about unspecified behavior. The way
+    >> it behaves now (when it doesn't ignore) is more
+    >> consistent with data.frame() though so I prefer that to a
+    >> "warn and ignore" behaviour:
+    >> 
+    >> data.frame(a = 1, b = 2, 3)
+    >> 
+    >> #> a b X3
+    >> 
+    >> #> 1 1 2 3
+    >> 
+    >> 
+    >> data.frame(a = 1, 2, 3)
+    >> 
+    >> #> a X2 X3
+    >> 
+    >> #> 1 1 2 3
+    >> 
+    >> 
+    >> (and in general warnings make for unpleasant debugging so
+    >> I prefer when we don't add new ones if avoidable)
+    >> 
+
+    > I find silence to be much more unpleasant in practice when
+    > debugging, myself, but that may be a personal preference.
+
++1
+
+I also *strongly* disagree with the claim
+
+   " in general warnings make for unpleasant debugging "
+
+That may be true for beginners (for whom debugging is often not really
+feasible anyway ..), but somewhat experienced useRs should know
+
+about
+    options(warn = 1) # or
+    options(warn = 2) # plus  options(error = recover) #
+or
+    tryCatch( ...,  warning = ..)
+
+or  {even more}
+
+Martin
+
+--
+Martin Maechler
+ETH Zurich  and  R Core team
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From g@bembecker @end|ng |rom gm@||@com  Sat Mar  4 22:44:03 2023
+From: g@bembecker @end|ng |rom gm@||@com (Gabriel Becker)
+Date: Sat, 4 Mar 2023 13:44:03 -0800
+Subject: [Rd] 
+ transform.data.frame() ignores unnamed arguments when no named
+ argument is provided
+In-Reply-To: <012001d94e57$1b4c0b30$51e42190$@gmail.com>
+References: <CAEKh8ug=Vy=rDkqCEKnrGL4h7A7fPmF_zpcwq2CTybNmOTgNnw@mail.gmail.com>
+ <e9c6473a-a005-5236-a616-4c34b596e593@fau.de>
+ <CAEKh8uhE=JEWRvio1DqabZ4MyWM7p_7NCmVkQ_6k8Ovy6N22WA@mail.gmail.com>
+ <CAD4oTHE43AFFkQFGrL5jDs9U5Jon99ZvYwTTt+6pT5A-2R-FhQ@mail.gmail.com>
+ <25602.4458.303335.397238@stat.math.ethz.ch>
+ <012001d94e57$1b4c0b30$51e42190$@gmail.com>
+Message-ID: <CAD4oTHEgE9+PdpOtvgRV1823OrNW3K-ufqZf=j9D0MPBNiyStA@mail.gmail.com>
+
+Hi Avi,
+
+On Fri, Mar 3, 2023 at 9:07?PM <avi.e.gross at gmail.com> wrote:
+
+> I am probably mistaken but it looks to me like the design of much of the
+> data.frame infrastructure not only does not insist you give columns names,
+> but even has all kinds of options such as check.names and fix.empty.names
+>
+>
+> https://www.rdocumentation.org/packages/base/versions/3.6.2/topics/data.frame
+>
+>
+I think this is true, but thats for the *construction* of a data.frame,
+where as, in my opinion from what I can tell, transform is for operating on
+a data.frame that has already been constructed. I'm not personally
+convinced the same allowances should be made at this conceptually later
+stage in data processing.
+
+
+> During the lifetime of a column, it can get removed, renamed, transfomed
+> in many ways and so on. A data.frame read in from a file such as a .CSV
+> often begins with temporary created names.
+>
+> It is so common, that sometimes not giving a name is a choice and not in
+> any way an error. I have seen some rather odd names in backticks that
+> include spaces and seen duplicate names. The reality is you can index by
+> column number two and maybe no actual name was needed by the one creating
+> or modifying the data.
+>
+
+You can but this creates brittle, difficult to maintain code to the extent
+that I consider this an anti-pattern, and I don't believe I'm alone in that.
+
+
+>
+> Some placed warnings are welcome as they tend to reflect a possibly
+> serious error.  But that error may not easily be at this point versus later
+> in the game.  If later the program tries to access the misnamed column,
+> then an error makes sense. Warnings, if overused, get old quickly and you
+> regularly see code written to suppress startup messages or warnings because
+> the same message shown every day becomes something you ignore mentally even
+> if not suppressed. How many times has loading the tidyverse reminded me it
+> is shadowing a few base R functions? How many times have I really cared?
+>
+
+I think this is a bad example to make your case on, because symbol masking
+is actually *really* important. In bioinformatics, Bioconductor is the
+flagship (which sails upon the sea that R provides), but guess what; dplyr
+and Bioconductor both define filter, and they do so meaning completely
+different incompatible things.
+
+I have seen code that wanted one version and got the other in both
+directions, and in neither case is it fun, but without that warning it
+would be a dystopian nightmarescape that scarcely bears thinking about.
+
+
+> What makes some sense to me is to add an argument to some functions
+> BEGGING to be shown the errors of your ways and turn that on as you wish,
+> often after something has gone wrong.
+>
+
+
+Flipping this on its head, I wonder, alternatively, if there might be a
+"strict" mode for transform which errors out on unnamed arguments, instead
+of providing the current undefined behavior.
+
+Best,
+~G
+
+
+>
+> -----Original Message-----
+> From: R-devel <r-devel-bounces at r-project.org> On Behalf Of Martin Maechler
+> Sent: Friday, March 3, 2023 10:26 AM
+> To: Gabriel Becker <gabembecker at gmail.com>
+> Cc: Antoine Fabri <antoine.fabri at gmail.com>; R-devel <
+> r-devel at r-project.org>
+> Subject: Re: [Rd] transform.data.frame() ignores unnamed arguments when no
+> named argument is provided
+>
+> >>>>> Gabriel Becker
+> >>>>>     on Thu, 2 Mar 2023 14:37:18 -0800 writes:
+>
+>     > On Thu, Mar 2, 2023 at 2:02?PM Antoine Fabri
+>     > <antoine.fabri at gmail.com> wrote:
+>
+>     >> Thanks and good point about unspecified behavior. The way
+>     >> it behaves now (when it doesn't ignore) is more
+>     >> consistent with data.frame() though so I prefer that to a
+>     >> "warn and ignore" behaviour:
+>     >>
+>     >> data.frame(a = 1, b = 2, 3)
+>     >>
+>     >> #> a b X3
+>     >>
+>     >> #> 1 1 2 3
+>     >>
+>     >>
+>     >> data.frame(a = 1, 2, 3)
+>     >>
+>     >> #> a X2 X3
+>     >>
+>     >> #> 1 1 2 3
+>     >>
+>     >>
+>     >> (and in general warnings make for unpleasant debugging so
+>     >> I prefer when we don't add new ones if avoidable)
+>     >>
+>
+>     > I find silence to be much more unpleasant in practice when
+>     > debugging, myself, but that may be a personal preference.
+>
+> +1
+>
+> I also *strongly* disagree with the claim
+>
+>    " in general warnings make for unpleasant debugging "
+>
+> That may be true for beginners (for whom debugging is often not really
+> feasible anyway ..), but somewhat experienced useRs should know
+>
+> about
+>     options(warn = 1) # or
+>     options(warn = 2) # plus  options(error = recover) #
+> or
+>     tryCatch( ...,  warning = ..)
+>
+> or  {even more}
+>
+> Martin
+>
+> --
+> Martin Maechler
+> ETH Zurich  and  R Core team
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
