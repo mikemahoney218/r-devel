@@ -2030,3 +2030,81 @@ Best,
 	[[alternative HTML version deleted]]
 
 
+From @oko| @end|ng |rom |n@@-tou|ou@e@|r  Mon Mar  6 09:45:21 2023
+From: @oko| @end|ng |rom |n@@-tou|ou@e@|r (Serguei Sokol)
+Date: Mon, 6 Mar 2023 09:45:21 +0100
+Subject: [Rd] Augment base::replace(x, list,
+ value) to allow list= to be a predicate?
+In-Reply-To: <c450f50c118c8e4ca10acaf7b1fc40e7b205be57.camel@unsw.edu.au>
+References: <c450f50c118c8e4ca10acaf7b1fc40e7b205be57.camel@unsw.edu.au>
+Message-ID: <60f31223-033a-21ee-67fd-b1a6566a0278@insa-toulouse.fr>
+
+Le 04/03/2023 ? 01:21, Pavel Krivitsky a ?crit?:
+> Dear All,
+>
+> Currently, list= in base::replace(x, list, value) has to be an index
+> vector. For me, at least, the most common use case is for list= to be
+> some simple property of elements of x, e.g.,
+>
+> x <- c(1,2,NA,3)
+> replace(x, is.na(x), 0)
+>
+> Particularly when using R pipes, which don't allow multiple
+> substitutions,
+Right, but anonymous function syntax can palliate to this:
+
+x |> (\(x) replace(x, is.na(x), 0))()
+
+
+>   it would simplify many of such cases if list= could be a
+> function that returns an index, e.g.,
+>
+> replace <- function (x, list, values, ...) {
+>    # Here, list() refers to the argument, not the built-in.
+>    if(is.function(list)) list <- list(x, ...)
+>    x[list] <- values
+>    x
+> }
+Before modifying the base of R, we should examine existing possibilities 
+to achieve the same goal.
+In this particular case and if the previous solution (anonymous 
+function) is not satisfactory a thin one-line wrapper can make the job:
+
+freplace <- function (x, list, values, ...) replace(x, 
+if(is.function(list)) list <- list(x, ...) else list, values)
+
+>
+> Then, the following is possible:
+>
+> c(1,2,NA,3) |> replace(is.na, 0)
+this becomes
+
+c(1,2,NA,3) |> freplace(is.na, 0)
+
+and looks quite acceptable for me.
+
+Best,
+Serguei.
+
+>
+> 			Any thoughts?
+> 			Pavel
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+-- 
+Serguei Sokol
+Ingenieur de recherche INRAE
+
+Cellule Math?matiques
+TBI, INSA/INRAE UMR 792, INSA/CNRS UMR 5504
+135 Avenue de Rangueil
+31077 Toulouse Cedex 04
+
+tel: +33 5 61 55 98 49
+email: sokol at insa-toulouse.fr
+http://www.toulouse-biotechnology-institute.fr/en/technology_platforms/mathematics-cell.html
+
+
