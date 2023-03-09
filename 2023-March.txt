@@ -2108,3 +2108,296 @@ email: sokol at insa-toulouse.fr
 http://www.toulouse-biotechnology-institute.fr/en/technology_platforms/mathematics-cell.html
 
 
+From p@kr|v|t@ky @end|ng |rom un@w@edu@@u  Tue Mar  7 11:49:41 2023
+From: p@kr|v|t@ky @end|ng |rom un@w@edu@@u (Pavel Krivitsky)
+Date: Tue, 7 Mar 2023 10:49:41 +0000
+Subject: [Rd] Augment base::replace(x, list,
+ value) to allow list= to be a predicate?
+In-Reply-To: <60f31223-033a-21ee-67fd-b1a6566a0278@insa-toulouse.fr>
+References: <c450f50c118c8e4ca10acaf7b1fc40e7b205be57.camel@unsw.edu.au>
+ <60f31223-033a-21ee-67fd-b1a6566a0278@insa-toulouse.fr>
+Message-ID: <d9dc22049a09fdbf55b43b21a947f61dda3d0720.camel@unsw.edu.au>
+
+Dear Serguei,
+
+On Mon, 2023-03-06 at 09:45 +0100, Serguei Sokol wrote:
+> Right, but anonymous function syntax can palliate to this:
+> 
+> x |> (\(x) replace(x, is.na(x), 0))()
+
+This approach hardly makes for concise or readable code.
+
+> 
+> Before modifying the base of R, we should examine existing
+> possibilities to achieve the same goal.
+
+Backwards-compatible enhancements to existing functions in base R
+appear in every major release. In this case, the proposed behaviour of
+replace() would be consistent with that of the *apply() family of
+functions.
+
+> In this particular case and if the previous solution (anonymous 
+> function) is not satisfactory a thin one-line wrapper can make the
+> job:
+> 
+> freplace <- function (x, list, values, ...) replace(x, 
+> if(is.function(list)) list <- list(x, ...) else list, values)
+> 
+> this becomes
+> 
+> c(1,2,NA,3) |> freplace(is.na, 0)
+> 
+> and looks quite acceptable for me.
+
+One could always implement a function that has this functionality, of
+course. In fact, one could write,
+
+replace <- function (x, list, values, ...) base::replace(x, 
+  if(is.function(list)) list <- list(x, ...) else list, values)
+
+and not even have to change the name. However, having to write it every
+time defeats the purpose of having it in base in the first place.
+
+				Best Regards,
+				Pavel
+
+> 
+> Best,
+> Serguei.
+> 
+> > 
+> > ????????????????????????Any thoughts?
+> > ????????????????????????Pavel
+> > ______________________________________________
+> > R-devel at r-project.org?mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> 
+
+
+From ggrothend|eck @end|ng |rom gm@||@com  Tue Mar  7 13:33:56 2023
+From: ggrothend|eck @end|ng |rom gm@||@com (Gabor Grothendieck)
+Date: Tue, 7 Mar 2023 07:33:56 -0500
+Subject: [Rd] Augment base::replace(x, list,
+ value) to allow list= to be a predicate?
+In-Reply-To: <c450f50c118c8e4ca10acaf7b1fc40e7b205be57.camel@unsw.edu.au>
+References: <c450f50c118c8e4ca10acaf7b1fc40e7b205be57.camel@unsw.edu.au>
+Message-ID: <CAP01uRk2-FWoH9cceJP61ckxte1hGF3VVcwFjF12ouASvoBZ9g@mail.gmail.com>
+
+This could be extended to sub and gsub as well which gsubfn in the
+gusbfn package already does:
+
+  library(gsubfn)
+  gsubfn("^..", toupper, c("abc", "xyz"))
+  ## [1] "ABc" "XYz"
+
+On Fri, Mar 3, 2023 at 7:22?PM Pavel Krivitsky <p.krivitsky at unsw.edu.au> wrote:
+>
+> Dear All,
+>
+> Currently, list= in base::replace(x, list, value) has to be an index
+> vector. For me, at least, the most common use case is for list= to be
+> some simple property of elements of x, e.g.,
+>
+> x <- c(1,2,NA,3)
+> replace(x, is.na(x), 0)
+>
+> Particularly when using R pipes, which don't allow multiple
+> substitutions, it would simplify many of such cases if list= could be a
+> function that returns an index, e.g.,
+>
+> replace <- function (x, list, values, ...) {
+>   # Here, list() refers to the argument, not the built-in.
+>   if(is.function(list)) list <- list(x, ...)
+>   x[list] <- values
+>   x
+> }
+>
+> Then, the following is possible:
+>
+> c(1,2,NA,3) |> replace(is.na, 0)
+>
+>                         Any thoughts?
+>                         Pavel
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+
+-- 
+Statistics & Software Consulting
+GKX Group, GKX Associates Inc.
+tel: 1-877-GKX-GROUP
+email: ggrothendieck at gmail.com
+
+
+From x|e @end|ng |rom y|hu|@n@me  Tue Mar  7 18:35:41 2023
+From: x|e @end|ng |rom y|hu|@n@me (Yihui Xie)
+Date: Tue, 7 Mar 2023 11:35:41 -0600
+Subject: [Rd] 
+ Undocumented change of dirname("C:/") on R-devel on Windows
+In-Reply-To: <a182c76a-02f1-2ede-5ded-0752e7a618bd@gmail.com>
+References: <CALyqOb8-eihVs9FW2AcH42mOCwZj2gLsq=j1sNUSthnf0k7Zow@mail.gmail.com>
+ <1db6ce6b-04f0-b890-c320-3e0cbc20a99f@gmail.com>
+ <CALyqOb8fuhNtO3QZVO75Zvb91EbV0ZgLvUPRyC6KkVYBWocUQw@mail.gmail.com>
+ <CALyqOb8xCA182niry8_OudVw+xVpg=WiPCMsEQZTP=R7Wc2wzw@mail.gmail.com>
+ <CANROs4cp5K5ZC3F8UcZa8Togd4EyuRmBiMxQrq4Du2=Asc5pUQ@mail.gmail.com>
+ <a182c76a-02f1-2ede-5ded-0752e7a618bd@gmail.com>
+Message-ID: <CANROs4df-Y6T-qp+LEqo3_LK67Hz7Xgm=Bgn7w81FEtbfDOuqQ@mail.gmail.com>
+
+Thanks a lot! I can confirm that it has been fixed indeed.
+
+Regards,
+Yihui
+
+
+
+On Mon, Feb 27, 2023 at 1:14?PM Tomas Kalibera <tomas.kalibera at gmail.com>
+wrote:
+
+>
+> On 2/27/23 17:02, Yihui Xie wrote:
+>
+> Hi Tomas,
+>
+> There has been an R CMD check error with xfun and r-devel on Windows for a
+> while:
+> https://www.r-project.org/nosvn/R.check/r-devel-windows-x86_64/xfun-00check.html
+> Basically it means that the following would return TRUE before:
+>
+>   normalizePath('a/b', mustWork = FALSE) == normalizePath('./a/b',
+> mustWork = FALSE)
+>
+> but it became FALSE at some point in r-devel. I think 'a/b' and './a/b`
+> should be treated as the same path. Does that make sense? Thanks!
+>
+> Thanks a lot for spotting and reporting this, fixed in R-devel.
+> Normalization of non-existent paths was broken.
+>
+> Best
+> Tomas
+>
+>
+> Regards,
+> Yihui
+> --
+> https://yihui.org
+>
+>
+> On Thu, Feb 23, 2023 at 11:44 PM Hiroaki Yutani <yutani.ini at gmail.com>
+> wrote:
+>
+>> I confirmed the revert fixed my failing test. Thanks!
+>>
+>> 2023?2?23?(?) 20:12 Hiroaki Yutani <yutani.ini at gmail.com>:
+>>
+>> > Thanks for the prompt response, I'll confirm it after the new R-devel
+>> > binary is available.
+>> > Also, thanks for the detailed explanation. I agree with you in general.
+>> >
+>> > > "/" in "C:/" is a path separator or not, and whether it is trailing or
+>> > not
+>> >
+>> > It seems a Windows' path basically consists of two components; a drive
+>> > specification (e.g., C:) and the directory structure within the drive.
+>> What
+>> > I learned today is that both "C:/" and "C:" are valid path
+>> specifications,
+>> > but refer to different locations; "C:" is not the root directory of the
+>> > drive, but just a relative path [1]. So, I agree with you that the
+>> basename
+>> > of "C:/" should be "C:/". However, at the same time, I don't feel this
+>> is
+>> > worth a breaking change, so I think we can preserve the current (R
+>> 4.2.2)
+>> > behavior.
+>> >
+>> > [1]:
+>> >
+>> https://learn.microsoft.com/en-us/dotnet/standard/io/file-path-formats#apply-the-current-directory
+>> >
+>> > Best,
+>> > Yutani
+>> >
+>> > 2023?2?23?(?) 17:15 Tomas Kalibera <tomas.kalibera at gmail.com>:
+>> >
+>> >>
+>> >> On 2/23/23 03:27, Hiroaki Yutani wrote:
+>> >> > Hi,
+>> >> >
+>> >> > I found dirname() behaves differently on R-devel on Windows. Since
+>> I'm
+>> >> not
+>> >> > sure which behavior is right, let me ask here before filing this to
+>> R's
+>> >> > Bigzilla.
+>> >> >
+>> >> > On R 4.2.2., we get
+>> >> >
+>> >> >      > dirname("C:/")
+>> >> >      [1] "C:/"
+>> >> >
+>> >> > However, on R-devel (r83888), we get
+>> >> >
+>> >> >      > dirname("C:/")
+>> >> >      [1] "."
+>> >> >
+>> >> > ?dirname says 'dirname returns the part of the path up to but
+>> excluding
+>> >> the
+>> >> > last path separator, or "." if there is no path separator,' but I
+>> don't
+>> >> see
+>> >> > how the root path is supposed to be treated based on this rule (,
+>> >> whether
+>> >> > it's WIndows or UNIX-alike).
+>> >> Thanks for spotting the difference, I've reverted to the previous
+>> >> behavior, the change was unintentional. If you spot any other
+>> suspicious
+>> >> changes in behavior in file-system operations, please report.
+>> >> > What should we expect as the return value of dirname("C:/")? I feel
+>> the
+>> >> > current behavior on R 4.2.2 is right, but I'd like to confirm.
+>> >>
+>> >> I also think the old behavior is better, even though it could be argued
+>> >> whether the "/" in "C:/" is a path separator or not, and whether it is
+>> >> trailing or not. But the behavior is in line with Unix where dirname of
+>> >> "/" is also "/". Msys2 would return "C:".
+>> >>
+>> >> If  "/" in "C:/" is a path separator but not a trailing path separator,
+>> >> then basename("C:/") should probably be "" and not "C:", and this would
+>> >> be in line with what R does on Unix. However, to be in line with Unix,
+>> I
+>> >> think the basename of "C:/" should be "C:/". Yet, Msys2 returns "C:"
+>> >> which is what R does now.
+>> >>
+>> >> So what these functions should do on Windows is definitely tricky. In
+>> >> either case the behavior is now again as in R 4.2.2.
+>> >>
+>> >> Best
+>> >> Tomas
+>> >>
+>> >> >
+>> >> > Best,
+>> >> > Yutani
+>> >> >
+>> >> >       [[alternative HTML version deleted]]
+>> >> >
+>> >> > ______________________________________________
+>> >> > R-devel at r-project.org mailing list
+>> >> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>> >>
+>> >
+>>
+>>         [[alternative HTML version deleted]]
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+
+	[[alternative HTML version deleted]]
+
+
