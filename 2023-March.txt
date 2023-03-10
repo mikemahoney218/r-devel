@@ -2401,3 +2401,256 @@ wrote:
 	[[alternative HTML version deleted]]
 
 
+From @tevem@rt|n041 @end|ng |rom gm@||@com  Wed Mar  8 03:41:29 2023
+From: @tevem@rt|n041 @end|ng |rom gm@||@com (Steve Martin)
+Date: Tue, 7 Mar 2023 21:41:29 -0500
+Subject: [Rd] Augment base::replace(x, list,
+ value) to allow list= to be a predicate?
+In-Reply-To: <CAP01uRk2-FWoH9cceJP61ckxte1hGF3VVcwFjF12ouASvoBZ9g@mail.gmail.com>
+References: <c450f50c118c8e4ca10acaf7b1fc40e7b205be57.camel@unsw.edu.au>
+ <CAP01uRk2-FWoH9cceJP61ckxte1hGF3VVcwFjF12ouASvoBZ9g@mail.gmail.com>
+Message-ID: <CAP=dwz8ZpEbRX40qGBt2L0T6rY5xo6a+QFOBZJfTcjGw8dEHrA@mail.gmail.com>
+
+That's an interesting example, as it's conceptually similar to what
+Pavel is proposing, but structurally different. gsubfn() is more
+complicated than a simple switch in the body of the function, and
+wouldn't work well as an anonymous function.
+
+Multiple dispatch can nicely encompass both of these cases. For replace(),
+
+library(S7)
+
+replace <- new_generic("replace", c("x", "list"), function(x, list,
+values, ...) {
+  S7_dispatch()
+})
+
+method(replace, list(class_any, class_any)) <- base::replace
+
+method(replace, list(class_any, class_function)) <- function(x, list,
+values, ...) {
+  replace(x, list(x, ...), values)
+}
+
+x <- c(1 ,2, NA, 3)
+replace(x, is.na(x), 0)
+[1] 1 2 0 3
+
+replace(x, is.na, 0)
+[1] 1 2 0 3
+
+And for gsub(),
+
+gsub <- new_generic("gsub", c("pattern", "replacement"),
+function(pattern, replacement, x, ...) {
+  S7_dispatch()
+})
+
+method(gsub, list(class_character, class_character)) <- base::gsub
+
+# My quick-and-dirty implementation as an example
+method(gsub, list(class_character, class_function)) <-
+function(pattern, replacement, x) {
+  m <- regexpr(pattern, x)
+  res <- replacement(regmatches(x, m))
+  mapply(gsub, pattern, as.character(res), x, USE.NAMES = FALSE)
+}
+
+gsub("^..", toupper, c("abc", "xyz"))
+[1] "ABc" "XYz"
+
+But this isn't a simple change to replace() anymore, and I may just be
+spending too much time tinkering with Julia.
+
+Steve
+
+On Tue, 7 Mar 2023 at 07:34, Gabor Grothendieck <ggrothendieck at gmail.com> wrote:
+>
+> This could be extended to sub and gsub as well which gsubfn in the
+> gusbfn package already does:
+>
+>   library(gsubfn)
+>   gsubfn("^..", toupper, c("abc", "xyz"))
+>   ## [1] "ABc" "XYz"
+>
+> On Fri, Mar 3, 2023 at 7:22?PM Pavel Krivitsky <p.krivitsky at unsw.edu.au> wrote:
+> >
+> > Dear All,
+> >
+> > Currently, list= in base::replace(x, list, value) has to be an index
+> > vector. For me, at least, the most common use case is for list= to be
+> > some simple property of elements of x, e.g.,
+> >
+> > x <- c(1,2,NA,3)
+> > replace(x, is.na(x), 0)
+> >
+> > Particularly when using R pipes, which don't allow multiple
+> > substitutions, it would simplify many of such cases if list= could be a
+> > function that returns an index, e.g.,
+> >
+> > replace <- function (x, list, values, ...) {
+> >   # Here, list() refers to the argument, not the built-in.
+> >   if(is.function(list)) list <- list(x, ...)
+> >   x[list] <- values
+> >   x
+> > }
+> >
+> > Then, the following is possible:
+> >
+> > c(1,2,NA,3) |> replace(is.na, 0)
+> >
+> >                         Any thoughts?
+> >                         Pavel
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+>
+>
+> --
+> Statistics & Software Consulting
+> GKX Group, GKX Associates Inc.
+> tel: 1-877-GKX-GROUP
+> email: ggrothendieck at gmail.com
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From ggrothend|eck @end|ng |rom gm@||@com  Wed Mar  8 15:11:06 2023
+From: ggrothend|eck @end|ng |rom gm@||@com (Gabor Grothendieck)
+Date: Wed, 8 Mar 2023 09:11:06 -0500
+Subject: [Rd] Augment base::replace(x, list,
+ value) to allow list= to be a predicate?
+In-Reply-To: <CAP=dwz8ZpEbRX40qGBt2L0T6rY5xo6a+QFOBZJfTcjGw8dEHrA@mail.gmail.com>
+References: <c450f50c118c8e4ca10acaf7b1fc40e7b205be57.camel@unsw.edu.au>
+ <CAP01uRk2-FWoH9cceJP61ckxte1hGF3VVcwFjF12ouASvoBZ9g@mail.gmail.com>
+ <CAP=dwz8ZpEbRX40qGBt2L0T6rY5xo6a+QFOBZJfTcjGw8dEHrA@mail.gmail.com>
+Message-ID: <CAP01uR=B3=KqmASJGtnPMZv-8J5CNO4fVg6S95FLKSmb5CMD_g@mail.gmail.com>
+
+This is getting way off topic. I wasn't suggesting that gsubfn, which
+does a lot more than this simple
+example, as the implementation.
+
+I was pointing out that the replace function idea can be extended to
+sub and gsub and showing what
+it would do.
+
+On Tue, Mar 7, 2023 at 9:41?PM Steve Martin <stevemartin041 at gmail.com> wrote:
+>
+> That's an interesting example, as it's conceptually similar to what
+> Pavel is proposing, but structurally different. gsubfn() is more
+> complicated than a simple switch in the body of the function, and
+> wouldn't work well as an anonymous function.
+>
+> Multiple dispatch can nicely encompass both of these cases. For replace(),
+>
+> library(S7)
+>
+> replace <- new_generic("replace", c("x", "list"), function(x, list,
+> values, ...) {
+>   S7_dispatch()
+> })
+>
+> method(replace, list(class_any, class_any)) <- base::replace
+>
+> method(replace, list(class_any, class_function)) <- function(x, list,
+> values, ...) {
+>   replace(x, list(x, ...), values)
+> }
+>
+> x <- c(1 ,2, NA, 3)
+> replace(x, is.na(x), 0)
+> [1] 1 2 0 3
+>
+> replace(x, is.na, 0)
+> [1] 1 2 0 3
+>
+> And for gsub(),
+>
+> gsub <- new_generic("gsub", c("pattern", "replacement"),
+> function(pattern, replacement, x, ...) {
+>   S7_dispatch()
+> })
+>
+> method(gsub, list(class_character, class_character)) <- base::gsub
+>
+> # My quick-and-dirty implementation as an example
+> method(gsub, list(class_character, class_function)) <-
+> function(pattern, replacement, x) {
+>   m <- regexpr(pattern, x)
+>   res <- replacement(regmatches(x, m))
+>   mapply(gsub, pattern, as.character(res), x, USE.NAMES = FALSE)
+> }
+>
+> gsub("^..", toupper, c("abc", "xyz"))
+> [1] "ABc" "XYz"
+>
+> But this isn't a simple change to replace() anymore, and I may just be
+> spending too much time tinkering with Julia.
+>
+> Steve
+>
+> On Tue, 7 Mar 2023 at 07:34, Gabor Grothendieck <ggrothendieck at gmail.com> wrote:
+> >
+> > This could be extended to sub and gsub as well which gsubfn in the
+> > gusbfn package already does:
+> >
+> >   library(gsubfn)
+> >   gsubfn("^..", toupper, c("abc", "xyz"))
+> >   ## [1] "ABc" "XYz"
+> >
+> > On Fri, Mar 3, 2023 at 7:22?PM Pavel Krivitsky <p.krivitsky at unsw.edu.au> wrote:
+> > >
+> > > Dear All,
+> > >
+> > > Currently, list= in base::replace(x, list, value) has to be an index
+> > > vector. For me, at least, the most common use case is for list= to be
+> > > some simple property of elements of x, e.g.,
+> > >
+> > > x <- c(1,2,NA,3)
+> > > replace(x, is.na(x), 0)
+> > >
+> > > Particularly when using R pipes, which don't allow multiple
+> > > substitutions, it would simplify many of such cases if list= could be a
+> > > function that returns an index, e.g.,
+> > >
+> > > replace <- function (x, list, values, ...) {
+> > >   # Here, list() refers to the argument, not the built-in.
+> > >   if(is.function(list)) list <- list(x, ...)
+> > >   x[list] <- values
+> > >   x
+> > > }
+> > >
+> > > Then, the following is possible:
+> > >
+> > > c(1,2,NA,3) |> replace(is.na, 0)
+> > >
+> > >                         Any thoughts?
+> > >                         Pavel
+> > > ______________________________________________
+> > > R-devel at r-project.org mailing list
+> > > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+> >
+> >
+> > --
+> > Statistics & Software Consulting
+> > GKX Group, GKX Associates Inc.
+> > tel: 1-877-GKX-GROUP
+> > email: ggrothendieck at gmail.com
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+
+-- 
+Statistics & Software Consulting
+GKX Group, GKX Associates Inc.
+tel: 1-877-GKX-GROUP
+email: ggrothendieck at gmail.com
+
+
