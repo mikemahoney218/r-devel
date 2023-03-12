@@ -2670,3 +2670,180 @@ Best wishes,
 Heather
 
 
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Fri Mar 10 13:54:43 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Fri, 10 Mar 2023 13:54:43 +0100
+Subject: [Rd] scan(..., skip=1e11): infinite loop; cannot interrupt
+In-Reply-To: <20230211113316.44dd813a@Tarkus>
+References: <acf79875-5042-1db1-5283-836dedd7f8a0@prodsyse.com>
+ <20230211113316.44dd813a@Tarkus>
+Message-ID: <c2d3c1eb-9a07-ff7b-3055-497c991535f3@gmail.com>
+
+
+
+On 2/11/23 09:33, Ivan Krylov wrote:
+> On Fri, 10 Feb 2023 23:38:55 -0600
+> Spencer Graves <spencer.graves at prodsyse.com> wrote:
+>
+>> I have a 4.54 GB file that I'm trying to read in chunks using
+>> "scan(..., skip=__)".  It works as expected for small values of
+>> "skip" but goes into an infinite loop for "skip=1e11" and similar
+>> large values of skip:  I cannot even interrupt it;  I must kill R.
+> Skipping lines is done by two nested loops. The outer loop counts the
+> lines to skip; the inner loop reads characters until it encounters a
+> newline or end of file. The outer loop doesn't check for EOF and keeps
+> asking for more characters until the inner loop runs at least once for
+> every line it wants to skip. The following patch should avoid the
+> wait in such cases:
+>
+> --- src/main/scan.c	(revision 83797)
+> +++ src/main/scan.c	(working copy)
+> @@ -835,7 +835,7 @@
+>   attribute_hidden SEXP do_scan(SEXP call, SEXP op, SEXP args, SEXP rho)
+>   {
+>       SEXP ans, file, sep, what, stripwhite, dec, quotes, comstr;
+> -    int c, flush, fill, blskip, multiline, escapes, skipNul;
+> +    int c = 0, flush, fill, blskip, multiline, escapes, skipNul;
+>       R_xlen_t nmax, nlines, nskip;
+>       const char *p, *encoding;
+>       RCNTXT cntxt;
+> @@ -952,7 +952,7 @@
+>   	    if(!data.con->canread)
+>   		error(_("cannot read from this connection"));
+>   	}
+> -	for (R_xlen_t i = 0; i < nskip; i++) /* MBCS-safe */
+> +	for (R_xlen_t i = 0; i < nskip && c != R_EOF; i++) /* MBCS-safe */
+>   	    while ((c = scanchar(FALSE, &data)) != '\n' && c != R_EOF);
+>       }
+>   
+>
+> Making it interruptible is a bit more work: we need to ensure that a
+> valid context is set up and check regularly for an interrupt.
+>
+> --- src/main/scan.c	(revision 83797)
+> +++ src/main/scan.c	(working copy)
+> @@ -835,7 +835,7 @@
+>   attribute_hidden SEXP do_scan(SEXP call, SEXP op, SEXP args, SEXP rho)
+>   {
+>       SEXP ans, file, sep, what, stripwhite, dec, quotes, comstr;
+> -    int c, flush, fill, blskip, multiline, escapes, skipNul;
+> +    int c = 0, flush, fill, blskip, multiline, escapes, skipNul;
+>       R_xlen_t nmax, nlines, nskip;
+>       const char *p, *encoding;
+>       RCNTXT cntxt;
+> @@ -952,8 +952,6 @@
+>   	    if(!data.con->canread)
+>   		error(_("cannot read from this connection"));
+>   	}
+> -	for (R_xlen_t i = 0; i < nskip; i++) /* MBCS-safe */
+> -	    while ((c = scanchar(FALSE, &data)) != '\n' && c != R_EOF);
+>       }
+>   
+>       ans = R_NilValue;		/* -Wall */
+> @@ -966,6 +964,10 @@
+>       cntxt.cend = &scan_cleanup;
+>       cntxt.cenddata = &data;
+>   
+> +    if (ii) for (R_xlen_t i = 0, j = 0; i < nskip && c != R_EOF; i++) /* MBCS-safe */
+> +	while ((c = scanchar(FALSE, &data)) != '\n' && c != R_EOF)
+> +	    if (j++ % 10000 == 9999) R_CheckUserInterrupt();
+> +
+>       switch (TYPEOF(what)) {
+>       case LGLSXP:
+>       case INTSXP:
+>
+> This way, even if you pour a Decanter of Endless Lines (e.g. mkfifo
+> LINES; perl -E'print "A"x42 while 1;' > LINES) into scan(), it can
+> still be interrupted, even if neither newline nor EOF ever arrives.
+
+Thanks, I've updated the implementation of scan() in R-devel to be 
+interruptible while skipping lines.
+
+I've done it slightly differently as I found there already was a memory 
+leak, which could be fixed by creating the context a bit earlier.
+
+I've also avoided modulo on the fast path as I saw 13% performance 
+overhead on my mailbox file. Decrementing and checking against zero 
+didn't have measurable overhead.
+
+Best
+Tomas
+
+> (We never skip lines when reading from the console? I suppose it makes
+> sense. I think this needs to be documented and can write a
+> documentation patch.)
+>
+> If you actually have 1e11 lines in your file and would like to read it
+> in chunks, it may help to use
+>
+> f <- file('...')
+> chunk1 <- scan(f, n = n1, skip = nskip1)
+> # the following will continue reading where chunk1 had ended
+> chunk2 <- scan(f, n = n2, skip = nskip2)
+>
+> ...in order to avoid having to skip over chunks you have already read,
+> which otherwise makes the algorithm quadratic in number of lines
+> instead of linear. (I couldn't determine whether you're already doing
+> this, sorry.)
+>
+> Skipping a fixed number of lines is hard: since they have variable
+> length, it's required to read every character in order to determine
+> whether it starts a new line. With byte ranges, it would have been
+> possible to use seek(), but not here.
+>
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Fri Mar 10 16:39:39 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Fri, 10 Mar 2023 16:39:39 +0100
+Subject: [Rd] On optimizing `R_NewEnv()`
+In-Reply-To: <CABzLhzxrrV7AGg5nCwCdEzqB1aRcRcHByoAXrjiXgRMi7Q=4-A@mail.gmail.com>
+References: <CABzLhzxrrV7AGg5nCwCdEzqB1aRcRcHByoAXrjiXgRMi7Q=4-A@mail.gmail.com>
+Message-ID: <9bb1f967-9a82-deca-e23a-12ebf515f851@gmail.com>
+
+
+On 2/8/23 21:51, Davis Vaughan via R-devel wrote:
+> Hi all,
+>
+> I really like the addition of `R_NewEnv()` back in 4.1.0
+> https://github.com/wch/r-source/blob/625ab8d45f86f65561e53627e1f0c220bdc5f752/src/main/envir.c#L3619-L3630
+>
+> I have a use case where I'm likely to call this function a large
+> number of times to generate many small hashed environments, so I'd
+> like to optimize it as far as possible.
+>
+> I noticed that it takes `int size`, converts that to a SEXP for
+> `R_NewHashedEnv()`, which then simply converts that back to an `int`
+> here:
+> https://github.com/wch/r-source/blob/625ab8d45f86f65561e53627e1f0c220bdc5f752/src/main/envir.c#L378
+>
+> I wonder if we could cut out that intermediate SEXP (along with its
+> protection) by adjusting `R_NewHashedEnv()` to instead take `int
+> size`.
+>
+> I'd be happy to do a patch if that sounds good. I'd update all uses of
+> `R_NewHashedEnv()` to supply `int`s instead, which actually seems like
+> it would make every instance of calling that function simpler:
+> https://github.com/search?q=repo%3Awch%2Fr-source%20R_NewHashedEnv&type=code
+>
+> So hopefully a win everywhere?
+
+I've simplified this code in R-devel as suggested.
+
+However, I think that the original performance motivation is weak: if 
+some program creates so many, small and little used hashed environments 
+that this overhead matters, probably it should use a different data 
+structure, and then it will get much bigger performance benefits.
+
+Best,
+Tomas
+
+>
+> Thanks,
+> Davis
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
