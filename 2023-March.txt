@@ -9078,3 +9078,636 @@ R-devel at r-project.org mailing list
 https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From ||one| @end|ng |rom po@|t@co  Thu Mar 16 18:45:24 2023
+From: ||one| @end|ng |rom po@|t@co (Lionel Henry)
+Date: Thu, 16 Mar 2023 18:45:24 +0100
+Subject: [Rd] Making headers self-contained for static analysis
+Message-ID: <CAJf4E3o1ZndpVV=b+RaFXZq1tKGXa5+WOemD0s62WpwNJRi8wA@mail.gmail.com>
+
+Hello,
+
+I started using clangd to get better static analysis and code
+refactoring tooling with the R sources (using eglot-mode in Emacs, it
+just works once you've generated a `compile_commands.json` file with
+`bear make all`). I noticed that the static analyser can't understand
+several header files because these are not self-contained. So I went
+through all .h files and inserted the missing includes, cf the
+attached patch.
+
+Making the headers self-contained has consequences for the .c or .cpp
+files that include them. In the case of C files, the only downside I
+see is that it might cause users to accidentally rely on indirect
+inclusion of standard headers, instead of directly including the
+header to make the dependency explicit as would be good practice.
+This doesn't seem like a big deal compared to the benefits of enabling
+static analysis.
+
+However in the case of C++ that's more problematic. We don't want to
+include the C headers because that would pollute the global namespace
+and users might prefer to import the missing symbols (`size_t` and
+`FILE`) selectively. Also that wouldn't help static analysis within
+the header files since the analysers use the C path. So I have guarded
+inclusion of standard C headers behing a `__cplusplus` check.
+
+If that makes sense, would R core consider applying the attached patch
+to the R sources?
+
+Best,
+Lionel
+
+From ||one| @end|ng |rom po@|t@co  Thu Mar 16 18:49:55 2023
+From: ||one| @end|ng |rom po@|t@co (Lionel Henry)
+Date: Thu, 16 Mar 2023 18:49:55 +0100
+Subject: [Rd] isNamespaceLoaded() while the namespace is loading
+In-Reply-To: <CABtg=Kn8zaF+ebw8qd-PeG2DnzT6xa-r3tMct9raDLUPFz=X0A@mail.gmail.com>
+References: <CABtg=Kn8zaF+ebw8qd-PeG2DnzT6xa-r3tMct9raDLUPFz=X0A@mail.gmail.com>
+Message-ID: <CAJf4E3q4dJu5=jNTUBZcJQracbc_MaHrHUzc6rnLfoMSQS1HtA@mail.gmail.com>
+
+Hello,
+
+We've run into this issue multiple times and it's often a head
+scratcher when it happens. We are using workarounds but it would be
+great to fix this for R 4.3. Would an R core member have time to
+review the patch that we supplied in
+https://bugs.r-project.org/show_bug.cgi?id=18489 ?
+
+Best,
+Lionel
+
+
+On 1/21/22, G?bor Cs?rdi <csardi.gabor at gmail.com> wrote:
+> We ran into a bug in our package that seems to boil down to
+> isNamespaceLoaded() returning TRUE for namespaces that R is currently
+> loading.
+>
+> We had something like this in an .onLoad function:
+>
+> if (isNamespaceLoaded("upstream")) {
+>   upstream::upstream_function()
+> }
+>
+> Which seems OK, unless upstream (recursively) imports the package
+> having this code. Should that happen, the loading of upstream triggers
+> the loading of this package as well and isNamespaceLoaded() seems to
+> return TRUE, even though the namespace of upstream is not fully loaded
+> yet, and we get an error that looks like this:
+>
+> Error : .onLoad failed in loadNamespace() for 'foo', details:
+>      call: NULL
+>      error: 'upstream_function' is not an exported object from
+> 'namespace:upstream'
+>
+> I wonder if isNamespaceLoaded() returning TRUE is correct in this
+> case, or returning FALSE would be better. Or maybe it would make sense
+> to have a way to query the packages that are being loaded currently?
+>
+> AFAICT this works, but it does use some implementation details from
+> loadNamespace(), so it does not seem like a proper solution:
+>
+> dynGet("__NameSpacesLoading__", NULL)
+>
+> Another workaround is something like this:
+>
+>   is_loaded <- function(pkg) {
+>     if (!isNamespaceLoaded(pkg)) return(FALSE)
+>     tryCatch({
+>       loadNamespace(pkg)
+>       TRUE
+>     }, error = function(err) FALSE)
+>   }
+>
+> which forces an error for currently loading namespaces by triggering a
+> (fake) recursive dependency.
+>
+> Thanks,
+> Gabor
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Thu Mar 16 19:05:54 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Thu, 16 Mar 2023 21:05:54 +0300
+Subject: [Rd] Making headers self-contained for static analysis
+In-Reply-To: <CAJf4E3o1ZndpVV=b+RaFXZq1tKGXa5+WOemD0s62WpwNJRi8wA@mail.gmail.com>
+References: <CAJf4E3o1ZndpVV=b+RaFXZq1tKGXa5+WOemD0s62WpwNJRi8wA@mail.gmail.com>
+Message-ID: <20230316210402.7cb38406@Tarkus>
+
+Hello Lionel,
+
+Just letting you know off-list that the patch didn't make it through.
+Unfortunately, I don't remember the exact rules regarding attachments
+(does text/plain work?), but an external link is always an option,
+especially for large patches.
+
+-- 
+Best regards,
+Ivan
+
+
+From ||one| @end|ng |rom po@|t@co  Thu Mar 16 19:32:39 2023
+From: ||one| @end|ng |rom po@|t@co (Lionel Henry)
+Date: Thu, 16 Mar 2023 19:32:39 +0100
+Subject: [Rd] Making headers self-contained for static analysis
+In-Reply-To: <CAJf4E3o1ZndpVV=b+RaFXZq1tKGXa5+WOemD0s62WpwNJRi8wA@mail.gmail.com>
+References: <CAJf4E3o1ZndpVV=b+RaFXZq1tKGXa5+WOemD0s62WpwNJRi8wA@mail.gmail.com>
+Message-ID: <CAJf4E3pubgvmTfdqK8GM39oyPN=AOSbKkyLN3wj3KB24T351Gg@mail.gmail.com>
+
+People have let me know that the attachment didn't make it through.
+Do patches get filtered out?
+
+Please find it there:
+https://github.com/lionel-/r-svn/commit/e3de56798b1321a3fa8688a42bbb73d763b78024.patch
+
+I'm also happy to post it on the bugzilla if that makes sense.
+
+Best,
+Lionel
+
+On 3/16/23, Lionel Henry <lionel at posit.co> wrote:
+> Hello,
+>
+> I started using clangd to get better static analysis and code
+> refactoring tooling with the R sources (using eglot-mode in Emacs, it
+> just works once you've generated a `compile_commands.json` file with
+> `bear make all`). I noticed that the static analyser can't understand
+> several header files because these are not self-contained. So I went
+> through all .h files and inserted the missing includes, cf the
+> attached patch.
+>
+> Making the headers self-contained has consequences for the .c or .cpp
+> files that include them. In the case of C files, the only downside I
+> see is that it might cause users to accidentally rely on indirect
+> inclusion of standard headers, instead of directly including the
+> header to make the dependency explicit as would be good practice.
+> This doesn't seem like a big deal compared to the benefits of enabling
+> static analysis.
+>
+> However in the case of C++ that's more problematic. We don't want to
+> include the C headers because that would pollute the global namespace
+> and users might prefer to import the missing symbols (`size_t` and
+> `FILE`) selectively. Also that wouldn't help static analysis within
+> the header files since the analysers use the C path. So I have guarded
+> inclusion of standard C headers behing a `__cplusplus` check.
+>
+> If that makes sense, would R core consider applying the attached patch
+> to the R sources?
+>
+> Best,
+> Lionel
+>
+
+
+From m@rc_@chw@rtz @end|ng |rom me@com  Thu Mar 16 19:54:05 2023
+From: m@rc_@chw@rtz @end|ng |rom me@com (Marc Schwartz)
+Date: Thu, 16 Mar 2023 14:54:05 -0400
+Subject: [Rd] Making headers self-contained for static analysis
+In-Reply-To: <CAJf4E3pubgvmTfdqK8GM39oyPN=AOSbKkyLN3wj3KB24T351Gg@mail.gmail.com>
+References: <CAJf4E3o1ZndpVV=b+RaFXZq1tKGXa5+WOemD0s62WpwNJRi8wA@mail.gmail.com>
+ <CAJf4E3pubgvmTfdqK8GM39oyPN=AOSbKkyLN3wj3KB24T351Gg@mail.gmail.com>
+Message-ID: <etPan.641365cd.617551a8.410@me.com>
+
+Hi,
+
+There are a limited number of MIME file types that are accepted through the list server, with plain text being one. Even though a patch file should be plain text, it is possible that your mail client may not have set the correct MIME type for your patch file attachment. If so, that would explain why it was filtered from the list.
+
+For future reference, if you change the file extension to ".txt" and then attach it, that should get picked up as plain text and get through the list server filters.
+
+Regards,
+
+Marc Schwartz
+R-Devel Co-Admin
+
+
+On March 16, 2023 at 2:32:39 PM, Lionel Henry via R-devel (r-devel at r-project.org (mailto:r-devel at r-project.org)) wrote:
+
+> People have let me know that the attachment didn't make it through.
+> Do patches get filtered out?
+>
+> Please find it there:
+> https://github.com/lionel-/r-svn/commit/e3de56798b1321a3fa8688a42bbb73d763b78024.patch
+>
+> I'm also happy to post it on the bugzilla if that makes sense.
+>
+> Best,
+> Lionel
+>
+> On 3/16/23, Lionel Henry wrote:
+> > Hello,
+> >
+> > I started using clangd to get better static analysis and code
+> > refactoring tooling with the R sources (using eglot-mode in Emacs, it
+> > just works once you've generated a `compile_commands.json` file with
+> > `bear make all`). I noticed that the static analyser can't understand
+> > several header files because these are not self-contained. So I went
+> > through all .h files and inserted the missing includes, cf the
+> > attached patch.
+> >
+> > Making the headers self-contained has consequences for the .c or .cpp
+> > files that include them. In the case of C files, the only downside I
+> > see is that it might cause users to accidentally rely on indirect
+> > inclusion of standard headers, instead of directly including the
+> > header to make the dependency explicit as would be good practice.
+> > This doesn't seem like a big deal compared to the benefits of enabling
+> > static analysis.
+> >
+> > However in the case of C++ that's more problematic. We don't want to
+> > include the C headers because that would pollute the global namespace
+> > and users might prefer to import the missing symbols (`size_t` and
+> > `FILE`) selectively. Also that wouldn't help static analysis within
+> > the header files since the analysers use the C path. So I have guarded
+> > inclusion of standard C headers behing a `__cplusplus` check.
+> >
+> > If that makes sense, would R core consider applying the attached patch
+> > to the R sources?
+> >
+> > Best,
+> > Lionel
+> >
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From |e||pe@contrer@@ @end|ng |rom gm@||@com  Thu Mar 16 20:39:40 2023
+From: |e||pe@contrer@@ @end|ng |rom gm@||@com (Felipe Contreras)
+Date: Thu, 16 Mar 2023 13:39:40 -0600
+Subject: [Rd] Request: better default R_LIBS_USER
+Message-ID: <CAMP44s2zzqo6iG2ujvhBGL4UsxsOt7e11p81xwWLCEf5Ggperw@mail.gmail.com>
+
+Hi,
+
+I see R by default installs packages in ~/R. I know I can change the
+default directory with R_LIBS_USER, but software shouldn't be
+polluting the home directory.
+
+For example both python and node install packages to ~/.local/lib,
+ruby to ~/.local/share. They don't install to for example ~/node.
+
+R should do the same: it should install packages to somewhere inside
+~/.local by default.
+
+Cheers.
+
+-- 
+Felipe Contreras
+
+
+From edd @end|ng |rom deb|@n@org  Thu Mar 16 23:08:41 2023
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Thu, 16 Mar 2023 17:08:41 -0500
+Subject: [Rd] Request: better default R_LIBS_USER
+In-Reply-To: <CAMP44s2zzqo6iG2ujvhBGL4UsxsOt7e11p81xwWLCEf5Ggperw@mail.gmail.com>
+References: <CAMP44s2zzqo6iG2ujvhBGL4UsxsOt7e11p81xwWLCEf5Ggperw@mail.gmail.com>
+Message-ID: <25619.37737.873897.49177@rob.eddelbuettel.com>
+
+
+On 16 March 2023 at 13:39, Felipe Contreras wrote:
+| I see R by default installs packages in ~/R. I know I can change the
+| default directory with R_LIBS_USER, but software shouldn't be
+| polluting the home directory.
+| 
+| For example both python and node install packages to ~/.local/lib,
+| ruby to ~/.local/share. They don't install to for example ~/node.
+| 
+| R should do the same: it should install packages to somewhere inside
+| ~/.local by default.
+
+Use of ~/.local is a fairly recent convention (relative to the time R has
+been around, which is now decades) and one which R supports already eg in the
+(rather useful) portable config directories:
+
+   > tools::R_user_dir("r2u")
+   [1] "/home/edd/.local/share/R/r2u"
+   > 
+
+Your best bet really to govern your .libPaths from your Rprofile.site and
+Renviron.site rather than asking a few million R users to adjust from past
+practice.
+
+Also: personal preferences differ. I think of Linux as multi-tenant and
+expect other (even system) users to have access to packages I install. So I
+am happy with this default --- which goes after all back to fruitful
+discussion in a bar in Vienna with Kurt and Fritz some 20 years ago:
+
+   > .libPaths()
+   [1] "/usr/local/lib/R/site-library" "/usr/lib/R/site-library"
+   [3] "/usr/lib/R/library"           
+   > 
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Fri Mar 17 01:15:09 2023
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Thu, 16 Mar 2023 17:15:09 -0700
+Subject: [Rd] Request: better default R_LIBS_USER
+In-Reply-To: <25619.37737.873897.49177@rob.eddelbuettel.com>
+References: <CAMP44s2zzqo6iG2ujvhBGL4UsxsOt7e11p81xwWLCEf5Ggperw@mail.gmail.com>
+ <25619.37737.873897.49177@rob.eddelbuettel.com>
+Message-ID: <CAFDcVCQz0VfD-BKoy8swP4iCXx-Q-unH=nk7N0P_-QM=GbfMXw@mail.gmail.com>
+
+> Your best bet really to govern your .libPaths from your Rprofile.site and
+Renviron.site ...
+
+To do this for any version of R, one can add:
+
+R_LIBS_USER=~/.local/share/R/%p-library/%v
+
+to ~/.Renviron or the Renviron.site file. This automatically expands
+to the platform and R x.y version early on when R starts up, e.g.
+~/.local/share/R/x86_64-pc-linux-gnu-library/4.2.
+
+> rather than asking a few million R users to adjust from past practice.
+
+We're all starting out with a fresh R_LIBS_USER once a year when a new
+minor version of R is released, so changing the default should be
+doable without major troubles. On MS Windows, this move has already
+been made. When R 4.2.0 was released, the default R_LIBS_USER location
+on MS Windows was changed, similarly, to the Local Application Data
+directory in R (>= 4.2.0), e.g.
+C:\Users\alice\AppData\Local\R\win-library\4.2.
+
+/Henrik
+
+On Thu, Mar 16, 2023 at 3:09?PM Dirk Eddelbuettel <edd at debian.org> wrote:
+>
+>
+> On 16 March 2023 at 13:39, Felipe Contreras wrote:
+> | I see R by default installs packages in ~/R. I know I can change the
+> | default directory with R_LIBS_USER, but software shouldn't be
+> | polluting the home directory.
+> |
+> | For example both python and node install packages to ~/.local/lib,
+> | ruby to ~/.local/share. They don't install to for example ~/node.
+> |
+> | R should do the same: it should install packages to somewhere inside
+> | ~/.local by default.
+>
+> Use of ~/.local is a fairly recent convention (relative to the time R has
+> been around, which is now decades) and one which R supports already eg in the
+> (rather useful) portable config directories:
+>
+>    > tools::R_user_dir("r2u")
+>    [1] "/home/edd/.local/share/R/r2u"
+>    >
+>
+> Your best bet really to govern your .libPaths from your Rprofile.site and
+> Renviron.site rather than asking a few million R users to adjust from past
+> practice.
+>
+> Also: personal preferences differ. I think of Linux as multi-tenant and
+> expect other (even system) users to have access to packages I install. So I
+> am happy with this default --- which goes after all back to fruitful
+> discussion in a bar in Vienna with Kurt and Fritz some 20 years ago:
+>
+>    > .libPaths()
+>    [1] "/usr/local/lib/R/site-library" "/usr/lib/R/site-library"
+>    [3] "/usr/lib/R/library"
+>    >
+>
+> Dirk
+>
+> --
+> dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From edd @end|ng |rom deb|@n@org  Fri Mar 17 01:39:16 2023
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Thu, 16 Mar 2023 19:39:16 -0500
+Subject: [Rd] Request: better default R_LIBS_USER
+In-Reply-To: <CAFDcVCQz0VfD-BKoy8swP4iCXx-Q-unH=nk7N0P_-QM=GbfMXw@mail.gmail.com>
+References: <CAMP44s2zzqo6iG2ujvhBGL4UsxsOt7e11p81xwWLCEf5Ggperw@mail.gmail.com>
+ <25619.37737.873897.49177@rob.eddelbuettel.com>
+ <CAFDcVCQz0VfD-BKoy8swP4iCXx-Q-unH=nk7N0P_-QM=GbfMXw@mail.gmail.com>
+Message-ID: <25619.46772.139003.258344@rob.eddelbuettel.com>
+
+
+On 16 March 2023 at 17:15, Henrik Bengtsson wrote:
+| We're all starting out with a fresh R_LIBS_USER once a year when a new
+| minor version of R is released,
+
+Maybe not "we all". I don't, and I know other Linux users who don't force a
+rebuild unless needed (as with R 3.6.* -> R 4.0.0).
+
+R signals clearly when a rebuild is needed at a major version change, and we
+had this (if I recall correctly) about twice in the six or so years.  I carry
+my directories over with ease from most (major) release to the next: By doing
+nothing as my .libPaths has no version number in.
+
+[ In fairness the last few upgrades were semi-dirtied because package needing
+a graphics device needed a rebuild as the tireless Paul Murrell extends
+capabilities and hence API interfaces. But that affects usually half a dozen
+out of maybe hundreds of installed packages. ]
+
+[ But your post was helpful in adding how to define a version, or arch, or
+... handle for which `help(".Library")` has all the relevant details. ]
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From |e||pe@contrer@@ @end|ng |rom gm@||@com  Fri Mar 17 02:17:12 2023
+From: |e||pe@contrer@@ @end|ng |rom gm@||@com (Felipe Contreras)
+Date: Thu, 16 Mar 2023 19:17:12 -0600
+Subject: [Rd] Request: better default R_LIBS_USER
+In-Reply-To: <25619.37737.873897.49177@rob.eddelbuettel.com>
+References: <CAMP44s2zzqo6iG2ujvhBGL4UsxsOt7e11p81xwWLCEf5Ggperw@mail.gmail.com>
+ <25619.37737.873897.49177@rob.eddelbuettel.com>
+Message-ID: <CAMP44s2NFqiOP1hYcXvk0MvDDnQ9ZmoQvEk37cRyUW2T_0pqRQ@mail.gmail.com>
+
+On Thu, Mar 16, 2023 at 4:08?PM Dirk Eddelbuettel <edd at debian.org> wrote:
+>
+>
+> On 16 March 2023 at 13:39, Felipe Contreras wrote:
+> | I see R by default installs packages in ~/R. I know I can change the
+> | default directory with R_LIBS_USER, but software shouldn't be
+> | polluting the home directory.
+> |
+> | For example both python and node install packages to ~/.local/lib,
+> | ruby to ~/.local/share. They don't install to for example ~/node.
+> |
+> | R should do the same: it should install packages to somewhere inside
+> | ~/.local by default.
+>
+> Use of ~/.local is a fairly recent convention (relative to the time R has
+> been around, which is now decades) and one which R supports already eg in the
+> (rather useful) portable config directories:
+>
+>    > tools::R_user_dir("r2u")
+>    [1] "/home/edd/.local/share/R/r2u"
+>    >
+>
+> Your best bet really to govern your .libPaths from your Rprofile.site and
+> Renviron.site
+
+I already have fixed it for myself, my request was about the default,
+so most users don't have to fix it for themselves too.
+
+> rather than asking a few million R users to adjust from past
+> practice.
+
+Why would they have to adjust anything?
+
+Just expand %U to both:
+
+            paste(c(
+            file.path(home, ".local", "lib", "r", x.y),
+            file.path(home, "R", paste0(R.version$platform, "-library"), x.y)
+            ), collapse = ":")
+
+Then R would install packages to the new location in new installations
+by default, but still use packages from the old location if present.
+
+Moreover, this location is going to change the next time the minor
+version is bumped anyway.
+
+Cheers.
+
+-- 
+Felipe Contreras
+
+
+From j@g@nmn2 @end|ng |rom gm@||@com  Fri Mar 17 02:22:00 2023
+From: j@g@nmn2 @end|ng |rom gm@||@com (Mikael Jagan)
+Date: Thu, 16 Mar 2023 21:22:00 -0400
+Subject: [Rd] det(diag(c(NaN, 1))) should be NaN, not 0
+In-Reply-To: <4d6116fe-ecf0-19c8-d572-4eb1a3631d4c@gmail.com>
+References: <4d6116fe-ecf0-19c8-d572-4eb1a3631d4c@gmail.com>
+Message-ID: <35b2c677-1cae-0327-f626-20a75f566efe@gmail.com>
+
+Hmm ... I can no longer reproduce this under r83996 when configuring
+--without-lapack and --without-blas {the default}.  Now det(A), det(B),
+det(C), and det(D) are all NaN.
+
+I assume that the reason is the recent update to use LAPACK 3.11.0?
+But I don't see any related NEWS here:
+
+     https://netlib.org/lapack/lapack-3.11.0.html
+
+It is possible that the underlying issue in DGETRF (INFO>0 due to NaN
+pivots rather than 0 pivots {=> singular}) still exists for matrices
+less trivial than my 2-by-2 examples.  Will have to experiment ...
+
+Mikael
+
+On 2022-11-09 3:58 pm, Mikael Jagan wrote:
+> Hello,
+> 
+> Currently, determinant(A) calculates the determinant of 'A' by factorizing
+> A=LU and computing prod(diag(U)) [or the logarithm of the absolute value].
+> The factorization is done by LAPACK routine DGETRF, which gives a status
+> code INFO, documented [1] as follows:
+> 
+> *>          INFO is INTEGER
+> *>          = 0:  successful exit
+> *>          < 0:  if INFO = -i, the i-th argument had an illegal value
+> *>          > 0:  if INFO = i, U(i,i) is exactly zero. The factorization
+> *>                has been completed, but the factor U is exactly
+> *>                singular, and division by zero will occur if it is used
+> *>                to solve a system of equations.
+> 
+> Accordingly, when INF0>0, determinant(A) behaves as det(A)=0, _not_ computing
+> prod(diag(U)).  The problem here is that DGETRF can _also_ give positive
+> INFO for matrices containing NaN, which may very well not be singular for some
+> finite value of NaN.
+> 
+> I claim that, when INFO>0, determinant(A) should _not_ behave as det(A)=0
+> unconditionally, but rather sometimes (depending on some test) give NaN.
+> Here is one case where 0 is really "wrong":
+> 
+>   > (A <- diag(c(NaN, 1)))
+>        [,1] [,2]
+> [1,]  NaN    0
+> [2,]    0    1
+>   > det(A)
+> [1] 0
+> 
+> R isn't consistent, either:
+> 
+>   > (B <- diag(c(1, NaN)))
+>        [,1] [,2]
+> [1,]    1    0
+> [2,]    0  NaN
+>   > det(B)
+> [1] NaN
+> 
+> Here, DGETRF _does_ succeed, because it does not "see" the trailing NaN in 'B'.
+> 
+> So: Should R change to better handle the INFO>0 case?  If so, how?
+> 
+> Ideally (I think), the proposed change would give NaN for 'A' and 'B'
+> above and 0 for 'C' and 'D' below (both of which really _are_ singular):
+> 
+>   > (C <- matrix(c(NaN, NaN, 0, 0), 2L, 2L))
+>        [,1] [,2]
+> [1,]  NaN    0
+> [2,]  NaN    0
+>   > det(C)
+> [1] NaN
+>   > (D <- t(C))
+>        [,1] [,2]
+> [1,]  NaN  NaN
+> [2,]    0    0
+>   > det(D)
+> [1] 0
+> 
+> Furthermore, the proposed change should _not_ decrease the performance
+> of determinant(A) for nonsingular 'A' ...
+> 
+> For those looking, the relevant C-level function is det_ge_real(),
+> defined in R-devel/src/modules/lapack/Lapack.c (at line 1260 in r83320).
+> 
+> Mikael
+> 
+> [1] https://github.com/Reference-LAPACK/lapack/blob/master/SRC/dgetrf.f
+
+
+From |e||pe@contrer@@ @end|ng |rom gm@||@com  Fri Mar 17 02:22:42 2023
+From: |e||pe@contrer@@ @end|ng |rom gm@||@com (Felipe Contreras)
+Date: Thu, 16 Mar 2023 19:22:42 -0600
+Subject: [Rd] Request: better default R_LIBS_USER
+In-Reply-To: <25619.46772.139003.258344@rob.eddelbuettel.com>
+References: <CAMP44s2zzqo6iG2ujvhBGL4UsxsOt7e11p81xwWLCEf5Ggperw@mail.gmail.com>
+ <25619.37737.873897.49177@rob.eddelbuettel.com>
+ <CAFDcVCQz0VfD-BKoy8swP4iCXx-Q-unH=nk7N0P_-QM=GbfMXw@mail.gmail.com>
+ <25619.46772.139003.258344@rob.eddelbuettel.com>
+Message-ID: <CAMP44s0hZ6MR6Hx4YfnfVRCqFXK5EvHcmDLKY2AcMXi+9jQUNQ@mail.gmail.com>
+
+On Thu, Mar 16, 2023 at 6:39?PM Dirk Eddelbuettel <edd at debian.org> wrote:
+>
+>
+> On 16 March 2023 at 17:15, Henrik Bengtsson wrote:
+> | We're all starting out with a fresh R_LIBS_USER once a year when a new
+> | minor version of R is released,
+>
+> Maybe not "we all". I don't, and I know other Linux users who don't force a
+> rebuild unless needed (as with R 3.6.* -> R 4.0.0).
+
+Then you are not using the default.
+
+And BTW, that's why the default location probably should be in a "4"
+directory, not "4.2". And since it's even more unlikely that the
+platform is going to change from one version to the next:
+
+    ~/.local/share/R/4
+
+Or something like that.
+
+-- 
+Felipe Contreras
+
+
