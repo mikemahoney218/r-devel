@@ -9711,3 +9711,170 @@ Or something like that.
 Felipe Contreras
 
 
+From c@@rd|@g@bor @end|ng |rom gm@||@com  Fri Mar 17 11:53:02 2023
+From: c@@rd|@g@bor @end|ng |rom gm@||@com (=?UTF-8?B?R8OhYm9yIENzw6FyZGk=?=)
+Date: Fri, 17 Mar 2023 11:53:02 +0100
+Subject: [Rd] La_library() always returns "" on R-devel?
+Message-ID: <CABtg=Kkr3MsFndd5MSXBHbfOvgwcuOuZioVr13wNQm-UN61Sbw@mail.gmail.com>
+
+Seems like this in 83986 [1] needs a fix in Lapack.c:
+
+        if (dladdr((void *) F77_NAME(ilaver), &dl_info)) {
+            char buf[PATH_MAX+1];
+            char *res = realpath(dl_info.dli_fname, buf);
+            if (res) {
+                SEXP nfo = R_NilValue;
+                if (strstr(res, "flexiblas"))
+                    nfo = R_flexiblas_info();
+                if (isNull(nfo))
+                    nfo = mkChar("");
+                ans = ScalarString(nfo);
+                break;
+            }
+        }
+
+It will always return an empty string except for flexiblas. I assume
+this is not intentional.
+
+Gabor
+
+[1] https://github.com/wch/r-source/commit/77b1f5a75f8691d3e77ef07ece53f0bb6c149020#diff-b6e85dec8d7194fae29b1a1768e3f6608fa184e57f0828f48c05ebd29ef653c8R1416
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Fri Mar 17 12:01:31 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Fri, 17 Mar 2023 12:01:31 +0100
+Subject: [Rd] La_library() always returns "" on R-devel?
+In-Reply-To: <CABtg=Kkr3MsFndd5MSXBHbfOvgwcuOuZioVr13wNQm-UN61Sbw@mail.gmail.com>
+References: <CABtg=Kkr3MsFndd5MSXBHbfOvgwcuOuZioVr13wNQm-UN61Sbw@mail.gmail.com>
+Message-ID: <33900d0c-003a-fb11-c22c-e7954990aa49@gmail.com>
+
+
+On 3/17/23 11:53, G?bor Cs?rdi wrote:
+> Seems like this in 83986 [1] needs a fix in Lapack.c:
+>
+>          if (dladdr((void *) F77_NAME(ilaver), &dl_info)) {
+>              char buf[PATH_MAX+1];
+>              char *res = realpath(dl_info.dli_fname, buf);
+>              if (res) {
+>                  SEXP nfo = R_NilValue;
+>                  if (strstr(res, "flexiblas"))
+>                      nfo = R_flexiblas_info();
+>                  if (isNull(nfo))
+>                      nfo = mkChar("");
+>                  ans = ScalarString(nfo);
+>                  break;
+>              }
+>          }
+>
+> It will always return an empty string except for flexiblas. I assume
+> this is not intentional.
+
+Thanks, fixed now.
+
+Tomas
+
+>
+> Gabor
+>
+> [1] https://github.com/wch/r-source/commit/77b1f5a75f8691d3e77ef07ece53f0bb6c149020#diff-b6e85dec8d7194fae29b1a1768e3f6608fa184e57f0828f48c05ebd29ef653c8R1416
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From bbo|ker @end|ng |rom gm@||@com  Fri Mar 17 23:16:49 2023
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Fri, 17 Mar 2023 18:16:49 -0400
+Subject: [Rd] use Ctrl-W to close View() window?
+Message-ID: <49134429-268f-5632-c6f3-08b995aa8fa4@gmail.com>
+
+ ? I might be the last person in the world who's using View() outside of 
+RStudio, but does anyone have a sense of how hard it would be to enable 
+closing such a window (when in focus) with a standard keyboard shortcut 
+(e.g. Ctrl-W on Linux) ... ?? Where would I start looking in the code base?
+
+ ? Or maybe this can already be enabled somehow?
+
+ ? cheers
+
+ ?? Ben Bolker
+
+
+From joh@nne@@r@nke @end|ng |rom jrwb@de  Fri Mar 17 23:25:36 2023
+From: joh@nne@@r@nke @end|ng |rom jrwb@de (Johannes Ranke)
+Date: Fri, 17 Mar 2023 23:25:36 +0100
+Subject: [Rd] use Ctrl-W to close View() window?
+In-Reply-To: <49134429-268f-5632-c6f3-08b995aa8fa4@gmail.com>
+References: <49134429-268f-5632-c6f3-08b995aa8fa4@gmail.com>
+Message-ID: <3404502.RL5eaSpR8r@ryz>
+
+Hi,
+
+am I missing something or could you just use Alt-F4? This is pretty standard 
+for closing focussed windows on Windows and Linux at least. It just closed a 
+Window opened with View() on Debian Linux FWIW.
+
+Cheers, Johannes
+
+Am Freitag, 17. M?rz 2023, 23:16:49 CET schrieb Ben Bolker:
+>    I might be the last person in the world who's using View() outside of
+> RStudio, but does anyone have a sense of how hard it would be to enable
+> closing such a window (when in focus) with a standard keyboard shortcut
+> (e.g. Ctrl-W on Linux) ... ?  Where would I start looking in the code base?
+> 
+>    Or maybe this can already be enabled somehow?
+> 
+>    cheers
+> 
+>     Ben Bolker
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From bbo|ker @end|ng |rom gm@||@com  Sat Mar 18 00:15:15 2023
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Fri, 17 Mar 2023 19:15:15 -0400
+Subject: [Rd] use Ctrl-W to close View() window?
+In-Reply-To: <3404502.RL5eaSpR8r@ryz>
+References: <49134429-268f-5632-c6f3-08b995aa8fa4@gmail.com>
+ <3404502.RL5eaSpR8r@ryz>
+Message-ID: <82622d04-37f2-9ed0-6284-dcb9f34ac266@gmail.com>
+
+ ? It does work, although it's very awkward with my current keyboard 
+setup (I need to use Alt-Fn-F4).? However, knowing that there was *a* 
+keyboard shortcut for it led me to figuring out how to add Ctrl-W as a 
+synonym.? Thanks!? ("Super"-Q is also a synonym, where "Super" is the 
+same as the Windows/MacOS command/system key ...)
+
+On 2023-03-17 6:25 p.m., Johannes Ranke wrote:
+
+> Hi,
+>
+> am I missing something or could you just use Alt-F4? This is pretty standard
+> for closing focussed windows on Windows and Linux at least. It just closed a
+> Window opened with View() on Debian Linux FWIW.
+>
+> Cheers, Johannes
+>
+> Am Freitag, 17. M?rz 2023, 23:16:49 CET schrieb Ben Bolker:
+>>     I might be the last person in the world who's using View() outside of
+>> RStudio, but does anyone have a sense of how hard it would be to enable
+>> closing such a window (when in focus) with a standard keyboard shortcut
+>> (e.g. Ctrl-W on Linux) ... ?  Where would I start looking in the code base?
+>>
+>>     Or maybe this can already be enabled somehow?
+>>
+>>     cheers
+>>
+>>      Ben Bolker
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
