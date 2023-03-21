@@ -9878,3 +9878,1096 @@ On 2023-03-17 6:25 p.m., Johannes Ranke wrote:
 >
 
 
+From p@kr|v|t@ky @end|ng |rom un@w@edu@@u  Sun Mar 19 07:33:38 2023
+From: p@kr|v|t@ky @end|ng |rom un@w@edu@@u (Pavel Krivitsky)
+Date: Sun, 19 Mar 2023 06:33:38 +0000
+Subject: [Rd] 
+ [WARNING: POTENTIAL FORGED EMAIL] Augment base::replace(x, list,
+ value) to allow list= to be a predicate?
+In-Reply-To: <c450f50c118c8e4ca10acaf7b1fc40e7b205be57.camel@unsw.edu.au>
+References: <c450f50c118c8e4ca10acaf7b1fc40e7b205be57.camel@unsw.edu.au>
+Message-ID: <510b9ed9647460c12819d3cd2d61ea2ad1e482f1.camel@unsw.edu.au>
+
+Dear All,
+
+Following up on this, I was wondering whether it might be possible to
+get a disposition from R developers.
+
+I did find a way to produce a similar effect reasonably concisely using
+call alchemy and lazy evaluation. The following function grabs the
+specified arguments in the function whose argument it is, applies the
+specified function to them, and returns the result. I am not sure if it
+correctly handles all possible cases, particularly when nonstandard
+evaluation and functions with side-effects are involved.
+
+.af. <- function(...){
+  if(is.numeric(arg1 <- ...elt(1)) || is.character(arg1)){ # By position or name
+    i <- arg1
+    f <- ...elt(2L)
+    g <- \(x, dummy1, dummy2, ...) f(x, ...) # Eat 2 arguments in ... .
+  }else{ # First argument (the default)
+    i <- 1L
+    f <- arg1
+    g <- \(x, dummy, ...) f(x, ...) # Eat 1 argument in ... .
+  }
+
+  sys.function(1L) |> formals() |> names() |>
+    setNames(nm=_) |> (`[`)(i) |> get(sys.frame(1L)) |>
+    g(...)
+}
+
+# Examples:
+
+c(1,2,NA,3) |> replace(.af.(is.na), 0) # First argument
+
+1:5 |> replace(.af.(`>`, 3), 0) # Function of multiple arguments
+
+1:5 |> ifelse(.af.(2, `>`, 3), yes=_, 0) # Specify position of referenced argument
+
+1:5 |> ifelse(.af.("yes", `>`, 3), yes=_, 0) # Specify name of referenced argument
+
+It may also make sense to have hard-coded versions of this for common cases, e.g.,
+
+.a2f. <- function(...) .af.(2L, ...)
+
+I am not sure how readable or concise this is in practice, and I don't
+think this should go into R proper, but would anyone else use it if I
+put something like this in a package?
+
+				Best Regards,
+				Pavel
+
+On Sat, 2023-03-04 at 00:21 +0000, r-devel-bounces at r-project.org wrote:
+> Dear All,
+> 
+> Currently, list= in base::replace(x, list, value) has to be an index
+> vector. For me, at least, the most common use case is for list= to be
+> some simple property of elements of x, e.g.,
+> 
+> x <- c(1,2,NA,3)
+> replace(x, is.na(x), 0)
+> 
+> Particularly when using R pipes, which don't allow multiple
+> substitutions, it would simplify many of such cases if list= could be
+> a
+> function that returns an index, e.g.,
+> 
+> replace <- function (x, list, values, ...) {
+> ? # Here, list() refers to the argument, not the built-in.
+> ? if(is.function(list)) list <- list(x, ...)
+> ? x[list] <- values
+> ? x
+> }
+> 
+> Then, the following is possible:
+> 
+> c(1,2,NA,3) |> replace(is.na, 0)
+> 
+> ????????????????????????Any thoughts?
+> ????????????????????????Pavel
+> ______________________________________________
+> R-devel at r-project.org?mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Sun Mar 19 17:08:20 2023
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Sun, 19 Mar 2023 09:08:20 -0700
+Subject: [Rd] WISH: Optional mechanism preventing var <<- value from
+ assigning non-existing variable
+Message-ID: <CAFDcVCRFvDFP1fszvn8=UbgArtAyU5P97r=X7QdnGbUQCkaOcw@mail.gmail.com>
+
+I'd like to be able to prevent the <<- assignment operator ("super
+assignment") from assigning to the global environment unless the
+variable already exists and is not locked.  If it does not exist or is
+locked, I'd like an error to be produced.  This would allow me to
+evaluate expressions with this temporarily set to protect against
+mistakes.
+
+For example, I'd like to do something like:
+
+$ R --vanilla
+> exists("a")
+[1] FALSE
+
+> options(check.superassignment = TRUE)
+> local({ a <<- 1 })
+Error: object 'a' not found
+
+> a <- 0
+> local({ a <<- 1 })
+> a
+[1] 1
+
+> rm("a")
+> options(check.superassignment = FALSE)
+> local({ a <<- 1 })
+> exists("a")
+[1] TRUE
+
+
+BACKGROUND:
+
+>From help("<<-") we have:
+
+"The operators <<- and ->> are normally only used in functions, and
+cause a search to be made through parent environments for an existing
+definition of the variable being assigned. If such a variable is found
+(and its binding is not locked) then its value is redefined, otherwise
+assignment takes place in the global environment."
+
+I argue that it's unfortunate that <<- fallbacks back to assigning to
+the global environment if the variable does not already exist.
+Unfortunately, it has become a "go to" solution for many to use it
+that way.  Sometimes it is intended, sometimes it's a mistake.  We
+find it also in R packages on CRAN, even if 'R CMD check' tries to
+detect when it happens (but it's limited to do so from run-time
+examples and tests).
+
+It's probably too widely used for us to change to a more strict
+behavior permanent.  The proposed R option allows me, as a developer,
+to evaluate an R expression with the strict behavior, especially if I
+don't trust the code.
+
+With 'check.superassignment = TRUE' set, a developer would have to
+first declare the variable in the global environment for <<- to assign
+there.  This would remove the fallback "If such a variable is found
+(and its binding is not locked) then its value is redefined, otherwise
+assignment takes place in the global environment" in the current
+design.  For those who truly intends to assign to the global, could
+use assign(var, value, envir = globalenv()) or globalenv()[[var]] <-
+value.
+
+'R CMD check' could temporarily set 'check.superassignment = TRUE'
+during checks.  If we let environment variable
+'R_CHECK_SUPERASSIGNMENT' set the default value of option
+'check.superassignment' on R startup, it would be possible to check
+packages optionally this way, but also to run any "non-trusted" R
+script in the "strict" mode.
+
+
+TEASER:
+
+Here's an example why using <<- for assigning to the global
+environment is a bad idea:
+
+This works:
+
+$ R --vanilla
+> y <- lapply(1:3, function(x) { if (x > 2) keep <<- x; x^2 })
+> keep
+> [1] 3
+
+
+This doesn't work:
+
+$ R --vanilla
+> library(purrr)
+> y <- lapply(1:3, function(x) { if (x > 2) keep <<- x; x^2 })
+Error in keep <<- x : cannot change value of locked binding for 'keep'
+
+
+But, if we "declare" the variable first, it works:
+
+$ R --vanilla
+> library(purrr)
+> keep <- 0
+> y <- lapply(1:3, function(x) { if (x > 2) keep <<- x; x^2 })
+> keep
+> [1] 3
+
+/Henrik
+
+PS. Does the <<- operator have an official name? Hadley calls it
+"super assignment" in 'Advanced R'
+(https://adv-r.hadley.nz/environments.html), which is where I got it
+from.
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sun Mar 19 18:53:57 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sun, 19 Mar 2023 13:53:57 -0400
+Subject: [Rd] WISH: Optional mechanism preventing var <<- value from
+ assigning non-existing variable
+In-Reply-To: <CAFDcVCRFvDFP1fszvn8=UbgArtAyU5P97r=X7QdnGbUQCkaOcw@mail.gmail.com>
+References: <CAFDcVCRFvDFP1fszvn8=UbgArtAyU5P97r=X7QdnGbUQCkaOcw@mail.gmail.com>
+Message-ID: <2c1fefc8-a554-3876-91ed-27e2d77d6f12@gmail.com>
+
+I think that should be the default behaviour. It's pretty late to get 
+that into R 4.3.0, but I think your proposal (with check.superassignment 
+= FALSE being the default) could make it in, and 4.4.0 could change the 
+default to TRUE.
+
+Duncan
+
+
+
+On 19/03/2023 12:08 p.m., Henrik Bengtsson wrote:
+> I'd like to be able to prevent the <<- assignment operator ("super
+> assignment") from assigning to the global environment unless the
+> variable already exists and is not locked.  If it does not exist or is
+> locked, I'd like an error to be produced.  This would allow me to
+> evaluate expressions with this temporarily set to protect against
+> mistakes.
+> 
+> For example, I'd like to do something like:
+> 
+> $ R --vanilla
+>> exists("a")
+> [1] FALSE
+> 
+>> options(check.superassignment = TRUE)
+>> local({ a <<- 1 })
+> Error: object 'a' not found
+> 
+>> a <- 0
+>> local({ a <<- 1 })
+>> a
+> [1] 1
+> 
+>> rm("a")
+>> options(check.superassignment = FALSE)
+>> local({ a <<- 1 })
+>> exists("a")
+> [1] TRUE
+> 
+> 
+> BACKGROUND:
+> 
+>  From help("<<-") we have:
+> 
+> "The operators <<- and ->> are normally only used in functions, and
+> cause a search to be made through parent environments for an existing
+> definition of the variable being assigned. If such a variable is found
+> (and its binding is not locked) then its value is redefined, otherwise
+> assignment takes place in the global environment."
+> 
+> I argue that it's unfortunate that <<- fallbacks back to assigning to
+> the global environment if the variable does not already exist.
+> Unfortunately, it has become a "go to" solution for many to use it
+> that way.  Sometimes it is intended, sometimes it's a mistake.  We
+> find it also in R packages on CRAN, even if 'R CMD check' tries to
+> detect when it happens (but it's limited to do so from run-time
+> examples and tests).
+> 
+> It's probably too widely used for us to change to a more strict
+> behavior permanent.  The proposed R option allows me, as a developer,
+> to evaluate an R expression with the strict behavior, especially if I
+> don't trust the code.
+> 
+> With 'check.superassignment = TRUE' set, a developer would have to
+> first declare the variable in the global environment for <<- to assign
+> there.  This would remove the fallback "If such a variable is found
+> (and its binding is not locked) then its value is redefined, otherwise
+> assignment takes place in the global environment" in the current
+> design.  For those who truly intends to assign to the global, could
+> use assign(var, value, envir = globalenv()) or globalenv()[[var]] <-
+> value.
+> 
+> 'R CMD check' could temporarily set 'check.superassignment = TRUE'
+> during checks.  If we let environment variable
+> 'R_CHECK_SUPERASSIGNMENT' set the default value of option
+> 'check.superassignment' on R startup, it would be possible to check
+> packages optionally this way, but also to run any "non-trusted" R
+> script in the "strict" mode.
+> 
+> 
+> TEASER:
+> 
+> Here's an example why using <<- for assigning to the global
+> environment is a bad idea:
+> 
+> This works:
+> 
+> $ R --vanilla
+>> y <- lapply(1:3, function(x) { if (x > 2) keep <<- x; x^2 })
+>> keep
+>> [1] 3
+> 
+> 
+> This doesn't work:
+> 
+> $ R --vanilla
+>> library(purrr)
+>> y <- lapply(1:3, function(x) { if (x > 2) keep <<- x; x^2 })
+> Error in keep <<- x : cannot change value of locked binding for 'keep'
+> 
+> 
+> But, if we "declare" the variable first, it works:
+> 
+> $ R --vanilla
+>> library(purrr)
+>> keep <- 0
+>> y <- lapply(1:3, function(x) { if (x > 2) keep <<- x; x^2 })
+>> keep
+>> [1] 3
+> 
+> /Henrik
+> 
+> PS. Does the <<- operator have an official name? Hadley calls it
+> "super assignment" in 'Advanced R'
+> (https://adv-r.hadley.nz/environments.html), which is where I got it
+> from.
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From w||||@mwdun|@p @end|ng |rom gm@||@com  Sun Mar 19 19:15:38 2023
+From: w||||@mwdun|@p @end|ng |rom gm@||@com (Bill Dunlap)
+Date: Sun, 19 Mar 2023 11:15:38 -0700
+Subject: [Rd] WISH: Optional mechanism preventing var <<- value from
+ assigning non-existing variable
+In-Reply-To: <2c1fefc8-a554-3876-91ed-27e2d77d6f12@gmail.com>
+References: <CAFDcVCRFvDFP1fszvn8=UbgArtAyU5P97r=X7QdnGbUQCkaOcw@mail.gmail.com>
+ <2c1fefc8-a554-3876-91ed-27e2d77d6f12@gmail.com>
+Message-ID: <CAHqSRuR=VLGtatNfty7sHA4aBNPxU-y0PfJiyN-gAR65V5hkGw@mail.gmail.com>
+
+Why should it make an exception for cases where the about-to-be-assigned-to
+name is present in the global environment?  I think it should warn or give
+an error if the altered variable is in any environment on the search list.
+
+-Bill
+
+On Sun, Mar 19, 2023 at 10:54?AM Duncan Murdoch <murdoch.duncan at gmail.com>
+wrote:
+
+> I think that should be the default behaviour. It's pretty late to get
+> that into R 4.3.0, but I think your proposal (with check.superassignment
+> = FALSE being the default) could make it in, and 4.4.0 could change the
+> default to TRUE.
+>
+> Duncan
+>
+>
+>
+> On 19/03/2023 12:08 p.m., Henrik Bengtsson wrote:
+> > I'd like to be able to prevent the <<- assignment operator ("super
+> > assignment") from assigning to the global environment unless the
+> > variable already exists and is not locked.  If it does not exist or is
+> > locked, I'd like an error to be produced.  This would allow me to
+> > evaluate expressions with this temporarily set to protect against
+> > mistakes.
+> >
+> > For example, I'd like to do something like:
+> >
+> > $ R --vanilla
+> >> exists("a")
+> > [1] FALSE
+> >
+> >> options(check.superassignment = TRUE)
+> >> local({ a <<- 1 })
+> > Error: object 'a' not found
+> >
+> >> a <- 0
+> >> local({ a <<- 1 })
+> >> a
+> > [1] 1
+> >
+> >> rm("a")
+> >> options(check.superassignment = FALSE)
+> >> local({ a <<- 1 })
+> >> exists("a")
+> > [1] TRUE
+> >
+> >
+> > BACKGROUND:
+> >
+> >  From help("<<-") we have:
+> >
+> > "The operators <<- and ->> are normally only used in functions, and
+> > cause a search to be made through parent environments for an existing
+> > definition of the variable being assigned. If such a variable is found
+> > (and its binding is not locked) then its value is redefined, otherwise
+> > assignment takes place in the global environment."
+> >
+> > I argue that it's unfortunate that <<- fallbacks back to assigning to
+> > the global environment if the variable does not already exist.
+> > Unfortunately, it has become a "go to" solution for many to use it
+> > that way.  Sometimes it is intended, sometimes it's a mistake.  We
+> > find it also in R packages on CRAN, even if 'R CMD check' tries to
+> > detect when it happens (but it's limited to do so from run-time
+> > examples and tests).
+> >
+> > It's probably too widely used for us to change to a more strict
+> > behavior permanent.  The proposed R option allows me, as a developer,
+> > to evaluate an R expression with the strict behavior, especially if I
+> > don't trust the code.
+> >
+> > With 'check.superassignment = TRUE' set, a developer would have to
+> > first declare the variable in the global environment for <<- to assign
+> > there.  This would remove the fallback "If such a variable is found
+> > (and its binding is not locked) then its value is redefined, otherwise
+> > assignment takes place in the global environment" in the current
+> > design.  For those who truly intends to assign to the global, could
+> > use assign(var, value, envir = globalenv()) or globalenv()[[var]] <-
+> > value.
+> >
+> > 'R CMD check' could temporarily set 'check.superassignment = TRUE'
+> > during checks.  If we let environment variable
+> > 'R_CHECK_SUPERASSIGNMENT' set the default value of option
+> > 'check.superassignment' on R startup, it would be possible to check
+> > packages optionally this way, but also to run any "non-trusted" R
+> > script in the "strict" mode.
+> >
+> >
+> > TEASER:
+> >
+> > Here's an example why using <<- for assigning to the global
+> > environment is a bad idea:
+> >
+> > This works:
+> >
+> > $ R --vanilla
+> >> y <- lapply(1:3, function(x) { if (x > 2) keep <<- x; x^2 })
+> >> keep
+> >> [1] 3
+> >
+> >
+> > This doesn't work:
+> >
+> > $ R --vanilla
+> >> library(purrr)
+> >> y <- lapply(1:3, function(x) { if (x > 2) keep <<- x; x^2 })
+> > Error in keep <<- x : cannot change value of locked binding for 'keep'
+> >
+> >
+> > But, if we "declare" the variable first, it works:
+> >
+> > $ R --vanilla
+> >> library(purrr)
+> >> keep <- 0
+> >> y <- lapply(1:3, function(x) { if (x > 2) keep <<- x; x^2 })
+> >> keep
+> >> [1] 3
+> >
+> > /Henrik
+> >
+> > PS. Does the <<- operator have an official name? Hadley calls it
+> > "super assignment" in 'Advanced R'
+> > (https://adv-r.hadley.nz/environments.html), which is where I got it
+> > from.
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Sun Mar 19 19:20:56 2023
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Sun, 19 Mar 2023 11:20:56 -0700
+Subject: [Rd] CRAN 'R Sources' page: Provide link to
+ https://svn.r-project.org/R/
+Message-ID: <CAFDcVCSCu=P464E8-N_VcCizAnY0PsTfcHOBnJuBGKy=HVeUcQ@mail.gmail.com>
+
+Not sure who is the webadmin for
+https://cran.r-project.org/sources.html, so posting it here:
+
+I just noticed it's not straightforward to find the Subversion URL for
+the R source code.  A natural search would be to go to
+https://cran.r-project.org/, then click 'Source code' to get to
+https://cran.r-project.org/sources.html.  That page does mention
+"Subversion tree", but it gives not URL for it.  I'd like to suggest
+adding it in parentheses, as in:
+
+"The above archives are created automatically from the Subversion tree
+(https://svn.r-project.org/R/), hence might not even compile on your
+platform and can contain any number of bugs. They will probably work,
+but maybe not. Use them to verify whether a bug you're tracking has
+been fixed or a new feature you always wanted has already been
+implemented."
+
+Thanks,
+
+Henrik
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sun Mar 19 19:33:31 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sun, 19 Mar 2023 14:33:31 -0400
+Subject: [Rd] WISH: Optional mechanism preventing var <<- value from
+ assigning non-existing variable
+In-Reply-To: <CAHqSRuR=VLGtatNfty7sHA4aBNPxU-y0PfJiyN-gAR65V5hkGw@mail.gmail.com>
+References: <CAFDcVCRFvDFP1fszvn8=UbgArtAyU5P97r=X7QdnGbUQCkaOcw@mail.gmail.com>
+ <2c1fefc8-a554-3876-91ed-27e2d77d6f12@gmail.com>
+ <CAHqSRuR=VLGtatNfty7sHA4aBNPxU-y0PfJiyN-gAR65V5hkGw@mail.gmail.com>
+Message-ID: <c7892263-98b1-99d0-f22b-225a1e0b81a6@gmail.com>
+
+On 19/03/2023 2:15 p.m., Bill Dunlap wrote:
+> Why should it make an exception for cases where the 
+> about-to-be-assigned-to name is present in the global environment?? I 
+> think it should warn or give an error if the altered variable is in any 
+> environment on the search list.
+
+I'd say code like this should work:
+
+   x <- NULL
+   f <- function() x <<- 123
+   f()
+
+and then x should be changed to 123 unless the binding to x is locked. 
+I don't see why it should matter if this code is in local() or in a 
+function, or if it is run at the top level.
+
+For most things on the search list, the binding would be locked, but we 
+do allow people to attach environments, and then they'd be on the search 
+list, so this code should work too:
+
+   g <- function() {
+
+     attach(environment())
+
+     x <- NULL
+     f <- function() x <<- 123
+     f()
+
+   }
+
+What shouldn't work would be something like
+
+   mean <<- 3
+
+but it already doesn't work (contrary to the documentation), giving
+
+   Error: cannot change value of locked binding for 'mean'
+
+(which makes sense; what if I locked a binding in the global 
+environment?  Then we'd go to the fallback, but the fallback can't work, 
+because the binding is already there but locked...)
+
+Duncan Murdoch
+
+> 
+> -Bill
+> 
+> On Sun, Mar 19, 2023 at 10:54?AM Duncan Murdoch 
+> <murdoch.duncan at gmail.com <mailto:murdoch.duncan at gmail.com>> wrote:
+> 
+>     I think that should be the default behaviour. It's pretty late to get
+>     that into R 4.3.0, but I think your proposal (with
+>     check.superassignment
+>     = FALSE being the default) could make it in, and 4.4.0 could change the
+>     default to TRUE.
+> 
+>     Duncan
+> 
+> 
+> 
+>     On 19/03/2023 12:08 p.m., Henrik Bengtsson wrote:
+>      > I'd like to be able to prevent the <<- assignment operator ("super
+>      > assignment") from assigning to the global environment unless the
+>      > variable already exists and is not locked.? If it does not exist
+>     or is
+>      > locked, I'd like an error to be produced.? This would allow me to
+>      > evaluate expressions with this temporarily set to protect against
+>      > mistakes.
+>      >
+>      > For example, I'd like to do something like:
+>      >
+>      > $ R --vanilla
+>      >> exists("a")
+>      > [1] FALSE
+>      >
+>      >> options(check.superassignment = TRUE)
+>      >> local({ a <<- 1 })
+>      > Error: object 'a' not found
+>      >
+>      >> a <- 0
+>      >> local({ a <<- 1 })
+>      >> a
+>      > [1] 1
+>      >
+>      >> rm("a")
+>      >> options(check.superassignment = FALSE)
+>      >> local({ a <<- 1 })
+>      >> exists("a")
+>      > [1] TRUE
+>      >
+>      >
+>      > BACKGROUND:
+>      >
+>      >? From help("<<-") we have:
+>      >
+>      > "The operators <<- and ->> are normally only used in functions, and
+>      > cause a search to be made through parent environments for an existing
+>      > definition of the variable being assigned. If such a variable is
+>     found
+>      > (and its binding is not locked) then its value is redefined,
+>     otherwise
+>      > assignment takes place in the global environment."
+>      >
+>      > I argue that it's unfortunate that <<- fallbacks back to assigning to
+>      > the global environment if the variable does not already exist.
+>      > Unfortunately, it has become a "go to" solution for many to use it
+>      > that way.? Sometimes it is intended, sometimes it's a mistake.? We
+>      > find it also in R packages on CRAN, even if 'R CMD check' tries to
+>      > detect when it happens (but it's limited to do so from run-time
+>      > examples and tests).
+>      >
+>      > It's probably too widely used for us to change to a more strict
+>      > behavior permanent.? The proposed R option allows me, as a developer,
+>      > to evaluate an R expression with the strict behavior, especially if I
+>      > don't trust the code.
+>      >
+>      > With 'check.superassignment = TRUE' set, a developer would have to
+>      > first declare the variable in the global environment for <<- to
+>     assign
+>      > there.? This would remove the fallback "If such a variable is found
+>      > (and its binding is not locked) then its value is redefined,
+>     otherwise
+>      > assignment takes place in the global environment" in the current
+>      > design.? For those who truly intends to assign to the global, could
+>      > use assign(var, value, envir = globalenv()) or globalenv()[[var]] <-
+>      > value.
+>      >
+>      > 'R CMD check' could temporarily set 'check.superassignment = TRUE'
+>      > during checks.? If we let environment variable
+>      > 'R_CHECK_SUPERASSIGNMENT' set the default value of option
+>      > 'check.superassignment' on R startup, it would be possible to check
+>      > packages optionally this way, but also to run any "non-trusted" R
+>      > script in the "strict" mode.
+>      >
+>      >
+>      > TEASER:
+>      >
+>      > Here's an example why using <<- for assigning to the global
+>      > environment is a bad idea:
+>      >
+>      > This works:
+>      >
+>      > $ R --vanilla
+>      >> y <- lapply(1:3, function(x) { if (x > 2) keep <<- x; x^2 })
+>      >> keep
+>      >> [1] 3
+>      >
+>      >
+>      > This doesn't work:
+>      >
+>      > $ R --vanilla
+>      >> library(purrr)
+>      >> y <- lapply(1:3, function(x) { if (x > 2) keep <<- x; x^2 })
+>      > Error in keep <<- x : cannot change value of locked binding for
+>     'keep'
+>      >
+>      >
+>      > But, if we "declare" the variable first, it works:
+>      >
+>      > $ R --vanilla
+>      >> library(purrr)
+>      >> keep <- 0
+>      >> y <- lapply(1:3, function(x) { if (x > 2) keep <<- x; x^2 })
+>      >> keep
+>      >> [1] 3
+>      >
+>      > /Henrik
+>      >
+>      > PS. Does the <<- operator have an official name? Hadley calls it
+>      > "super assignment" in 'Advanced R'
+>      > (https://adv-r.hadley.nz/environments.html
+>     <https://adv-r.hadley.nz/environments.html>), which is where I got it
+>      > from.
+>      >
+>      > ______________________________________________
+>      > R-devel at r-project.org <mailto:R-devel at r-project.org> mailing list
+>      > https://stat.ethz.ch/mailman/listinfo/r-devel
+>     <https://stat.ethz.ch/mailman/listinfo/r-devel>
+> 
+>     ______________________________________________
+>     R-devel at r-project.org <mailto:R-devel at r-project.org> mailing list
+>     https://stat.ethz.ch/mailman/listinfo/r-devel
+>     <https://stat.ethz.ch/mailman/listinfo/r-devel>
+>
+
+
+From g@bembecker @end|ng |rom gm@||@com  Sun Mar 19 19:43:58 2023
+From: g@bembecker @end|ng |rom gm@||@com (Gabriel Becker)
+Date: Sun, 19 Mar 2023 11:43:58 -0700
+Subject: [Rd] WISH: Optional mechanism preventing var <<- value from
+ assigning non-existing variable
+In-Reply-To: <CAHqSRuR=VLGtatNfty7sHA4aBNPxU-y0PfJiyN-gAR65V5hkGw@mail.gmail.com>
+References: <CAFDcVCRFvDFP1fszvn8=UbgArtAyU5P97r=X7QdnGbUQCkaOcw@mail.gmail.com>
+ <2c1fefc8-a554-3876-91ed-27e2d77d6f12@gmail.com>
+ <CAHqSRuR=VLGtatNfty7sHA4aBNPxU-y0PfJiyN-gAR65V5hkGw@mail.gmail.com>
+Message-ID: <CAD4oTHF2sMYQseEgs-cr7hoggGgjFrVdxHyWTEtMLmxbESLyHA@mail.gmail.com>
+
+I have to say <<- is a core debugging tool when assigning into the global
+environment. I suppose I could use assign but that would be somewhat
+annoying.
+
+That said I'm still for this change, the vast overwhelming number of times
+that <<- is in my package code - already rare but it does happen - it would
+absolutely be a bug (typo most likely) for it to get to the global
+environment and assign into it. Assigning into thr global environment from
+package code is a serious anti pattern anyway.
+
+To be honest from the developer perspective what id personally actually
+want is an assigner that was willing to go up exactly one frame from the
+current one to find its binding. That is how I essentially always am using
+<<- myself.
+
+~G
+
+On Sun, Mar 19, 2023, 11:16 AM Bill Dunlap <williamwdunlap at gmail.com> wrote:
+
+> Why should it make an exception for cases where the about-to-be-assigned-to
+> name is present in the global environment?  I think it should warn or give
+> an error if the altered variable is in any environment on the search list.
+>
+> -Bill
+>
+> On Sun, Mar 19, 2023 at 10:54?AM Duncan Murdoch <murdoch.duncan at gmail.com>
+> wrote:
+>
+> > I think that should be the default behaviour. It's pretty late to get
+> > that into R 4.3.0, but I think your proposal (with check.superassignment
+> > = FALSE being the default) could make it in, and 4.4.0 could change the
+> > default to TRUE.
+> >
+> > Duncan
+> >
+> >
+> >
+> > On 19/03/2023 12:08 p.m., Henrik Bengtsson wrote:
+> > > I'd like to be able to prevent the <<- assignment operator ("super
+> > > assignment") from assigning to the global environment unless the
+> > > variable already exists and is not locked.  If it does not exist or is
+> > > locked, I'd like an error to be produced.  This would allow me to
+> > > evaluate expressions with this temporarily set to protect against
+> > > mistakes.
+> > >
+> > > For example, I'd like to do something like:
+> > >
+> > > $ R --vanilla
+> > >> exists("a")
+> > > [1] FALSE
+> > >
+> > >> options(check.superassignment = TRUE)
+> > >> local({ a <<- 1 })
+> > > Error: object 'a' not found
+> > >
+> > >> a <- 0
+> > >> local({ a <<- 1 })
+> > >> a
+> > > [1] 1
+> > >
+> > >> rm("a")
+> > >> options(check.superassignment = FALSE)
+> > >> local({ a <<- 1 })
+> > >> exists("a")
+> > > [1] TRUE
+> > >
+> > >
+> > > BACKGROUND:
+> > >
+> > >  From help("<<-") we have:
+> > >
+> > > "The operators <<- and ->> are normally only used in functions, and
+> > > cause a search to be made through parent environments for an existing
+> > > definition of the variable being assigned. If such a variable is found
+> > > (and its binding is not locked) then its value is redefined, otherwise
+> > > assignment takes place in the global environment."
+> > >
+> > > I argue that it's unfortunate that <<- fallbacks back to assigning to
+> > > the global environment if the variable does not already exist.
+> > > Unfortunately, it has become a "go to" solution for many to use it
+> > > that way.  Sometimes it is intended, sometimes it's a mistake.  We
+> > > find it also in R packages on CRAN, even if 'R CMD check' tries to
+> > > detect when it happens (but it's limited to do so from run-time
+> > > examples and tests).
+> > >
+> > > It's probably too widely used for us to change to a more strict
+> > > behavior permanent.  The proposed R option allows me, as a developer,
+> > > to evaluate an R expression with the strict behavior, especially if I
+> > > don't trust the code.
+> > >
+> > > With 'check.superassignment = TRUE' set, a developer would have to
+> > > first declare the variable in the global environment for <<- to assign
+> > > there.  This would remove the fallback "If such a variable is found
+> > > (and its binding is not locked) then its value is redefined, otherwise
+> > > assignment takes place in the global environment" in the current
+> > > design.  For those who truly intends to assign to the global, could
+> > > use assign(var, value, envir = globalenv()) or globalenv()[[var]] <-
+> > > value.
+> > >
+> > > 'R CMD check' could temporarily set 'check.superassignment = TRUE'
+> > > during checks.  If we let environment variable
+> > > 'R_CHECK_SUPERASSIGNMENT' set the default value of option
+> > > 'check.superassignment' on R startup, it would be possible to check
+> > > packages optionally this way, but also to run any "non-trusted" R
+> > > script in the "strict" mode.
+> > >
+> > >
+> > > TEASER:
+> > >
+> > > Here's an example why using <<- for assigning to the global
+> > > environment is a bad idea:
+> > >
+> > > This works:
+> > >
+> > > $ R --vanilla
+> > >> y <- lapply(1:3, function(x) { if (x > 2) keep <<- x; x^2 })
+> > >> keep
+> > >> [1] 3
+> > >
+> > >
+> > > This doesn't work:
+> > >
+> > > $ R --vanilla
+> > >> library(purrr)
+> > >> y <- lapply(1:3, function(x) { if (x > 2) keep <<- x; x^2 })
+> > > Error in keep <<- x : cannot change value of locked binding for 'keep'
+> > >
+> > >
+> > > But, if we "declare" the variable first, it works:
+> > >
+> > > $ R --vanilla
+> > >> library(purrr)
+> > >> keep <- 0
+> > >> y <- lapply(1:3, function(x) { if (x > 2) keep <<- x; x^2 })
+> > >> keep
+> > >> [1] 3
+> > >
+> > > /Henrik
+> > >
+> > > PS. Does the <<- operator have an official name? Hadley calls it
+> > > "super assignment" in 'Advanced R'
+> > > (https://adv-r.hadley.nz/environments.html), which is where I got it
+> > > from.
+> > >
+> > > ______________________________________________
+> > > R-devel at r-project.org mailing list
+> > > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sun Mar 19 20:39:41 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sun, 19 Mar 2023 15:39:41 -0400
+Subject: [Rd] WISH: Optional mechanism preventing var <<- value from
+ assigning non-existing variable
+In-Reply-To: <CAD4oTHF2sMYQseEgs-cr7hoggGgjFrVdxHyWTEtMLmxbESLyHA@mail.gmail.com>
+References: <CAFDcVCRFvDFP1fszvn8=UbgArtAyU5P97r=X7QdnGbUQCkaOcw@mail.gmail.com>
+ <2c1fefc8-a554-3876-91ed-27e2d77d6f12@gmail.com>
+ <CAHqSRuR=VLGtatNfty7sHA4aBNPxU-y0PfJiyN-gAR65V5hkGw@mail.gmail.com>
+ <CAD4oTHF2sMYQseEgs-cr7hoggGgjFrVdxHyWTEtMLmxbESLyHA@mail.gmail.com>
+Message-ID: <2a9cbd8f-7e5a-30a2-3f60-f5b1ac4e0095@gmail.com>
+
+On 19/03/2023 2:43 p.m., Gabriel Becker wrote:
+> I have to say <<- is a core debugging tool when assigning into the 
+> global environment. I suppose I could use assign but that would be 
+> somewhat annoying.
+> 
+> That said I'm still for this change, the vast overwhelming number of 
+> times that <<- is in my package code - already rare but it does happen - 
+> it would absolutely be a bug (typo most likely) for it to get to the 
+> global environment and assign into it. Assigning into thr global 
+> environment from package code is a serious anti pattern anyway.
+> 
+> To be honest from the developer perspective what id personally actually 
+> want is an assigner that was willing to go up exactly one frame from the 
+> current one to find its binding. That is how I essentially always am 
+> using <<- myself.
+
+This sounds like a linter would be appropriate:  any time you make an 
+assignment that goes more than one level up, it warns you about it.
+
+Other linter rules could limit the destination in other ways, e.g. 
+assigning to globalenv() or things in the search list could be disallowed.
+
+Another error I've made a few times is to use "<-" by mistake when "<<-" 
+was intended.  A linter could detect this by seeing both `x <- value1` 
+and `x <<- value2` in the same context.  That's legal, but (for me at 
+least) it usually indicates that one of them is a typo.
+
+Duncan Murdoch
+
+> 
+> ~G
+> 
+> On Sun, Mar 19, 2023, 11:16 AM Bill Dunlap <williamwdunlap at gmail.com 
+> <mailto:williamwdunlap at gmail.com>> wrote:
+> 
+>     Why should it make an exception for cases where the
+>     about-to-be-assigned-to
+>     name is present in the global environment?? I think it should warn
+>     or give
+>     an error if the altered variable is in any environment on the search
+>     list.
+> 
+>     -Bill
+> 
+>     On Sun, Mar 19, 2023 at 10:54?AM Duncan Murdoch
+>     <murdoch.duncan at gmail.com <mailto:murdoch.duncan at gmail.com>>
+>     wrote:
+> 
+>      > I think that should be the default behaviour. It's pretty late to get
+>      > that into R 4.3.0, but I think your proposal (with
+>     check.superassignment
+>      > = FALSE being the default) could make it in, and 4.4.0 could
+>     change the
+>      > default to TRUE.
+>      >
+>      > Duncan
+>      >
+>      >
+>      >
+>      > On 19/03/2023 12:08 p.m., Henrik Bengtsson wrote:
+>      > > I'd like to be able to prevent the <<- assignment operator ("super
+>      > > assignment") from assigning to the global environment unless the
+>      > > variable already exists and is not locked.? If it does not
+>     exist or is
+>      > > locked, I'd like an error to be produced.? This would allow me to
+>      > > evaluate expressions with this temporarily set to protect against
+>      > > mistakes.
+>      > >
+>      > > For example, I'd like to do something like:
+>      > >
+>      > > $ R --vanilla
+>      > >> exists("a")
+>      > > [1] FALSE
+>      > >
+>      > >> options(check.superassignment = TRUE)
+>      > >> local({ a <<- 1 })
+>      > > Error: object 'a' not found
+>      > >
+>      > >> a <- 0
+>      > >> local({ a <<- 1 })
+>      > >> a
+>      > > [1] 1
+>      > >
+>      > >> rm("a")
+>      > >> options(check.superassignment = FALSE)
+>      > >> local({ a <<- 1 })
+>      > >> exists("a")
+>      > > [1] TRUE
+>      > >
+>      > >
+>      > > BACKGROUND:
+>      > >
+>      > >? From help("<<-") we have:
+>      > >
+>      > > "The operators <<- and ->> are normally only used in functions, and
+>      > > cause a search to be made through parent environments for an
+>     existing
+>      > > definition of the variable being assigned. If such a variable
+>     is found
+>      > > (and its binding is not locked) then its value is redefined,
+>     otherwise
+>      > > assignment takes place in the global environment."
+>      > >
+>      > > I argue that it's unfortunate that <<- fallbacks back to
+>     assigning to
+>      > > the global environment if the variable does not already exist.
+>      > > Unfortunately, it has become a "go to" solution for many to use it
+>      > > that way.? Sometimes it is intended, sometimes it's a mistake.? We
+>      > > find it also in R packages on CRAN, even if 'R CMD check' tries to
+>      > > detect when it happens (but it's limited to do so from run-time
+>      > > examples and tests).
+>      > >
+>      > > It's probably too widely used for us to change to a more strict
+>      > > behavior permanent.? The proposed R option allows me, as a
+>     developer,
+>      > > to evaluate an R expression with the strict behavior,
+>     especially if I
+>      > > don't trust the code.
+>      > >
+>      > > With 'check.superassignment = TRUE' set, a developer would have to
+>      > > first declare the variable in the global environment for <<- to
+>     assign
+>      > > there.? This would remove the fallback "If such a variable is found
+>      > > (and its binding is not locked) then its value is redefined,
+>     otherwise
+>      > > assignment takes place in the global environment" in the current
+>      > > design.? For those who truly intends to assign to the global, could
+>      > > use assign(var, value, envir = globalenv()) or
+>     globalenv()[[var]] <-
+>      > > value.
+>      > >
+>      > > 'R CMD check' could temporarily set 'check.superassignment = TRUE'
+>      > > during checks.? If we let environment variable
+>      > > 'R_CHECK_SUPERASSIGNMENT' set the default value of option
+>      > > 'check.superassignment' on R startup, it would be possible to check
+>      > > packages optionally this way, but also to run any "non-trusted" R
+>      > > script in the "strict" mode.
+>      > >
+>      > >
+>      > > TEASER:
+>      > >
+>      > > Here's an example why using <<- for assigning to the global
+>      > > environment is a bad idea:
+>      > >
+>      > > This works:
+>      > >
+>      > > $ R --vanilla
+>      > >> y <- lapply(1:3, function(x) { if (x > 2) keep <<- x; x^2 })
+>      > >> keep
+>      > >> [1] 3
+>      > >
+>      > >
+>      > > This doesn't work:
+>      > >
+>      > > $ R --vanilla
+>      > >> library(purrr)
+>      > >> y <- lapply(1:3, function(x) { if (x > 2) keep <<- x; x^2 })
+>      > > Error in keep <<- x : cannot change value of locked binding for
+>     'keep'
+>      > >
+>      > >
+>      > > But, if we "declare" the variable first, it works:
+>      > >
+>      > > $ R --vanilla
+>      > >> library(purrr)
+>      > >> keep <- 0
+>      > >> y <- lapply(1:3, function(x) { if (x > 2) keep <<- x; x^2 })
+>      > >> keep
+>      > >> [1] 3
+>      > >
+>      > > /Henrik
+>      > >
+>      > > PS. Does the <<- operator have an official name? Hadley calls it
+>      > > "super assignment" in 'Advanced R'
+>      > > (https://adv-r.hadley.nz/environments.html
+>     <https://adv-r.hadley.nz/environments.html>), which is where I got it
+>      > > from.
+>      > >
+>      > > ______________________________________________
+>      > > R-devel at r-project.org <mailto:R-devel at r-project.org> mailing list
+>      > > https://stat.ethz.ch/mailman/listinfo/r-devel
+>     <https://stat.ethz.ch/mailman/listinfo/r-devel>
+>      >
+>      > ______________________________________________
+>      > R-devel at r-project.org <mailto:R-devel at r-project.org> mailing list
+>      > https://stat.ethz.ch/mailman/listinfo/r-devel
+>     <https://stat.ethz.ch/mailman/listinfo/r-devel>
+>      >
+> 
+>      ? ? ? ? [[alternative HTML version deleted]]
+> 
+>     ______________________________________________
+>     R-devel at r-project.org <mailto:R-devel at r-project.org> mailing list
+>     https://stat.ethz.ch/mailman/listinfo/r-devel
+>     <https://stat.ethz.ch/mailman/listinfo/r-devel>
+>
+
+
