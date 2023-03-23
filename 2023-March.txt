@@ -10971,3 +10971,79 @@ Duncan Murdoch
 >
 
 
+From pd@|gd @end|ng |rom gm@||@com  Tue Mar 21 10:46:41 2023
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Tue, 21 Mar 2023 10:46:41 +0100
+Subject: [Rd] R 4.3.0 scheduled for April 21
+Message-ID: <FD365656-05E1-4962-8238-2A850FF7D972@gmail.com>
+
+Full schedule is available on developer.r-project.org (pending update from SVN).
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From @ndre|@ko@tyrk@ @end|ng |rom gm@||@com  Tue Mar 21 01:59:38 2023
+From: @ndre|@ko@tyrk@ @end|ng |rom gm@||@com (=?UTF-8?Q?Andre=C3=AF_V=2E_Kostyrka?=)
+Date: Tue, 21 Mar 2023 01:59:38 +0100
+Subject: [Rd] Floating-point-related surprising behaviour in
+ boot:::norm.inter
+Message-ID: <CAFnf=nqhRfHdQM3Tz5QccHy9NU8M5NJp11Y_D-8fk+YeucUFoQ@mail.gmail.com>
+
+Dear all,
+
+I have been implementing some bootstrap-related methods, and came across
+this theoretically undesirable behaviour in the computation of bootstrap
+quantiles. The manual says:
+
+?Interpolation on the normal quantile scale is used when a non-integer
+order statistic is required.?
+
+Theoretically, when R=999 and (R+1)*alpha is integer, then, the
+calculations of the 95% CI should never contain non-integer order
+statistics, right?
+
+No ? due to the fractional nature of the probabilities. Consider R=999 and
+conf=0.95; then, the second argument to boot:::norm.inter is
+
+alpha <- (1 + c(conf, -conf))/2
+print(alpha, 20) # c(0.974999999999999977796, 0.025000000000000022204)
+# print(0.025, 20) yields 0.025000000000000001388
+
+Looks like both numbers times (B+1) should not be integers, right?.. Oddly
+enough, one of them is integer, and one of them isn?t:
+
+R <- 999
+rk <- (R + 1) * alpha
+k <- trunc(rk)
+ints <- (k == rk) # TRUE FALSE
+
+k - rk # 0.000000e+00 -2.131628e-14
+
+This is why the subsequent variable `temp` (containing the indices of
+non-integer order statistics) becomes equal to 2.
+
+Yes, the amount of correction due to interpolation is minuscule (around
+1e-16), but this code should not have been invoked in the first place. This
+kind of unintended behaviour can be prevented through a more relaxed check:
+
+ints <- abs(k - rk) < R * .Machine$double.eps
+
+The FP-related error is proportional to R, e.g. if R=99999, then, abs(k -
+rk) = 0.000000e+00 2.273737e-12). Therefore, I believe that fuzzy
+comparison (with tolerance proportional to R) should replace the faulty
+strict-equality-based one. Then, a check can be carried out based on `if
+(any(!ints))` to invoke the interpolation only if the order statistics are
+really non-integer.
+
+Yours sincerely,
+Andre? V. Kostyrka
+
+	[[alternative HTML version deleted]]
+
+
