@@ -11047,3 +11047,127 @@ Andre? V. Kostyrka
 	[[alternative HTML version deleted]]
 
 
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Wed Mar 22 17:00:30 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Wed, 22 Mar 2023 17:00:30 +0100
+Subject: [Rd] Versioning Rtools ARP entries
+In-Reply-To: <d45cbe35-c093-ff9e-f31d-48f3144f7568@gmail.com>
+References: <CANu2KkPeXi3=0=KyvjfELrE1A_aRO1yrbqmRPavKo-3siJZ_og@mail.gmail.com>
+ <d45cbe35-c093-ff9e-f31d-48f3144f7568@gmail.com>
+Message-ID: <f426b0b8-eeed-24b7-993f-643946bda953@gmail.com>
+
+
+On 3/13/23 17:57, Tomas Kalibera wrote:
+>
+> On 3/13/23 17:31, Daniel Possenriede wrote:
+>> Hi,
+>>
+>> If I am not mistaken, all Rtools 4.2 (and 4.3) revisions have the same
+>> ARP [1] entries, i.e. all report version 4.2.0.1 (or 4.3.0.1). This
+>> makes it difficult to determine the installed version (is it possible
+>> to determine the installed revision?) and impossible for tools like
+>> winget [2] to update Rtools to the latest revision, AFAICT.
+>>
+>> Would it be possible to track the version in the installer [3] for
+>> future Rtools releases again, like it used to be in Rtools 4.0 [4]?
+>
+> Well the thing is that once you install Rtools 42/43, you can then 
+> upgrade it internally (without Windows knowing). You can upgrade the 
+> Msys2 part, or the MXE part, or both. The MXE part (customized for 
+> Rtools) does have a single version number, which can be found in the 
+> installation. The Msys2 part doesn't, afaik.
+>
+> See e.g. "Upgrading Rtools43" in 
+> https://cran.r-project.org/bin/windows/base/howto-R-devel.html for how 
+> to upgrade and how to find out the current version number of the MXE 
+> part.
+>
+> So, right, I could e.g. add a non-decreasing unique version to the 
+> build of the installer (e.g. based on that from the SVN where it lives 
+> and the MXE part version originally included), but I doubt how useful 
+> that would be, given that a particular installation can be 
+> upgraded/modified by the user. It could actually be misleading.
+>
+> Note Rtools40 also could be updated by the user internally.
+
+Hi Daniel,
+
+I've extended the version information in a testing version of an update 
+of Rtools43, more below, but first with some explanation of how the 
+versioning works.
+
+A version of an installed program in Windows is stored in the registry 
+as "Display version": this is shown, together with "Display name" in the 
+"Add/Remove programs menu" and it is used by tools such as winget to 
+determine the version of an installed application (so e.g. also in 
+"winget list").
+
+An installer in Windows has in its meta-data has a "Product version" and 
+a "File version" - one can see them in the Windows explorer via 
+"Properties/Details". This can be set also for other files, not only for 
+.EXEs of installers.? The distinction for general files is that "File 
+version" refers to the individual file and "Product version" (shared for 
+many files) to the application. The distinction for installers is 
+usually that "File version" refers to the installer, but "Product 
+version" to the application.
+
+A Windows installer may set the display version and display name for the 
+application it is installing, usually at the end. Many installers, 
+including that of Rtools, don't do that explicitly, and a "Product 
+version" from the installer meta-data is used, instead, for the display 
+version. A "Product name" is used for the display name. In Inno Setup, 
+used by R and Rtools, "Product version" is given by "AppVersion", "File 
+version" by "VersionInfoVersion", and "Product name" by 
+"UninstallDisplayName" (there are also some rules to take these values 
+from other entries when not specified, more in Inno Setup documentation).
+
+Historically, Rtools installer used two-component product version, e.g. 
+"4.2" or "4.0". Therefore, winget could offer an upgrade from say 
+Rtools40 Rtools42, but not between individual version of Rtools40 or 
+Rtool42. The changes in file version you referred to in [4] didn't make 
+a difference, because the "product version" stayed the same.
+
+In the testing version of Rtools43, I've added one more component to the 
+product version, which is the version of the toolchain+libraries (e.g. 
+4.3.5548). So, one can now see the version of the toolchain+libraries in 
+the "Add/Remove programs" list, and winget could (be made to) support 
+upgrades within say Rtools43. Winget registry is maintained 
+independently of R/Rtools, so it is up to those maintainer if they do 
+that or not, but it should now be easy since product version has the 
+information.
+
+I've also extended the file version to have four components, e.g. 
+4.3.5550.5548, where the last component is the version of the scripts to 
+build the installer. This corresponds to version in the file name, e.g. 
+rtools43-5550-5548.exe. The original file name is now also part of the 
+meta-data.
+
+When one manually upgrades the toolchain+libraries in an existing 
+Rtools43 installation, the version information stored in the registry 
+should be updated and the documentation will say how to do that (how to 
+change the registry accordingly).
+
+Best
+Tomas
+
+>
+> Tomas
+>
+>>
+>> Thanks!
+>>
+>> Daniel
+>>
+>> [1] 
+>> https://github.com/microsoft/winget-pkgs/blob/master/FAQ.md#what-is-an-arp-entry
+>> [2] https://github.com/microsoft/winget-cli
+>> [3] 
+>> https://svn.r-project.org/R-dev-web/trunk/WindowsBuilds/winutf8/ucrt3/rtools/rtools64.iss
+>> [4] 
+>> https://github.com/r-windows/rtools-installer/commit/7f23f0d0442d72922014ec4082c8bdd437364cef
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
