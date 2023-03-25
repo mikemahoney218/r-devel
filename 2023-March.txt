@@ -11171,3 +11171,394 @@ Tomas
 >> https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From |uc@r @end|ng |rom |edor@project@org  Thu Mar 23 11:00:44 2023
+From: |uc@r @end|ng |rom |edor@project@org (=?UTF-8?Q?I=C3=B1aki_Ucar?=)
+Date: Thu, 23 Mar 2023 11:00:44 +0100
+Subject: [Rd] Enable curl 8
+Message-ID: <CALEXWq2a_ZodJOa+wtQnyaVby+=d=1_YLOyYVatA+io4+zh+hQ@mail.gmail.com>
+
+Hi,
+
+Just a heads-up that curl 8 landed in Fedora Rawhide a couple of days
+ago. Note that R does **not** compile without a small fix [1] that
+allows the configuration to continue if the major version is > 7.
+
+[1] https://src.fedoraproject.org/rpms/R/blob/rawhide/f/R-4.2.3-curl-v8.patch
+
+Best,
+-- 
+I?aki ?car
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Thu Mar 23 11:05:37 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Thu, 23 Mar 2023 13:05:37 +0300
+Subject: [Rd] `dendrapply` Enhancements
+In-Reply-To: <BL0PR04MB4706C5E54A0C323647098D76D9B29@BL0PR04MB4706.namprd04.prod.outlook.com>
+References: <BL0PR04MB47068D544F5A49315EF1D042D9AB9@BL0PR04MB4706.namprd04.prod.outlook.com>
+ <CALK03d1PWiA4tfbRkxMBU6tckhfB2JRGUmnuqh5ygLcCLHDXNw@mail.gmail.com>
+ <BL0PR04MB4706A66884728B9419CEAE00D9A89@BL0PR04MB4706.namprd04.prod.outlook.com>
+ <BL0PR04MB4706B185A345A98AB4AB829AD9AC9@BL0PR04MB4706.namprd04.prod.outlook.com>
+ <20230302174750.19c3b247@arachnoid>
+ <BL0PR04MB47069CCBD8C6EB57BB22533ED9B29@BL0PR04MB4706.namprd04.prod.outlook.com>
+ <BL0PR04MB4706F5BC72B6331815DC1DFDD9B29@BL0PR04MB4706.namprd04.prod.outlook.com>
+ <BL0PR04MB4706C5E54A0C323647098D76D9B29@BL0PR04MB4706.namprd04.prod.outlook.com>
+Message-ID: <20230323130537.65f1c69e@arachnoid>
+
+Hello Aidan,
+
+Sorry for dropping this for a while.
+
+? Thu, 2 Mar 2023 21:03:59 +0000
+"Lakshman, Aidan H" <AHL27 at pitt.edu> ?????:
+
+> //after
+> curnode = eval(lang3(R_Bracket2Symbol, parent->node, DEND_IND), env);
+
+lang3() always constructs a new language object. If you do end up using
+eval(), it may make sense to move lang3() out of the loop and reuse the
+existing object by referring to the DEND_IND variable using its symbol,
+like it's done in the lapply() implementation.
+
+> The problem is, it seems like the returned value from `eval` is not
+> protected, whereas the value from VECTOR_ELT is (if the source list
+> is protected). My understanding is that this happens because
+> VECTOR_ELT just copies the pointer, whereas eval(?) calls R code,
+> which returns a copy of the object.
+
+That's right, `[[.dendrogram` returns a new object which is not
+protected, unlike the raw elements of node that you're keeping a
+protected pointer to.
+
+> This ends up being problematic, since it isn?t feasible to protect
+> all the nodes until we?re done with them.
+
+I see. It's not easy in R to unprotect arbitrary previously-allocated
+objects in a safe way. Have you considered "precious multi-sets"
+<https://blog.r-project.org/2018/12/10/unprotecting-by-value/index.html>?
+They have R_ReleaseFromMSet(), making it possible to free arbitrary
+objects from the set, and they automatically unprotect everything they
+contain on destruction.
+
+> It?s also possible to use eval(?) to get the node, apply the function
+> to it, save its class in the linked list, and then save the object
+> using VECTOR_ELT. This way we get the benefits of `[[` dispatch,
+> class preservation, and constant stack space. However, this ends up
+> hurting performance significantly (about 4x slower than the current
+> new version, making it around half the speed of the version in stats).
+
+That's a clever solution! Can you profile the code to see if there are
+visible sources of slowdown? Maybe this can be salvaged.
+
+-- 
+Best regards,
+Ivan
+
+
+From c@@rd|@g@bor @end|ng |rom gm@||@com  Thu Mar 23 12:01:24 2023
+From: c@@rd|@g@bor @end|ng |rom gm@||@com (=?UTF-8?B?R8OhYm9yIENzw6FyZGk=?=)
+Date: Thu, 23 Mar 2023 12:01:24 +0100
+Subject: [Rd] Edge case in rm() now failing in R-devel
+Message-ID: <CABtg=KkLjFaUqgUy63OEwvB7Tje4g+HgcWGVrErLou72vATPaw@mail.gmail.com>
+
+This is new in R-devel:
+
+> rm(list = NULL)
+Error in rm(list = NULL) : invalid first argument
+
+It still works in r84020, but does not in r84023, possibly because of
+r84022 [1].
+
+Gabor
+
+[1] https://github.com/wch/r-source/commit/4dc057f5d49d3c0590488100e418e39b68682c95
+
+
+From AHL27 @end|ng |rom p|tt@edu  Thu Mar 23 12:27:42 2023
+From: AHL27 @end|ng |rom p|tt@edu (Lakshman, Aidan H)
+Date: Thu, 23 Mar 2023 11:27:42 +0000
+Subject: [Rd] `dendrapply` Enhancements
+In-Reply-To: <20230323130537.65f1c69e@arachnoid>
+References: <BL0PR04MB47068D544F5A49315EF1D042D9AB9@BL0PR04MB4706.namprd04.prod.outlook.com>
+ <CALK03d1PWiA4tfbRkxMBU6tckhfB2JRGUmnuqh5ygLcCLHDXNw@mail.gmail.com>
+ <BL0PR04MB4706A66884728B9419CEAE00D9A89@BL0PR04MB4706.namprd04.prod.outlook.com>
+ <BL0PR04MB4706B185A345A98AB4AB829AD9AC9@BL0PR04MB4706.namprd04.prod.outlook.com>
+ <20230302174750.19c3b247@arachnoid>
+ <BL0PR04MB47069CCBD8C6EB57BB22533ED9B29@BL0PR04MB4706.namprd04.prod.outlook.com>
+ <BL0PR04MB4706F5BC72B6331815DC1DFDD9B29@BL0PR04MB4706.namprd04.prod.outlook.com>
+ <BL0PR04MB4706C5E54A0C323647098D76D9B29@BL0PR04MB4706.namprd04.prod.outlook.com>
+ <20230323130537.65f1c69e@arachnoid>
+Message-ID: <BL0PR04MB47062E263CB43FD6DA6E8C7CD9879@BL0PR04MB4706.namprd04.prod.outlook.com>
+
+No problem! I know it?s a lot of code and also not super high priority haha; I appreciate the feedback and comments.
+
+I had looked at precious multi sets, but I wasn?t quite sure how to implement them?the docs mentioned they were mainly intended for the interpreter, and I couldn?t find a ton of code examples to work off of.
+
+Another idea I had was to make use of R-level dendrogram indexing. I recently learned dendrograms support vector indexing, so like dend[[c(1,1)]] == dend[[1]][[1]]. It could theoretically be possible to make the linked list just store the access vectors, and then have the R function execute by taking the root and the vector as input. Theoretically would solve a lot of these issues, but there?s a lot of quirks I can see causing issues.
+
+> That's a clever solution! Can you profile the code to see if there are
+> visible sources of slowdown? Maybe this can be salvaged.
+
+Yep, I'll add that to my list. Salvaging the existing solution would definitely be a lot simpler for me than the other options mentioned here :D
+
+When I get back to dendrapply (hopefully later today) I'll look at precious MSets, seeing if a simplification with vector indexing is possible, and profiling the existing code.
+
+Thanks again for taking a look! I really appreciate it.
+
+-Aidan
+
+-----------------------
+
+Aidan Lakshman (he/him)<https://www.ahl27.com/>
+
+Doctoral Candidate, Wright Lab<https://www.wrightlabscience.com/>
+
+University of Pittsburgh School of Medicine
+
+Department of Biomedical Informatics
+
+ahl27 at pitt.edu
+
+(724) 612-9940
+
+
+
+________________________________
+From: Ivan Krylov <krylov.r00t at gmail.com>
+Sent: Thursday, March 23, 2023 6:05:37 AM
+To: Lakshman, Aidan H <AHL27 at pitt.edu>
+Cc: R-devel at r-project.org <R-devel at r-project.org>
+Subject: Re: [Rd] `dendrapply` Enhancements
+
+Hello Aidan,
+
+Sorry for dropping this for a while.
+
+? Thu, 2 Mar 2023 21:03:59 +0000
+"Lakshman, Aidan H" <AHL27 at pitt.edu> ?????:
+
+> //after
+> curnode = eval(lang3(R_Bracket2Symbol, parent->node, DEND_IND), env);
+
+lang3() always constructs a new language object. If you do end up using
+eval(), it may make sense to move lang3() out of the loop and reuse the
+existing object by referring to the DEND_IND variable using its symbol,
+like it's done in the lapply() implementation.
+
+> The problem is, it seems like the returned value from `eval` is not
+> protected, whereas the value from VECTOR_ELT is (if the source list
+> is protected). My understanding is that this happens because
+> VECTOR_ELT just copies the pointer, whereas eval(?) calls R code,
+> which returns a copy of the object.
+
+That's right, `[[.dendrogram` returns a new object which is not
+protected, unlike the raw elements of node that you're keeping a
+protected pointer to.
+
+> This ends up being problematic, since it isn?t feasible to protect
+> all the nodes until we?re done with them.
+
+I see. It's not easy in R to unprotect arbitrary previously-allocated
+objects in a safe way. Have you considered "precious multi-sets"
+<https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fblog.r-project.org%2F2018%2F12%2F10%2Funprotecting-by-value%2Findex.html&data=05%7C01%7CAHL27%40pitt.edu%7Ce05bb9d748bf45bd4d0308db2b862883%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638151627427438911%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=3A447zpoQaI1%2BOptiBE8Ix4gXr72VrOdaByvUrHRBbA%3D&reserved=0>?
+They have R_ReleaseFromMSet(), making it possible to free arbitrary
+objects from the set, and they automatically unprotect everything they
+contain on destruction.
+
+> It?s also possible to use eval(?) to get the node, apply the function
+> to it, save its class in the linked list, and then save the object
+> using VECTOR_ELT. This way we get the benefits of `[[` dispatch,
+> class preservation, and constant stack space. However, this ends up
+> hurting performance significantly (about 4x slower than the current
+> new version, making it around half the speed of the version in stats).
+
+That's a clever solution! Can you profile the code to see if there are
+visible sources of slowdown? Maybe this can be salvaged.
+
+--
+Best regards,
+Ivan
+
+	[[alternative HTML version deleted]]
+
+
+From |e||pe@contrer@@ @end|ng |rom gm@||@com  Thu Mar 23 20:48:40 2023
+From: |e||pe@contrer@@ @end|ng |rom gm@||@com (Felipe Contreras)
+Date: Thu, 23 Mar 2023 13:48:40 -0600
+Subject: [Rd] Request: better default R_LIBS_USER
+In-Reply-To: <CAMP44s2NFqiOP1hYcXvk0MvDDnQ9ZmoQvEk37cRyUW2T_0pqRQ@mail.gmail.com>
+References: <CAMP44s2zzqo6iG2ujvhBGL4UsxsOt7e11p81xwWLCEf5Ggperw@mail.gmail.com>
+ <25619.37737.873897.49177@rob.eddelbuettel.com>
+ <CAMP44s2NFqiOP1hYcXvk0MvDDnQ9ZmoQvEk37cRyUW2T_0pqRQ@mail.gmail.com>
+Message-ID: <CAMP44s2JwdYn8ct6Lg3onjGfOwzEpr6e995vRqQhQMs4HS_Apg@mail.gmail.com>
+
+Hi,
+
+Pinging.
+
+On Thu, Mar 16, 2023 at 7:17?PM Felipe Contreras
+<felipe.contreras at gmail.com> wrote:
+> On Thu, Mar 16, 2023 at 4:08?PM Dirk Eddelbuettel <edd at debian.org> wrote:
+> > On 16 March 2023 at 13:39, Felipe Contreras wrote:
+
+> > | R should do the same: it should install packages to somewhere inside
+> > | ~/.local by default.
+
+> > rather than asking a few million R users to adjust from past
+> > practice.
+>
+> Why would they have to adjust anything?
+>
+> Just expand %U to both:
+>
+>             paste(c(
+>             file.path(home, ".local", "lib", "r", x.y),
+>             file.path(home, "R", paste0(R.version$platform, "-library"), x.y)
+>             ), collapse = ":")
+>
+> Then R would install packages to the new location in new installations
+> by default, but still use packages from the old location if present.
+
+This would work, would it not?
+
+> Moreover, this location is going to change the next time the minor
+> version is bumped anyway.
+
+Or just change it for the next version of R.
+
+Cheers.
+
+-- 
+Felipe Contreras
+
+
+From g@bembecker @end|ng |rom gm@||@com  Thu Mar 23 23:57:21 2023
+From: g@bembecker @end|ng |rom gm@||@com (Gabriel Becker)
+Date: Thu, 23 Mar 2023 15:57:21 -0700
+Subject: [Rd] Request: better default R_LIBS_USER
+In-Reply-To: <CAMP44s2JwdYn8ct6Lg3onjGfOwzEpr6e995vRqQhQMs4HS_Apg@mail.gmail.com>
+References: <CAMP44s2zzqo6iG2ujvhBGL4UsxsOt7e11p81xwWLCEf5Ggperw@mail.gmail.com>
+ <25619.37737.873897.49177@rob.eddelbuettel.com>
+ <CAMP44s2NFqiOP1hYcXvk0MvDDnQ9ZmoQvEk37cRyUW2T_0pqRQ@mail.gmail.com>
+ <CAMP44s2JwdYn8ct6Lg3onjGfOwzEpr6e995vRqQhQMs4HS_Apg@mail.gmail.com>
+Message-ID: <CAD4oTHGLUpap62_1dVoumt9BnLn+UffLmD5d+ZWcre9X7LayDA@mail.gmail.com>
+
+Felipe,
+
+Thanks for being interested in making R better. Its great to see engagement
+from a new "virtual face", so to speak. That said, without speaking for
+R-core, my experience is that the R-project and R-core team place a very
+high premium on backwards compatibility. They will make breaking changes,
+on occasion, but its rare and extreme for them to do so. I personally
+don't think the amount of convenience/modern conceptual best practices
+adherence we're talking about here rises to the level of justifying a
+breaking change put in quickly.
+
+As for why I'm calling this a breaking change, see inline:
+
+>
+
+On Thu, Mar 23, 2023 at 12:49?PM Felipe Contreras <
+felipe.contreras at gmail.com> wrote:
+
+> > Just expand %U to both:
+> >
+> >             paste(c(
+> >             file.path(home, ".local", "lib", "r", x.y),
+> >             file.path(home, "R", paste0(R.version$platform, "-library"),
+> x.y)
+> >             ), collapse = ":")
+> >
+> > Then R would install packages to the new location in new installations
+> > by default, but still use packages from the old location if present.
+>
+> This would work, would it not?
+>
+
+So off the top of my head, this would mean that people who have versions of
+R from before and after that change installed simultaneously would, *by
+default* have package libraries that live in completely different places on
+the drive.
+
+Does that preclude a change like this from ever being made? No, but it does
+seem more like a major version change than a minor version change to me.
+
+For an example of why this could be a breaking change, i'd be willing to
+bet there are shell scripts out there which assume the user directories
+live at ~user/R/<os>/<version> and detect them as such. Do I think its
+common? No. Do I think its the right way to do whatever that shell script
+is doing? No, but I'd be surprised if there wasn't code that does it
+somewhere. And that code will/would break under your proposed change.
+
+
+> Moreover, this location is going to change the next time the minor
+> > version is bumped anyway.
+>
+> Or just change it for the next version of R.
+>
+
+All of the above said, I do actually agree that it would be nice to change
+the default in the long term (including for mac builds from source).
+Perhaps this could be put on the list of possible changes for R 5.0, to be
+bundled with other as-yet undecided breaking changes, members of R-core
+feel the same way.
+
+Best,
+~G
+
+
+> Cheers.
+>
+> --
+> Felipe Contreras
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From g@bembecker @end|ng |rom gm@||@com  Fri Mar 24 01:50:53 2023
+From: g@bembecker @end|ng |rom gm@||@com (Gabriel Becker)
+Date: Thu, 23 Mar 2023 17:50:53 -0700
+Subject: [Rd] Request: better default R_LIBS_USER
+In-Reply-To: <CAD4oTHGLUpap62_1dVoumt9BnLn+UffLmD5d+ZWcre9X7LayDA@mail.gmail.com>
+References: <CAMP44s2zzqo6iG2ujvhBGL4UsxsOt7e11p81xwWLCEf5Ggperw@mail.gmail.com>
+ <25619.37737.873897.49177@rob.eddelbuettel.com>
+ <CAMP44s2NFqiOP1hYcXvk0MvDDnQ9ZmoQvEk37cRyUW2T_0pqRQ@mail.gmail.com>
+ <CAMP44s2JwdYn8ct6Lg3onjGfOwzEpr6e995vRqQhQMs4HS_Apg@mail.gmail.com>
+ <CAD4oTHGLUpap62_1dVoumt9BnLn+UffLmD5d+ZWcre9X7LayDA@mail.gmail.com>
+Message-ID: <CAD4oTHHyBt3g0+1jpi7OSRCHLUpEEwwenUam09MeSfsKxzDZbw@mail.gmail.com>
+
+Small but crucial typo correction:
+
+ Perhaps this could be put on the list of possible changes for R 5.0, to be
+> bundled with other as-yet undecided breaking changes, members of R-core
+> feel the same way.
+>
+
+ *if* members of R-core feel the same way.
+
+~G
+
+>
+> Best,
+> ~G
+>
+>
+>> Cheers.
+>>
+>> --
+>> Felipe Contreras
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+
+	[[alternative HTML version deleted]]
+
+
