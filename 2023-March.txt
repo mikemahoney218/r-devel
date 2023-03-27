@@ -11646,3 +11646,412 @@ Martin Maechler
 ETH Zurich  and   R Core team
 
 
+From |e||pe@contrer@@ @end|ng |rom gm@||@com  Sun Mar 26 08:09:56 2023
+From: |e||pe@contrer@@ @end|ng |rom gm@||@com (Felipe Contreras)
+Date: Sun, 26 Mar 2023 00:09:56 -0600
+Subject: [Rd] Request: better default R_LIBS_USER
+In-Reply-To: <CAD4oTHGLUpap62_1dVoumt9BnLn+UffLmD5d+ZWcre9X7LayDA@mail.gmail.com>
+References: <CAMP44s2zzqo6iG2ujvhBGL4UsxsOt7e11p81xwWLCEf5Ggperw@mail.gmail.com>
+ <25619.37737.873897.49177@rob.eddelbuettel.com>
+ <CAMP44s2NFqiOP1hYcXvk0MvDDnQ9ZmoQvEk37cRyUW2T_0pqRQ@mail.gmail.com>
+ <CAMP44s2JwdYn8ct6Lg3onjGfOwzEpr6e995vRqQhQMs4HS_Apg@mail.gmail.com>
+ <CAD4oTHGLUpap62_1dVoumt9BnLn+UffLmD5d+ZWcre9X7LayDA@mail.gmail.com>
+Message-ID: <CAMP44s3NZZXp7BKhxZeZ400s_9myghT8XM6Kq=_AOA+aXiUYqQ@mail.gmail.com>
+
+On Thu, Mar 23, 2023 at 4:57?PM Gabriel Becker <gabembecker at gmail.com> wrote:
+> Thanks for being interested in making R better. Its great to see engagement from a new "virtual face", so to speak. That said, without speaking for R-core, my experience is that the R-project and R-core team place a very high premium on backwards compatibility.
+
+Yes, this is something I value in the software I use: backwards
+compatibility should be of utmost importance.
+
+However, there's a difference between being extremely dutiful with
+backwards-incompatible changes, and making them taboo. There's such a
+thing as too much inflexibleness. And you must make
+backwards-incompatible changes at some point. Otherwise your software
+eventually becomes stale and obsolete.
+
+> They will make breaking changes, on occasion, but its rare and extreme for them to do so.
+
+As it should be. But rare doesn't mean non-existent.
+
+> I personally  don't think the amount of convenience/modern conceptual best practices adherence we're talking about here rises to the level of justifying a breaking change put in quickly.
+
+Let me put it this way: I work with several dozens of projects on my
+Linux system, and R is the *only* one that creates a directory
+directly on top of my home directory, it has been the only one doing
+so for at least the past 10 years, if not *ever*.
+
+Most projects with poor considerations towards the user's home
+directory at least have the decency to start the name of the directory
+with a dot: e.g. ~/.R (as opposed to ~/R).
+
+But I'm a programmer, R is just one of the many projects I dabble
+with. If on the other hand R is the main project *you* work with (if
+not the only one), then I can imagine how *you* don't see a problem.
+But that doesn't mean there isn't one.
+
+I bet many casual users of R are annoyed by precisely the same thing,
+but they aren't going to bother investigating and contacting you like
+I did.
+
+> As for why I'm calling this a breaking change, see inline:
+>
+> On Thu, Mar 23, 2023 at 12:49?PM Felipe Contreras <felipe.contreras at gmail.com> wrote:
+>>
+>> > Just expand %U to both:
+>> >
+>> >             paste(c(
+>> >             file.path(home, ".local", "lib", "r", x.y),
+>> >             file.path(home, "R", paste0(R.version$platform, "-library"), x.y)
+>> >             ), collapse = ":")
+>> >
+>> > Then R would install packages to the new location in new installations
+>> > by default, but still use packages from the old location if present.
+>>
+>> This would work, would it not?
+>
+>
+> So off the top of my head, this would mean that people who have versions of R from before and after that change installed simultaneously would, by default have package libraries that live in completely different places on the drive.
+>
+> Does that preclude a change like this from ever being made? No, but it does seem more like a major version change than a minor version change to me.
+>
+> For an example of why this could be a breaking change, i'd be willing to bet there are shell scripts out there which assume the user directories live at ~user/R/<os>/<version> and detect them as such. Do I think its common? No. Do I think its the right way to do whatever that shell script is doing? No, but I'd be surprised if there wasn't code that does it somewhere. And that code will/would break under your proposed change.
+
+Yes, bad code breaks. That is the nature of using bad code.
+
+But that's why good software doesn't rely on hard-coded paths, and
+instead relies on methods to fetch them automatically. If I wrote a
+software that somehow needed a path to check for Ruby gems, I wouldn't
+use a hardcoded path such as `$HOME/.local/share/gem/ruby/3.0.0`, I
+would use the output of `ruby -e 'puts Gem.user_dir'`.
+
+Instead of hardcoding a path, why don't you provide a functionality
+similar to `ruby -e 'puts Gem.user_dir'` so that scripts can use that
+instead?
+
+That being said, I don't even buy this hypothetical scenario, because
+the location where R packages are installed isn't even
+`~user/R/<os>/<version>`, the <os> is always the same, what is
+different is the *platform*, and it's not even <version>, it's
+`major.minor`.
+
+How is this hypothetical shell script supposed to figure out this
+directory in reality? What is the actual command?
+
+* Ruby: find $(ruby -e 'puts Gem.user_dir')
+* R: find $(????)
+
+>> > Moreover, this location is going to change the next time the minor
+>> > version is bumped anyway.
+>>
+>> Or just change it for the next version of R.
+>
+>
+> All of the above said, I do actually agree that it would be nice to change the default in the long term (including for mac builds from source). Perhaps this could be put on the list of possible changes for R 5.0, to be bundled with other as-yet undecided breaking changes, members of R-core feel the same way.
+
+I'm perfectly fine with this change being part of the next major
+release (as long as it actually happens at some point), but wasn't
+this *already* changed?
+
+Here's a link to a git mirror (because the last time I used svn was in 2005):
+
+https://github.com/wch/r-source/commit/9196047eea
+
+Isn't this a change for the default location? Not in 4.0, not in 5.0,
+but in 4.2. So there's nothing that should prevent this from happening
+for Linux in 4.3. Is there?
+
+Cheers.
+
+-- 
+Felipe Contreras
+
+
+From pro|jcn@@h @end|ng |rom gm@||@com  Sun Mar 26 17:54:36 2023
+From: pro|jcn@@h @end|ng |rom gm@||@com (J C Nash)
+Date: Sun, 26 Mar 2023 11:54:36 -0400
+Subject: [Rd] Query: Could documentation include modernized references?
+Message-ID: <11c89c31-8e67-7947-00eb-717cc5d65557@gmail.com>
+
+A tangential email discussion with Simon U. has highlighted a long-standing
+matter that some tools in the base R distribution are outdated, but that
+so many examples and other tools may use them that they cannot be deprecated.
+
+The examples that I am most familiar with concern optimization and nonlinear
+least squares, but other workers will surely be able to suggest cases elsewhere.
+I was the source (in Pascal) of Nelder-Mead, BFGS and CG algorithms in optim().
+BFGS is still mostly competitive, and Nelder-Mead is useful for initial exploration
+of an optimization problem, but CG was never very good, right from the mid-1970s
+well before it was interfaced to R. By contrast Rcgmin works rather well
+considering how similar it is in nature to CG. Yet I continue to see use and
+even recommendations of these tools in inappropriate circumstances.
+
+Given that it would break too many other packages and examples to drop the
+existing tools, should we at least add short notes in the man (.Rd) pages?
+I'm thinking of something like
+
+    optim() has methods that are dated. Users are urged to consider suggestions
+    from ...
+
+and point to references and/or an appropriate Task View, which could, of course,
+be in the references.
+
+I have no idea what steps are needed to make such edits to the man pages. Would
+R-core need to be directly involved, or could one or two trusted R developers
+be given privileges to seek advice on and implement such modest documentation
+additions?  FWIW, I'm willing to participate in such an effort, which I believe
+would help users to use appropriate and up-to-date tools.
+
+John Nash
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sun Mar 26 18:41:03 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sun, 26 Mar 2023 12:41:03 -0400
+Subject: [Rd] Query: Could documentation include modernized references?
+In-Reply-To: <11c89c31-8e67-7947-00eb-717cc5d65557@gmail.com>
+References: <11c89c31-8e67-7947-00eb-717cc5d65557@gmail.com>
+Message-ID: <9f202099-a869-b325-057a-a5e21e286ab2@gmail.com>
+
+On 26/03/2023 11:54 a.m., J C Nash wrote:
+> A tangential email discussion with Simon U. has highlighted a long-standing
+> matter that some tools in the base R distribution are outdated, but that
+> so many examples and other tools may use them that they cannot be deprecated.
+> 
+> The examples that I am most familiar with concern optimization and nonlinear
+> least squares, but other workers will surely be able to suggest cases elsewhere.
+> I was the source (in Pascal) of Nelder-Mead, BFGS and CG algorithms in optim().
+> BFGS is still mostly competitive, and Nelder-Mead is useful for initial exploration
+> of an optimization problem, but CG was never very good, right from the mid-1970s
+> well before it was interfaced to R. By contrast Rcgmin works rather well
+> considering how similar it is in nature to CG. Yet I continue to see use and
+> even recommendations of these tools in inappropriate circumstances.
+> 
+> Given that it would break too many other packages and examples to drop the
+> existing tools, should we at least add short notes in the man (.Rd) pages?
+> I'm thinking of something like
+> 
+>      optim() has methods that are dated. Users are urged to consider suggestions
+>      from ...
+> 
+> and point to references and/or an appropriate Task View, which could, of course,
+> be in the references.
+> 
+> I have no idea what steps are needed to make such edits to the man pages. Would
+> R-core need to be directly involved, or could one or two trusted R developers
+> be given privileges to seek advice on and implement such modest documentation
+> additions?  FWIW, I'm willing to participate in such an effort, which I believe
+> would help users to use appropriate and up-to-date tools.
+
+I can answer your final paragraph:
+
+Currently R-core would need to be directly involved, in that they are 
+the only ones with write permission on the R sources.
+
+However, they don't need to do the work, they just need to approve of it 
+and commit it.  So I would suggest one way forward is the following:
+
+- You fork one of the mirrors of the R sources from Github, and (perhaps 
+with help from others) edit one or two of the pages in the way you're 
+describing.  Once you think they are ready, make them available online 
+for others to review (Github or Gitlab would help doing this), and then 
+submit the changes as a patch against the svn sources on the R Bugzilla 
+site.
+
+- Another way could be that you copy the help page sources to a dummy 
+package, instead of checking out the whole of the R sources.  You'll 
+need to be careful not to miss other changes to the originals between 
+the time you make your copy and the time you submit the patches.
+
+Don't do too many pages, because you're probably going to have to work 
+out the details of the workflow as you go, and earn R Core's trust by 
+submitting good changes and responding to their requests.  And maybe 
+don't do any until you hear from a member of R Core that they're willing 
+to participate in this, because they certainly don't accept all suggestions.
+
+Duncan Murdoch
+
+
+From bbo|ker @end|ng |rom gm@||@com  Sun Mar 26 20:57:19 2023
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Sun, 26 Mar 2023 14:57:19 -0400
+Subject: [Rd] Query: Could documentation include modernized references?
+In-Reply-To: <9f202099-a869-b325-057a-a5e21e286ab2@gmail.com>
+References: <11c89c31-8e67-7947-00eb-717cc5d65557@gmail.com>
+ <9f202099-a869-b325-057a-a5e21e286ab2@gmail.com>
+Message-ID: <c77d7a36-2b98-8271-ad32-5d9e4ddec78f@gmail.com>
+
+   For one point of evidence about how much people pay attention to the 
+documentation about what's outdated: Brian Ripley added a comment to 
+nlminb.Rd in 2013 saying that the function was "for historical 
+compatibility" 
+<https://github.com/wch/r-source/commit/fd50cf2047b636e496551bcefd6bfa505f93f168> 
+but it's still widely used in new code ...
+
+  But I agree that adding appropriate warnings/links to the 
+documentation couldn't hurt.
+
+   cheers
+    Ben
+
+On 2023-03-26 12:41 p.m., Duncan Murdoch wrote:
+> On 26/03/2023 11:54 a.m., J C Nash wrote:
+>> A tangential email discussion with Simon U. has highlighted a 
+>> long-standing
+>> matter that some tools in the base R distribution are outdated, but that
+>> so many examples and other tools may use them that they cannot be 
+>> deprecated.
+>>
+>> The examples that I am most familiar with concern optimization and 
+>> nonlinear
+>> least squares, but other workers will surely be able to suggest cases 
+>> elsewhere.
+>> I was the source (in Pascal) of Nelder-Mead, BFGS and CG algorithms in 
+>> optim().
+>> BFGS is still mostly competitive, and Nelder-Mead is useful for 
+>> initial exploration
+>> of an optimization problem, but CG was never very good, right from the 
+>> mid-1970s
+>> well before it was interfaced to R. By contrast Rcgmin works rather well
+>> considering how similar it is in nature to CG. Yet I continue to see 
+>> use and
+>> even recommendations of these tools in inappropriate circumstances.
+>>
+>> Given that it would break too many other packages and examples to drop 
+>> the
+>> existing tools, should we at least add short notes in the man (.Rd) 
+>> pages?
+>> I'm thinking of something like
+>>
+>> ???? optim() has methods that are dated. Users are urged to consider 
+>> suggestions
+>> ???? from ...
+>>
+>> and point to references and/or an appropriate Task View, which could, 
+>> of course,
+>> be in the references.
+>>
+>> I have no idea what steps are needed to make such edits to the man 
+>> pages. Would
+>> R-core need to be directly involved, or could one or two trusted R 
+>> developers
+>> be given privileges to seek advice on and implement such modest 
+>> documentation
+>> additions?? FWIW, I'm willing to participate in such an effort, which 
+>> I believe
+>> would help users to use appropriate and up-to-date tools.
+> 
+> I can answer your final paragraph:
+> 
+> Currently R-core would need to be directly involved, in that they are 
+> the only ones with write permission on the R sources.
+> 
+> However, they don't need to do the work, they just need to approve of it 
+> and commit it.? So I would suggest one way forward is the following:
+> 
+> - You fork one of the mirrors of the R sources from Github, and (perhaps 
+> with help from others) edit one or two of the pages in the way you're 
+> describing.? Once you think they are ready, make them available online 
+> for others to review (Github or Gitlab would help doing this), and then 
+> submit the changes as a patch against the svn sources on the R Bugzilla 
+> site.
+> 
+> - Another way could be that you copy the help page sources to a dummy 
+> package, instead of checking out the whole of the R sources.? You'll 
+> need to be careful not to miss other changes to the originals between 
+> the time you make your copy and the time you submit the patches.
+> 
+> Don't do too many pages, because you're probably going to have to work 
+> out the details of the workflow as you go, and earn R Core's trust by 
+> submitting good changes and responding to their requests.? And maybe 
+> don't do any until you hear from a member of R Core that they're willing 
+> to participate in this, because they certainly don't accept all 
+> suggestions.
+> 
+> Duncan Murdoch
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Dr. Benjamin Bolker
+Professor, Mathematics & Statistics and Biology, McMaster University
+Director, School of Computational Science and Engineering
+(Acting) Graduate chair, Mathematics & Statistics
+ > E-mail is sent at my convenience; I don't expect replies outside of 
+working hours.
+
+
+From p@u| @end|ng |rom @t@t@@uck|@nd@@c@nz  Sun Mar 26 22:00:00 2023
+From: p@u| @end|ng |rom @t@t@@uck|@nd@@c@nz (Paul Murrell)
+Date: Mon, 27 Mar 2023 09:00:00 +1300
+Subject: [Rd] Inconsistency in grid::grid.polyline
+In-Reply-To: <CABtA9mH=PjDv2Cz5MLx6p5Xj=a99BVe9PEffDFVZ_bG15Cpn0w@mail.gmail.com>
+References: <CABtA9mH=PjDv2Cz5MLx6p5Xj=a99BVe9PEffDFVZ_bG15Cpn0w@mail.gmail.com>
+Message-ID: <6b6c49ef-72d2-d237-a66f-2cd696fb2f46@stat.auckland.ac.nz>
+
+Hi
+
+The general "evolution" of grid.*() functions (that I have written) have 
+tended towards the grid.polyline() style ...
+
+grid.*(...) {
+     grid.draw(*Grob(...))
+}
+
+With my thinking at least heading towards:  if you are calling grid.*(), 
+then you want to actually draw something;  if you want to just create a 
+description of something to draw, then you want to call *Grob().
+
+In other words, I have come to view the 'draw' argument to grid.*() as 
+redundant.
+
+That reflects how I use 'grid', so I may be unaware of an important 
+counter argument.
+
+Paul
+
+On 25/03/23 13:02, mikefc wrote:
+> Caution - Forged External Domain!
+> This e-mail cannot be validated and may not have been sent by the sender 
+> shown in the 'From' field.
+> If you were not expecting to receive this e-mail we recommend you 
+> contact the sender to confirm that they sent it.
+> If you believe this email was legitimately sent, we suggest the sender 
+> notify their e-mail administrator that it has been received as a forged 
+> (fake) e-mail by the University of Auckland.
+> Please contact the Staff Service Centre on extension 86000 if you 
+> require further assistance.
+> 
+> Hi Paul and R-devel team,
+> 
+> There is an inconsistency in the definition of ?grid.polyline? in 
+> comparison to the other grid.* functions.
+> 
+> grid.polyline() simply passes all args (specified via ? only) ?to 
+> polylineGrob() and unconditionally calls grid.draw() on the returned object.
+> 
+> In contrast, all other functions in the grid.* family have a full set of 
+> named arguments (reflecting the arguments to the *Grob() form of the 
+> function).? Internally to each of the grid.* family of functions, a draw 
+> argument is used to enable/disable the drawing of the object at call time.
+> 
+> Is this a conscious choice?? Should grid.polyline() behave like the 
+> other grid.*() functions?
+> 
+> Kind regards,
+> Mike.
+> 
+> 
+
+-- 
+Dr Paul Murrell
+Te Kura Tatauranga | Department of Statistics
+Waipapa Taumata Rau | The University of Auckland
+Private Bag 92019, Auckland 1142, New Zealand
+64 9 3737599 x85392
+paul at stat.auckland.ac.nz
+www.stat.auckland.ac.nz/~paul/
+
+
