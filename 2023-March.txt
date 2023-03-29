@@ -12055,3 +12055,462 @@ paul at stat.auckland.ac.nz
 www.stat.auckland.ac.nz/~paul/
 
 
+From @nto|ne@|@br| @end|ng |rom gm@||@com  Tue Mar 28 17:42:52 2023
+From: @nto|ne@|@br| @end|ng |rom gm@||@com (Antoine Fabri)
+Date: Tue, 28 Mar 2023 17:42:52 +0200
+Subject: [Rd] subfolders in the R folder
+Message-ID: <CAEKh8uhzLqFM=mPoNG+bDK5H8Fh-H0pEO_e8T8aV39YXhqv2pg@mail.gmail.com>
+
+Dear R-devel,
+
+Packages don't allow for subfolders in R with a couple exceptions. We find
+in "Writing R extensions" :
+
+> The R and man subdirectories may contain OS-specific subdirectories named
+unix or windows.
+
+This is something I've seen discussed outside of the mailing list numerous
+times, and thanks to this SO question
+https://stackoverflow.com/questions/14902199/using-source-subdirectories-within-r-packages-with-roxygen2
+I could find a couple instances where this was discussed here as well,
+apologies if I missed later discussions :
+
+* https://stat.ethz.ch/pipermail/r-devel/2009-December/056022.html
+* https://stat.ethz.ch/pipermail/r-devel/2010-February/056513.html
+
+I don't see a very compelling conclusion, nor a justification for the
+behavior, and I see that it makes some users snarky (second link is an
+example), so let me make a case.
+
+This limitation is an annoyance for bigger projects where we must choose
+between having fewer files with too many objects defined (less structure,
+more scrolling), or to have too many scripts, often with long prefixed
+names to emulate essentially what folders would do. In my experience this
+creates confusion, slows down the workflow, makes onboarding or open source
+contributions on a new project harder (where do we start ?), makes dead
+code easier to happen, makes it harder to test the rights things etc...
+
+It would seem to me, but I might be naive, that it'd be a quick enough fix
+to flatten the R folders not named "unix" or "windows"  when building the
+package. Is there a good reason why we can't do that ?
+
+Thanks,
+
+Antoine
+
+PS:
+Other SO Q&As:
+https://stackoverflow.com/questions/33776643/subdirectory-in-r-package
+https://stackoverflow.com/questions/18584807/code-organisation-in-r-package-development
+
+	[[alternative HTML version deleted]]
+
+
+From @nto|ne@|@br| @end|ng |rom gm@||@com  Tue Mar 28 17:59:23 2023
+From: @nto|ne@|@br| @end|ng |rom gm@||@com (Antoine Fabri)
+Date: Tue, 28 Mar 2023 17:59:23 +0200
+Subject: [Rd] subfolders in the R folder
+In-Reply-To: <CAEKh8uhzLqFM=mPoNG+bDK5H8Fh-H0pEO_e8T8aV39YXhqv2pg@mail.gmail.com>
+References: <CAEKh8uhzLqFM=mPoNG+bDK5H8Fh-H0pEO_e8T8aV39YXhqv2pg@mail.gmail.com>
+Message-ID: <CAEKh8ugS5JPfxxMM2Rb1qe=OkeC_kahBcJX+nSTDqHpiZ8Ha5w@mail.gmail.com>
+
+I just found this other discussion, with some more snark (who would have
+thought this subject would be so slippery!) :
+https://bugs.r-project.org/show_bug.cgi?id=17258
+
+Duncan makes the argument that R's history shows the feature is not
+absolutely necessary, but that's what make it a feature request and not a
+bug report in my opinion. Feng makes the point that Python's history shows
+that the feature is useful, and no counterpoint is made.
+
+	[[alternative HTML version deleted]]
+
+
+From b@row||ng@on @end|ng |rom |@nc@@ter@@c@uk  Tue Mar 28 18:23:29 2023
+From: b@row||ng@on @end|ng |rom |@nc@@ter@@c@uk (Barry Rowlingson)
+Date: Tue, 28 Mar 2023 16:23:29 +0000
+Subject: [Rd] [External]  subfolders in the R folder
+In-Reply-To: <4f78fcc4efb247fbbb1d5e69cc3e8122@LO2P265MB3344.GBRP265.PROD.OUTLOOK.COM>
+References: <4f78fcc4efb247fbbb1d5e69cc3e8122@LO2P265MB3344.GBRP265.PROD.OUTLOOK.COM>
+Message-ID: <CANVKczOxZ9KEW_3GXms7jdDNHezEfQ8kYwH_Tg_zBOUUxvPSRQ@mail.gmail.com>
+
+The "good reason" is all the tooling in R doesn't work with subfolders and
+would have to be rewritten. All the package check and build stuff. And
+that's assuming you don't want to change the basic flat package structure -
+for example to allow something like `library(foo)` to attach a package and
+`library(foo.bar)` to attach some subset of package `foo`. That would
+require more changes of core R package and namespace code.
+
+As a workaround, you could implement a hierarchical structure in your file
+*names*. That's what `ggplot2` does with its (...downloads tarball...) 192
+files in its R folder. Well mostly, there's a load of files called
+annotation- and geom- and plot- and position- and stat- etc etc. No reason
+why you can't have multiple "levels" separated with "-" as you would have
+multiple folder levels separated with "/". You can then do `ls geom-*` to
+see the `geom` "folder" and so on (on a unix shell).
+
+And then when R Core receive a patch that implements subfolders, a quick
+shell script will be able to create the hierarchy for you and drop all the
+files in the right place.
+
+One reason for the flat folder structure may be that R's packages
+themselves have no structure to the functions - compare with Python where
+modules can have subfolders and functions in subfolders can be access with
+module.subfolder.subsub.foo(x), and module subfolders can be imported etc.
+The whole module ecosystem was designed with structure in mind.
+
+I don't think there's any restriction on subfolders in the "inst" folder of
+a package so if you have scripts you can arrange them there.
+
+Given that most of my students seem to keep all their 23,420 files in one
+folder called "Stuff" I think we can manage like this for a bit longer.
+
+B
+
+
+
+On Tue, Mar 28, 2023 at 4:43?PM Antoine Fabri <antoine.fabri at gmail.com>
+wrote:
+
+> This email originated outside the University. Check before clicking links
+> or attachments.
+>
+> Dear R-devel,
+>
+> Packages don't allow for subfolders in R with a couple exceptions. We find
+> in "Writing R extensions" :
+>
+> > The R and man subdirectories may contain OS-specific subdirectories named
+> unix or windows.
+>
+> This is something I've seen discussed outside of the mailing list numerous
+> times, and thanks to this SO question
+>
+> https://stackoverflow.com/questions/14902199/using-source-subdirectories-within-r-packages-with-roxygen2
+> I could find a couple instances where this was discussed here as well,
+> apologies if I missed later discussions :
+>
+> * https://stat.ethz.ch/pipermail/r-devel/2009-December/056022.html
+> * https://stat.ethz.ch/pipermail/r-devel/2010-February/056513.html
+>
+> I don't see a very compelling conclusion, nor a justification for the
+> behavior, and I see that it makes some users snarky (second link is an
+> example), so let me make a case.
+>
+> This limitation is an annoyance for bigger projects where we must choose
+> between having fewer files with too many objects defined (less structure,
+> more scrolling), or to have too many scripts, often with long prefixed
+> names to emulate essentially what folders would do. In my experience this
+> creates confusion, slows down the workflow, makes onboarding or open source
+> contributions on a new project harder (where do we start ?), makes dead
+> code easier to happen, makes it harder to test the rights things etc...
+>
+> It would seem to me, but I might be naive, that it'd be a quick enough fix
+> to flatten the R folders not named "unix" or "windows"  when building the
+> package. Is there a good reason why we can't do that ?
+>
+> Thanks,
+>
+> Antoine
+>
+> PS:
+> Other SO Q&As:
+> https://stackoverflow.com/questions/33776643/subdirectory-in-r-package
+>
+> https://stackoverflow.com/questions/18584807/code-organisation-in-r-package-development
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Tue Mar 28 20:00:06 2023
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Tue, 28 Mar 2023 20:00:06 +0200
+Subject: [Rd] [External] subfolders in the R folder
+In-Reply-To: <CANVKczOxZ9KEW_3GXms7jdDNHezEfQ8kYwH_Tg_zBOUUxvPSRQ@mail.gmail.com>
+References: <4f78fcc4efb247fbbb1d5e69cc3e8122@LO2P265MB3344.GBRP265.PROD.OUTLOOK.COM>
+ <CANVKczOxZ9KEW_3GXms7jdDNHezEfQ8kYwH_Tg_zBOUUxvPSRQ@mail.gmail.com>
+Message-ID: <CAFDcVCSOeMm38k96QVtP7vBcioG7EhjY1uAdo4aPkZLx_Yor-g@mail.gmail.com>
+
+A quick drive-by-comment: What if 'R CMD build' would have an option
+to flatten R/ subfolders when building the tarball, e.g.
+
+R/unix/a.R
+R/windows/a.R
+R/a.R
+
+becomes:
+
+R/00__unix__a.R
+R/00__windows__a.R
+R/a.R
+
+?  Maybe that would be sufficient for most use cases.  The only thing
+I can imagine is that source file references (e.g. in check NOTEs)
+will be toward the latter and not the former.
+
+Of course, one could write a 'build2' shell script locally that wraps
+all this internally, so that one can call 'R CMD build2 mypkg', which
+then creates a flattened copy of the package folder, and runs 'R CMD
+build' on that. Prototyping that could be a good start to see what
+such a solution will bring and what it breaks.
+
+/Henrik
+
+On Tue, Mar 28, 2023 at 6:24?PM Barry Rowlingson
+<b.rowlingson at lancaster.ac.uk> wrote:
+>
+> The "good reason" is all the tooling in R doesn't work with subfolders and
+> would have to be rewritten. All the package check and build stuff. And
+> that's assuming you don't want to change the basic flat package structure -
+> for example to allow something like `library(foo)` to attach a package and
+> `library(foo.bar)` to attach some subset of package `foo`. That would
+> require more changes of core R package and namespace code.
+>
+> As a workaround, you could implement a hierarchical structure in your file
+> *names*. That's what `ggplot2` does with its (...downloads tarball...) 192
+> files in its R folder. Well mostly, there's a load of files called
+> annotation- and geom- and plot- and position- and stat- etc etc. No reason
+> why you can't have multiple "levels" separated with "-" as you would have
+> multiple folder levels separated with "/". You can then do `ls geom-*` to
+> see the `geom` "folder" and so on (on a unix shell).
+>
+> And then when R Core receive a patch that implements subfolders, a quick
+> shell script will be able to create the hierarchy for you and drop all the
+> files in the right place.
+>
+> One reason for the flat folder structure may be that R's packages
+> themselves have no structure to the functions - compare with Python where
+> modules can have subfolders and functions in subfolders can be access with
+> module.subfolder.subsub.foo(x), and module subfolders can be imported etc.
+> The whole module ecosystem was designed with structure in mind.
+>
+> I don't think there's any restriction on subfolders in the "inst" folder of
+> a package so if you have scripts you can arrange them there.
+>
+> Given that most of my students seem to keep all their 23,420 files in one
+> folder called "Stuff" I think we can manage like this for a bit longer.
+>
+> B
+>
+>
+>
+> On Tue, Mar 28, 2023 at 4:43?PM Antoine Fabri <antoine.fabri at gmail.com>
+> wrote:
+>
+> > This email originated outside the University. Check before clicking links
+> > or attachments.
+> >
+> > Dear R-devel,
+> >
+> > Packages don't allow for subfolders in R with a couple exceptions. We find
+> > in "Writing R extensions" :
+> >
+> > > The R and man subdirectories may contain OS-specific subdirectories named
+> > unix or windows.
+> >
+> > This is something I've seen discussed outside of the mailing list numerous
+> > times, and thanks to this SO question
+> >
+> > https://stackoverflow.com/questions/14902199/using-source-subdirectories-within-r-packages-with-roxygen2
+> > I could find a couple instances where this was discussed here as well,
+> > apologies if I missed later discussions :
+> >
+> > * https://stat.ethz.ch/pipermail/r-devel/2009-December/056022.html
+> > * https://stat.ethz.ch/pipermail/r-devel/2010-February/056513.html
+> >
+> > I don't see a very compelling conclusion, nor a justification for the
+> > behavior, and I see that it makes some users snarky (second link is an
+> > example), so let me make a case.
+> >
+> > This limitation is an annoyance for bigger projects where we must choose
+> > between having fewer files with too many objects defined (less structure,
+> > more scrolling), or to have too many scripts, often with long prefixed
+> > names to emulate essentially what folders would do. In my experience this
+> > creates confusion, slows down the workflow, makes onboarding or open source
+> > contributions on a new project harder (where do we start ?), makes dead
+> > code easier to happen, makes it harder to test the rights things etc...
+> >
+> > It would seem to me, but I might be naive, that it'd be a quick enough fix
+> > to flatten the R folders not named "unix" or "windows"  when building the
+> > package. Is there a good reason why we can't do that ?
+> >
+> > Thanks,
+> >
+> > Antoine
+> >
+> > PS:
+> > Other SO Q&As:
+> > https://stackoverflow.com/questions/33776643/subdirectory-in-r-package
+> >
+> > https://stackoverflow.com/questions/18584807/code-organisation-in-r-package-development
+> >
+> >         [[alternative HTML version deleted]]
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Tue Mar 28 20:24:26 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 28 Mar 2023 14:24:26 -0400
+Subject: [Rd] [External] subfolders in the R folder
+In-Reply-To: <CAFDcVCSOeMm38k96QVtP7vBcioG7EhjY1uAdo4aPkZLx_Yor-g@mail.gmail.com>
+References: <4f78fcc4efb247fbbb1d5e69cc3e8122@LO2P265MB3344.GBRP265.PROD.OUTLOOK.COM>
+ <CANVKczOxZ9KEW_3GXms7jdDNHezEfQ8kYwH_Tg_zBOUUxvPSRQ@mail.gmail.com>
+ <CAFDcVCSOeMm38k96QVtP7vBcioG7EhjY1uAdo4aPkZLx_Yor-g@mail.gmail.com>
+Message-ID: <b8e89651-c811-d1b9-59fd-6a3b59fba6ca@gmail.com>
+
+On 28/03/2023 2:00 p.m., Henrik Bengtsson wrote:
+> A quick drive-by-comment: What if 'R CMD build' would have an option
+> to flatten R/ subfolders when building the tarball, e.g.
+> 
+> R/unix/a.R
+> R/windows/a.R
+> R/a.R
+> 
+> becomes:
+> 
+> R/00__unix__a.R
+> R/00__windows__a.R
+> R/a.R
+> 
+> ?  Maybe that would be sufficient for most use cases.  The only thing
+> I can imagine is that source file references (e.g. in check NOTEs)
+> will be toward the latter and not the former.
+
+If you are renaming a file (or merging multiple files, etc.) you can use 
+#line directives so that diagnostic messages refer to the original file.
+
+Duncan Murdoch
+
+> Of course, one could write a 'build2' shell script locally that wraps
+> all this internally, so that one can call 'R CMD build2 mypkg', which
+> then creates a flattened copy of the package folder, and runs 'R CMD
+> build' on that. Prototyping that could be a good start to see what
+> such a solution will bring and what it breaks.
+
+
+> 
+> /Henrik
+> 
+> On Tue, Mar 28, 2023 at 6:24?PM Barry Rowlingson
+> <b.rowlingson at lancaster.ac.uk> wrote:
+>>
+>> The "good reason" is all the tooling in R doesn't work with subfolders and
+>> would have to be rewritten. All the package check and build stuff. And
+>> that's assuming you don't want to change the basic flat package structure -
+>> for example to allow something like `library(foo)` to attach a package and
+>> `library(foo.bar)` to attach some subset of package `foo`. That would
+>> require more changes of core R package and namespace code.
+>>
+>> As a workaround, you could implement a hierarchical structure in your file
+>> *names*. That's what `ggplot2` does with its (...downloads tarball...) 192
+>> files in its R folder. Well mostly, there's a load of files called
+>> annotation- and geom- and plot- and position- and stat- etc etc. No reason
+>> why you can't have multiple "levels" separated with "-" as you would have
+>> multiple folder levels separated with "/". You can then do `ls geom-*` to
+>> see the `geom` "folder" and so on (on a unix shell).
+>>
+>> And then when R Core receive a patch that implements subfolders, a quick
+>> shell script will be able to create the hierarchy for you and drop all the
+>> files in the right place.
+>>
+>> One reason for the flat folder structure may be that R's packages
+>> themselves have no structure to the functions - compare with Python where
+>> modules can have subfolders and functions in subfolders can be access with
+>> module.subfolder.subsub.foo(x), and module subfolders can be imported etc.
+>> The whole module ecosystem was designed with structure in mind.
+>>
+>> I don't think there's any restriction on subfolders in the "inst" folder of
+>> a package so if you have scripts you can arrange them there.
+>>
+>> Given that most of my students seem to keep all their 23,420 files in one
+>> folder called "Stuff" I think we can manage like this for a bit longer.
+>>
+>> B
+>>
+>>
+>>
+>> On Tue, Mar 28, 2023 at 4:43?PM Antoine Fabri <antoine.fabri at gmail.com>
+>> wrote:
+>>
+>>> This email originated outside the University. Check before clicking links
+>>> or attachments.
+>>>
+>>> Dear R-devel,
+>>>
+>>> Packages don't allow for subfolders in R with a couple exceptions. We find
+>>> in "Writing R extensions" :
+>>>
+>>>> The R and man subdirectories may contain OS-specific subdirectories named
+>>> unix or windows.
+>>>
+>>> This is something I've seen discussed outside of the mailing list numerous
+>>> times, and thanks to this SO question
+>>>
+>>> https://stackoverflow.com/questions/14902199/using-source-subdirectories-within-r-packages-with-roxygen2
+>>> I could find a couple instances where this was discussed here as well,
+>>> apologies if I missed later discussions :
+>>>
+>>> * https://stat.ethz.ch/pipermail/r-devel/2009-December/056022.html
+>>> * https://stat.ethz.ch/pipermail/r-devel/2010-February/056513.html
+>>>
+>>> I don't see a very compelling conclusion, nor a justification for the
+>>> behavior, and I see that it makes some users snarky (second link is an
+>>> example), so let me make a case.
+>>>
+>>> This limitation is an annoyance for bigger projects where we must choose
+>>> between having fewer files with too many objects defined (less structure,
+>>> more scrolling), or to have too many scripts, often with long prefixed
+>>> names to emulate essentially what folders would do. In my experience this
+>>> creates confusion, slows down the workflow, makes onboarding or open source
+>>> contributions on a new project harder (where do we start ?), makes dead
+>>> code easier to happen, makes it harder to test the rights things etc...
+>>>
+>>> It would seem to me, but I might be naive, that it'd be a quick enough fix
+>>> to flatten the R folders not named "unix" or "windows"  when building the
+>>> package. Is there a good reason why we can't do that ?
+>>>
+>>> Thanks,
+>>>
+>>> Antoine
+>>>
+>>> PS:
+>>> Other SO Q&As:
+>>> https://stackoverflow.com/questions/33776643/subdirectory-in-r-package
+>>>
+>>> https://stackoverflow.com/questions/18584807/code-organisation-in-r-package-development
+>>>
+>>>          [[alternative HTML version deleted]]
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>
+>>
+>>          [[alternative HTML version deleted]]
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
