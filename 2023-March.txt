@@ -12514,3 +12514,66 @@ Duncan Murdoch
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Wed Mar 29 10:44:42 2023
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Wed, 29 Mar 2023 10:44:42 +0200
+Subject: [Rd] Incorrect behavior of ks.test and psmirnov functions with
+ exact=TRUE
+In-Reply-To: <CAMGHQ95wXZ=LMVkUjDRsCJ_0P2VAbWnQrj-4_NvdXRGMuvVDvA@mail.gmail.com>
+References: <CAMGHQ95wXZ=LMVkUjDRsCJ_0P2VAbWnQrj-4_NvdXRGMuvVDvA@mail.gmail.com>
+Message-ID: <25635.64122.246376.31423@hornik.net>
+
+>>>>> Alexey Sergushichev writes:
+
+Thanks.  This is now fixed for the upcoming 4.3.0 release.
+
+Best
+-k
+
+> HI,
+> I've noticed what I think is an incorrect behavior of stats::psmirnov
+> function and consequently of ks.test when run in an exact mode.
+
+> For example:
+> psmirnov(1, sizes=c(50, 50), z=1:100, two.sided = FALSE, lower.tail = F,
+> exact=TRUE)
+
+> produces 2.775558e-15
+
+> However, the exact value should be 1/combination(100, 50), which is
+> 9.9e-30. While the absolute error is small, the relative error is huge, and
+> it is not fixed by setting option log.p=T
+
+> To compare, SciPy has a correct implementation in scipy.stats.ks_2samp:
+> scipy.stats.ks_2samp(list(range(1,51)), list(range(51, 101)),
+> alternative="greater", method="exact")
+> returns 9.911653021418333e-30.
+
+> I've tried to dig in a bit and the problem comes down to how the final
+> value is calculated in psmirnov function:
+
+>     if (log.p & !lower.tail)
+>         return(log1p(-ret/exp(logdenom)))
+>     if (!log.p & !lower.tail)
+>         return(1 - ret/exp(logdenom))
+
+> There exp(logdenom) is a relatively good (but not perfect) approximation of
+> combination(100, 50) = 1.008913e+29, ret is also a good approximation of
+> combination(100, 50)-1 = 1.008913e+29 but there is not enough double
+> precision for 1 - ret/exp(logdenom) to capture 1/combination(100, 50).
+
+> I don't have time to provide a fix, at least not now, but I think this
+> behavior (good absolute error, but poor relative error for small values)
+> should at least be mentioned in the manual of the methods psmirnov and/or
+> ks.test
+
+> Best,
+> Alexey Sergushichev
+
+> 	[[alternative HTML version deleted]]
+
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
