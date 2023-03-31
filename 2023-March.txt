@@ -12577,3 +12577,244 @@ Best
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From tdhock5 @end|ng |rom gm@||@com  Thu Mar 30 06:53:59 2023
+From: tdhock5 @end|ng |rom gm@||@com (Toby Hocking)
+Date: Wed, 29 Mar 2023 21:53:59 -0700
+Subject: [Rd] read.csv quadratic time in number of columns
+Message-ID: <CALK03d3m4wN1o=m8V6_4Za4uZ-FQrU8pRU8FuxkFORPdoQwRYg@mail.gmail.com>
+
+Dear R-devel,
+A number of people have observed anecdotally that read.csv is slow for
+large number of columns, for example:
+https://stackoverflow.com/questions/7327851/read-csv-is-extremely-slow-in-reading-csv-files-with-large-numbers-of-columns
+I did a systematic comparison of read.csv with similar functions, and
+observed that read.csv is quadratic time (N^2) in the number of columns N,
+whereas the others are linear (N).
+Can read.csv be improved to use a linear time algorithm, so it can handle
+CSV files with larger numbers of columns?
+For more details including figures and session info, please see
+https://github.com/tdhock/atime/issues/8
+Sincerely,
+Toby Dylan Hocking
+
+	[[alternative HTML version deleted]]
+
+
+From tdhock5 @end|ng |rom gm@||@com  Thu Mar 30 07:24:13 2023
+From: tdhock5 @end|ng |rom gm@||@com (Toby Hocking)
+Date: Wed, 29 Mar 2023 22:24:13 -0700
+Subject: [Rd] write.csv performance improvements?
+Message-ID: <CALK03d06ooGiZ+vq7kZVPUzx9B=t9gvJ8f7xwZCWv4CUrBwrJg@mail.gmail.com>
+
+Dear R-devel,
+I did a systematic comparison of write.csv with similar functions, and
+observed two asymptotic inefficiencies that could be improved.
+
+1. write.csv is quadratic time (N^2) in the number of columns N.
+Can write.csv be improved to use a linear time algorithm, so it can handle
+CSV files with larger numbers of columns?
+For more details including figures and session info, please see
+https://github.com/tdhock/atime/issues/9
+
+2. write.csv uses memory that is linear in the number of rows, whereas
+similar R functions for writing CSV use only constant memory. This is not
+as important of an issue to fix, because anyway linear memory is used to
+store the data in R. But since the other functions use constant memory,
+could write.csv also? Is there some copying happening that could be
+avoided? (this memory measurement uses bench::mark, which in turn uses
+utils::Rprofmem)
+https://github.com/tdhock/atime/issues/10
+
+Sincerely,
+Toby Dylan Hocking
+
+	[[alternative HTML version deleted]]
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Thu Mar 30 16:32:39 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Thu, 30 Mar 2023 17:32:39 +0300
+Subject: [Rd] removeSource() vs. function literals
+Message-ID: <20230330173239.72da4e14@arachnoid>
+
+Dear R-devel,
+
+In a package of mine, I use removeSource on expression objects in order
+to make expressions that are semantically the same serialize to the
+same byte sequences:
+https://github.com/cran/depcache/blob/854d68a/R/fixup.R#L8-L34
+
+Today I learned that expressions containing function definitions also
+contain the source references for the functions, not as an attribute,
+but as a separate argument to the `function` call:
+
+str(quote(function() NULL)[[4]])
+# 'srcref' int [1:8] 1 11 1 25 11 25 1 1
+# - attr(*, "srcfile")=Classes 'srcfilecopy', 'srcfile'
+#   <environment:0x55aba55a8a50>
+
+This means that removeSource() on an expression that would define a
+function when evaluated doesn't actually remove the source reference
+from the object.
+
+Do you think it would be appropriate to teach removeSource() to remove
+such source references? What could be a good way to implement that?
+if (is.call(fn) && identical(fn[[1]], 'function')) fn[[4]] <- NULL
+sounds too arbitrary. if (inherits(fn, 'srcref')) return(NULL) sounds
+too broad.
+
+-- 
+Best regards,
+Ivan
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Thu Mar 30 18:38:24 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Thu, 30 Mar 2023 12:38:24 -0400
+Subject: [Rd] removeSource() vs. function literals
+In-Reply-To: <20230330173239.72da4e14@arachnoid>
+References: <20230330173239.72da4e14@arachnoid>
+Message-ID: <509b2249-d533-6f15-5b14-c5cfb8218059@gmail.com>
+
+On 30/03/2023 10:32 a.m., Ivan Krylov wrote:
+> Dear R-devel,
+> 
+> In a package of mine, I use removeSource on expression objects in order
+> to make expressions that are semantically the same serialize to the
+> same byte sequences:
+> https://github.com/cran/depcache/blob/854d68a/R/fixup.R#L8-L34
+> 
+> Today I learned that expressions containing function definitions also
+> contain the source references for the functions, not as an attribute,
+> but as a separate argument to the `function` call:
+> 
+> str(quote(function() NULL)[[4]])
+> # 'srcref' int [1:8] 1 11 1 25 11 25 1 1
+> # - attr(*, "srcfile")=Classes 'srcfilecopy', 'srcfile'
+> #   <environment:0x55aba55a8a50>
+> 
+> This means that removeSource() on an expression that would define a
+> function when evaluated doesn't actually remove the source reference
+> from the object.
+> 
+> Do you think it would be appropriate to teach removeSource() to remove
+> such source references? What could be a good way to implement that?
+> if (is.call(fn) && identical(fn[[1]], 'function')) fn[[4]] <- NULL
+> sounds too arbitrary. if (inherits(fn, 'srcref')) return(NULL) sounds
+> too broad.
+> 
+
+I don't think there's a simple way to do that.  Functions can define 
+functions within themselves.  If you're talking about code that was 
+constructed by messing with language objects, it could contain both 
+function objects and calls to `function` to construct them.  You'd need 
+to recurse through all expressions in the object.  Some of those 
+expressions might be environments, so your changes could leak out of the 
+function you're working on.
+
+Things are simpler if you know the expression is the unmodified result 
+of parsing source code, but if you know that, wouldn't you usually be 
+able to control things by setting keep.source = FALSE?
+
+Maybe a workable solution is something like parse(deparse(expr, control 
+= "exact"), keep.source = FALSE).  Wouldn't work on environments or 
+various exotic types, but would probably warn you if it wasn't working.
+
+Duncan Murdoch
+
+
+From g@bembecker @end|ng |rom gm@||@com  Fri Mar 31 00:50:35 2023
+From: g@bembecker @end|ng |rom gm@||@com (Gabriel Becker)
+Date: Thu, 30 Mar 2023 15:50:35 -0700
+Subject: [Rd] write.csv performance improvements?
+In-Reply-To: <CALK03d06ooGiZ+vq7kZVPUzx9B=t9gvJ8f7xwZCWv4CUrBwrJg@mail.gmail.com>
+References: <CALK03d06ooGiZ+vq7kZVPUzx9B=t9gvJ8f7xwZCWv4CUrBwrJg@mail.gmail.com>
+Message-ID: <CAD4oTHEEY8oD5qQs5X0zT5rizS8+zuP_LCZziVSHjYxXwCf6tw@mail.gmail.com>
+
+Hi Toby et al,
+
+
+
+On Wed, Mar 29, 2023 at 10:24?PM Toby Hocking <tdhock5 at gmail.com> wrote:
+
+> Dear R-devel,
+> I did a systematic comparison of write.csv with similar functions, and
+> observed two asymptotic inefficiencies that could be improved.
+>
+> 1. write.csv is quadratic time (N^2) in the number of columns N.
+> Can write.csv be improved to use a linear time algorithm, so it can handle
+> CSV files with larger numbers of columns?
+>
+
+Yes, I think there is a narrow fix and a wider discussion to be had.
+
+I've posted a discussion and the narrow fix at:
+https://bugs.r-project.org/show_bug.cgi?id=18500
+
+For "normal data", ie data that doesn't have classed object columns, the
+narrow change I propose in the patch us the performance we might expect
+(see the attached, admittedly very ugly plots).
+
+The fact remains though, that with the patch, write.table is still
+quadratic in the number of *object-classed *columns.
+
+It doesn't seem like it should be, but I haven't (yet) had a chance to dig
+deeper to attack that.  Might be a good subject for the R developer sprint,
+if R-core agrees.
+
+~G
+
+> For more details including figures and session info, please see
+> https://github.com/tdhock/atime/issues/9
+>
+> 2. write.csv uses memory that is linear in the number of rows, whereas
+> similar R functions for writing CSV use only constant memory. This is not
+> as important of an issue to fix, because anyway linear memory is used to
+> store the data in R. But since the other functions use constant memory,
+> could write.csv also? Is there some copying happening that could be
+> avoided? (this memory measurement uses bench::mark, which in turn uses
+> utils::Rprofmem)
+> https://github.com/tdhock/atime/issues/10
+>
+> Sincerely,
+> Toby Dylan Hocking
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+-------------- next part --------------
+A non-text attachment was scrubbed...
+Name: csv_ncols_time_4.2.2.png
+Type: image/png
+Size: 19358 bytes
+Desc: not available
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20230330/957ed575/attachment.png>
+
+-------------- next part --------------
+A non-text attachment was scrubbed...
+Name: csv_nobjcols_time_4.2.2.png
+Type: image/png
+Size: 21430 bytes
+Desc: not available
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20230330/957ed575/attachment-0001.png>
+
+-------------- next part --------------
+A non-text attachment was scrubbed...
+Name: csv_ncols_time.png
+Type: image/png
+Size: 20187 bytes
+Desc: not available
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20230330/957ed575/attachment-0002.png>
+
+-------------- next part --------------
+A non-text attachment was scrubbed...
+Name: csv_nobjcols_time.png
+Type: image/png
+Size: 21411 bytes
+Desc: not available
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20230330/957ed575/attachment-0003.png>
+
