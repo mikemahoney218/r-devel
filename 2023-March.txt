@@ -12818,3 +12818,391 @@ Size: 21411 bytes
 Desc: not available
 URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20230330/957ed575/attachment-0003.png>
 
+From ||one| @end|ng |rom po@|t@co  Fri Mar 31 08:49:53 2023
+From: ||one| @end|ng |rom po@|t@co (Lionel Henry)
+Date: Fri, 31 Mar 2023 08:49:53 +0200
+Subject: [Rd] removeSource() vs. function literals
+In-Reply-To: <509b2249-d533-6f15-5b14-c5cfb8218059@gmail.com>
+References: <20230330173239.72da4e14@arachnoid>
+ <509b2249-d533-6f15-5b14-c5cfb8218059@gmail.com>
+Message-ID: <CAJf4E3pF-SOgch5AKgx2aLb27amSCd4wUuDhd-MokF9h8ggVQA@mail.gmail.com>
+
+If you can afford a dependency on rlang, `rlang::zap_srcref()` deals
+with this. It's recursive over expression vectors, calls (including
+calls to `function` and their hidden srcref arg), and function
+objects. It's implemented in C for efficiency as we found it to be a
+bottleneck in some applications (IIRC caching). I'd be happy to
+upstream this in base if R core is interested.
+
+Best,
+Lionel
+
+
+On 3/30/23, Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+> On 30/03/2023 10:32 a.m., Ivan Krylov wrote:
+>> Dear R-devel,
+>>
+>> In a package of mine, I use removeSource on expression objects in order
+>> to make expressions that are semantically the same serialize to the
+>> same byte sequences:
+>> https://github.com/cran/depcache/blob/854d68a/R/fixup.R#L8-L34
+>>
+>> Today I learned that expressions containing function definitions also
+>> contain the source references for the functions, not as an attribute,
+>> but as a separate argument to the `function` call:
+>>
+>> str(quote(function() NULL)[[4]])
+>> # 'srcref' int [1:8] 1 11 1 25 11 25 1 1
+>> # - attr(*, "srcfile")=Classes 'srcfilecopy', 'srcfile'
+>> #   <environment:0x55aba55a8a50>
+>>
+>> This means that removeSource() on an expression that would define a
+>> function when evaluated doesn't actually remove the source reference
+>> from the object.
+>>
+>> Do you think it would be appropriate to teach removeSource() to remove
+>> such source references? What could be a good way to implement that?
+>> if (is.call(fn) && identical(fn[[1]], 'function')) fn[[4]] <- NULL
+>> sounds too arbitrary. if (inherits(fn, 'srcref')) return(NULL) sounds
+>> too broad.
+>>
+>
+> I don't think there's a simple way to do that.  Functions can define
+> functions within themselves.  If you're talking about code that was
+> constructed by messing with language objects, it could contain both
+> function objects and calls to `function` to construct them.  You'd need
+> to recurse through all expressions in the object.  Some of those
+> expressions might be environments, so your changes could leak out of the
+> function you're working on.
+>
+> Things are simpler if you know the expression is the unmodified result
+> of parsing source code, but if you know that, wouldn't you usually be
+> able to control things by setting keep.source = FALSE?
+>
+> Maybe a workable solution is something like parse(deparse(expr, control
+> = "exact"), keep.source = FALSE).  Wouldn't work on environments or
+> various exotic types, but would probably warn you if it wasn't working.
+>
+> Duncan Murdoch
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From toth@dene@ @end|ng |rom kogentum@hu  Fri Mar 31 11:38:34 2023
+From: toth@dene@ @end|ng |rom kogentum@hu (=?UTF-8?B?RMOpbmVzIFTDs3Ro?=)
+Date: Fri, 31 Mar 2023 11:38:34 +0200
+Subject: [Rd] removeSource() vs. function literals
+In-Reply-To: <CAJf4E3pF-SOgch5AKgx2aLb27amSCd4wUuDhd-MokF9h8ggVQA@mail.gmail.com>
+References: <20230330173239.72da4e14@arachnoid>
+ <509b2249-d533-6f15-5b14-c5cfb8218059@gmail.com>
+ <CAJf4E3pF-SOgch5AKgx2aLb27amSCd4wUuDhd-MokF9h8ggVQA@mail.gmail.com>
+Message-ID: <ad47fcfe-0293-631c-493e-8d30421a5e03@kogentum.hu>
+
+
+On 3/31/23 08:49, Lionel Henry via R-devel wrote:
+> If you can afford a dependency on rlang, `rlang::zap_srcref()` deals
+> with this. It's recursive over expression vectors, calls (including
+> calls to `function` and their hidden srcref arg), and function
+> objects. It's implemented in C for efficiency as we found it to be a
+> bottleneck in some applications (IIRC caching). I'd be happy to
+> upstream this in base if R core is interested.
+
+That would be very helpful. When having to implement caching, I have 
+been hit by this issue several times in the past, too (before 
+rlang::zap_srcref() existed).
+
+Regards,
+Denes
+
+
+
+> 
+> Best,
+> Lionel
+> 
+> 
+> On 3/30/23, Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+>> On 30/03/2023 10:32 a.m., Ivan Krylov wrote:
+>>> Dear R-devel,
+>>>
+>>> In a package of mine, I use removeSource on expression objects in order
+>>> to make expressions that are semantically the same serialize to the
+>>> same byte sequences:
+>>> https://github.com/cran/depcache/blob/854d68a/R/fixup.R#L8-L34
+>>>
+>>> Today I learned that expressions containing function definitions also
+>>> contain the source references for the functions, not as an attribute,
+>>> but as a separate argument to the `function` call:
+>>>
+>>> str(quote(function() NULL)[[4]])
+>>> # 'srcref' int [1:8] 1 11 1 25 11 25 1 1
+>>> # - attr(*, "srcfile")=Classes 'srcfilecopy', 'srcfile'
+>>> #   <environment:0x55aba55a8a50>
+>>>
+>>> This means that removeSource() on an expression that would define a
+>>> function when evaluated doesn't actually remove the source reference
+>>> from the object.
+>>>
+>>> Do you think it would be appropriate to teach removeSource() to remove
+>>> such source references? What could be a good way to implement that?
+>>> if (is.call(fn) && identical(fn[[1]], 'function')) fn[[4]] <- NULL
+>>> sounds too arbitrary. if (inherits(fn, 'srcref')) return(NULL) sounds
+>>> too broad.
+>>>
+>>
+>> I don't think there's a simple way to do that.  Functions can define
+>> functions within themselves.  If you're talking about code that was
+>> constructed by messing with language objects, it could contain both
+>> function objects and calls to `function` to construct them.  You'd need
+>> to recurse through all expressions in the object.  Some of those
+>> expressions might be environments, so your changes could leak out of the
+>> function you're working on.
+>>
+>> Things are simpler if you know the expression is the unmodified result
+>> of parsing source code, but if you know that, wouldn't you usually be
+>> able to control things by setting keep.source = FALSE?
+>>
+>> Maybe a workable solution is something like parse(deparse(expr, control
+>> = "exact"), keep.source = FALSE).  Wouldn't work on environments or
+>> various exotic types, but would probably warn you if it wasn't working.
+>>
+>> Duncan Murdoch
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Fri Mar 31 15:31:14 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Fri, 31 Mar 2023 15:31:14 +0200
+Subject: [Rd] Query: Could documentation include modernized references?
+In-Reply-To: <9f202099-a869-b325-057a-a5e21e286ab2@gmail.com>
+References: <11c89c31-8e67-7947-00eb-717cc5d65557@gmail.com>
+ <9f202099-a869-b325-057a-a5e21e286ab2@gmail.com>
+Message-ID: <25638.57506.331836.766096@stat.math.ethz.ch>
+
+>>>>> Duncan Murdoch 
+>>>>>     on Sun, 26 Mar 2023 12:41:03 -0400 writes:
+
+    > On 26/03/2023 11:54 a.m., J C Nash wrote:
+    >> A tangential email discussion with Simon U. has
+    >> highlighted a long-standing matter that some tools in the
+    >> base R distribution are outdated, but that so many
+    >> examples and other tools may use them that they cannot be
+    >> deprecated.
+    >> 
+    >> The examples that I am most familiar with concern
+    >> optimization and nonlinear least squares, but other
+    >> workers will surely be able to suggest cases elsewhere.
+    >> I was the source (in Pascal) of Nelder-Mead, BFGS and CG
+    >> algorithms in optim().  BFGS is still mostly competitive,
+    >> and Nelder-Mead is useful for initial exploration of an
+    >> optimization problem, but CG was never very good, right
+    >> from the mid-1970s well before it was interfaced to R. By
+    >> contrast Rcgmin works rather well considering how similar
+    >> it is in nature to CG. Yet I continue to see use and even
+    >> recommendations of these tools in inappropriate
+    >> circumstances.
+    >> 
+    >> Given that it would break too many other packages and
+    >> examples to drop the existing tools, should we at least
+    >> add short notes in the man (.Rd) pages?  I'm thinking of
+    >> something like
+    >> 
+    >> optim() has methods that are dated. Users are urged to
+    >> consider suggestions from ...
+    >> 
+    >> and point to references and/or an appropriate Task View,
+    >> which could, of course, be in the references.
+    >> 
+    >> I have no idea what steps are needed to make such edits
+    >> to the man pages. Would R-core need to be directly
+    >> involved, or could one or two trusted R developers be
+    >> given privileges to seek advice on and implement such
+    >> modest documentation additions?  FWIW, I'm willing to
+    >> participate in such an effort, which I believe would help
+    >> users to use appropriate and up-to-date tools.
+
+    > I can answer your final paragraph:
+
+    > Currently R-core would need to be directly involved, in
+    > that they are the only ones with write permission on the R
+    > sources.
+
+    > However, they don't need to do the work, they just need to
+    > approve of it and commit it.  So I would suggest one way
+    > forward is the following:
+
+    > - You fork one of the mirrors of the R sources from
+    > Github, and (perhaps with help from others) edit one or
+    > two of the pages in the way you're describing.  Once you
+    > think they are ready, make them available online for
+    > others to review (Github or Gitlab would help doing this),
+    > and then submit the changes as a patch against the svn
+    > sources on the R Bugzilla site.
+
+    > - Another way could be that you copy the help page sources
+    > to a dummy package, instead of checking out the whole of
+    > the R sources.  You'll need to be careful not to miss
+    > other changes to the originals between the time you make
+    > your copy and the time you submit the patches.
+
+    > Don't do too many pages, because you're probably going to
+    > have to work out the details of the workflow as you go,
+
+(indeed!)
+
+    > and earn R Core's trust by submitting good changes and
+    > responding to their requests.  And maybe don't do any
+    > until you hear from a member of R Core that they're
+    > willing to participate in this, because they certainly
+    > don't accept all suggestions.
+
+    > Duncan Murdoch
+
+Thanks a lot, Duncan, for this (as usual from you) very precise
+and helpful information / explanations.
+
+I am "happy"/willing to get involved a bit here, as I do want to
+spend some time re-reading about current state of (some, notably
+optim-related) optimizers.
+
+(But I will be mostly offline for the next 60 hours or so.)
+
+
+Martin
+
+--
+Martin Maechler
+ETH Zurich  and  R Core team
+
+
+From pro|jcn@@h @end|ng |rom gm@||@com  Fri Mar 31 19:31:56 2023
+From: pro|jcn@@h @end|ng |rom gm@||@com (J C Nash)
+Date: Fri, 31 Mar 2023 13:31:56 -0400
+Subject: [Rd] Query: Could documentation include modernized references?
+In-Reply-To: <25638.57506.331836.766096@stat.math.ethz.ch>
+References: <11c89c31-8e67-7947-00eb-717cc5d65557@gmail.com>
+ <9f202099-a869-b325-057a-a5e21e286ab2@gmail.com>
+ <25638.57506.331836.766096@stat.math.ethz.ch>
+Message-ID: <7262f12d-8c77-c877-363f-20260ec5f3f3@gmail.com>
+
+Thanks Martin.
+
+Following Duncan's advice as well as some textual input, I have put a proposed Rd file for
+optim on a fork of the R code at
+https://github.com/nashjc/r/blob/master/src/library/stats/man/optim.Rd
+
+This has the diffs given below from the github master. The suggested changes
+primarily point to a Task View, which I believe is a sensible approach.
+
+I'll admit to being rather clumsy with git, and will be happy to receive advice
+on how to proceed if more work needed on my part.
+
+Cheers,
+
+John Nash
+
+
+
+
+--- optim.Rd	2022-03-24 19:02:04.000000000 -0400
++++ optim.Rd.20230324.txt	2023-03-29 09:23:28.373457291 -0400
+@@ -15,6 +15,9 @@
+    General-purpose optimization based on Nelder--Mead, quasi-Newton and
+    conjugate-gradient algorithms. It includes an option for
+    box-constrained optimization and simulated annealing.
++  These methods are quite old and better ones are known for many
++  problems.  See the Optimization and Mathematical Programming task
++  view (Schwendinger and Borchers, 2023) for a survey.
+  }
+  \usage{
+  optim(par, fn, gr = NULL, \dots,
+@@ -67,6 +70,8 @@
+    Beale--Sorenson updates).  Conjugate gradient methods will generally
+    be more fragile than the BFGS method, but as they do not store a
+    matrix they may be successful in much larger optimization problems.
++  The \code{"CG"} method has known improvements that are discussed in
++  Schwendinger and Borchers (2023)."
+
+    Method \code{"L-BFGS-B"} is that of Byrd \emph{et. al.} (1995) which
+    allows \emph{box constraints}, that is each variable can be given a lower
+@@ -230,8 +235,10 @@
+  \source{
+    The code for methods \code{"Nelder-Mead"}, \code{"BFGS"} and
+    \code{"CG"} was based originally on Pascal code in Nash (1990) that was
+-  translated by \code{p2c} and then hand-optimized.  Dr Nash has agreed
+-  that the code can be made freely available.
++  translated by \code{p2c} and then hand-optimized.  Dr Nash has agreed
++  that the code can be made freely available, but recommends that the more
++  reliable \code{optimx::Rcgmin()} function should be used instead of
++  method \code{"CG"}.
+
+    The code for method \code{"L-BFGS-B"} is based on Fortran code by Zhu,
+    Byrd, Lu-Chen and Nocedal obtained from Netlib (file
+@@ -269,6 +276,10 @@
+    Nocedal, J. and Wright, S. J. (1999).
+    \emph{Numerical Optimization}.
+    Springer.
++	
++  Florian Schwendinger, Hans W. Borchers (2023). \emph{CRAN Task View:
++  Optimization and Mathematical Programming.} Version 2023-02-16.
++  URL https://CRAN.R-project.org/view=Optimization.	
+  }
+
+  \seealso{
+
+
+
+
+On 2023-03-31 09:31, Martin Maechler wrote:
+> 
+> Thanks a lot, Duncan, for this (as usual from you) very precise
+> and helpful information / explanations.
+> 
+> I am "happy"/willing to get involved a bit here, as I do want to
+> spend some time re-reading about current state of (some, notably
+> optim-related) optimizers.
+> 
+> (But I will be mostly offline for the next 60 hours or so.)
+> 
+> 
+> Martin
+> 
+> --
+> Martin Maechler
+> ETH Zurich  and  R Core team
+
+
+From k@ro||@@koncev|c|u@ @end|ng |rom gm@||@com  Fri Mar 31 20:11:27 2023
+From: k@ro||@@koncev|c|u@ @end|ng |rom gm@||@com (Karolis K)
+Date: Fri, 31 Mar 2023 21:11:27 +0300
+Subject: [Rd] Autocompletion for the new S3 generic @ method?
+Message-ID: <AEF74F63-9E94-4130-B4B4-9D2CD0C3D468@gmail.com>
+
+Hello,
+
+In the current R-devel @ is S3 generic, so we can do things like - for example - use it to extract matrix rows by name:
+
+    .S3method("@", "mm", function(object, name) object[name,])
+    m <- structure(matrix(rnorm(20), ncol=2), dimnames=list(paste0("row", 1:10), paste("col", 1:2)), class="mm")
+
+    m at row1
+
+However, seems like currently it does not support autocompletion.
+
+Wouldn?t it make sense to add a method like .EtaNames() which would provide tab autocompletions for x@<tab> in the same way current .DollarNames() does for x$<tab>?
+
+Regards,
+Karolis K.
+
