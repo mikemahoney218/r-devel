@@ -774,3 +774,692 @@ Tel:  040/6541-2819
 mail: steuer at hsu-hh.de
 
 
+From ttm|gue|tt @end|ng |rom gm@||@com  Tue Apr  4 04:27:58 2023
+From: ttm|gue|tt @end|ng |rom gm@||@com (Michael Milton)
+Date: Tue, 4 Apr 2023 12:27:58 +1000
+Subject: [Rd] Breaking Change in Rcomplex Layout?
+In-Reply-To: <c90c269e-1fdd-b12d-263c-e8c4a92e08db@gmail.com>
+References: <CAPZyOoLG7Bgt0D_Nz-pdBv5k0_SmpFN9UuFE1-mKQxX76L=21g@mail.gmail.com>
+ <e8c052d6-50ae-002d-71ba-5e160b56d419@gmail.com>
+ <CAPZyOoL7rLbLHwQMziADwg_Dy-UGNScdwi3wf_RawWyU2Y4v-Q@mail.gmail.com>
+ <c90c269e-1fdd-b12d-263c-e8c4a92e08db@gmail.com>
+Message-ID: <CAPZyOo++tZ-ThaGq=Zj3HbiY-r3wH3x0jPOHKgWcJ9zU-FTYLA@mail.gmail.com>
+
+Hi Tomas,
+
+Thanks for this explanation. As you can probably tell I'm not much of a C
+person, so I didn't realise this change would be invisible to C users. I
+suppose R's stability contract only applies to C, and therefore changes
+that break other languages such as Rust are out of scope. You are right
+that this error is confused by bindgen's inability to handle anonymous
+types, but even without that it would be a breaking change in Rust because
+code that accesses r or c must now access the struct variant of the union
+and then access the struct field. Also, this code has to now be in an
+unsafe block because of the potential to read from the wrong variant
+<https://doc.rust-lang.org/reference/items/unions.html#reading-and-writing-union-fields>.
+I guess we will have to handle this using some kind of compile-time
+abstraction that handles this type differently depending on the R version
+being used.
+
+Cheers
+
+On Tue, Apr 4, 2023 at 12:15?AM Tomas Kalibera <tomas.kalibera at gmail.com>
+wrote:
+
+>
+> On 4/3/23 15:50, Michael Milton wrote:
+>
+> Okay, but I'm afraid this will only mean something to Rust users. The
+> reason being that we encountered this issue in extendr: a Rust extension
+> library for R. The specific compiler errors we encounter happen because
+> bindgen (the Rust code generation library) read the changed R header files,
+> and generated a new type definition for Rcomplex. Then, our downstream code
+> that uses that bindgen-generated code caused rustc compiler errors such as:
+>
+> error[E0560]: union `libR_sys::Rcomplex` has no field named `r`
+>   --> extendr-api\src\robj\into_robj.rs:93:20
+>    |
+> 93 |         Rcomplex { r: 0., i: 0. }
+>    |                    ^ `libR_sys::Rcomplex` does not have this field
+>    |
+>    = note: available fields are: `__bindgen_anon_1`, `private_data_c`
+>
+> and
+>
+> error[E0609]: no field `i` on type `libR_sys::Rcomplex`
+>    --> extendr-api\src\scalar\rcplx_default.rs:105:35
+>     |
+> 105 |         Rcplx(c64::new(val.r, val.i))
+>     |                                   ^ unknown field
+>     |
+>     = note: available fields are: `__bindgen_anon_1`, `private_data_c`
+> help: one of the expressions' fields has a field of the same name
+>     |
+> 105 |         Rcplx(c64::new(val.r, val.__bindgen_anon_1.i))
+>     |                                   +++++++++++++++++
+>
+> That seems like the generator does not support anonymous structures.
+> Thanks for letting me know, but I am afraid it is not something that could
+> be fixed on the R end.
+>
+> However, to put this into context, I would expect that C, C++ packages
+> would encounter a similar issue if they tried to access or modify specific
+> Rcomplex fields in the same way.
+>
+> No, you can access the fields as before in C (C11):
+>
+> Rcomplex z;
+>
+> z.r = 1; z.i = 2
+>
+> this is what anonymous structures allow, this is why the structure is
+> anonymous, not to break existing code.  The union there is to tell the
+> compiler about the aliasing, to prevent it from misoptimizing the code. As
+> far as I can tell this is valid C code, not a breaking change.
+>
+> The only issues I know about so far are that you get a warning for
+> initializations such as "z = {1, 2}", but still, they will be interpreted
+> correctly by the compiler within the standard. However, "z = { .r = 1, .i =
+> 2}" worked before and works with the change.
+>
+> The definition unfortunately is not valid C++, but works with C++ language
+> extensions supported at least by GCC and clang, yet you may see warnings. R
+> itself doesn't use C++, but some packages do.
+>
+> Please note your subject is not quite right: the layout of Rcomplex did
+> not change, at least not on systems supported by R. The layout is the same
+> on systems which use self-alignment of structures.
+>
+> Also please keep in mind R-devel is meant for unstable changes, it may not
+> work, things may be reverted, it is partially used for testing. I've still
+> tested this on all CRAN and Bioconductor packages before committing even to
+> R-devel, but this is not always done and cannot be due to how much
+> resources it takes. Obviously this will get a NEWS entry when/if it gets
+> ported to 4.3.0 branch, in the form it would have at that point.
+>
+> Best
+> Tomas
+>
+>
+>
+> On Mon, Apr 3, 2023 at 11:39?PM Tomas Kalibera <tomas.kalibera at gmail.com>
+> wrote:
+>
+>>
+>> On 4/3/23 14:07, Michael Milton wrote:
+>> > Hi all,
+>> >
+>> > There seems to have been a breaking change in the R trunk caused by a
+>> fix
+>> > to bug 18430 <https://bugs.r-project.org/show_bug.cgi?id=18430> that
+>> > relates to the layout of the Rcomplex typedef. Previously it was a
+>> struct,
+>> > but now it's a union by default
+>> > <
+>> https://github.com/r-devel/r-svn/commit/862f9f816ff3ff3cb3f851603f19e99f60a98475#diff-e9b09a44d9dc69444eca2300325e790a0cc6d2c8c3960f47519c7f8ef896f9e4
+>> >,
+>> > which breaks downstream code that relied on this layout. I'm aware of
+>> > the R_LEGACY_RCOMPLEX variable, but I still wouldn't expect an
+>> unreported
+>> > breaking change especially if it's aimed at R 4.3 (although I'm not
+>> sure if
+>> > it is). I believe src/include/R_ext/Complex.h, which this patch
+>> affects, is
+>> > considered part of the public R ABI since it's included by R.h.
+>> >
+>> > What should I, as a downstream package developer, do about this change?
+>>
+>> Please report the actual problem you have ran into.
+>>
+>> Thanks
+>> Tomas
+>>
+>> >
+>> > Cheers.
+>> >
+>> >       [[alternative HTML version deleted]]
+>> >
+>> > ______________________________________________
+>> > R-devel at r-project.org mailing list
+>> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+
+	[[alternative HTML version deleted]]
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue Apr  4 09:31:33 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 4 Apr 2023 09:31:33 +0200
+Subject: [Rd] Breaking Change in Rcomplex Layout?
+In-Reply-To: <CAPZyOo++tZ-ThaGq=Zj3HbiY-r3wH3x0jPOHKgWcJ9zU-FTYLA@mail.gmail.com>
+References: <CAPZyOoLG7Bgt0D_Nz-pdBv5k0_SmpFN9UuFE1-mKQxX76L=21g@mail.gmail.com>
+ <e8c052d6-50ae-002d-71ba-5e160b56d419@gmail.com>
+ <CAPZyOoL7rLbLHwQMziADwg_Dy-UGNScdwi3wf_RawWyU2Y4v-Q@mail.gmail.com>
+ <c90c269e-1fdd-b12d-263c-e8c4a92e08db@gmail.com>
+ <CAPZyOo++tZ-ThaGq=Zj3HbiY-r3wH3x0jPOHKgWcJ9zU-FTYLA@mail.gmail.com>
+Message-ID: <3787c02c-2f7a-96b7-3299-35734db89a0f@gmail.com>
+
+
+On 4/4/23 04:27, Michael Milton wrote:
+> Hi Tomas,
+>
+> Thanks for this explanation. As you can probably tell I'm not much of 
+> a C person, so I didn't realise this change would be invisible to C 
+> users. I suppose R's stability contract only applies to C, and 
+> therefore changes that break other languages such as Rust are out of 
+> scope. You are right that this error is confused by 
+> bindgen's?inability to handle anonymous types, but even without that 
+> it would be a breaking change in Rust because code that accesses r or 
+> c must now access the struct variant of the union and then access the 
+> struct field.
+Which I believe can be rephrased as that it also matters how Rust can 
+handle anonymous nested structures, or what is the right mapping of the 
+involved C types to Rust. I can't comment on that and it is definitely 
+out of scope of maintaining R, R just cares about its C interface. As 
+long as that is done right, correct mapping from C to other languages 
+should work as well.
+> Also, this code has to now be in an unsafe block because of the 
+> potential to read from the wrong variant 
+> <https://doc.rust-lang.org/reference/items/unions.html#reading-and-writing-union-fields>. 
+> I guess we will have to handle this using some kind of compile-time 
+> abstraction that handles this type differently depending on the R 
+> version being used.
+
+That's a Rust thing, but it is certainly worth making sure you don't 
+re-introduce the problem that R had before this change, on your end.
+
+Tomas
+
+>
+> Cheers
+>
+> On Tue, Apr 4, 2023 at 12:15?AM Tomas Kalibera 
+> <tomas.kalibera at gmail.com> wrote:
+>
+>
+>     On 4/3/23 15:50, Michael Milton wrote:
+>>     Okay, but I'm afraid this will only mean something to Rust users.
+>>     The reason being that we encountered this issue in extendr: a
+>>     Rust extension library for R. The specific compiler errors we
+>>     encounter happen because bindgen (the Rust code generation
+>>     library) read the changed R header files, and generated a new
+>>     type definition for Rcomplex. Then, our downstream code that uses
+>>     that bindgen-generated code caused rustc compiler errors such as:
+>>     |error[E0560]: union `libR_sys::Rcomplex` has no field named `r`
+>>     --> extendr-api\src\robj\into_robj.rs:93:20 | 93 | Rcomplex { r:
+>>     0., i: 0. } | ^ `libR_sys::Rcomplex` does not have this field | =
+>>     note: available fields are: `__bindgen_anon_1`, `private_data_c`|
+>>     and
+>>     |error[E0609]: no field `i` on type `libR_sys::Rcomplex` -->
+>>     extendr-api\src\scalar\rcplx_default.rs:105:35 | 105 |
+>>     Rcplx(c64::new(val.r, val.i)) | ^ unknown field | = note:
+>>     available fields are: `__bindgen_anon_1`, `private_data_c` help:
+>>     one of the expressions' fields has a field of the same name | 105
+>>     | Rcplx(c64::new(val.r, val.__bindgen_anon_1.i)) | +++++++++++++++++|
+>     That seems like the generator does not support anonymous
+>     structures. Thanks for letting me know, but I am afraid it is not
+>     something that could be fixed on the R end.
+>>     However, to put this into context, I would expect that C, C++
+>>     packages would encounter a similar issue if they tried to access
+>>     or modify specific Rcomplex?fields in the same way.
+>
+>     No, you can access the fields as before in C (C11):
+>
+>     Rcomplex z;
+>
+>     z.r = 1; z.i = 2
+>
+>     this is what anonymous structures allow, this is why the structure
+>     is anonymous, not to break existing code.? The union there is to
+>     tell the compiler about the aliasing, to prevent it from
+>     misoptimizing the code. As far as I can tell this is valid C code,
+>     not a breaking change.
+>
+>     The only issues I know about so far are that you get a warning for
+>     initializations such as "z = {1, 2}", but still, they will be
+>     interpreted correctly by the compiler within the standard.
+>     However, "z = { .r = 1, .i = 2}" worked before and works with the
+>     change.
+>
+>     The definition unfortunately is not valid C++, but works with C++
+>     language extensions supported at least by GCC and clang, yet you
+>     may see warnings. R itself doesn't use C++, but some packages do.
+>
+>     Please note your subject is not quite right: the layout of
+>     Rcomplex did not change, at least not on systems supported by R.
+>     The layout is the same on systems which use self-alignment of
+>     structures.
+>
+>     Also please keep in mind R-devel is meant for unstable changes, it
+>     may not work, things may be reverted, it is partially used for
+>     testing. I've still tested this on all CRAN and Bioconductor
+>     packages before committing even to R-devel, but this is not always
+>     done and cannot be due to how much resources it takes. Obviously
+>     this will get a NEWS entry when/if it gets ported to 4.3.0 branch,
+>     in the form it would have at that point.
+>
+>     Best
+>     Tomas
+>
+>
+>>
+>>     On Mon, Apr 3, 2023 at 11:39?PM Tomas Kalibera
+>>     <tomas.kalibera at gmail.com> wrote:
+>>
+>>
+>>         On 4/3/23 14:07, Michael Milton wrote:
+>>         > Hi all,
+>>         >
+>>         > There seems to have been a breaking change in the R trunk
+>>         caused by a fix
+>>         > to bug 18430
+>>         <https://bugs.r-project.org/show_bug.cgi?id=18430> that
+>>         > relates to the layout of the Rcomplex typedef. Previously
+>>         it was a struct,
+>>         > but now it's a union by default
+>>         >
+>>         <https://github.com/r-devel/r-svn/commit/862f9f816ff3ff3cb3f851603f19e99f60a98475#diff-e9b09a44d9dc69444eca2300325e790a0cc6d2c8c3960f47519c7f8ef896f9e4>,
+>>         > which breaks downstream code that relied on this layout.
+>>         I'm aware of
+>>         > the R_LEGACY_RCOMPLEX variable, but I still wouldn't expect
+>>         an unreported
+>>         > breaking change especially if it's aimed at R 4.3 (although
+>>         I'm not sure if
+>>         > it is). I believe src/include/R_ext/Complex.h, which this
+>>         patch affects, is
+>>         > considered part of the public R ABI since it's included by R.h.
+>>         >
+>>         > What should I, as a downstream package developer, do about
+>>         this change?
+>>
+>>         Please report the actual problem you have ran into.
+>>
+>>         Thanks
+>>         Tomas
+>>
+>>         >
+>>         > Cheers.
+>>         >
+>>         >? ? ? ?[[alternative HTML version deleted]]
+>>         >
+>>         > ______________________________________________
+>>         > R-devel at r-project.org mailing list
+>>         > https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+	[[alternative HTML version deleted]]
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Tue Apr  4 09:50:15 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Tue, 4 Apr 2023 10:50:15 +0300
+Subject: [Rd] Breaking Change in Rcomplex Layout?
+In-Reply-To: <3787c02c-2f7a-96b7-3299-35734db89a0f@gmail.com>
+References: <CAPZyOoLG7Bgt0D_Nz-pdBv5k0_SmpFN9UuFE1-mKQxX76L=21g@mail.gmail.com>
+ <e8c052d6-50ae-002d-71ba-5e160b56d419@gmail.com>
+ <CAPZyOoL7rLbLHwQMziADwg_Dy-UGNScdwi3wf_RawWyU2Y4v-Q@mail.gmail.com>
+ <c90c269e-1fdd-b12d-263c-e8c4a92e08db@gmail.com>
+ <CAPZyOo++tZ-ThaGq=Zj3HbiY-r3wH3x0jPOHKgWcJ9zU-FTYLA@mail.gmail.com>
+ <3787c02c-2f7a-96b7-3299-35734db89a0f@gmail.com>
+Message-ID: <20230404105015.2a1a65fa@Tarkus>
+
+On Tue, 4 Apr 2023 09:31:33 +0200
+Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+
+> it also matters how Rust can handle anonymous nested structures, or
+> what is the right mapping of the involved C types to Rust
+
+It's worth mentioning that Rust's RFC 2102 [1] defines unnamed structs
+and unions for the purpose of C interoperability, but it's not yet
+implemented.
+
+Would it help Rust's bindgen (and, potentially, other C declaration
+parsers) if R could optionally give a name to the anonymous union
+member, like it's done in Windows API [2]?
+
+-- 
+Best regards,
+Ivan
+
+[1] https://github.com/rust-lang/rust/issues/49804
+
+[2] https://devblogs.microsoft.com/oldnewthing/20170907-00/?p=96956
+
+
+From ttm|gue|tt @end|ng |rom gm@||@com  Tue Apr  4 11:27:03 2023
+From: ttm|gue|tt @end|ng |rom gm@||@com (Michael Milton)
+Date: Tue, 4 Apr 2023 19:27:03 +1000
+Subject: [Rd] Breaking Change in Rcomplex Layout?
+In-Reply-To: <20230404105015.2a1a65fa@Tarkus>
+References: <CAPZyOoLG7Bgt0D_Nz-pdBv5k0_SmpFN9UuFE1-mKQxX76L=21g@mail.gmail.com>
+ <e8c052d6-50ae-002d-71ba-5e160b56d419@gmail.com>
+ <CAPZyOoL7rLbLHwQMziADwg_Dy-UGNScdwi3wf_RawWyU2Y4v-Q@mail.gmail.com>
+ <c90c269e-1fdd-b12d-263c-e8c4a92e08db@gmail.com>
+ <CAPZyOo++tZ-ThaGq=Zj3HbiY-r3wH3x0jPOHKgWcJ9zU-FTYLA@mail.gmail.com>
+ <3787c02c-2f7a-96b7-3299-35734db89a0f@gmail.com>
+ <20230404105015.2a1a65fa@Tarkus>
+Message-ID: <CAPZyOoKxTKu20CCiVXZ2yCiUxZYPj0=MfM8bKDLJkNsMPU3Vag@mail.gmail.com>
+
+I don't think an auto-generated name (along the lines of u or u2) for the
+anonymous structs would be helpful here. You can see that bindgen is
+already generating a placeholder name ("__bindgen_anon_1"). A meaningful
+name might be nice instead, but I get the impression that isn't an option
+here since that would break the C API.
+
+Can I ask, would it make sense for us to hard code in R_LEGACY_RCOMPLEX so
+that Rust can just ignore the union? Because as I understand the only
+compiler that actually needs to "see" the union is gfortran, and if we
+pretend it's still a struct in Rust everything should work as before, no?
+Is this guaranteed to be a stable macro?
+
+On Tue, Apr 4, 2023 at 5:50?PM Ivan Krylov <krylov.r00t at gmail.com> wrote:
+
+> On Tue, 4 Apr 2023 09:31:33 +0200
+> Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+>
+> > it also matters how Rust can handle anonymous nested structures, or
+> > what is the right mapping of the involved C types to Rust
+>
+> It's worth mentioning that Rust's RFC 2102 [1] defines unnamed structs
+> and unions for the purpose of C interoperability, but it's not yet
+> implemented.
+>
+> Would it help Rust's bindgen (and, potentially, other C declaration
+> parsers) if R could optionally give a name to the anonymous union
+> member, like it's done in Windows API [2]?
+>
+> --
+> Best regards,
+> Ivan
+>
+> [1] https://github.com/rust-lang/rust/issues/49804
+>
+> [2] https://devblogs.microsoft.com/oldnewthing/20170907-00/?p=96956
+>
+
+	[[alternative HTML version deleted]]
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue Apr  4 14:48:11 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 4 Apr 2023 14:48:11 +0200
+Subject: [Rd] Breaking Change in Rcomplex Layout?
+In-Reply-To: <CAPZyOoKxTKu20CCiVXZ2yCiUxZYPj0=MfM8bKDLJkNsMPU3Vag@mail.gmail.com>
+References: <CAPZyOoLG7Bgt0D_Nz-pdBv5k0_SmpFN9UuFE1-mKQxX76L=21g@mail.gmail.com>
+ <e8c052d6-50ae-002d-71ba-5e160b56d419@gmail.com>
+ <CAPZyOoL7rLbLHwQMziADwg_Dy-UGNScdwi3wf_RawWyU2Y4v-Q@mail.gmail.com>
+ <c90c269e-1fdd-b12d-263c-e8c4a92e08db@gmail.com>
+ <CAPZyOo++tZ-ThaGq=Zj3HbiY-r3wH3x0jPOHKgWcJ9zU-FTYLA@mail.gmail.com>
+ <3787c02c-2f7a-96b7-3299-35734db89a0f@gmail.com>
+ <20230404105015.2a1a65fa@Tarkus>
+ <CAPZyOoKxTKu20CCiVXZ2yCiUxZYPj0=MfM8bKDLJkNsMPU3Vag@mail.gmail.com>
+Message-ID: <582bdd91-d8ce-dca6-8012-8cac64124d2d@gmail.com>
+
+
+On 4/4/23 11:27, Michael Milton wrote:
+> I don't think an auto-generated name (along the lines of u or u2) for 
+> the anonymous structs would be helpful here. You can see that bindgen 
+> is already generating a placeholder name ("__bindgen_anon_1"). A 
+> meaningful name might be nice instead, but I get the impression that 
+> isn't an option here since that would break the C API.
+>
+> Can I ask, would it make sense for us to hard code 
+> in?R_LEGACY_RCOMPLEX so that Rust can just ignore the union? Because 
+> as I understand the only compiler that actually needs to "see" the 
+> union is gfortran, and if we pretend it's still a struct in Rust 
+> everything should work as before, no? Is this guaranteed to be a 
+> stable macro?
+
+Not necessarily only gfortran, the problem arises anytime when an 
+Rcomplex value is (without explicit conversion) treated as C99 _Complex 
+double. The layout is (under some assumptions) the same, but not the 
+aliasing, so the information about that it can be treated as either 
+needs to be carried over. You would run into a similar problem when 
+calling say a library function expecting a C99 _Complex double, one 
+could argue it is not correct and one should do an explicit conversion, 
+but the question is how much code does it correctly. Then in theory 
+there could be LTO across C/Fortran/Rust and I can't rule out you 
+couldn't get to a similar situation (e.g. Rust calling Fortran). Ideally 
+really Rust should be able to translate this valid C11 code correctly.
+
+R_LEGACY_RCOMPLEX should not be used (as the comment says), but it could 
+help as a temporary work-around, for cases like you are facing now.? 
+Also, more about Rcomplex may have to change in R-devel (not for 4.3.0), 
+possibly requiring some API changes.
+
+In case clarification is needed, the Fortran compiler will not see the 
+definition of Rcomplex at all, it will use complex numbers as defined in 
+Fortran, and in case of gfortran this is C99 _Complex at least on the 
+interface to C. The definition is for the C compiler, which compiles 
+code using ".r" and ".i" to access real and imaginary parts of complex 
+numbers. When compiling this code, the C compiler will be made aware 
+that values set via ".r" and ".i" may also be accessed as C99 _Complex 
+double objects. It will also store this information in object files, in 
+the intermediate representation used during link-time optimizations. The 
+link-time optimizer will then know that e.g. when passing Rcomplex from 
+(originally) C to COMPLEX*16 in (originally) Fortran, values set on the 
+C side via ".r" and ".i" are visible on the Fortran side in a 
+corresponding array of COMPLEX. Without knowing that, the link-time 
+optimizer could remove say stores to the ".r" and ".i" when calling to 
+Fortran, this is what has been actually seen to happen.
+
+Tomas
+
+
+>
+> On Tue, Apr 4, 2023 at 5:50?PM Ivan Krylov <krylov.r00t at gmail.com> wrote:
+>
+>     On Tue, 4 Apr 2023 09:31:33 +0200
+>     Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+>
+>     > it also matters how Rust can handle anonymous nested structures, or
+>     > what is the right mapping of the involved C types to Rust
+>
+>     It's worth mentioning that Rust's RFC 2102 [1] defines unnamed structs
+>     and unions for the purpose of C interoperability, but it's not yet
+>     implemented.
+>
+>     Would it help Rust's bindgen (and, potentially, other C declaration
+>     parsers) if R could optionally give a name to the anonymous union
+>     member, like it's done in Windows API [2]?
+>
+>     -- 
+>     Best regards,
+>     Ivan
+>
+>     [1] https://github.com/rust-lang/rust/issues/49804
+>
+>     [2] https://devblogs.microsoft.com/oldnewthing/20170907-00/?p=96956
+>
+	[[alternative HTML version deleted]]
+
+
+From p@tr|ck@g|r@udoux @end|ng |rom un|v-|comte@|r  Wed Apr  5 07:48:54 2023
+From: p@tr|ck@g|r@udoux @end|ng |rom un|v-|comte@|r (Patrick Giraudoux)
+Date: Wed, 5 Apr 2023 07:48:54 +0200
+Subject: [Rd] path to rtools not updated in R 4.2.3 - line 1: gcc: command
+ not found
+Message-ID: <ba9b7201-fe6a-baed-6108-fc26529dd019@univ-fcomte.fr>
+
+Dear listers,
+
+I have update to rtools43 and, using R 4.2.3 I have been surprised not 
+to be able to compile packages needing compilation when updating.
+
+Looks like the path given in
+
+gcc? -I"C:/PROGRA~1/R/R-42~1.3/include" -DNDEBUG -DNTIMER 
+-I./SuiteSparse_config -DUSE_FC_LEN_T 
+-I"C:/rtools42/x86_64-w64-mingw32.static.posix/include"???? -O2 -Wall? 
+-std=gnu99 -mfpmath=sse -msse2 -mstackrealign? -c CHMfactor.c -o CHMfactor.o
+/bin/sh: line 1: gcc: command not found
+
+points to rtools42 by defaut
+
+I have fixed the issue changing the folder name rtools43 into rtools42, 
+but I wonder wether this is recommandable...
+
+
+	[[alternative HTML version deleted]]
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Wed Apr  5 08:27:27 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Wed, 5 Apr 2023 08:27:27 +0200
+Subject: [Rd] 
+ path to rtools not updated in R 4.2.3 - line 1: gcc: command
+ not found
+In-Reply-To: <ba9b7201-fe6a-baed-6108-fc26529dd019@univ-fcomte.fr>
+References: <ba9b7201-fe6a-baed-6108-fc26529dd019@univ-fcomte.fr>
+Message-ID: <34bf89ad-0fe2-5187-fc59-8b0676e2634a@gmail.com>
+
+
+On 4/5/23 07:48, Patrick Giraudoux wrote:
+> Dear listers,
+>
+> I have update to rtools43 and, using R 4.2.3 I have been surprised not
+> to be able to compile packages needing compilation when updating.
+>
+> Looks like the path given in
+>
+> gcc? -I"C:/PROGRA~1/R/R-42~1.3/include" -DNDEBUG -DNTIMER
+> -I./SuiteSparse_config -DUSE_FC_LEN_T
+> -I"C:/rtools42/x86_64-w64-mingw32.static.posix/include"???? -O2 -Wall
+> -std=gnu99 -mfpmath=sse -msse2 -mstackrealign? -c CHMfactor.c -o CHMfactor.o
+> /bin/sh: line 1: gcc: command not found
+>
+> points to rtools42 by defaut
+>
+> I have fixed the issue changing the folder name rtools43 into rtools42,
+> but I wonder wether this is recommandable...
+
+You should use Rtools42 with R 4.2.x. Rtools43 is currently for R-devel 
+and R 4.3.0alpha. You can have both Rtools42 and Rtools43 installed on 
+the same machine.
+
+Tomas
+
+>
+>
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Wed Apr  5 08:53:28 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Wed, 5 Apr 2023 09:53:28 +0300
+Subject: [Rd] removeSource() vs. function literals
+In-Reply-To: <509b2249-d533-6f15-5b14-c5cfb8218059@gmail.com>
+References: <20230330173239.72da4e14@arachnoid>
+ <509b2249-d533-6f15-5b14-c5cfb8218059@gmail.com>
+Message-ID: <20230405095328.0424a3ca@Tarkus>
+
+Thanks for the comments and sorry I didn't reply sooner!
+
+On Thu, 30 Mar 2023 12:38:24 -0400
+Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+
+> You'd need to recurse through all expressions in the object.  Some of
+> those expressions might be environments, so your changes could leak
+> out of the function you're working on.
+
+In my efforts to get arbitrary objects to hash consistently, I already
+walk them recursively, but I do stop at environments. (In theory, it
+could be possible to create mock environments with the same
+relationships between each other and then "fix up" and hash their
+contents, but it's hard to do right. Imagine environments e1 and e2
+where e1$other <- e2 and e2$other <- e1.)
+
+I think that removeSource() already walks language objects recursively,
+it just doesn't remove source references from unevaluated function
+expressions.
+
+> Things are simpler if you know the expression is the unmodified
+> result of parsing source code, but if you know that, wouldn't you
+> usually be able to control things by setting keep.source = FALSE?
+
+I receive the expression object from substitute(). The idea is to hash
+the expression, locate and hash its dependencies and then see if
+there's already a file named like the resulting hash. In theory, the
+user could be constructing elaborate scary-looking expressions and then
+calling my function on them, but I think I can be reasonably certain I
+get the calls straight from the parser. Unfortunately, this doesn't put
+me in a position to be controlling options(keep.source=...).
+
+> Maybe a workable solution is something like parse(deparse(expr,
+> control = "exact"), keep.source = FALSE).
+
+Thanks for this idea! At some point I was considering hashing text
+representations of objects, but then I got serialize()-hashing working
+and forgot about it.
+
+-- 
+Best regards,
+Ivan
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Wed Apr  5 09:03:03 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Wed, 5 Apr 2023 10:03:03 +0300
+Subject: [Rd] removeSource() vs. function literals
+In-Reply-To: <CAJf4E3pF-SOgch5AKgx2aLb27amSCd4wUuDhd-MokF9h8ggVQA@mail.gmail.com>
+References: <20230330173239.72da4e14@arachnoid>
+ <509b2249-d533-6f15-5b14-c5cfb8218059@gmail.com>
+ <CAJf4E3pF-SOgch5AKgx2aLb27amSCd4wUuDhd-MokF9h8ggVQA@mail.gmail.com>
+Message-ID: <20230405100303.75bc4a37@Tarkus>
+
+On Fri, 31 Mar 2023 08:49:53 +0200
+Lionel Henry <lionel at posit.co> wrote:
+
+> If you can afford a dependency on rlang, `rlang::zap_srcref()` deals
+> with this. It's recursive over expression vectors, calls (including
+> calls to `function` and their hidden srcref arg), and function
+> objects.
+
+Thanks for the suggestion! I hope that the source reference argument in
+the `function` calls is the last way a source reference could sneak by
+in an expression obtained using substitute().
+
+> It's implemented in C for efficiency as we found it to be a
+> bottleneck in some applications (IIRC caching). I'd be happy to
+> upstream this in base if R core is interested.
+
+A removeSource() that handles all the corner cases would be a nice
+improvement.
+
+-- 
+Best regards,
+Ivan
+
+
+From d@v|@ @end|ng |rom po@|t@co  Wed Apr  5 17:53:55 2023
+From: d@v|@ @end|ng |rom po@|t@co (Davis Vaughan)
+Date: Wed, 5 Apr 2023 11:53:55 -0400
+Subject: [Rd] An alternative algorithm for `which()`
+Message-ID: <CABzLhzzy82=y2cM1kJpN=QygcM6eZwGxPWPBo14KRQ0s5Qw6vw@mail.gmail.com>
+
+Hi all,
+
+I've sent in a bugzilla patch for an alternative C algorithm for
+`which()` which uses less memory and is often faster in many real life
+scenarios. I've documented it in full on the bugzilla page, with many
+examples:
+https://bugs.r-project.org/show_bug.cgi?id=18495
+
+The short version is that the performance comes from making the loops
+branchless, which seems to be particularly helpful for `which()`. With
+`which(x)`, I'd argue that branches are often hard for the compiler to
+predict since in most real data there is typically no indication that
+if the i-th element of `x` is `TRUE`, then the i+1-th element might
+also be `TRUE`.
+
+I've received a few comments on the bugzilla page, but I'd love it if
+anyone else could chime in and provide their own thoughts!
+
+Thanks,
+Davis Vaughan
+
+
