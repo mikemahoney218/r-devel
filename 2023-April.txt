@@ -1877,3 +1877,184 @@ Duncan Murdoch
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From dut@ngc @end|ng |rom gm@||@com  Mon Apr 10 09:08:05 2023
+From: dut@ngc @end|ng |rom gm@||@com (Christophe Dutang)
+Date: Mon, 10 Apr 2023 09:08:05 +0200
+Subject: [Rd] 
+ Error message for infinite probability parameters in rbinom()
+ and rmultinom()
+In-Reply-To: <3de0afd6-5c93-c396-d49b-9c5d80bc83e4@gmail.com>
+References: <3D1EFD77-1BA5-46E3-B69A-EE754906FAFD@gmail.com>
+ <25649.57928.875627.313028@stat.math.ethz.ch>
+ <3de0afd6-5c93-c396-d49b-9c5d80bc83e4@gmail.com>
+Message-ID: <E560E4A2-1157-49B3-8D56-F8116D037743@gmail.com>
+
+Thanks Duncan and Martin for your answer.
+
+> Le 9 avr. 2023 ? 00:33, Duncan Murdoch <murdoch.duncan at gmail.com> a ?crit :
+> 
+> On 08/04/2023 5:53 p.m., Martin Maechler wrote:
+>>>>>>> Christophe Dutang
+>>>>>>>     on Sat, 8 Apr 2023 14:21:53 +0200 writes:
+>>     > Dear all,
+>>     > Using rmultinom() in a stochastic model, I found this function returns an error message 'NA in probability' for an infinite probability.
+>>     > Maybe, a more precise message will be helpful when debugging.
+>>     >> rmultinom(1, 3:5, c(1/2, 1/3, Inf))
+>>     > Error in rmultinom(1, 3:5, c(1/2, 1/3, Inf)) : NA in probability vector
+>>     >> rmultinom(1, 3:5, c(1/2, 1/3, NA))
+>>     > Error in rmultinom(1, 3:5, c(1/2, 1/3, NA)) : NA in probability vector
+>> Thank you.
+>> I agree the first ('Inf') should not do what it currently does,
+>> and probably the 2nd one should neither give an error.
+>> Note that in rmultinom,  the 'prob' is allowed to be *NOT*
+>> scaled to sum(.) = 1.
+>> Therefore 'Inf' makes sense as the limit (of a sequence) of (a)
+>> very large number(s).
+>> I claim that
+>>   rmultinom(1, 3, c(1/2, 1/3, Inf))
+>> should give the same as
+>>   rmultinom(1, 3, c(1/2, 1/3, 1e300))
+>> even without a warning,
+> 
+> That case makes sense, but is it worth the effort?  Certainly
+> 
+>    rmultinom(1, 3, c(1/2, Inf, Inf))
+> 
+> can't give a useful answer because we don't know the relative size of the two infinities.  
+
+
+I think any infinite values in the probability vector or in the size vector should return NaN.
+
+
+> I imagine the first NA comes from computing prob/sum(prob), which is c(0, 0, NaN).
+
+Line 73 of rmultinom.c check for probability in [0,1] and throw an error by calling C macro ML_WARN_ret_NAN() which return NA or -1.
+
+I also notice that rbinom() throws a warning and not an error (for prob not in [0,1] or missing), e.g. 
+
+> rbinom(4, 2:5, c(1/2, -1, Inf, NA))
+[1]  2 NA NA NA
+
+Maybe, only the man page should be updated in the Value field and state that NA is returned when parameter are not correct. By the way, in ?dbinom, it is said 'If size is not an integer, NaN is returned.' which is not true for rbinom() and qbinom(), but only for dbinom() and pbinom().
+
+Thanks in advance for your work
+
+Kind regards, Christophe 
+
+> 
+> Duncan Murdoch
+> 
+> > and OTOH,  an NA in prob may return NA (and signal a warning)
+> > instead of an error.
+>>     > For rgeom() or rbinom(), we got a warning for infinite probability :
+>> Yes, but there, prob must be in [0,1] ... so that's somewhat differnt.
+>>     >> rbinom(1, 3, Inf)
+>>     > [1] NA
+>>     > Warning message:
+>>     > In rbinom(1, 3, Inf) : NAs produced
+>>     >> rbinom(1, 3, NA)
+>>     > [1] NA
+>>     > Warning message:
+>>     > In rbinom(1, 3, NA) : NAs produced
+>>     >> rgeom(1, Inf)
+>>     > [1] NA
+>>     > Warning message:
+>>     > In rgeom(1, Inf) : NAs produced
+>>     >> rgeom(1, NA)
+>>     > [1] NA
+>>     > Warning message:
+>>     > In rgeom(1, NA) : NAs produced
+>>     > Maybe, it could be better to harmonize the behavior for infinite probability.
+>>     > Kind regards, Christophe
+>>     >> sessionInfo()
+>>     > R version 4.2.3 (2023-03-15)
+>>     > Platform: aarch64-apple-darwin20 (64-bit)
+>>     > Running under: macOS Ventura 13.2.1
+>>     > Matrix products: default
+>>     > BLAS:   /Library/Frameworks/R.framework/Versions/4.2-arm64/Resources/lib/libRblas.0.dylib
+>>     > LAPACK: /Library/Frameworks/R.framework/Versions/4.2-arm64/Resources/lib/libRlapack.dylib
+>>     > locale:
+>>     > [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+>>     > attached base packages:
+>>     > [1] stats     graphics  grDevices utils     datasets  methods   base
+>>     > loaded via a namespace (and not attached):
+>>     > [1] compiler_4.2.3 tools_4.2.3
+>>     > -------------------------------------------------
+>>     > Christophe DUTANG
+>>     > LJK, Ensimag, Grenoble INP, UGA, France
+>>     > Web: http://dutangc.free.fr
+>>     > ______________________________________________
+>>     > R-devel at r-project.org mailing list
+>>     > https://stat.ethz.ch/mailman/listinfo/r-devel
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
+From dj@@mper| @end|ng |rom gm@||@com  Mon Apr 10 16:23:09 2023
+From: dj@@mper| @end|ng |rom gm@||@com (Dominick Samperi)
+Date: Mon, 10 Apr 2023 10:23:09 -0400
+Subject: [Rd] Archive policy and Rcpp?
+Message-ID: <CADUbQ5j6MyuvBLJ_eXccMSF-hjjE4GnecDkKUyQ_-EV9Ly5noQ@mail.gmail.com>
+
+It appears that my archived packages Rcpp and RcppTemplate have
+been removed at CRAN, yet they appeared in the CRAN archives
+until recently.
+
+What is the CRAN policy on archives and removal?
+
+Thanks,
+Dominick
+
+	[[alternative HTML version deleted]]
+
+
+From m@rc_@chw@rtz @end|ng |rom me@com  Mon Apr 10 22:35:18 2023
+From: m@rc_@chw@rtz @end|ng |rom me@com (Marc Schwartz)
+Date: Mon, 10 Apr 2023 16:35:18 -0400
+Subject: [Rd] Archive policy and Rcpp?
+In-Reply-To: <CADUbQ5j6MyuvBLJ_eXccMSF-hjjE4GnecDkKUyQ_-EV9Ly5noQ@mail.gmail.com>
+References: <CADUbQ5j6MyuvBLJ_eXccMSF-hjjE4GnecDkKUyQ_-EV9Ly5noQ@mail.gmail.com>
+Message-ID: <etPan.64347306.aaff9a4.508@me.com>
+
+Hi Dominick,
+
+While somebody from CRAN might eventually reply here, your query is actually OT for R-Devel, which has been, since circa 2015, focused on more technical code development (e.g. C/C++/FORTRAN, etc.) and core R development issues, rather than on CRAN and package development related topics.
+
+A better option for questions on package development/CRAN related topics would be to post to R-Package-Devel:
+
+??https://stat.ethz.ch/mailman/listinfo/r-package-devel
+
+or perhaps better yet in this specific case, directly to the CRAN folks at?CRAN at R-project.org.
+
+FWIW, my read of the CRAN policy at:
+
+??https://cran.r-project.org/web/packages/policies.html
+
+would suggest that there is an expectation that older versions of packages are "archived in perpetuity".
+
+Regards,
+
+Marc Schwartz
+R-Devel Co-Admin
+
+
+On April 10, 2023 at 10:23:09 AM, Dominick Samperi (djsamperi at gmail.com (mailto:djsamperi at gmail.com)) wrote:
+
+> It appears that my archived packages Rcpp and RcppTemplate have
+> been removed at CRAN, yet they appeared in the CRAN archives
+> until recently.
+>
+> What is the CRAN policy on archives and removal?
+>
+> Thanks,
+> Dominick
+>
+> [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
