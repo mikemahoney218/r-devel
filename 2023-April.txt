@@ -2058,3 +2058,168 @@ On April 10, 2023 at 10:23:09 AM, Dominick Samperi (djsamperi at gmail.com (mail
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From kry|ov@r00t @end|ng |rom gm@||@com  Fri Apr 14 12:38:00 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Fri, 14 Apr 2023 13:38:00 +0300
+Subject: [Rd] sum(), min(), max(), prod() vs. named arguments in ...
+Message-ID: <20230414133800.75383dae@arachnoid>
+
+
+Hello R-devel,
+
+As mentioned on Fosstodon [1] and discussed during RCOH [2], named
+arguments to sum(), min(), max() and prod() are currently processed the
+same way as the un-named ones. Additionally, when specifying the na.rm
+argument more than once, the last specified value is silently taken
+into account.
+
+Most of this behaviour is exactly as documented, but it's arguably a
+source of mistakes when the na.rm=TRUE argument is mistyped and
+converted to 1.
+
+Internally, all these calls land in do_summary(), and the na.rm
+argument is processed by fixup_NaRm(). mean() is safe because it's
+dispatched via S3 lookup.
+
+Do users normally name their arguments to sum()? If not, it could be
+relatively safe to make it a warning to pass named arguments to sum()
+that are not na.rm and later transition it to an error:
+
+--- src/main/summary.c	(revision 84252)
++++ src/main/summary.c	(working copy)
+@@ -419,6 +419,8 @@
+ 	    na_value = CAR(a);
+ 	    if(prev == R_NilValue) args = CDR(a);
+ 	    else SETCDR(prev, CDR(a));
++	} else if (TAG(a) && TAG(a) != R_NilValue) {
++	    warning("Named argument \"%s\" here is probably a mistake", CHAR(PRINTNAME(TAG(a))));
+ 	}
+ 	prev = a;
+     }
+
+(Can TAG(a) ever be NULL or anything other than R_NilValue or a symbol
+here? We'll probably need to translate this message, too.)
+
+Passing na.rm more than once could be made into an error right away:
+
+--- src/main/summary.c	(revision 84252)
++++ src/main/summary.c	(working copy)
+@@ -409,6 +409,7 @@
+ attribute_hidden
+ SEXP fixup_NaRm(SEXP args)
+ {
++    Rboolean seen_NaRm = FALSE;
+     SEXP t, na_value;
+ 
+     /* Need to make sure na.rm is last and exists */
+@@ -415,7 +416,9 @@
+     na_value = ScalarLogical(FALSE);
+     for(SEXP a = args, prev = R_NilValue; a != R_NilValue; a = CDR(a)) {
+ 	if(TAG(a) == R_NaRmSymbol) {
++	    if(seen_NaRm) error("Please specify na.rm only once");
++	    seen_NaRm = TRUE;
+ 	    if(CDR(a) == R_NilValue) return args;
+ 	    na_value = CAR(a);
+ 	    if(prev == R_NilValue) args = CDR(a);
+ 	    else SETCDR(prev, CDR(a));
+
+(Can we use error(_("formal argument \"%s\" matched by multiple actual
+arguments"), "na.rm") to emit an already translated error message?)
+
+Additionally, is it desirable to have S3 methods for sum() and its
+friends? Currently, they are dispatched, but something confusing
+happens to the arguments: according to the method, the dots contain
+what I would expect them to contain (only the numbers to sum), but when
+calling NextMethod() to compute the actual sum, extra arguments get
+processed:
+
+sum.foo <- function(..., ExtraArg = 999, na.rm = FALSE) {
+ print(ExtraArg)
+ str(...)
+ NextMethod(generic = 'sum', ..., na.rm = na.rm)
+}
+sum(structure(100, class = 'foo'))
+# [1] 999
+#  'foo' num 100
+# [1] 100
+sum(structure(100, class = 'foo'), ExtraArg = -1)
+# [1] -1
+#  'foo' num 100 # <-- ExtraArg = -1 missing from ...
+# [1] 99         # <-- but still subtracted
+
+Maybe I'm just misusing NextMethod(). This is probably not important in
+practice due to how S3 dispatch works.
+
+-- 
+Best regards,
+Ivan
+
+[1]
+https://fosstodon.org/@nibsalot/110105034507818285
+
+[2]
+https://github.com/r-devel/rcontribution/blob/main/office_hours/2023-04-13_EMEA-APAC.md
+
+
+From d@v|@ @end|ng |rom po@|t@co  Fri Apr 14 18:29:32 2023
+From: d@v|@ @end|ng |rom po@|t@co (Davis Vaughan)
+Date: Fri, 14 Apr 2023 12:29:32 -0400
+Subject: [Rd] Possible inconsistency between `as.complex(NA_real_)` and the
+ docs
+Message-ID: <CABzLhzyh8bFX8iGkXdY1g-gD35-yP89RjsiKd1d+GA8+qBbEFg@mail.gmail.com>
+
+Hi all,
+
+Surprisingly (at least to me), `as.complex(NA_real_)` results in
+`complex(real = NA_real_, imaginary = 0)` rather than `NA_complex_`.
+
+It seems to me that this goes against the docs of `as.complex()`,
+which say this in the Details section:
+
+"Up to R versions 3.2.x, all forms of NA and NaN were coerced to a
+complex NA, i.e., the NA_complex_ constant, for which both the real
+and imaginary parts are NA. Since R 3.3.0, typically only objects
+which are NA in parts are coerced to complex NA, but others with NaN
+parts, are not. As a consequence, complex arithmetic where only NaN's
+(but no NA's) are involved typically will not give complex NA but
+complex numbers with real or imaginary parts of NaN."
+
+To me this suggests that `NA_real_`, which is "NA in parts", should
+have been coerced to "complex NA".
+
+`NA_integer_` is actually coerced to `NA_complex_`, which to me is
+further evidence that `NA_real_` should have been as well.
+
+Here is the original commit where this behavior was changed in R 3.3.0:
+https://github.com/wch/r-source/commit/4a4c2052e5a541981a249d4fcf92b54ca7f0a2df
+
+```
+# This is expected, based on the docs
+x <- as.complex(NaN)
+Re(x)
+#> [1] NaN
+Im(x)
+#> [1] 0
+
+# This is not expected. The docs say:
+# "Since R 3.3.0, typically only objects which are NA in parts are
+coerced to complex NA"
+# but that doesn't seem true for `NA_real_`.
+x <- as.complex(NA_real_)
+Re(x)
+#> [1] NA
+Im(x)
+#> [1] 0
+
+# It does seem to be the case for `NA_integer_`
+x <- as.complex(NA_integer_)
+Re(x)
+#> [1] NA
+Im(x)
+#> [1] NA
+```
+
+Thanks,
+Davis Vaughan
+
+
