@@ -2223,3 +2223,276 @@ Thanks,
 Davis Vaughan
 
 
+From @osp@m m@iii@g oii @itieid-im@de  Sun Apr 16 12:56:58 2023
+From: @osp@m m@iii@g oii @itieid-im@de (@osp@m m@iii@g oii @itieid-im@de)
+Date: Sun, 16 Apr 2023 12:56:58 +0200
+Subject: [Rd] Unique ID for conditions to supress/rethrow selected
+ conditions?
+Message-ID: <7aec819921187169a324e2d7481af0cb963ef3a4.camel@altfeld-im.de>
+
+I am the author of the *tryCatchLog* package and want to
+
+- suppress selected conditions (warnings and messages)
+- rethrow  selected conditions (e.g a specific warning as a message or to "rename" the condition text).
+
+I could not find any reliable unique identifier for each possible condition
+
+- that (base) R throws
+- that 3rd-party packages can throw (out of scope here).
+
+
+
+Is there any reliable way to identify each possible condition of base R?
+
+Are there plans to implement such an identifier ("errno")?
+
+
+
+PS: Things that do not work good enough IMHO:
+
+    1. Just use the condition classes (not really unique to distiguish between each and every condition))
+
+    2. Try to match the condition text
+       (it depends on the active language setting in R which cannot be switched "on the fly" on each platform
+        and wordings or translations may even change in the future)
+
+
+From |uc@r @end|ng |rom |edor@project@org  Sun Apr 16 13:52:50 2023
+From: |uc@r @end|ng |rom |edor@project@org (=?UTF-8?Q?I=C3=B1aki_Ucar?=)
+Date: Sun, 16 Apr 2023 13:52:50 +0200
+Subject: [Rd] Unique ID for conditions to supress/rethrow selected
+ conditions?
+In-Reply-To: <7aec819921187169a324e2d7481af0cb963ef3a4.camel@altfeld-im.de>
+References: <7aec819921187169a324e2d7481af0cb963ef3a4.camel@altfeld-im.de>
+Message-ID: <CALEXWq2b0aZCeodwgk8tdVqnEC0j8m38HbfBh65HxCw7HhWsOg@mail.gmail.com>
+
+On Sun, 16 Apr 2023 at 12:58, nospam at altfeld-im.de <nospam at altfeld-im.de> wrote:
+>
+> I am the author of the *tryCatchLog* package and want to
+>
+> - suppress selected conditions (warnings and messages)
+> - rethrow  selected conditions (e.g a specific warning as a message or to "rename" the condition text).
+>
+> I could not find any reliable unique identifier for each possible condition
+>
+> - that (base) R throws
+> - that 3rd-party packages can throw (out of scope here).
+>
+> Is there any reliable way to identify each possible condition of base R?
+
+I don't think so. As stated in the manual, "?simpleError? is the class
+used by ?stop? and all internal error signals".
+
+> Are there plans to implement such an identifier ("errno")?
+
+I agree that something like this would be a nice addition. With the
+current condition system, it would be certainly easy (but quite a lot
+of work) to define a hierarchy of built-in conditions, and then use
+them consistently throughout base R. For example,
+
+> 1 + "a"
+Error in 1 + "a" : non-numeric argument to binary operator
+
+could be a "typeError". And catching this is already possible:
+
+> e <- errorCondition("non-numeric argument to binary operator", class="typeError")
+> tryCatch(stop(e), typeError=function(e) print("hello"))
+[1] "hello"
+
+-- 
+I?aki ?car
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sun Apr 16 14:12:31 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sun, 16 Apr 2023 08:12:31 -0400
+Subject: [Rd] Unique ID for conditions to supress/rethrow selected
+ conditions?
+In-Reply-To: <7aec819921187169a324e2d7481af0cb963ef3a4.camel@altfeld-im.de>
+References: <7aec819921187169a324e2d7481af0cb963ef3a4.camel@altfeld-im.de>
+Message-ID: <352f33f2-23b9-05d8-cc82-842a8311319c@gmail.com>
+
+As far as I know there are no reliable unique identifiers.
+
+There appears to be a general drift towards classed conditions, but so 
+far only a small subset of conditions are generated that way (and to 
+tell you the truth, I forget how to detect one, even though I 
+contributed some of them to the parser.  One example (I forget whether I 
+wrote this one or not) is
+
+https://github.com/r-devel/r-svn/blob/cf233857df61549b71eb466ceab7d081424833d6/src/main/gram.y#L1328
+
+which raises an error with class c("pipebindDisabled", "parseError", 
+"error", "condition").
+
+For some conditions, it might be sufficient to generate the condition 
+and then use (part of) the generated message as the identifier.  But 
+that's not going to always be possible.
+
+Duncan Murdoch
+
+
+
+On 16/04/2023 6:56 a.m., nospam at altfeld-im.de wrote:
+> I am the author of the *tryCatchLog* package and want to
+> 
+> - suppress selected conditions (warnings and messages)
+> - rethrow  selected conditions (e.g a specific warning as a message or to "rename" the condition text).
+> 
+> I could not find any reliable unique identifier for each possible condition
+> 
+> - that (base) R throws
+> - that 3rd-party packages can throw (out of scope here).
+> 
+> 
+> 
+> Is there any reliable way to identify each possible condition of base R?
+> 
+> Are there plans to implement such an identifier ("errno")?
+> 
+> 
+> 
+> PS: Things that do not work good enough IMHO:
+> 
+>      1. Just use the condition classes (not really unique to distiguish between each and every condition))
+> 
+>      2. Try to match the condition text
+>         (it depends on the active language setting in R which cannot be switched "on the fly" on each platform
+>          and wordings or translations may even change in the future)
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @osp@m m@iii@g oii @itieid-im@de  Sun Apr 16 16:49:04 2023
+From: @osp@m m@iii@g oii @itieid-im@de (@osp@m m@iii@g oii @itieid-im@de)
+Date: Sun, 16 Apr 2023 16:49:04 +0200
+Subject: [Rd] Unique ID for conditions to supress/rethrow selected
+ conditions?
+In-Reply-To: <CALEXWq2b0aZCeodwgk8tdVqnEC0j8m38HbfBh65HxCw7HhWsOg@mail.gmail.com>
+References: <7aec819921187169a324e2d7481af0cb963ef3a4.camel@altfeld-im.de>
+ <CALEXWq2b0aZCeodwgk8tdVqnEC0j8m38HbfBh65HxCw7HhWsOg@mail.gmail.com>
+Message-ID: <c71c585d7c63b14f10a1a1f7967ad75e0a9981fd.camel@altfeld-im.de>
+
+On Sun, 2023-04-16 at 13:52 +0200, I?aki Ucar wrote:
+
+> I agree that something like this would be a nice addition. With the
+> current condition system, it would be certainly easy (but quite a lot
+> of work) to define a hierarchy of built-in conditions, and then use
+> them consistently throughout base R.
+
+Yes, a typed condition system would be great.
+
+I have two other ideas:
+
+
+
+By reading the "R messages" and "preparing translactions" sections of the "R extensions manual"
+
+https://cran.r-project.org/doc/manuals/r-release/R-exts.html#R-messages
+
+I was thinking about using the "unique" R message texts (which are the msgid in the *.po files,
+see e.g. https://github.com/r-devel/r-svn/blob/60a4db2171835067999e96fd2751b6b42c6a6ebc/src/library/base/po/de.po#L892)
+to maintain a unique ID (not dependent on the actual translation into the current language).
+
+A "simple" solution could be to pre- or postfix each message text with an ID, for example this code here
+
+     else errorcall(call, _("non-numeric argument to function"));
+     # https://github.com/r-devel/r-svn/blob/49597237842697595755415cf9147da26c8d1088/src/main/complex.c#L347
+
+would become
+
+     else errorcall(call, _("non-numeric argument to function [47]"));
+or
+     else errorcall(call, _("[47] non-numeric argument to function"));
+
+Now the ID could be extracted more easily (at least for base R condition messages)...
+
+This would even be back-portable to older R versions to make condition IDs broadly available "in the wild".
+
+
+
+Another way to introduce an ID for each condition in base R would be ("the hard way")
+
+1) by refactoring each and every code location with an embedded message string to use a centralized
+   key/msg_text data structure to "look up" the appropriate message text and
+
+2) use the key to enrich the condition as unique ID (e.g. as an attribute in the condition object).
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sun Apr 16 17:27:37 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sun, 16 Apr 2023 11:27:37 -0400
+Subject: [Rd] Unique ID for conditions to supress/rethrow selected
+ conditions?
+In-Reply-To: <c71c585d7c63b14f10a1a1f7967ad75e0a9981fd.camel@altfeld-im.de>
+References: <7aec819921187169a324e2d7481af0cb963ef3a4.camel@altfeld-im.de>
+ <CALEXWq2b0aZCeodwgk8tdVqnEC0j8m38HbfBh65HxCw7HhWsOg@mail.gmail.com>
+ <c71c585d7c63b14f10a1a1f7967ad75e0a9981fd.camel@altfeld-im.de>
+Message-ID: <6ebf5e5d-acdd-7f8c-3ed7-6aa537f8a23d@gmail.com>
+
+On 16/04/2023 10:49 a.m., nospam at altfeld-im.de wrote:
+> On Sun, 2023-04-16 at 13:52 +0200, I?aki Ucar wrote:
+> 
+>> I agree that something like this would be a nice addition. With the
+>> current condition system, it would be certainly easy (but quite a lot
+>> of work) to define a hierarchy of built-in conditions, and then use
+>> them consistently throughout base R.
+> 
+> Yes, a typed condition system would be great.
+
+Why don't you contribute some patches to the sources to implement it in 
+some particular area?  You can follow the pattern that is used in the 
+gram.y file:  identify a class of messages, and what information is 
+useful in them.  Write a function or functions to generate errors or 
+warnings with that class, and possibly a subclass.  Then replace each 
+error() and warning() call in some group of functions with a call to 
+your function(s).
+
+Even better, since that's a lot of work:  propose it as a project to be 
+funded by the R Foundation, or as a shorter project in some other way. 
+There are now quite a number of ways to contribute to R, e.g. see
+
+   https://github.com/r-devel/rdevguide
+
+Duncan Murdoch
+
+> I have two other ideas:
+> 
+> 
+> 
+> By reading the "R messages" and "preparing translactions" sections of the "R extensions manual"
+> 
+> https://cran.r-project.org/doc/manuals/r-release/R-exts.html#R-messages
+> 
+> I was thinking about using the "unique" R message texts (which are the msgid in the *.po files,
+> see e.g. https://github.com/r-devel/r-svn/blob/60a4db2171835067999e96fd2751b6b42c6a6ebc/src/library/base/po/de.po#L892)
+> to maintain a unique ID (not dependent on the actual translation into the current language).
+> 
+> A "simple" solution could be to pre- or postfix each message text with an ID, for example this code here
+> 
+>       else errorcall(call, _("non-numeric argument to function"));
+>       # https://github.com/r-devel/r-svn/blob/49597237842697595755415cf9147da26c8d1088/src/main/complex.c#L347
+> 
+> would become
+> 
+>       else errorcall(call, _("non-numeric argument to function [47]"));
+> or
+>       else errorcall(call, _("[47] non-numeric argument to function"));
+> 
+> Now the ID could be extracted more easily (at least for base R condition messages)...
+> 
+> This would even be back-portable to older R versions to make condition IDs broadly available "in the wild".
+> Another way to introduce an ID for each condition in base R would be ("the hard way")
+> 
+> 1) by refactoring each and every code location with an embedded message string to use a centralized
+>     key/msg_text data structure to "look up" the appropriate message text and
+> 
+> 2) use the key to enrich the condition as unique ID (e.g. as an attribute in the condition object).
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
