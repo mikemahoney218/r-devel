@@ -2526,3 +2526,147 @@ Best regards,
 Ivan
 
 
+From j@g@nmn2 @end|ng |rom gm@||@com  Sun Apr 16 07:34:33 2023
+From: j@g@nmn2 @end|ng |rom gm@||@com (Mikael Jagan)
+Date: Sun, 16 Apr 2023 01:34:33 -0400
+Subject: [Rd] sum(), min(), max(), prod() vs. named arguments in ...
+In-Reply-To: <mailman.53413.3.1681552802.34617.r-devel@r-project.org>
+References: <mailman.53413.3.1681552802.34617.r-devel@r-project.org>
+Message-ID: <60e67e27-f486-fa00-f102-d1a149b8413f-2181@gmail.com>
+
+
+
+
+On 2023-04-15 6:00 am, r-devel-request at r-project.org wrote:
+> Date: Fri, 14 Apr 2023 13:38:00 +0300
+> From: Ivan Krylov<krylov.r00t at gmail.com>
+> To:r-devel at r-project.org
+> Subject: [Rd] sum(), min(), max(), prod() vs. named arguments in ...
+Message-ID: <20230414133800.75383dae-6792 at arachnoid>
+> Content-Type: text/plain; charset="us-ascii"
+> 
+> 
+> Hello R-devel,
+> 
+> As mentioned on Fosstodon [1] and discussed during RCOH [2], named
+> arguments to sum(), min(), max() and prod() are currently processed the
+> same way as the un-named ones. Additionally, when specifying the na.rm
+> argument more than once, the last specified value is silently taken
+> into account.
+> 
+> Most of this behaviour is exactly as documented, but it's arguably a
+> source of mistakes when the na.rm=TRUE argument is mistyped and
+> converted to 1.
+> 
+> Internally, all these calls land in do_summary(), and the na.rm
+> argument is processed by fixup_NaRm(). mean() is safe because it's
+> dispatched via S3 lookup.
+> 
+> Do users normally name their arguments to sum()? If not, it could be
+> relatively safe to make it a warning to pass named arguments to sum()
+> that are not na.rm and later transition it to an error:
+> 
+
+Forbidding or warning against tagged arguments other than 'na.rm' would be
+quite intrusive, since it is not uncommon to see do.call(sum, <named list>).
+
+> --- src/main/summary.c	(revision 84252)
+> +++ src/main/summary.c	(working copy)
+> @@ -419,6 +419,8 @@
+>   	    na_value = CAR(a);
+>   	    if(prev == R_NilValue) args = CDR(a);
+>   	    else SETCDR(prev, CDR(a));
+> +	} else if (TAG(a) && TAG(a) != R_NilValue) {
+> +	    warning("Named argument \"%s\" here is probably a mistake", CHAR(PRINTNAME(TAG(a))));
+>   	}
+>   	prev = a;
+>       }
+> 
+> (Can TAG(a) ever be NULL or anything other than R_NilValue or a symbol
+> here? We'll probably need to translate this message, too.)
+> 
+> Passing na.rm more than once could be made into an error right away:
+> 
+
+That would be much easier to support, as users should be accustomed to that
+_not_ working.
+
+> --- src/main/summary.c	(revision 84252)
+> +++ src/main/summary.c	(working copy)
+> @@ -409,6 +409,7 @@
+>   attribute_hidden
+>   SEXP fixup_NaRm(SEXP args)
+>   {
+> +    Rboolean seen_NaRm = FALSE;
+>       SEXP t, na_value;
+>   
+>       /* Need to make sure na.rm is last and exists */
+> @@ -415,7 +416,9 @@
+>       na_value = ScalarLogical(FALSE);
+>       for(SEXP a = args, prev = R_NilValue; a != R_NilValue; a = CDR(a)) {
+>   	if(TAG(a) == R_NaRmSymbol) {
+> +	    if(seen_NaRm) error("Please specify na.rm only once");
+> +	    seen_NaRm = TRUE;
+>   	    if(CDR(a) == R_NilValue) return args;
+>   	    na_value = CAR(a);
+>   	    if(prev == R_NilValue) args = CDR(a);
+>   	    else SETCDR(prev, CDR(a));
+> 
+> (Can we use error(_("formal argument \"%s\" matched by multiple actual
+> arguments"), "na.rm") to emit an already translated error message?)
+> 
+> Additionally, is it desirable to have S3 methods for sum() and its
+> friends? Currently, they are dispatched, but something confusing
+> happens to the arguments: according to the method, the dots contain
+> what I would expect them to contain (only the numbers to sum), but when
+> calling NextMethod() to compute the actual sum, extra arguments get
+> processed:
+> 
+> sum.foo <- function(..., ExtraArg = 999, na.rm = FALSE) {
+>   print(ExtraArg)
+>   str(...)
+>   NextMethod(generic = 'sum', ..., na.rm = na.rm)
+> }
+> sum(structure(100, class = 'foo'))
+> # [1] 999
+> #  'foo' num 100
+> # [1] 100
+> sum(structure(100, class = 'foo'), ExtraArg = -1)
+> # [1] -1
+> #  'foo' num 100 # <-- ExtraArg = -1 missing from ...
+> # [1] 99         # <-- but still subtracted
+> 
+
+str(...) only gives the structure of the first argument matching the dots.
+'ExtraArg' doesn't match the dots, as you say, but even if it did, it would
+be discarded silently by 'str' there.  Better would be, e.g., str(list(...)).
+
+> Maybe I'm just misusing NextMethod(). This is probably not important in
+> practice due to how S3 dispatch works.
+> 
+
+In both of your examples, just one named "actual" matches the "formal" '...'
+in the call to 'NextMethod': the promise 'na.rm' evaluating to FALSE.
+
+Named actuals matching the formal '...' are used to update the original call:
+
+         sum(structure(100, class = 'foo'))
+     ==> sum(structure(100, class = 'foo'), na.rm = na.rm)
+
+         sum(structure(100, class = 'foo'), ExtraArg = -1)
+     ==> sum(structure(100, class = 'foo'), ExtraArg = -1, na.rm = na.rm)
+
+The new call is evaluated, this time dispatching the internal default method,
+giving the results that you observed.
+
+FWIW, help("NextMethod") does warn:
+
+     When a primitive is called as the default method, argument matching may
+     not work as described above due to the different semantics of primitives.
+
+Mikael
+
+> -- Best regards, Ivan [1] https://fosstodon.org/@nibsalot/110105034507818285 [2] 
+> https://github.com/r-devel/rcontribution/blob/main/office_hours/2023-04-13_EMEA-APAC.md
+
+
