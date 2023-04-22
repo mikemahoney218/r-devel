@@ -2741,3 +2741,340 @@ Serguei.
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From k@ro||@@koncev|c|u@ @end|ng |rom gm@||@com  Fri Apr 21 10:32:41 2023
+From: k@ro||@@koncev|c|u@ @end|ng |rom gm@||@com (=?utf-8?Q?Karolis_Koncevi=C4=8Dius?=)
+Date: Fri, 21 Apr 2023 11:32:41 +0300
+Subject: [Rd] Confusion about ks.test() handling of ties and exact vs
+ approximate results
+Message-ID: <BFD9732F-8AD7-4F0E-8288-5DA4519A7B43@gmail.com>
+
+Hello,
+
+Today I was investigating ks.test() with two numerical arguments (x and y) and was left a bit confused about the policy behind handling ties.
+I might be missing something, so sorry in advance, but here is what confuses me:
+
+The documentation states: "The presence of ties always generates a warning, since continuous distributions do not generate them"
+
+But when I run a test with ties there is no warning:
+
+ks.test(1:4, 4:7)
+
+However, when I specify that I do not want an exact test, there appears a warning saying that the computation will be approximate:
+
+ks.test(1:4, 4:7, exact=FALSE)
+# Warning: p-value will be approximate in the presence of ties
+
+But isn?t specifying exact=FALSE already makes the test approximate?
+
+I tried inspecting the source code for guidance but also was left a bit puzzled. In ks.test.R under if(is.numeric(y)) clause there is a variable called TIES that is set and changed, but is never used anywhere. Here are examples:
+
+line 55    TIES <- FALSE
+
+line 61    TIES <- TRUE
+
+line 74    if (TIES)
+line 75        z <- w
+
+But later this z variable is not used as a variable in the code. It looks to me that this TIES variable can be deleted without affecting anything else.
+
+What I gathered from the investigation is that probably now ties are handled by psmirnov() and for numeric x and y the computations are exact even with ties, however I am a bit puzzled about the warning for approximate values, when exact = FALSE is set anyway.
+
+So my question - is everything currently OK with the code and the documentation?
+
+From ttm|gue|tt @end|ng |rom gm@||@com  Fri Apr 21 10:35:54 2023
+From: ttm|gue|tt @end|ng |rom gm@||@com (Michael Milton)
+Date: Fri, 21 Apr 2023 18:35:54 +1000
+Subject: [Rd] Generalised piping into operators
+Message-ID: <CAPZyOoLMvRarY+RTN8HSD4OGPF_V9UFXvm=aaoXHRoiq=G00Wg@mail.gmail.com>
+
+I just checked out R-devel and noticed that the new "pipe extractor"
+capability coming in 4.3 only works for the 4 extractor operators, but no
+other standard operators like +, *, %*% etc, meaning that e.g. mtcars |>
+as.matrix() |> _ + 1 |> colMeans() is a syntax error. In addition, we are
+still subject to the restriction that the functions on the RHS of a pipe
+can't have special names, so mtcars |> as.matrix() |> `+`(1) |> colMeans() is
+also a syntax error.
+
+Either option would be great, as I find it much cleaner to coordinate a
+sequence of function calls using pipes rather than nested function calls or
+using temporary variables.
+
+May I enquire why both of these expressions are disallowed, and if it might
+be possible to help remove one or both of these restrictions? There is some
+discussion at
+https://stat.ethz.ch/pipermail/r-devel/2020-December/080210.html but the
+thread is mostly concerned with other things like the placeholder and
+whether or not parentheses can be omitted. My naive view is that piping
+into a special operator function like `+` would be the least ambiguous: `+`
+presumably parses to the same type of token as `colMeans` does, so the
+function parse tree seems like it would work fine if this was allowed in a
+pipe.
+
+Cheers,
+Michael
+
+	[[alternative HTML version deleted]]
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Fri Apr 21 14:56:59 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Fri, 21 Apr 2023 14:56:59 +0200
+Subject: [Rd] Confusion about ks.test() handling of ties and exact vs
+ approximate results
+In-Reply-To: <BFD9732F-8AD7-4F0E-8288-5DA4519A7B43@gmail.com>
+References: <BFD9732F-8AD7-4F0E-8288-5DA4519A7B43@gmail.com>
+Message-ID: <25666.34843.972664.851511@stat.math.ethz.ch>
+
+>>>>> Karolis Koncevi?ius 
+>>>>>     on Fri, 21 Apr 2023 11:32:41 +0300 writes:
+
+    > Hello,
+
+    > Today I was investigating ks.test() with two numerical arguments (x and y) and was left a bit confused about the policy behind handling ties.
+    > I might be missing something, so sorry in advance, but here is what confuses me:
+
+    > The documentation states: "The presence of ties always generates a warning, since continuous distributions do not generate them"
+
+Indeed, that has not correct anymore for quite a while I think.
+
+The current default is  `exact = NULL`  and that will be made
+into TRUE in certain circumstances, notably for all(*) small data
+situations.
+--
+*) The help page gives details.
+
+
+    > But when I run a test with ties there is no warning:
+
+    > ks.test(1:4, 4:7)
+
+and indeed the printed output explicitly says that the *exact*
+test was used.
+
+    > However, when I specify that I do not want an exact test, there appears a warning saying that the computation will be approximate:
+
+    > ks.test(1:4, 4:7, exact=FALSE)
+    > # Warning: p-value will be approximate in the presence of ties
+
+    > But isn?t specifying exact=FALSE already makes the test approximate?
+
+yes, but I think the idea is you'd look twice, and see that in
+this case it is recommended to also use  simulate.p.value = TRUE,
+
+
+    > I tried inspecting the source code for guidance but also was left a bit puzzled. In ks.test.R under if(is.numeric(y)) clause there is a variable called TIES that is set and changed, but is never used anywhere. Here are examples:
+
+    > line 55    TIES <- FALSE
+
+    > line 61    TIES <- TRUE
+
+    > line 74    if (TIES)
+    > line 75        z <- w
+
+    > But later this z variable is not used as a variable in the code. It looks to me that this TIES variable can be deleted without affecting anything else.
+
+That is correct.  It is indeed a remainder from before the
+recent improvements and psmirnov().
+
+[TIES is used in the other branch in the same ks.test.default() function]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Fri Apr 21 15:52:37 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Fri, 21 Apr 2023 09:52:37 -0400
+Subject: [Rd] Generalised piping into operators
+In-Reply-To: <CAPZyOoLMvRarY+RTN8HSD4OGPF_V9UFXvm=aaoXHRoiq=G00Wg@mail.gmail.com>
+References: <CAPZyOoLMvRarY+RTN8HSD4OGPF_V9UFXvm=aaoXHRoiq=G00Wg@mail.gmail.com>
+Message-ID: <e3cabe21-4887-8fd1-0d5d-009d2188f88b@gmail.com>
+
+On 21/04/2023 4:35 a.m., Michael Milton wrote:
+> I just checked out R-devel and noticed that the new "pipe extractor"
+> capability coming in 4.3 only works for the 4 extractor operators, but no
+> other standard operators like +, *, %*% etc, meaning that e.g. mtcars |>
+> as.matrix() |> _ + 1 |> colMeans() is a syntax error. In addition, we are
+> still subject to the restriction that the functions on the RHS of a pipe
+> can't have special names, so mtcars |> as.matrix() |> `+`(1) |> colMeans() is
+> also a syntax error.
+> 
+> Either option would be great, as I find it much cleaner to coordinate a
+> sequence of function calls using pipes rather than nested function calls or
+> using temporary variables.
+> 
+> May I enquire why both of these expressions are disallowed, and if it might
+> be possible to help remove one or both of these restrictions? There is some
+> discussion at
+> https://stat.ethz.ch/pipermail/r-devel/2020-December/080210.html but the
+> thread is mostly concerned with other things like the placeholder and
+> whether or not parentheses can be omitted. My naive view is that piping
+> into a special operator function like `+` would be the least ambiguous: `+`
+> presumably parses to the same type of token as `colMeans` does, so the
+> function parse tree seems like it would work fine if this was allowed in a
+> pipe.
+
+If it were allowed, people would expect expressions like yours to work, 
+but as ?Syntax says, your pipe would actually be parsed as something like
+
+   (mtcars |> as.matrix() |> _) + (1 |> colMeans())
+
+because the |> operator has higher precedence than +.
+
+Since parens would be needed somewhere to override this, you may as well 
+type
+
+   (as.matrix(mtcars) + 1) |> colMeans()
+
+which is both shorter and arguably clearer than
+
+   mtcars |> as.matrix() |> (_ + 1) |> colMeans()
+
+Duncan Murdoch
+
+
+From ttm|gue|tt @end|ng |rom gm@||@com  Fri Apr 21 17:33:24 2023
+From: ttm|gue|tt @end|ng |rom gm@||@com (Michael Milton)
+Date: Sat, 22 Apr 2023 01:33:24 +1000
+Subject: [Rd] Generalised piping into operators
+In-Reply-To: <e3cabe21-4887-8fd1-0d5d-009d2188f88b@gmail.com>
+References: <CAPZyOoLMvRarY+RTN8HSD4OGPF_V9UFXvm=aaoXHRoiq=G00Wg@mail.gmail.com>
+ <e3cabe21-4887-8fd1-0d5d-009d2188f88b@gmail.com>
+Message-ID: <CAPZyOoKK8UK5Uj+R0S7CLi-B_tvHWkeLE3-RL9BHyTPALftraw@mail.gmail.com>
+
+Thanks, this makes sense. Is there a similar precedence reasoning behind
+why operator functions (`+` etc) can't be piped into?
+
+On Fri, Apr 21, 2023 at 11:52?PM Duncan Murdoch <murdoch.duncan at gmail.com>
+wrote:
+
+> On 21/04/2023 4:35 a.m., Michael Milton wrote:
+> > I just checked out R-devel and noticed that the new "pipe extractor"
+> > capability coming in 4.3 only works for the 4 extractor operators, but no
+> > other standard operators like +, *, %*% etc, meaning that e.g. mtcars |>
+> > as.matrix() |> _ + 1 |> colMeans() is a syntax error. In addition, we are
+> > still subject to the restriction that the functions on the RHS of a pipe
+> > can't have special names, so mtcars |> as.matrix() |> `+`(1) |>
+> colMeans() is
+> > also a syntax error.
+> >
+> > Either option would be great, as I find it much cleaner to coordinate a
+> > sequence of function calls using pipes rather than nested function calls
+> or
+> > using temporary variables.
+> >
+> > May I enquire why both of these expressions are disallowed, and if it
+> might
+> > be possible to help remove one or both of these restrictions? There is
+> some
+> > discussion at
+> > https://stat.ethz.ch/pipermail/r-devel/2020-December/080210.html but the
+> > thread is mostly concerned with other things like the placeholder and
+> > whether or not parentheses can be omitted. My naive view is that piping
+> > into a special operator function like `+` would be the least ambiguous:
+> `+`
+> > presumably parses to the same type of token as `colMeans` does, so the
+> > function parse tree seems like it would work fine if this was allowed in
+> a
+> > pipe.
+>
+> If it were allowed, people would expect expressions like yours to work,
+> but as ?Syntax says, your pipe would actually be parsed as something like
+>
+>    (mtcars |> as.matrix() |> _) + (1 |> colMeans())
+>
+> because the |> operator has higher precedence than +.
+>
+> Since parens would be needed somewhere to override this, you may as well
+> type
+>
+>    (as.matrix(mtcars) + 1) |> colMeans()
+>
+> which is both shorter and arguably clearer than
+>
+>    mtcars |> as.matrix() |> (_ + 1) |> colMeans()
+>
+> Duncan Murdoch
+>
+>
+>
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Fri Apr 21 18:05:57 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Fri, 21 Apr 2023 12:05:57 -0400
+Subject: [Rd] Generalised piping into operators
+In-Reply-To: <CAPZyOoKK8UK5Uj+R0S7CLi-B_tvHWkeLE3-RL9BHyTPALftraw@mail.gmail.com>
+References: <CAPZyOoLMvRarY+RTN8HSD4OGPF_V9UFXvm=aaoXHRoiq=G00Wg@mail.gmail.com>
+ <e3cabe21-4887-8fd1-0d5d-009d2188f88b@gmail.com>
+ <CAPZyOoKK8UK5Uj+R0S7CLi-B_tvHWkeLE3-RL9BHyTPALftraw@mail.gmail.com>
+Message-ID: <4a9cc19c-9dde-ac9c-1f08-e64d46eaa2e9@gmail.com>
+
+On 21/04/2023 11:33 a.m., Michael Milton wrote:
+> Thanks, this makes sense. Is there a similar precedence reasoning behind 
+> why operator functions (`+` etc) can't be piped into?
+
+Yes:
+
+ > identical(quote(1 + 1), quote(`+`(1, 1)))
+[1] TRUE
+
+Duncan Murdoch
+
+
+From ttm|gue|tt @end|ng |rom gm@||@com  Fri Apr 21 18:16:39 2023
+From: ttm|gue|tt @end|ng |rom gm@||@com (Michael Milton)
+Date: Sat, 22 Apr 2023 02:16:39 +1000
+Subject: [Rd] Generalised piping into operators
+In-Reply-To: <4a9cc19c-9dde-ac9c-1f08-e64d46eaa2e9@gmail.com>
+References: <CAPZyOoLMvRarY+RTN8HSD4OGPF_V9UFXvm=aaoXHRoiq=G00Wg@mail.gmail.com>
+ <e3cabe21-4887-8fd1-0d5d-009d2188f88b@gmail.com>
+ <CAPZyOoKK8UK5Uj+R0S7CLi-B_tvHWkeLE3-RL9BHyTPALftraw@mail.gmail.com>
+ <4a9cc19c-9dde-ac9c-1f08-e64d46eaa2e9@gmail.com>
+Message-ID: <CAPZyOo+crtkFt6RKLes80EFd44VfNqH9qcOnCzAHjidyi1jFyQ@mail.gmail.com>
+
+I'm afraid I don't understand. I know that parsing `+`(1, 1) returns a
+result equivalent to `1 + 1`, but why does that impose a restriction on
+parsing the pipe operator? What is the downside of allowing arbitrary RHS
+functions?
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Fri Apr 21 19:00:46 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Fri, 21 Apr 2023 13:00:46 -0400
+Subject: [Rd] Generalised piping into operators
+In-Reply-To: <CAPZyOo+crtkFt6RKLes80EFd44VfNqH9qcOnCzAHjidyi1jFyQ@mail.gmail.com>
+References: <CAPZyOoLMvRarY+RTN8HSD4OGPF_V9UFXvm=aaoXHRoiq=G00Wg@mail.gmail.com>
+ <e3cabe21-4887-8fd1-0d5d-009d2188f88b@gmail.com>
+ <CAPZyOoKK8UK5Uj+R0S7CLi-B_tvHWkeLE3-RL9BHyTPALftraw@mail.gmail.com>
+ <4a9cc19c-9dde-ac9c-1f08-e64d46eaa2e9@gmail.com>
+ <CAPZyOo+crtkFt6RKLes80EFd44VfNqH9qcOnCzAHjidyi1jFyQ@mail.gmail.com>
+Message-ID: <df77cd83-2500-49df-2406-d6e218a832c6@gmail.com>
+
+On 21/04/2023 12:16 p.m., Michael Milton wrote:
+> I'm afraid I don't understand. I know that parsing `+`(1, 1) returns a 
+> result equivalent to `1?+ 1`, but why does that impose a restriction on 
+> parsing the pipe operator? What is the downside of allowing arbitrary 
+> RHS functions?
+
+I thought the decision to exclude "_ + 1" happens after enough parsing 
+has happened so that the code making the decision can't tell the 
+difference between "_ + 1" and "`+`(_, 1)".  I might be wrong about 
+that, but this suggests it:
+
+   > quote(_ + 1)
+   Error in quote("_" + 1) : invalid use of pipe placeholder (<input>:1:0)
+   > quote(`+`(_,  1))
+   Error in quote("_" + 1) : invalid use of pipe placeholder (<input>:1:0)
+
+On the other hand, this works:
+
+   > quote(x |> `+`(e1 = _, 1))
+   x + 1
+
+So maybe `+`() is fine after all.
+
+Duncan Murdoch
+
+
