@@ -3078,3 +3078,221 @@ So maybe `+`() is fine after all.
 Duncan Murdoch
 
 
+From dj@@mper| @end|ng |rom gm@||@com  Sat Apr 22 03:23:44 2023
+From: dj@@mper| @end|ng |rom gm@||@com (Dominick Samperi)
+Date: Fri, 21 Apr 2023 21:23:44 -0400
+Subject: [Rd] Generalised piping into operators
+In-Reply-To: <df77cd83-2500-49df-2406-d6e218a832c6@gmail.com>
+References: <df77cd83-2500-49df-2406-d6e218a832c6@gmail.com>
+Message-ID: <27F87D52-3668-486C-A843-37CC597FA984@gmail.com>
+
+A few years ago there was a post by the author of pipeR suggesting improvements in efficiency and reliability. Is there collaboration between these various pipe projects?
+
+Sent from my iPhone
+
+> On Apr 21, 2023, at 1:01 PM, Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+> 
+> ?On 21/04/2023 12:16 p.m., Michael Milton wrote:
+>> I'm afraid I don't understand. I know that parsing `+`(1, 1) returns a result equivalent to `1 + 1`, but why does that impose a restriction on parsing the pipe operator? What is the downside of allowing arbitrary RHS functions?
+> 
+> I thought the decision to exclude "_ + 1" happens after enough parsing has happened so that the code making the decision can't tell the difference between "_ + 1" and "`+`(_, 1)".  I might be wrong about that, but this suggests it:
+> 
+>  > quote(_ + 1)
+>  Error in quote("_" + 1) : invalid use of pipe placeholder (<input>:1:0)
+>  > quote(`+`(_,  1))
+>  Error in quote("_" + 1) : invalid use of pipe placeholder (<input>:1:0)
+> 
+> On the other hand, this works:
+> 
+>  > quote(x |> `+`(e1 = _, 1))
+>  x + 1
+> 
+> So maybe `+`() is fine after all.
+> 
+> Duncan Murdoch
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From ttm|gue|tt @end|ng |rom gm@||@com  Sat Apr 22 10:42:27 2023
+From: ttm|gue|tt @end|ng |rom gm@||@com (Michael Milton)
+Date: Sat, 22 Apr 2023 18:42:27 +1000
+Subject: [Rd] Generalised piping into operators
+In-Reply-To: <df77cd83-2500-49df-2406-d6e218a832c6@gmail.com>
+References: <CAPZyOoLMvRarY+RTN8HSD4OGPF_V9UFXvm=aaoXHRoiq=G00Wg@mail.gmail.com>
+ <e3cabe21-4887-8fd1-0d5d-009d2188f88b@gmail.com>
+ <CAPZyOoKK8UK5Uj+R0S7CLi-B_tvHWkeLE3-RL9BHyTPALftraw@mail.gmail.com>
+ <4a9cc19c-9dde-ac9c-1f08-e64d46eaa2e9@gmail.com>
+ <CAPZyOo+crtkFt6RKLes80EFd44VfNqH9qcOnCzAHjidyi1jFyQ@mail.gmail.com>
+ <df77cd83-2500-49df-2406-d6e218a832c6@gmail.com>
+Message-ID: <CAPZyOoKxWdCrkHypQWvTT9K2AVB9BQb=KUODcDGtcCLtyGHVQw@mail.gmail.com>
+
+This is all very intriguing. Normally when piping into an operator
+function, R throws "Error: function '+' not supported in RHS call of a
+pipe":
+
+> 1 |> `+`(2)
+Error: function '+' not supported in RHS call of a pipe
+
+This is a different error from the above "invalid use of pipe placeholder",
+which makes me think it was added for a different purpose than prohibiting
+operator precedence issues. I am interested in the justification of this
+error.
+
+However, as you have noted, when using the placeholder, R has no issue with
+this syntax (which I didn't realise!):
+
+> 1 |> `+`(x=_, 2)
+[1] 3
+
+
+On Sat, Apr 22, 2023 at 3:00?AM Duncan Murdoch <murdoch.duncan at gmail.com>
+wrote:
+
+> On 21/04/2023 12:16 p.m., Michael Milton wrote:
+> > I'm afraid I don't understand. I know that parsing `+`(1, 1) returns a
+> > result equivalent to `1 + 1`, but why does that impose a restriction on
+> > parsing the pipe operator? What is the downside of allowing arbitrary
+> > RHS functions?
+>
+> I thought the decision to exclude "_ + 1" happens after enough parsing
+> has happened so that the code making the decision can't tell the
+> difference between "_ + 1" and "`+`(_, 1)".  I might be wrong about
+> that, but this suggests it:
+>
+>    > quote(_ + 1)
+>    Error in quote("_" + 1) : invalid use of pipe placeholder (<input>:1:0)
+>    > quote(`+`(_,  1))
+>    Error in quote("_" + 1) : invalid use of pipe placeholder (<input>:1:0)
+>
+> On the other hand, this works:
+>
+>    > quote(x |> `+`(e1 = _, 1))
+>    x + 1
+>
+> So maybe `+`() is fine after all.
+>
+> Duncan Murdoch
+>
+>
+
+	[[alternative HTML version deleted]]
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Sat Apr 22 18:41:26 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Sat, 22 Apr 2023 18:41:26 +0200
+Subject: [Rd] 
+ Possible inconsistency between `as.complex(NA_real_)` and the docs
+In-Reply-To: <CABzLhzyh8bFX8iGkXdY1g-gD35-yP89RjsiKd1d+GA8+qBbEFg@mail.gmail.com>
+References: <CABzLhzyh8bFX8iGkXdY1g-gD35-yP89RjsiKd1d+GA8+qBbEFg@mail.gmail.com>
+Message-ID: <25668.3638.81705.1776@stat.math.ethz.ch>
+
+
+> Hi all,
+> 
+> Surprisingly (at least to me), `as.complex(NA_real_)` results in
+> `complex(real = NA_real_, imaginary = 0)` rather than `NA_complex_`.
+
+Well, the logic here is really the mathematical equivalence:
+if you turn a real number x  in to a complex one, say z,
+then  z =  x + i * 0 , i.e., real part x  and imaginary part 0.
+
+
+> It seems to me that this goes against the docs of `as.complex()`,
+> which say this in the Details section:
+> 
+> "Up to R versions 3.2.x, all forms of NA and NaN were coerced to a
+> complex NA, i.e., the NA_complex_ constant, for which both the real
+> and imaginary parts are NA. Since R 3.3.0, typically only objects
+> which are NA in parts are coerced to complex NA, but others with NaN
+> parts, are not. As a consequence, complex arithmetic where only NaN's
+> (but no NA's) are involved typically will not give complex NA but
+> complex numbers with real or imaginary parts of NaN."
+
+The above was written in  svn commit 69410  (the github mirror
+of which you mention below)
+------------------------------------------------------------------------
+r69410 | maechler | 2015-09-22 10:11:34 +0200 (Tue, 22 Sep 2015) | 1 line
+
+more consistent behavior of complex number NaN / NA - not back-compatible
+------------------------------------------------------------------------
+
+which I had to amend a day later in
+------------------------------------------------------------------------
+r69423 | maechler | 2015-09-23 19:23:57 +0200 (Wed, 23 Sep 2015) | 1 line
+
+even NaN + NA_complex_ is platform dependent
+------------------------------------------------------------------------
+
+just with adding the following at the end of
+example(as.complex)  :
+
+showC <- function(z) noquote(sprintf("(R = \%g, I = \%g)", Re(z), Im(z)))
+
+## The exact result of this *depends* on the platform, compiler, math-library:
+(NpNA <- NaN + NA_complex_) ; str(NpNA) # *behaves* as 'cplx NA' ..
+stopifnot(is.na(NpNA), is.na(NA_complex_), is.na(Re(NA_complex_)), is.na(Im(NA_complex_)))
+showC(NpNA)# but not always is {shows  '(R = NaN, I = NA)' on some platforms}
+## and this is not TRUE everywhere:
+identical(NpNA, NA_complex_)
+showC(NA_complex_) # always == (R = NA, I = NA)
+
+And that was a while ago.  In the mean time I've become more
+aware of the fact that --- to my large chagrin --- our
+distinction of NA and NaN  unfortunately   has more problems in
+quite platform-dependent arithmetic than I had still hoped at
+the time.
+
+> To me this suggests that `NA_real_`, which is "NA in parts", should
+> have been coerced to "complex NA".
+> 
+> `NA_integer_` is actually coerced to `NA_complex_`, which to me is
+> further evidence that `NA_real_` should have been as well.
+
+Yeah.. I agree that  as.complex(.) should return the same for integer
+and double NA.
+
+I see where and how the change would need to happen.
+.. we'll see if it is feasible (I guess "yes" with 0.98 subjective probability)
+
+
+> Here is the original commit where this behavior was changed in R 3.3.0:
+> https://github.com/wch/r-source/commit/4a4c2052e5a541981a249d4fcf92b54ca7f0a2df
+> 
+> ```
+> # This is expected, based on the docs
+> x <- as.complex(NaN)
+> Re(x)
+> #> [1] NaN
+> Im(x)
+> #> [1] 0
+> 
+> # This is not expected. The docs say:
+> # "Since R 3.3.0, typically only objects which are NA in parts are
+> coerced to complex NA"
+> # but that doesn't seem true for `NA_real_`.
+> x <- as.complex(NA_real_)
+> Re(x)
+> #> [1] NA
+> Im(x)
+> #> [1] 0
+> 
+> # It does seem to be the case for `NA_integer_`
+> x <- as.complex(NA_integer_)
+> Re(x)
+> #> [1] NA
+> Im(x)
+> #> [1] NA
+> ```
+> 
+> Thanks,
+> Davis Vaughan
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
