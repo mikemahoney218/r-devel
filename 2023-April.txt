@@ -3331,3 +3331,468 @@ Laurent
 	[[alternative HTML version deleted]]
 
 
+From wo||g@ng@v|echtb@uer @end|ng |rom m@@@tr|chtun|ver@|ty@n|  Tue Apr 25 10:24:52 2023
+From: wo||g@ng@v|echtb@uer @end|ng |rom m@@@tr|chtun|ver@|ty@n| (Viechtbauer, Wolfgang (NP))
+Date: Tue, 25 Apr 2023 08:24:52 +0000
+Subject: [Rd] xyTable(x,y) versus table(x,y) with NAs
+Message-ID: <338cffd6748d4758ad32b542a37bf735@UM-MAIL3210.unimaas.nl>
+
+Hi all,
+
+Posted this many years ago (https://stat.ethz.ch/pipermail/r-devel/2017-December/075224.html), but either this slipped under the radar or my feeble mind is unable to understand what xyTable() is doing here and nobody bothered to correct me. I now stumbled again across this issue.
+
+x <- c(1, 1, 2, 2,  2, 3)
+y <- c(1, 2, 1, 3, NA, 3)
+table(x, y, useNA="always")
+xyTable(x, y)
+
+Why does xyTable() report that there are NA instances of (2,3)? I could understand the logic that the NA could be anything, including a 3, so the $number value for (2,3) is therefore unknown, but then the same should apply so (2,1), but here $number is 1, so the logic is then inconsistent.
+
+I stared at the xyTable code for a while and I suspect this is coming from order() using na.last=TRUE by default, but in any case, to me the behavior above is surprising.
+
+Best,
+Wolfgang
+
+
+From @oko| @end|ng |rom |n@@-tou|ou@e@|r  Tue Apr 25 11:30:26 2023
+From: @oko| @end|ng |rom |n@@-tou|ou@e@|r (Serguei Sokol)
+Date: Tue, 25 Apr 2023 11:30:26 +0200
+Subject: [Rd] xyTable(x,y) versus table(x,y) with NAs
+In-Reply-To: <338cffd6748d4758ad32b542a37bf735@UM-MAIL3210.unimaas.nl>
+References: <338cffd6748d4758ad32b542a37bf735@UM-MAIL3210.unimaas.nl>
+Message-ID: <f0b1cac7-efac-e126-6e47-ed3a69479499@insa-toulouse.fr>
+
+Le 25/04/2023 ? 10:24, Viechtbauer, Wolfgang (NP) a ?crit?:
+> Hi all,
+>
+> Posted this many years ago (https://stat.ethz.ch/pipermail/r-devel/2017-December/075224.html), but either this slipped under the radar or my feeble mind is unable to understand what xyTable() is doing here and nobody bothered to correct me. I now stumbled again across this issue.
+>
+> x <- c(1, 1, 2, 2,  2, 3)
+> y <- c(1, 2, 1, 3, NA, 3)
+> table(x, y, useNA="always")
+> xyTable(x, y)
+>
+> Why does xyTable() report that there are NA instances of (2,3)? I could understand the logic that the NA could be anything, including a 3, so the $number value for (2,3) is therefore unknown, but then the same should apply so (2,1), but here $number is 1, so the logic is then inconsistent.
+>
+> I stared at the xyTable code for a while and I suspect this is coming from order() using na.last=TRUE by default, but in any case, to me the behavior above is surprising.
+Not really. The variable 'first' in xyTable() is supposed to detect 
+positions of first values in repeated pair sequences. Then it is used to 
+retained only their indexes in a vector of type 1:n. Finally, by taking 
+diff(), a number of repeated pairs is obtained. However, as 'first' will 
+contain one NA? for your example, the diff() call will produce two NAs 
+by taking the difference with precedent and following number. Hence, the 
+result.
+
+Here is a slightly modified code ox xyTable to handle NA too.
+
+xyTableNA <- function (x, y = NULL, digits)
+{
+ ??? x <- xy.coords(x, y, setLab = FALSE)
+ ??? y <- signif(x$y, digits = digits)
+ ??? x <- signif(x$x, digits = digits)
+ ??? n <- length(x)
+ ??? number <- if (n > 0) {
+ ??????? orderxy <- order(x, y)
+ ??????? x <- x[orderxy]
+ ??????? y <- y[orderxy]
+ ??????? first <- c(TRUE, (x[-1L] != x[-n]) | (y[-1L] != y[-n]))
+ ??????? firstNA <- c(TRUE, xor(is.na(x[-1L]), is.na(x[-n])) | 
+xor(is.na(y[-1L]), is.na(y[-n])))
+ ??????? first[firstNA] <- TRUE
+ ??????? first[is.na(first) | isFALSE(first)] <- FALSE
+ ??????? x <- x[first]
+ ??????? y <- y[first]
+ ??????? diff(c((1L:n)[first], n + 1L))
+ ??? }
+ ??? else integer()
+ ??? list(x = x, y = y, number = number)
+}
+
+Best,
+Serguei.
+
+>
+> Best,
+> Wolfgang
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @oko| @end|ng |rom |n@@-tou|ou@e@|r  Tue Apr 25 11:35:03 2023
+From: @oko| @end|ng |rom |n@@-tou|ou@e@|r (Serguei Sokol)
+Date: Tue, 25 Apr 2023 11:35:03 +0200
+Subject: [Rd] xyTable(x,y) versus table(x,y) with NAs
+In-Reply-To: <f0b1cac7-efac-e126-6e47-ed3a69479499@insa-toulouse.fr>
+References: <338cffd6748d4758ad32b542a37bf735@UM-MAIL3210.unimaas.nl>
+ <f0b1cac7-efac-e126-6e47-ed3a69479499@insa-toulouse.fr>
+Message-ID: <8a8b06d5-b4de-89fe-9efc-6cd7e10c448e@insa-toulouse.fr>
+
+I correct myself. Obviously, the line
+
+first[is.na(first) | isFALSE(first)] <- FALSE
+
+should read
+
+first[is.na(first)] <- FALSE
+
+Serguei.
+
+Le 25/04/2023 ? 11:30, Serguei Sokol a ?crit?:
+> Le 25/04/2023 ? 10:24, Viechtbauer, Wolfgang (NP) a ?crit?:
+>> Hi all,
+>>
+>> Posted this many years ago 
+>> (https://stat.ethz.ch/pipermail/r-devel/2017-December/075224.html), 
+>> but either this slipped under the radar or my feeble mind is unable 
+>> to understand what xyTable() is doing here and nobody bothered to 
+>> correct me. I now stumbled again across this issue.
+>>
+>> x <- c(1, 1, 2, 2,? 2, 3)
+>> y <- c(1, 2, 1, 3, NA, 3)
+>> table(x, y, useNA="always")
+>> xyTable(x, y)
+>>
+>> Why does xyTable() report that there are NA instances of (2,3)? I 
+>> could understand the logic that the NA could be anything, including a 
+>> 3, so the $number value for (2,3) is therefore unknown, but then the 
+>> same should apply so (2,1), but here $number is 1, so the logic is 
+>> then inconsistent.
+>>
+>> I stared at the xyTable code for a while and I suspect this is coming 
+>> from order() using na.last=TRUE by default, but in any case, to me 
+>> the behavior above is surprising.
+> Not really. The variable 'first' in xyTable() is supposed to detect 
+> positions of first values in repeated pair sequences. Then it is used 
+> to retained only their indexes in a vector of type 1:n. Finally, by 
+> taking diff(), a number of repeated pairs is obtained. However, as 
+> 'first' will contain one NA? for your example, the diff() call will 
+> produce two NAs by taking the difference with precedent and following 
+> number. Hence, the result.
+>
+> Here is a slightly modified code ox xyTable to handle NA too.
+>
+> xyTableNA <- function (x, y = NULL, digits)
+> {
+> ??? x <- xy.coords(x, y, setLab = FALSE)
+> ??? y <- signif(x$y, digits = digits)
+> ??? x <- signif(x$x, digits = digits)
+> ??? n <- length(x)
+> ??? number <- if (n > 0) {
+> ??????? orderxy <- order(x, y)
+> ??????? x <- x[orderxy]
+> ??????? y <- y[orderxy]
+> ??????? first <- c(TRUE, (x[-1L] != x[-n]) | (y[-1L] != y[-n]))
+> ??????? firstNA <- c(TRUE, xor(is.na(x[-1L]), is.na(x[-n])) | 
+> xor(is.na(y[-1L]), is.na(y[-n])))
+> ??????? first[firstNA] <- TRUE
+> ??????? first[is.na(first) | isFALSE(first)] <- FALSE
+> ??????? x <- x[first]
+> ??????? y <- y[first]
+> ??????? diff(c((1L:n)[first], n + 1L))
+> ??? }
+> ??? else integer()
+> ??? list(x = x, y = y, number = number)
+> }
+>
+> Best,
+> Serguei.
+>
+>>
+>> Best,
+>> Wolfgang
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+>
+
+
+-- 
+Serguei Sokol
+Ingenieur de recherche INRAE
+
+Cellule Math?matiques
+TBI, INSA/INRAE UMR 792, INSA/CNRS UMR 5504
+135 Avenue de Rangueil
+31077 Toulouse Cedex 04
+
+tel: +33 5 61 55 98 49
+email: sokol at insa-toulouse.fr
+http://www.toulouse-biotechnology-institute.fr/en/technology_platforms/mathematics-cell.html
+
+
+From wo||g@ng@v|echtb@uer @end|ng |rom m@@@tr|chtun|ver@|ty@n|  Tue Apr 25 13:45:45 2023
+From: wo||g@ng@v|echtb@uer @end|ng |rom m@@@tr|chtun|ver@|ty@n| (Viechtbauer, Wolfgang (NP))
+Date: Tue, 25 Apr 2023 11:45:45 +0000
+Subject: [Rd] xyTable(x,y) versus table(x,y) with NAs
+In-Reply-To: <8a8b06d5-b4de-89fe-9efc-6cd7e10c448e@insa-toulouse.fr>
+References: <338cffd6748d4758ad32b542a37bf735@UM-MAIL3210.unimaas.nl>
+ <f0b1cac7-efac-e126-6e47-ed3a69479499@insa-toulouse.fr>
+ <8a8b06d5-b4de-89fe-9efc-6cd7e10c448e@insa-toulouse.fr>
+Message-ID: <1202a20f16704f5d9538055c401f1852@UM-MAIL3210.unimaas.nl>
+
+Nice! Would this be something to consider as either a permanent fix to xyTable() (to me, the function is right now behaving in a rather unexpected manner, if not to say, buggy) or via an argument (for backwards compatability)?
+
+Best,
+Wolfgang
+
+>-----Original Message-----
+>From: Serguei Sokol [mailto:sokol at insa-toulouse.fr]
+>Sent: Tuesday, 25 April, 2023 11:35
+>To: Viechtbauer, Wolfgang (NP); r-devel at r-project.org
+>Subject: Re: [Rd] xyTable(x,y) versus table(x,y) with NAs
+>
+>I correct myself. Obviously, the line
+>
+>first[is.na(first) | isFALSE(first)] <- FALSE
+>
+>should read
+>
+>first[is.na(first)] <- FALSE
+>
+>Serguei.
+>
+>Le 25/04/2023 ? 11:30, Serguei Sokol a ?crit?:
+>> Le 25/04/2023 ? 10:24, Viechtbauer, Wolfgang (NP) a ?crit?:
+>>> Hi all,
+>>>
+>>> Posted this many years ago
+>>> (https://stat.ethz.ch/pipermail/r-devel/2017-December/075224.html),
+>>> but either this slipped under the radar or my feeble mind is unable
+>>> to understand what xyTable() is doing here and nobody bothered to
+>>> correct me. I now stumbled again across this issue.
+>>>
+>>> x <- c(1, 1, 2, 2,? 2, 3)
+>>> y <- c(1, 2, 1, 3, NA, 3)
+>>> table(x, y, useNA="always")
+>>> xyTable(x, y)
+>>>
+>>> Why does xyTable() report that there are NA instances of (2,3)? I
+>>> could understand the logic that the NA could be anything, including a
+>>> 3, so the $number value for (2,3) is therefore unknown, but then the
+>>> same should apply so (2,1), but here $number is 1, so the logic is
+>>> then inconsistent.
+>>>
+>>> I stared at the xyTable code for a while and I suspect this is coming
+>>> from order() using na.last=TRUE by default, but in any case, to me
+>>> the behavior above is surprising.
+>> Not really. The variable 'first' in xyTable() is supposed to detect
+>> positions of first values in repeated pair sequences. Then it is used
+>> to retained only their indexes in a vector of type 1:n. Finally, by
+>> taking diff(), a number of repeated pairs is obtained. However, as
+>> 'first' will contain one NA? for your example, the diff() call will
+>> produce two NAs by taking the difference with precedent and following
+>> number. Hence, the result.
+>>
+>> Here is a slightly modified code ox xyTable to handle NA too.
+>>
+>> xyTableNA <- function (x, y = NULL, digits)
+>> {
+>> ??? x <- xy.coords(x, y, setLab = FALSE)
+>> ??? y <- signif(x$y, digits = digits)
+>> ??? x <- signif(x$x, digits = digits)
+>> ??? n <- length(x)
+>> ??? number <- if (n > 0) {
+>> ??????? orderxy <- order(x, y)
+>> ??????? x <- x[orderxy]
+>> ??????? y <- y[orderxy]
+>> ??????? first <- c(TRUE, (x[-1L] != x[-n]) | (y[-1L] != y[-n]))
+>> ??????? firstNA <- c(TRUE, xor(is.na(x[-1L]), is.na(x[-n])) |
+>> xor(is.na(y[-1L]), is.na(y[-n])))
+>> ??????? first[firstNA] <- TRUE
+>> ??????? first[is.na(first) | isFALSE(first)] <- FALSE
+>> ??????? x <- x[first]
+>> ??????? y <- y[first]
+>> ??????? diff(c((1L:n)[first], n + 1L))
+>> ??? }
+>> ??? else integer()
+>> ??? list(x = x, y = y, number = number)
+>> }
+>>
+>> Best,
+>> Serguei.
+>>>
+>>> Best,
+>>> Wolfgang
+
+From w||||@mwdun|@p @end|ng |rom gm@||@com  Tue Apr 25 17:39:27 2023
+From: w||||@mwdun|@p @end|ng |rom gm@||@com (Bill Dunlap)
+Date: Tue, 25 Apr 2023 08:39:27 -0700
+Subject: [Rd] xyTable(x,y) versus table(x,y) with NAs
+In-Reply-To: <338cffd6748d4758ad32b542a37bf735@UM-MAIL3210.unimaas.nl>
+References: <338cffd6748d4758ad32b542a37bf735@UM-MAIL3210.unimaas.nl>
+Message-ID: <CAHqSRuQRNWyeLUk=Zg+ccyJxYAzwqdj-Hk-bcq-PrfoK9H2d9g@mail.gmail.com>
+
+x <- c(1, 1, 2, 2,  2, 3)
+y <- c(1, 2, 1, 3, NA, 3)
+> str(xyTable(x,y))
+List of 3
+ $ x     : num [1:6] 1 1 2 2 NA 3
+ $ y     : num [1:6] 1 2 1 3 NA 3
+ $ number: int [1:6] 1 1 1 NA NA 1
+
+
+How many (2,3)s do we have?  At least one, the third entry, but the fourth
+entry, (2,NA), is possibly a (2,3) so we don't know and make the count NA.
+I suspect this is not the intended logic, but a byproduct of finding value
+changes in a sorted vector with the idiom x[-1]!=x[-length(x).  Also the
+following does follow that logic:
+
+> x <- c(1, 1, 2, 2,  5, 6)
+> y <- c(2, 2, 2, 4, NA, 3)
+> str(xyTable(x,y))
+List of 3
+ $ x     : num [1:5] 1 2 2 5 6
+ $ y     : num [1:5] 2 2 4 NA 3
+ $ number: int [1:5] 2 1 1 1 1
+
+
+
+table() does not use this logic, as one NA in a vector would make all the
+counts NA.  Should xyTable have a way to handle NAs the way table() does?
+
+-Bill
+
+On Tue, Apr 25, 2023 at 1:26?AM Viechtbauer, Wolfgang (NP) <
+wolfgang.viechtbauer at maastrichtuniversity.nl> wrote:
+
+> Hi all,
+>
+> Posted this many years ago (
+> https://stat.ethz.ch/pipermail/r-devel/2017-December/075224.html), but
+> either this slipped under the radar or my feeble mind is unable to
+> understand what xyTable() is doing here and nobody bothered to correct me.
+> I now stumbled again across this issue.
+>
+> x <- c(1, 1, 2, 2,  2, 3)
+> y <- c(1, 2, 1, 3, NA, 3)
+> table(x, y, useNA="always")
+> xyTable(x, y)
+>
+> Why does xyTable() report that there are NA instances of (2,3)? I could
+> understand the logic that the NA could be anything, including a 3, so the
+> $number value for (2,3) is therefore unknown, but then the same should
+> apply so (2,1), but here $number is 1, so the logic is then inconsistent.
+>
+> I stared at the xyTable code for a while and I suspect this is coming from
+> order() using na.last=TRUE by default, but in any case, to me the behavior
+> above is surprising.
+>
+> Best,
+> Wolfgang
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From @oko| @end|ng |rom |n@@-tou|ou@e@|r  Tue Apr 25 18:03:47 2023
+From: @oko| @end|ng |rom |n@@-tou|ou@e@|r (Serguei Sokol)
+Date: Tue, 25 Apr 2023 18:03:47 +0200
+Subject: [Rd] xyTable(x,y) versus table(x,y) with NAs
+In-Reply-To: <CAHqSRuQRNWyeLUk=Zg+ccyJxYAzwqdj-Hk-bcq-PrfoK9H2d9g@mail.gmail.com>
+References: <338cffd6748d4758ad32b542a37bf735@UM-MAIL3210.unimaas.nl>
+ <CAHqSRuQRNWyeLUk=Zg+ccyJxYAzwqdj-Hk-bcq-PrfoK9H2d9g@mail.gmail.com>
+Message-ID: <aa8dbcb9-0d2c-4d32-d0f6-b7ca36148c97@insa-toulouse.fr>
+
+Le 25/04/2023 ? 17:39, Bill Dunlap a ?crit?:
+> x <- c(1, 1, 2, 2,  2, 3)
+> y <- c(1, 2, 1, 3, NA, 3)
+>> str(xyTable(x,y))
+> List of 3
+>   $ x     : num [1:6] 1 1 2 2 NA 3
+>   $ y     : num [1:6] 1 2 1 3 NA 3
+>   $ number: int [1:6] 1 1 1 NA NA 1
+>
+>
+> How many (2,3)s do we have?  At least one, the third entry, but the fourth
+> entry, (2,NA), is possibly a (2,3) so we don't know and make the count NA.
+> I suspect this is not the intended logic, but a byproduct of finding value
+> changes in a sorted vector with the idiom x[-1]!=x[-length(x).  Also the
+> following does follow that logic:
+>
+>> x <- c(1, 1, 2, 2,  5, 6)
+>> y <- c(2, 2, 2, 4, NA, 3)
+>> str(xyTable(x,y))
+> List of 3
+>   $ x     : num [1:5] 1 2 2 5 6
+>   $ y     : num [1:5] 2 2 4 NA 3
+>   $ number: int [1:5] 2 1 1 1 1
+Not really. If we take
+
+   x <- c(1, 1, 2, 2,  5, 6, 5, 5)
+   y <- c(2, 2, 2, 4, NA, 3, 3, 4)
+
+we get
+
+   str(xyTable(x,y))
+
+List of 3
+  $ x     : num [1:7] 1 2 2 5 5 NA 6
+  $ y     : num [1:7] 2 2 4 3 4 NA 3
+  $ number: int [1:7] 2 1 1 1 NA NA 1
+
+How many (5, 3) we have? At least 1 but (5, NA) is possibly (5,3) so we 
+should have NA but we have 1.
+How many (5, 4) we have? At least 1 but (5, NA) is possibly (5,4) and we 
+do get NA. So restored logic is not consistent.
+Without talking about a pair (NA, NA) appeared and not producing (5, NA) 
+pair.
+
+Best,
+Serguei.
+
+
+>
+>
+>
+> table() does not use this logic, as one NA in a vector would make all the
+> counts NA.  Should xyTable have a way to handle NAs the way table() does?
+>
+> -Bill
+>
+> On Tue, Apr 25, 2023 at 1:26?AM Viechtbauer, Wolfgang (NP) <
+> wolfgang.viechtbauer at maastrichtuniversity.nl> wrote:
+>
+>> Hi all,
+>>
+>> Posted this many years ago (
+>> https://stat.ethz.ch/pipermail/r-devel/2017-December/075224.html), but
+>> either this slipped under the radar or my feeble mind is unable to
+>> understand what xyTable() is doing here and nobody bothered to correct me.
+>> I now stumbled again across this issue.
+>>
+>> x <- c(1, 1, 2, 2,  2, 3)
+>> y <- c(1, 2, 1, 3, NA, 3)
+>> table(x, y, useNA="always")
+>> xyTable(x, y)
+>>
+>> Why does xyTable() report that there are NA instances of (2,3)? I could
+>> understand the logic that the NA could be anything, including a 3, so the
+>> $number value for (2,3) is therefore unknown, but then the same should
+>> apply so (2,1), but here $number is 1, so the logic is then inconsistent.
+>>
+>> I stared at the xyTable code for a while and I suspect this is coming from
+>> order() using na.last=TRUE by default, but in any case, to me the behavior
+>> above is surprising.
+>>
+>> Best,
+>> Wolfgang
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
