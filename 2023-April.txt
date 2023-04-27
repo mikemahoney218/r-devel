@@ -3796,3 +3796,40 @@ Serguei.
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From kry|ov@r00t @end|ng |rom gm@||@com  Wed Apr 26 12:23:51 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Wed, 26 Apr 2023 13:23:51 +0300
+Subject: [Rd] 
+ Warnings created during R_eval or R_tryEval not shown before R
+ ending or R error.
+In-Reply-To: <CA+JCgN1PGvRbG-ocbZ6=QzZ+qN=FxA_LuhohcVOhpbW7Q1WKQw@mail.gmail.com>
+References: <CA+JCgN1PGvRbG-ocbZ6=QzZ+qN=FxA_LuhohcVOhpbW7Q1WKQw@mail.gmail.com>
+Message-ID: <20230426132351.714df0c8@arachnoid>
+
+? Sun, 23 Apr 2023 13:33:16 -0400
+Laurent Gautier <lgautier at gmail.com> ?????:
+
+> When tracing what happens during an error I found that
+> verrorcall_dflt() in src/main/errors.c calls PrintWarnings(). That
+> function is not part of R's C-API though.
+
+I've tried reading the source code and came to a similar conclusion.
+
+PrintWarnings() is required for warnings() to work because it creates
+the last.warning variable for warnings() to access. When driving an
+embedded R, R_ReplDLLdo1() will call it for you between expressions it
+processes, but there doesn't seem to be a way to call it yourself.
+
+Interestingly, there is .Internal(printDeferredWarnings()) which
+eventually calls PrintWarnings(), but it's not exported as an API, only
+used in a few places like try().
+
+Would it help to run with options(warn = 1)? I think that a different
+code path is taken in this case, which should emit warnings even
+without a working REPL. warnings() would still be empty, unfortunately.
+
+-- 
+Best regards,
+Ivan
+
+
