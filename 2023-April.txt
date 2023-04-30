@@ -4356,3 +4356,431 @@ University of Sydney
 Camperdown NSW 2050
 Australia
 
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Sat Apr 29 12:24:48 2023
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Sat, 29 Apr 2023 12:24:48 +0200
+Subject: [Rd] Should '@" now be listed in
+ tools:::.get_internal_S3_generics() ?
+In-Reply-To: <FCF643DC-F104-4F60-8270-81733CA1DD06@gmail.com>
+References: <0C4C0FCC-0982-4D28-BDBB-229A4C37BEA6@gmail.com>
+ <00D614F7-CFCA-4AC2-A5DF-843EFE603236@gmail.com>
+ <CAD4oTHHVnfFYqBeHpLtJ2KXp-GnOMJvvzPYnrSN-nv5uVMa1tA@mail.gmail.com>
+ <9C3D8A28-603C-4D95-9C49-E7E3BB8A6AA3@gmail.com>
+ <FCF643DC-F104-4F60-8270-81733CA1DD06@gmail.com>
+Message-ID: <25676.61552.111786.790307@hornik.net>
+
+>>>>> Karolis Koncevi?ius writes:
+
+Can you pls try again with r84341 or later?
+
+Best
+-k
+
+> A more concrete example in order to correct my vague messages below.
+> Writing an R package that uses `@` and `@<-` as S3 generics. Line from manual pages in .Rd files:
+
+>     \method{@}{newclass}(object, name) <- value
+
+> Throws this error during R CMD check ?as-cran
+
+>     Bad \usage lines found in documentation object ?code?:
+>       <unescaped bksl>method{@}{newclass}(object, name) <- value
+
+> This error is due to tools::checkDocFiles eventually calling tools:::.S3_method_markup_regexp and not finding `@` as a valid for S3.
+> This error is gone if we adjust tools:::.S3_method_markup_regexp to pass for ?@? by adding ?\\@? to regexp.
+
+> Please note that this now is not dependant on using or not using roxygen2
+> KK.
+
+>> On Apr 29, 2023, at 12:53 AM, Karolis Koncevi?ius <karolis.koncevicius at gmail.com> wrote:
+>> 
+>> Thank you for such a quick reply, Gabriel,
+>> 
+>> I am not too familiar with the package tools, so cannot speak too confidently, but below is how I see the issue currently.
+>> 
+>> The issue is not for external packages to rely on unexported functions from tools::, rather the issue is that 'R CMD check ?as-cran' runs those functions from tools:: in order to check the validity of Rd files (from any package). R 4.3.0 added @ as internal S3 generic. However, package tools does not recognise it as valid in Rd files and throws errors when it sees S3 method declared for @ in the Rd usage lines.
+>> 
+>> So any package that will try to use @ generic will run into the issue, without attempting to use internal S3 functions in their code, but during the R CMD check step.
+>> 
+>> Hope I am being clearer now, and not missing something important (all these things: both @ as generic and tools:: package are quite new to me),
+>> Karolis K.
+>> 
+>>> On Apr 29, 2023, at 12:38 AM, Gabriel Becker <gabembecker at gmail.com> wrote:
+>>> 
+>>> Karolis,
+>>> 
+>>> It seems likely, without having looked myself, that you could be correct about the issue, but it does seem worth noting that both of the functions you have mentioned are not exported, and thus not part of the API that extension packages are allowed to use and rely on.
+>>> 
+>>> If retrieving the list of "internal S3 generics" is something package and user code is allowed to do, the real fix seems to go beyond what you're suggesting, to actually providing an API entry point that gives the relevant information (maybe in an identical form to how those internal functions do so, maybe not). If it's not, for some principled reason, something R-core wants to support package and user code doing, then the fact that the new thing doesn't work automatically with roxygen2 would become the roxygen maintainers' job to fix or document. 
+>>> 
+>>> I do not know whether R-core feels this is something packages/users should be able to do; both decisions strike me as possible, to be honest, depending on details I don't know and/or am not privy to.
+>>> 
+>>> Best,
+>>> ~G 
+>>> 
+>>> On Fri, Apr 28, 2023 at 1:49?PM Karolis Koncevi?ius <karolis.koncevicius at gmail.com <mailto:karolis.koncevicius at gmail.com>> wrote:
+>>>> This issue might go deeper - I was not successful in passing R CMD checks for the usage files. R CMD check kept showing errors for `@` declarations, even thou they were identical to `$` declarations (which passed fine).
+>>>> 
+>>>> Seems like the usage check functions are not prepared for `@` - also in tools:::.S3_method_markup_regexp
+>>>> 
+>>>> > On Apr 28, 2023, at 10:34 PM, Karolis Koncevi?ius <karolis.koncevicius at gmail.com <mailto:karolis.koncevicius at gmail.com>> wrote:
+>>>> > 
+>>>> > I was building a package that uses the new generic @ and kept having errors with ?roxygen2? documentation. ?roxygen2? generated NAMESPACE added `@.newclass` as a newly exported function, not as a S3method.
+>>>> > 
+>>>> > At first I thought this must be a bug in roxygen2 and they lag behind the new developments in R. But after some investigation I found that ?roxygen2? is using tools:::.get_internal_S3_generis() to decide if the method should be exported as S3method or not. For some reason ?@<-? is listed in there, but ?@? is not.
+>>>> > 
+>>>> > Am I missing some context, or is this an oversight?
+>>>> > 
+>>>> > Kind regards,
+>>>> > Karolis Koncevicius
+>>>> 
+>>>> ______________________________________________
+>>>> R-devel at r-project.org <mailto:R-devel at r-project.org> mailing list
+>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>> 
+
+
+> 	[[alternative HTML version deleted]]
+
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From k@ro||@@koncev|c|u@ @end|ng |rom gm@||@com  Sat Apr 29 15:44:29 2023
+From: k@ro||@@koncev|c|u@ @end|ng |rom gm@||@com (=?utf-8?Q?Karolis_Koncevi=C4=8Dius?=)
+Date: Sat, 29 Apr 2023 16:44:29 +0300
+Subject: [Rd] Should '@" now be listed in
+ tools:::.get_internal_S3_generics() ?
+In-Reply-To: <25676.61552.111786.790307@hornik.net>
+References: <0C4C0FCC-0982-4D28-BDBB-229A4C37BEA6@gmail.com>
+ <00D614F7-CFCA-4AC2-A5DF-843EFE603236@gmail.com>
+ <CAD4oTHHVnfFYqBeHpLtJ2KXp-GnOMJvvzPYnrSN-nv5uVMa1tA@mail.gmail.com>
+ <9C3D8A28-603C-4D95-9C49-E7E3BB8A6AA3@gmail.com>
+ <FCF643DC-F104-4F60-8270-81733CA1DD06@gmail.com>
+ <25676.61552.111786.790307@hornik.net>
+Message-ID: <3E75CED7-F8C0-4568-9335-A6B66B842BD1@gmail.com>
+
+Hello Kurt,
+
+With r84341 it now works on my side.
+
+Warm regards,
+Karolis K.
+
+> On Apr 29, 2023, at 1:24 PM, Kurt Hornik <Kurt.Hornik at wu.ac.at> wrote:
+> 
+>>>>>> Karolis Koncevi?ius writes:
+> 
+> Can you pls try again with r84341 or later?
+> 
+> Best
+> -k
+> 
+>> A more concrete example in order to correct my vague messages below.
+>> Writing an R package that uses `@` and `@<-` as S3 generics. Line from manual pages in .Rd files:
+> 
+>>    \method{@}{newclass}(object, name) <- value
+> 
+>> Throws this error during R CMD check ?as-cran
+> 
+>>    Bad \usage lines found in documentation object ?code?:
+>>      <unescaped bksl>method{@}{newclass}(object, name) <- value
+> 
+>> This error is due to tools::checkDocFiles eventually calling tools:::.S3_method_markup_regexp and not finding `@` as a valid for S3.
+>> This error is gone if we adjust tools:::.S3_method_markup_regexp to pass for ?@? by adding ?\\@? to regexp.
+> 
+>> Please note that this now is not dependant on using or not using roxygen2
+>> KK.
+> 
+>>> On Apr 29, 2023, at 12:53 AM, Karolis Koncevi?ius <karolis.koncevicius at gmail.com> wrote:
+>>> 
+>>> Thank you for such a quick reply, Gabriel,
+>>> 
+>>> I am not too familiar with the package tools, so cannot speak too confidently, but below is how I see the issue currently.
+>>> 
+>>> The issue is not for external packages to rely on unexported functions from tools::, rather the issue is that 'R CMD check ?as-cran' runs those functions from tools:: in order to check the validity of Rd files (from any package). R 4.3.0 added @ as internal S3 generic. However, package tools does not recognise it as valid in Rd files and throws errors when it sees S3 method declared for @ in the Rd usage lines.
+>>> 
+>>> So any package that will try to use @ generic will run into the issue, without attempting to use internal S3 functions in their code, but during the R CMD check step.
+>>> 
+>>> Hope I am being clearer now, and not missing something important (all these things: both @ as generic and tools:: package are quite new to me),
+>>> Karolis K.
+>>> 
+>>>> On Apr 29, 2023, at 12:38 AM, Gabriel Becker <gabembecker at gmail.com> wrote:
+>>>> 
+>>>> Karolis,
+>>>> 
+>>>> It seems likely, without having looked myself, that you could be correct about the issue, but it does seem worth noting that both of the functions you have mentioned are not exported, and thus not part of the API that extension packages are allowed to use and rely on.
+>>>> 
+>>>> If retrieving the list of "internal S3 generics" is something package and user code is allowed to do, the real fix seems to go beyond what you're suggesting, to actually providing an API entry point that gives the relevant information (maybe in an identical form to how those internal functions do so, maybe not). If it's not, for some principled reason, something R-core wants to support package and user code doing, then the fact that the new thing doesn't work automatically with roxygen2 would become the roxygen maintainers' job to fix or document. 
+>>>> 
+>>>> I do not know whether R-core feels this is something packages/users should be able to do; both decisions strike me as possible, to be honest, depending on details I don't know and/or am not privy to.
+>>>> 
+>>>> Best,
+>>>> ~G 
+>>>> 
+>>>> On Fri, Apr 28, 2023 at 1:49?PM Karolis Koncevi?ius <karolis.koncevicius at gmail.com <mailto:karolis.koncevicius at gmail.com> <mailto:karolis.koncevicius at gmail.com>> wrote:
+>>>>> This issue might go deeper - I was not successful in passing R CMD checks for the usage files. R CMD check kept showing errors for `@` declarations, even thou they were identical to `$` declarations (which passed fine).
+>>>>> 
+>>>>> Seems like the usage check functions are not prepared for `@` - also in tools:::.S3_method_markup_regexp
+>>>>> 
+>>>>>> On Apr 28, 2023, at 10:34 PM, Karolis Koncevi?ius <karolis.koncevicius at gmail.com <mailto:karolis.koncevicius at gmail.com> <mailto:karolis.koncevicius at gmail.com>> wrote:
+>>>>>> 
+>>>>>> I was building a package that uses the new generic @ and kept having errors with ?roxygen2? documentation. ?roxygen2? generated NAMESPACE added `@.newclass` as a newly exported function, not as a S3method.
+>>>>>> 
+>>>>>> At first I thought this must be a bug in roxygen2 and they lag behind the new developments in R. But after some investigation I found that ?roxygen2? is using tools:::.get_internal_S3_generis() to decide if the method should be exported as S3method or not. For some reason ?@<-? is listed in there, but ?@? is not.
+>>>>>> 
+>>>>>> Am I missing some context, or is this an oversight?
+>>>>>> 
+>>>>>> Kind regards,
+>>>>>> Karolis Koncevicius
+>>>>> 
+>>>>> ______________________________________________
+>>>>> R-devel at r-project.org <mailto:R-devel at r-project.org> <mailto:R-devel at r-project.org> mailing list
+>>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>> 
+> 
+> 
+>> 	[[alternative HTML version deleted]]
+> 
+>> ______________________________________________
+>> R-devel at r-project.org <mailto:R-devel at r-project.org> mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+	[[alternative HTML version deleted]]
+
+
+From ttm|gue|tt @end|ng |rom gm@||@com  Sat Apr 29 19:26:18 2023
+From: ttm|gue|tt @end|ng |rom gm@||@com (Michael Milton)
+Date: Sun, 30 Apr 2023 03:26:18 +1000
+Subject: [Rd] Forcing a PROTECT Bug to Occur
+Message-ID: <CAPZyOoJXP4+D_XZ8FDvYxLVjVmD6h0UHFnY+MEuAhhB6MtYvxQ@mail.gmail.com>
+
+I'm trying to learn about R's PROTECT system. To that end I've tried to
+create an example of C code that doesn't protect anything. I was hoping it
+would either segfault from trying to access deallocated memory, or maybe
+print out nonsense results because the unprotected memory got overwritten,
+but I can't make either happen.
+
+Here's my current code (all in R, using the inline package for simplicity):
+
+> gctorture(TRUE)
+> z = inline::cfunction(body="
+    SEXP vec_1 = Rf_ScalarInteger(99);
+    SEXP vec_2 = Rf_allocVector(VECSXP, 10);
+    SET_VECTOR_ELT(vec_2, 1, vec_1);
+    Rf_PrintValue(vec_2);
+")
+
+My thinking was that, with torture mode enabled, the allocation of vec_2
+should ensure that vec_1 is collected, and then trying to put it into vec_2
+and then print it would then fail. But it consistently prints 99 in the
+list's second element.
+
+Why does this code not have issues? Alternatively, is there a simpler
+example of C code that demonstrates missing PROTECT calls?
+
+	[[alternative HTML version deleted]]
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Sat Apr 29 20:04:13 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Sat, 29 Apr 2023 20:04:13 +0200
+Subject: [Rd] Forcing a PROTECT Bug to Occur
+In-Reply-To: <CAPZyOoJXP4+D_XZ8FDvYxLVjVmD6h0UHFnY+MEuAhhB6MtYvxQ@mail.gmail.com>
+References: <CAPZyOoJXP4+D_XZ8FDvYxLVjVmD6h0UHFnY+MEuAhhB6MtYvxQ@mail.gmail.com>
+Message-ID: <bc77f87d-f26b-58b0-8ae8-e48b91160190@gmail.com>
+
+
+On 4/29/23 19:26, Michael Milton wrote:
+> I'm trying to learn about R's PROTECT system. To that end I've tried to
+> create an example of C code that doesn't protect anything. I was hoping it
+> would either segfault from trying to access deallocated memory, or maybe
+> print out nonsense results because the unprotected memory got overwritten,
+> but I can't make either happen.
+>
+> Here's my current code (all in R, using the inline package for simplicity):
+>
+>> gctorture(TRUE)
+>> z = inline::cfunction(body="
+>      SEXP vec_1 = Rf_ScalarInteger(99);
+>      SEXP vec_2 = Rf_allocVector(VECSXP, 10);
+>      SET_VECTOR_ELT(vec_2, 1, vec_1);
+>      Rf_PrintValue(vec_2);
+> ")
+>
+> My thinking was that, with torture mode enabled, the allocation of vec_2
+> should ensure that vec_1 is collected, and then trying to put it into vec_2
+> and then print it would then fail. But it consistently prints 99 in the
+> list's second element.
+>
+> Why does this code not have issues? Alternatively, is there a simpler
+> example of C code that demonstrates missing PROTECT calls?
+
+It is not guaranteed that a PROTECT error will always lead to memory 
+corruption or a crash in all executions of a program, not even with 
+gctorture.
+
+To increase the chances, you can instruct gctorture to run the gc more 
+often (but the execution would be slower). You can build R with strict 
+write barrier checking (see e.g. Writing R Extensions, look for 
+gctorture) to make it more likely errors will be detected. There is 
+always a tradeoff between this probability and slowdown of the 
+execution. In theory we could invalidate all unreachable objects at 
+every allocation, but that would be so slow that we could not test any 
+programs in practice.
+
+Then, not every piece of memory can be used by any allocation, due to 
+how the memory allocator and gc works. If you need to provoke an error 
+e.g. for educational purposes, perhaps chances would be higher if you 
+allocate an object of the same type and size as the one not protected in 
+error.
+
+You can also play with R sources - e.g. introduce a PROTECT error into 
+some key part of the R interpreter, it should not be too hard to trigger 
+that via make check-devel.
+
+Best
+Tomas
+
+>
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From |g@ut|er @end|ng |rom gm@||@com  Sat Apr 29 22:16:07 2023
+From: |g@ut|er @end|ng |rom gm@||@com (Laurent Gautier)
+Date: Sat, 29 Apr 2023 16:16:07 -0400
+Subject: [Rd] 
+ Warnings created during R_eval or R_tryEval not shown before R
+ ending or R error.
+In-Reply-To: <20230426132351.714df0c8@arachnoid>
+References: <CA+JCgN1PGvRbG-ocbZ6=QzZ+qN=FxA_LuhohcVOhpbW7Q1WKQw@mail.gmail.com>
+ <20230426132351.714df0c8@arachnoid>
+Message-ID: <CA+JCgN2_uH6Kyrc74tMqXkimW=eVj7ptLp+aRuGP+W9=m_hCEQ@mail.gmail.com>
+
+Thanks Ivan. I did not know about ` .Internal(printDeferredWarnings())`. It
+does provide a solution for what I need.
+Best,
+Laurent
+
+Le mer. 26 avr. 2023 ? 06:23, Ivan Krylov <krylov.r00t at gmail.com> a ?crit :
+
+> ? Sun, 23 Apr 2023 13:33:16 -0400
+> Laurent Gautier <lgautier at gmail.com> ?????:
+>
+> > When tracing what happens during an error I found that
+> > verrorcall_dflt() in src/main/errors.c calls PrintWarnings(). That
+> > function is not part of R's C-API though.
+>
+> I've tried reading the source code and came to a similar conclusion.
+>
+> PrintWarnings() is required for warnings() to work because it creates
+> the last.warning variable for warnings() to access. When driving an
+> embedded R, R_ReplDLLdo1() will call it for you between expressions it
+> processes, but there doesn't seem to be a way to call it yourself.
+>
+> Interestingly, there is .Internal(printDeferredWarnings()) which
+> eventually calls PrintWarnings(), but it's not exported as an API, only
+> used in a few places like try().
+>
+> Would it help to run with options(warn = 1)? I think that a different
+> code path is taken in this case, which should emit warnings even
+> without a working REPL. warnings() would still be empty, unfortunately.
+>
+> --
+> Best regards,
+> Ivan
+>
+
+	[[alternative HTML version deleted]]
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Sat Apr 29 22:47:28 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Sat, 29 Apr 2023 22:47:28 +0200
+Subject: [Rd] range() for Date and POSIXct could respect `finite = TRUE`
+In-Reply-To: <CABzLhzyRuxgHnToS4CPn_g8NOsc6M5Tx+14Sf7X+cjD8NvZgRg@mail.gmail.com>
+References: <CABzLhzyRuxgHnToS4CPn_g8NOsc6M5Tx+14Sf7X+cjD8NvZgRg@mail.gmail.com>
+Message-ID: <25677.33376.349216.862139@stat.math.ethz.ch>
+
+>>>>> Davis Vaughan via R-devel 
+>>>>>     on Fri, 28 Apr 2023 11:12:27 -0400 writes:
+
+    > Hi all,
+
+    > I noticed that `range.default()` has a nice `finite =
+    > TRUE` argument, but it doesn't actually apply to Date or
+    > POSIXct due to how `is.numeric()` works.
+
+Well, I think it would / should never apply:
+
+range() belongs to the "Summary" group generics (as min, max, ...)
+
+and there  *are*  Summary.Date()  and Summary.POSIX{c,l}t() methods.
+
+Without checking further for now, I think you are indirectly
+suggesting to enhance these three Summary.*() methods so they do
+obey  'finite = TRUE' .
+
+I think I agree they should.
+
+Martin
+
+    > ``` x <- .Date(c(0, Inf, 1, 2, Inf)) x #> [1] "1970-01-01"
+    > "Inf" "1970-01-02" "1970-01-03" "Inf"
+
+    > # Darn!  range(x, finite = TRUE) #> [1] "1970-01-01" "Inf"
+
+    > # What I want .Date(range(unclass(x), finite = TRUE)) #>
+    > [1] "1970-01-01" "1970-01-03" ```
+
+    > I think `finite = TRUE` would be pretty nice for Dates in
+    > particular.
+
+    > As a motivating example, sometimes you have ranges of
+    > dates represented by start/end pairs. It is fairly natural
+    > to represent an event that hasn't ended yet with an
+    > infinite date. If you need to then compute a sequence of
+    > dates spanning the full range of the start/end pairs, it
+    > would be nice to be able to use `range(finite = TRUE)` to
+    > do so:
+
+    > ``` start <- as.Date(c("2019-01-05", "2019-01-10",
+    > "2019-01-11", "2019-01-14")) end <-
+    > as.Date(c("2019-01-07", NA, "2019-01-14", NA))
+    > end[is.na(end)] <- Inf
+
+    > # `end = Inf` means that the event hasn't "ended" yet
+    > data.frame(start, end) #> start end #> 1 2019-01-05
+    > 2019-01-07 #> 2 2019-01-10 Inf #> 3 2019-01-11 2019-01-14
+    > #> 4 2019-01-14 Inf
+
+    > # Create a full sequence along all days in start/end range
+    > <- .Date(range(unclass(c(start, end)), finite = TRUE))
+    > seq(range[1], range[2], by = 1) #> [1] "2019-01-05"
+    > "2019-01-06" "2019-01-07" "2019-01-08" "2019-01-09" #> [6]
+    > "2019-01-10" "2019-01-11" "2019-01-12" "2019-01-13"
+    > "2019-01-14" ```
+
+    > It seems like one option is to create a `range.Date()`
+    > method that unclasses, forwards the arguments on to a
+    > second call to `range()`, and then reclasses?
+
+    > ``` range.Date <- function(x, ..., na.rm = FALSE, finite =
+    > FALSE) { .Date(range(unclass(x), na.rm = na.rm, finite =
+    > finite), oldClass(x)) } ```
+
+    > This is similar to how `rep.Date()` works.
+
+    > Thanks, Davis Vaughan
+
+    > ______________________________________________
+    > R-devel at r-project.org mailing list
+    > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
