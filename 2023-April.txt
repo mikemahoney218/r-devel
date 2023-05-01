@@ -4784,3 +4784,520 @@ Martin
     > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Sun Apr 30 10:46:17 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Sun, 30 Apr 2023 10:46:17 +0200
+Subject: [Rd] Forcing a PROTECT Bug to Occur
+In-Reply-To: <CAPZyOoL0dHCKUZisU+iOb9KAG_2Y22aeFSs71+Z88aku=_KMAw@mail.gmail.com>
+References: <CAPZyOoJXP4+D_XZ8FDvYxLVjVmD6h0UHFnY+MEuAhhB6MtYvxQ@mail.gmail.com>
+ <bc77f87d-f26b-58b0-8ae8-e48b91160190@gmail.com>
+ <CAPZyOoL0dHCKUZisU+iOb9KAG_2Y22aeFSs71+Z88aku=_KMAw@mail.gmail.com>
+Message-ID: <f40a3394-7a46-6b9f-51f4-9a227f89b6f6@gmail.com>
+
+
+On 4/30/23 06:05, Michael Milton wrote:
+> Hi Tomas, thanks for the reply.
+>
+> I played with some of the factors you mentioned like allocating more 
+> INTSXP of the same size as vec_1, to little success. The thing that 
+> actually "worked" and caused a segfault, was simply allocating a 
+> larger vector the first time. 100 elements seemed to do it, but 10 or 
+> less elements almost never caused a segfault. Is there some other part 
+> of memory that small vectors are allocated that would prevent them 
+> being collected? Might this relate to the Ncells vs Vcells?distinction?
+
+I don't think it would be directly related (these are both vectors), but 
+I don't remember all the details. If you are interested in how exactly 
+the allocator works, I suggest reading memory.c - the sources are quite 
+small and easy to read. There is some external fragmentation which 
+limits what can be re-used. You could in principle force re-use by using 
+objects of the same size and type (but the number might have to be 
+large, maybe it wasn't large enough), or a single larger object (as you 
+did). It doesn't make sense speculating more without reading the code, 
+instrumenting and possibly debugging, if you want to find out exactly 
+what is happening in your situation.
+
+Tomas
+
+> > z = inline::cfunction(body="
+> ? ? SEXP vec_1 = Rf_allocVector(INTSXP, 100);
+> ? ? SEXP vec_2 = Rf_allocVector(VECSXP, 3);
+> ? ? SET_VECTOR_ELT(vec_2, 1, vec_1);
+> ")
+> > z()
+> NULL
+> Warning message:
+> In z() : your C program does not return anything!
+> > gctorture(TRUE)
+> > z()
+>
+> ?*** caught segfault ***
+> address 0x55a68ce57f90, cause 'memory not mapped'
+>
+> Traceback:
+> ?1: doWithOneRestart(return(expr), restart)
+> ?2: withOneRestart(expr, restarts[[1L]])
+> ?3: withRestarts({ ?.Internal(.signalCondition(simpleWarning(msg, 
+> call), msg, ? ? call)) ? ?.Internal(.dfltWarn(msg, call))}, 
+> muffleWarning = function() NULL)
+> ?4: .signalSimpleWarning("your C program does not return anything!", ? 
+> ? base::quote(z()))
+> ?5: .Primitive(".Call")(<pointer: 0x7f2a02572160>)
+> ?6: z()
+>
+>
+>
+>
+> On Sun, Apr 30, 2023 at 4:04?AM Tomas Kalibera 
+> <tomas.kalibera at gmail.com> wrote:
+>
+>
+>     On 4/29/23 19:26, Michael Milton wrote:
+>     > I'm trying to learn about R's PROTECT system. To that end I've
+>     tried to
+>     > create an example of C code that doesn't protect anything. I was
+>     hoping it
+>     > would either segfault from trying to access deallocated memory,
+>     or maybe
+>     > print out nonsense results because the unprotected memory got
+>     overwritten,
+>     > but I can't make either happen.
+>     >
+>     > Here's my current code (all in R, using the inline package for
+>     simplicity):
+>     >
+>     >> gctorture(TRUE)
+>     >> z = inline::cfunction(body="
+>     >? ? ? SEXP vec_1 = Rf_ScalarInteger(99);
+>     >? ? ? SEXP vec_2 = Rf_allocVector(VECSXP, 10);
+>     >? ? ? SET_VECTOR_ELT(vec_2, 1, vec_1);
+>     >? ? ? Rf_PrintValue(vec_2);
+>     > ")
+>     >
+>     > My thinking was that, with torture mode enabled, the allocation
+>     of vec_2
+>     > should ensure that vec_1 is collected, and then trying to put it
+>     into vec_2
+>     > and then print it would then fail. But it consistently prints 99
+>     in the
+>     > list's second element.
+>     >
+>     > Why does this code not have issues? Alternatively, is there a
+>     simpler
+>     > example of C code that demonstrates missing PROTECT calls?
+>
+>     It is not guaranteed that a PROTECT error will always lead to memory
+>     corruption or a crash in all executions of a program, not even with
+>     gctorture.
+>
+>     To increase the chances, you can instruct gctorture to run the gc
+>     more
+>     often (but the execution would be slower). You can build R with
+>     strict
+>     write barrier checking (see e.g. Writing R Extensions, look for
+>     gctorture) to make it more likely errors will be detected. There is
+>     always a tradeoff between this probability and slowdown of the
+>     execution. In theory we could invalidate all unreachable objects at
+>     every allocation, but that would be so slow that we could not test
+>     any
+>     programs in practice.
+>
+>     Then, not every piece of memory can be used by any allocation, due to
+>     how the memory allocator and gc works. If you need to provoke an
+>     error
+>     e.g. for educational purposes, perhaps chances would be higher if you
+>     allocate an object of the same type and size as the one not
+>     protected in
+>     error.
+>
+>     You can also play with R sources - e.g. introduce a PROTECT error
+>     into
+>     some key part of the R interpreter, it should not be too hard to
+>     trigger
+>     that via make check-devel.
+>
+>     Best
+>     Tomas
+>
+>     >
+>     >? ? ? ?[[alternative HTML version deleted]]
+>     >
+>     > ______________________________________________
+>     > R-devel at r-project.org mailing list
+>     > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+	[[alternative HTML version deleted]]
+
+
+From k@ro||@@koncev|c|u@ @end|ng |rom gm@||@com  Sun Apr 30 14:25:21 2023
+From: k@ro||@@koncev|c|u@ @end|ng |rom gm@||@com (=?utf-8?Q?Karolis_Koncevi=C4=8Dius?=)
+Date: Sun, 30 Apr 2023 15:25:21 +0300
+Subject: [Rd] Should '@" now be listed in
+ tools:::.get_internal_S3_generics() ?
+In-Reply-To: <3E75CED7-F8C0-4568-9335-A6B66B842BD1@gmail.com>
+References: <0C4C0FCC-0982-4D28-BDBB-229A4C37BEA6@gmail.com>
+ <00D614F7-CFCA-4AC2-A5DF-843EFE603236@gmail.com>
+ <CAD4oTHHVnfFYqBeHpLtJ2KXp-GnOMJvvzPYnrSN-nv5uVMa1tA@mail.gmail.com>
+ <9C3D8A28-603C-4D95-9C49-E7E3BB8A6AA3@gmail.com>
+ <FCF643DC-F104-4F60-8270-81733CA1DD06@gmail.com>
+ <25676.61552.111786.790307@hornik.net>
+ <3E75CED7-F8C0-4568-9335-A6B66B842BD1@gmail.com>
+Message-ID: <E17D7367-27B5-4E4E-B444-E00A3798283A@gmail.com>
+
+But this might require a more detailed investigation. For example I just noticed that even with the patch `@` is still not listed in .S3_methods_table().
+
+KK.
+
+> On Apr 29, 2023, at 4:44 PM, Karolis Koncevi?ius <karolis.koncevicius at gmail.com> wrote:
+> 
+> Hello Kurt,
+> 
+> With r84341 it now works on my side.
+> 
+> Warm regards,
+> Karolis K.
+> 
+>> On Apr 29, 2023, at 1:24 PM, Kurt Hornik <Kurt.Hornik at wu.ac.at> wrote:
+>> 
+>>>>>>> Karolis Koncevi?ius writes:
+>> 
+>> Can you pls try again with r84341 or later?
+>> 
+>> Best
+>> -k
+>> 
+>>> A more concrete example in order to correct my vague messages below.
+>>> Writing an R package that uses `@` and `@<-` as S3 generics. Line from manual pages in .Rd files:
+>> 
+>>>    \method{@}{newclass}(object, name) <- value
+>> 
+>>> Throws this error during R CMD check ?as-cran
+>> 
+>>>    Bad \usage lines found in documentation object ?code?:
+>>>      <unescaped bksl>method{@}{newclass}(object, name) <- value
+>> 
+>>> This error is due to tools::checkDocFiles eventually calling tools:::.S3_method_markup_regexp and not finding `@` as a valid for S3.
+>>> This error is gone if we adjust tools:::.S3_method_markup_regexp to pass for ?@? by adding ?\\@? to regexp.
+>> 
+>>> Please note that this now is not dependant on using or not using roxygen2
+>>> KK.
+>> 
+>>>> On Apr 29, 2023, at 12:53 AM, Karolis Koncevi?ius <karolis.koncevicius at gmail.com> wrote:
+>>>> 
+>>>> Thank you for such a quick reply, Gabriel,
+>>>> 
+>>>> I am not too familiar with the package tools, so cannot speak too confidently, but below is how I see the issue currently.
+>>>> 
+>>>> The issue is not for external packages to rely on unexported functions from tools::, rather the issue is that 'R CMD check ?as-cran' runs those functions from tools:: in order to check the validity of Rd files (from any package). R 4.3.0 added @ as internal S3 generic. However, package tools does not recognise it as valid in Rd files and throws errors when it sees S3 method declared for @ in the Rd usage lines.
+>>>> 
+>>>> So any package that will try to use @ generic will run into the issue, without attempting to use internal S3 functions in their code, but during the R CMD check step.
+>>>> 
+>>>> Hope I am being clearer now, and not missing something important (all these things: both @ as generic and tools:: package are quite new to me),
+>>>> Karolis K.
+>>>> 
+>>>>> On Apr 29, 2023, at 12:38 AM, Gabriel Becker <gabembecker at gmail.com> wrote:
+>>>>> 
+>>>>> Karolis,
+>>>>> 
+>>>>> It seems likely, without having looked myself, that you could be correct about the issue, but it does seem worth noting that both of the functions you have mentioned are not exported, and thus not part of the API that extension packages are allowed to use and rely on.
+>>>>> 
+>>>>> If retrieving the list of "internal S3 generics" is something package and user code is allowed to do, the real fix seems to go beyond what you're suggesting, to actually providing an API entry point that gives the relevant information (maybe in an identical form to how those internal functions do so, maybe not). If it's not, for some principled reason, something R-core wants to support package and user code doing, then the fact that the new thing doesn't work automatically with roxygen2 would become the roxygen maintainers' job to fix or document. 
+>>>>> 
+>>>>> I do not know whether R-core feels this is something packages/users should be able to do; both decisions strike me as possible, to be honest, depending on details I don't know and/or am not privy to.
+>>>>> 
+>>>>> Best,
+>>>>> ~G 
+>>>>> 
+>>>>> On Fri, Apr 28, 2023 at 1:49?PM Karolis Koncevi?ius <karolis.koncevicius at gmail.com <mailto:karolis.koncevicius at gmail.com> <mailto:karolis.koncevicius at gmail.com>> wrote:
+>>>>>> This issue might go deeper - I was not successful in passing R CMD checks for the usage files. R CMD check kept showing errors for `@` declarations, even thou they were identical to `$` declarations (which passed fine).
+>>>>>> 
+>>>>>> Seems like the usage check functions are not prepared for `@` - also in tools:::.S3_method_markup_regexp
+>>>>>> 
+>>>>>>> On Apr 28, 2023, at 10:34 PM, Karolis Koncevi?ius <karolis.koncevicius at gmail.com <mailto:karolis.koncevicius at gmail.com> <mailto:karolis.koncevicius at gmail.com>> wrote:
+>>>>>>> 
+>>>>>>> I was building a package that uses the new generic @ and kept having errors with ?roxygen2? documentation. ?roxygen2? generated NAMESPACE added `@.newclass` as a newly exported function, not as a S3method.
+>>>>>>> 
+>>>>>>> At first I thought this must be a bug in roxygen2 and they lag behind the new developments in R. But after some investigation I found that ?roxygen2? is using tools:::.get_internal_S3_generis() to decide if the method should be exported as S3method or not. For some reason ?@<-? is listed in there, but ?@? is not.
+>>>>>>> 
+>>>>>>> Am I missing some context, or is this an oversight?
+>>>>>>> 
+>>>>>>> Kind regards,
+>>>>>>> Karolis Koncevicius
+>>>>>> 
+>>>>>> ______________________________________________
+>>>>>> R-devel at r-project.org <mailto:R-devel at r-project.org> <mailto:R-devel at r-project.org> mailing list
+>>>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>> 
+>> 
+>> 
+>>> 	[[alternative HTML version deleted]]
+>> 
+>>> ______________________________________________
+>>> R-devel at r-project.org <mailto:R-devel at r-project.org> mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
+	[[alternative HTML version deleted]]
+
+
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Sun Apr 30 15:49:12 2023
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Sun, 30 Apr 2023 15:49:12 +0200
+Subject: [Rd] Should '@" now be listed in
+ tools:::.get_internal_S3_generics() ?
+In-Reply-To: <E17D7367-27B5-4E4E-B444-E00A3798283A@gmail.com>
+References: <0C4C0FCC-0982-4D28-BDBB-229A4C37BEA6@gmail.com>
+ <00D614F7-CFCA-4AC2-A5DF-843EFE603236@gmail.com>
+ <CAD4oTHHVnfFYqBeHpLtJ2KXp-GnOMJvvzPYnrSN-nv5uVMa1tA@mail.gmail.com>
+ <9C3D8A28-603C-4D95-9C49-E7E3BB8A6AA3@gmail.com>
+ <FCF643DC-F104-4F60-8270-81733CA1DD06@gmail.com>
+ <25676.61552.111786.790307@hornik.net>
+ <3E75CED7-F8C0-4568-9335-A6B66B842BD1@gmail.com>
+ <E17D7367-27B5-4E4E-B444-E00A3798283A@gmail.com>
+Message-ID: <25678.29144.624145.363150@hornik.net>
+
+>>>>> Karolis Koncevi?ius writes:
+
+> But this might require a more detailed investigation. For example I
+> just noticed that even with the patch `@` is still not listed in
+> .S3_methods_table().
+
+Afaict base does not register any methods for @ or @<- ?
+
+-k
+
+> KK.
+
+>> On Apr 29, 2023, at 4:44 PM, Karolis Koncevi?ius <karolis.koncevicius at gmail.com> wrote:
+>> 
+>> Hello Kurt,
+>> 
+>> With r84341 it now works on my side.
+>> 
+>> Warm regards,
+>> Karolis K.
+>> 
+>>> On Apr 29, 2023, at 1:24 PM, Kurt Hornik <Kurt.Hornik at wu.ac.at> wrote:
+>>> 
+>>>>>>>> Karolis Koncevi?ius writes:
+>>> 
+>>> Can you pls try again with r84341 or later?
+>>> 
+>>> Best
+>>> -k
+>>> 
+>>>> A more concrete example in order to correct my vague messages below.
+>>>> Writing an R package that uses `@` and `@<-` as S3 generics. Line from manual pages in .Rd files:
+>>> 
+>>>> \method{@}{newclass}(object, name) <- value
+>>> 
+>>>> Throws this error during R CMD check ?as-cran
+>>> 
+>>>> Bad \usage lines found in documentation object ?code?:
+>>>> <unescaped bksl>method{@}{newclass}(object, name) <- value
+>>> 
+>>>> This error is due to tools::checkDocFiles eventually calling tools:::.S3_method_markup_regexp and not finding `@` as a valid for S3.
+>>>> This error is gone if we adjust tools:::.S3_method_markup_regexp to pass for ?@? by adding ?\\@? to regexp.
+>>> 
+>>>> Please note that this now is not dependant on using or not using roxygen2
+>>>> KK.
+>>> 
+>>>>> On Apr 29, 2023, at 12:53 AM, Karolis Koncevi?ius <karolis.koncevicius at gmail.com> wrote:
+>>>>> 
+>>>>> Thank you for such a quick reply, Gabriel,
+>>>>> 
+>>>>> I am not too familiar with the package tools, so cannot speak too confidently, but below is how I see the issue currently.
+>>>>> 
+>>>>> The issue is not for external packages to rely on unexported functions from tools::, rather the issue is that 'R CMD check ?as-cran' runs those functions from tools:: in order to check the validity of Rd files (from any package). R 4.3.0 added @ as internal S3 generic. However, package tools does not recognise it as valid in Rd files and throws errors when it sees S3 method declared for @ in the Rd usage lines.
+>>>>> 
+>>>>> So any package that will try to use @ generic will run into the issue, without attempting to use internal S3 functions in their code, but during the R CMD check step.
+>>>>> 
+>>>>> Hope I am being clearer now, and not missing something important (all these things: both @ as generic and tools:: package are quite new to me),
+>>>>> Karolis K.
+>>>>> 
+>>>>> On Apr 29, 2023, at 12:38 AM, Gabriel Becker <gabembecker at gmail.com> wrote:
+>>>>> 
+>>>>> Karolis,
+>>>>> 
+>>>>> It seems likely, without having looked myself, that you could be correct about the issue, but it does seem worth noting that both of the functions you have mentioned are not exported, and thus not part of the API that extension packages are allowed to use and rely on.
+>>>>> 
+>>>>> If retrieving the list of "internal S3 generics" is something package and user code is allowed to do, the real fix seems to go beyond what you're suggesting, to actually providing an API entry point that gives the relevant information (maybe in an identical form to how those internal functions do so, maybe not). If it's not, for some principled reason, something R-core wants to support package and user code doing, then the fact that the new thing doesn't work automatically with roxygen2 would become the roxygen maintainers' job to fix or document. 
+>>>>> 
+>>>>> I do not know whether R-core feels this is something packages/users should be able to do; both decisions strike me as possible, to be honest, depending on details I don't know and/or am not privy to.
+>>>>> 
+>>>>> Best,
+>>>>> ~G 
+>>>>> 
+>>>>> On Fri, Apr 28, 2023 at 1:49?PM Karolis Koncevi?ius <karolis.koncevicius at gmail.com <mailto:karolis.koncevicius at gmail.com> <mailto:karolis.koncevicius at gmail.com>> wrote:
+>>>>>>> This issue might go deeper - I was not successful in passing R CMD checks for the usage files. R CMD check kept showing errors for `@` declarations, even thou they were identical to `$` declarations (which passed fine).
+>>>>>>> 
+>>>>>>> Seems like the usage check functions are not prepared for `@` - also in tools:::.S3_method_markup_regexp
+>>>>>>> 
+>>>>>>>> On Apr 28, 2023, at 10:34 PM, Karolis Koncevi?ius <karolis.koncevicius at gmail.com <mailto:karolis.koncevicius at gmail.com> <mailto:karolis.koncevicius at gmail.com>> wrote:
+>>>>>>>> 
+>>>>>>>> I was building a package that uses the new generic @ and kept having errors with ?roxygen2? documentation. ?roxygen2? generated NAMESPACE added `@.newclass` as a newly exported function, not as a S3method.
+>>>>>>>> 
+>>>>>>>> At first I thought this must be a bug in roxygen2 and they lag behind the new developments in R. But after some investigation I found that ?roxygen2? is using tools:::.get_internal_S3_generis() to decide if the method should be exported as S3method or not. For some reason ?@<-? is listed in there, but ?@? is not.
+>>>>>>>> 
+>>>>>>>> Am I missing some context, or is this an oversight?
+>>>>>>>> 
+>>>>>>>> Kind regards,
+>>>>>>>> Karolis Koncevicius
+>>>>>>> 
+>>>>>>> ______________________________________________
+>>>>>>> R-devel at r-project.org <mailto:R-devel at r-project.org> <mailto:R-devel at r-project.org> mailing list
+>>>>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>>> 
+>>> 
+>>> 
+>>>> [[alternative HTML version deleted]]
+>>> 
+>>>> ______________________________________________
+>>>> R-devel at r-project.org <mailto:R-devel at r-project.org> mailing list
+>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>> 
+
+
+> 	[[alternative HTML version deleted]]
+
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From k@ro||@@koncev|c|u@ @end|ng |rom gm@||@com  Sun Apr 30 15:56:23 2023
+From: k@ro||@@koncev|c|u@ @end|ng |rom gm@||@com (=?utf-8?Q?Karolis_Koncevi=C4=8Dius?=)
+Date: Sun, 30 Apr 2023 16:56:23 +0300
+Subject: [Rd] Should '@" now be listed in
+ tools:::.get_internal_S3_generics() ?
+In-Reply-To: <25678.29144.624145.363150@hornik.net>
+References: <0C4C0FCC-0982-4D28-BDBB-229A4C37BEA6@gmail.com>
+ <00D614F7-CFCA-4AC2-A5DF-843EFE603236@gmail.com>
+ <CAD4oTHHVnfFYqBeHpLtJ2KXp-GnOMJvvzPYnrSN-nv5uVMa1tA@mail.gmail.com>
+ <9C3D8A28-603C-4D95-9C49-E7E3BB8A6AA3@gmail.com>
+ <FCF643DC-F104-4F60-8270-81733CA1DD06@gmail.com>
+ <25676.61552.111786.790307@hornik.net>
+ <3E75CED7-F8C0-4568-9335-A6B66B842BD1@gmail.com>
+ <E17D7367-27B5-4E4E-B444-E00A3798283A@gmail.com>
+ <25678.29144.624145.363150@hornik.net>
+Message-ID: <2146232A-819A-49DB-87EC-162EAC0056B3@gmail.com>
+
+Ah, you are correct, my bad and apologies. I forgot that table is only for available methods, not for available generics.
+
+KK.
+
+> On Apr 30, 2023, at 4:49 PM, Kurt Hornik <Kurt.Hornik at wu.ac.at> wrote:
+> 
+>>>>>> Karolis Koncevi?ius writes:
+> 
+>> But this might require a more detailed investigation. For example I
+>> just noticed that even with the patch `@` is still not listed in
+>> .S3_methods_table().
+> 
+> Afaict base does not register any methods for @ or @<- ?
+> 
+> -k
+> 
+>> KK.
+> 
+>>> On Apr 29, 2023, at 4:44 PM, Karolis Koncevi?ius <karolis.koncevicius at gmail.com> wrote:
+>>> 
+>>> Hello Kurt,
+>>> 
+>>> With r84341 it now works on my side.
+>>> 
+>>> Warm regards,
+>>> Karolis K.
+>>> 
+>>>> On Apr 29, 2023, at 1:24 PM, Kurt Hornik <Kurt.Hornik at wu.ac.at> wrote:
+>>>> 
+>>>>>>>>> Karolis Koncevi?ius writes:
+>>>> 
+>>>> Can you pls try again with r84341 or later?
+>>>> 
+>>>> Best
+>>>> -k
+>>>> 
+>>>>> A more concrete example in order to correct my vague messages below.
+>>>>> Writing an R package that uses `@` and `@<-` as S3 generics. Line from manual pages in .Rd files:
+>>>> 
+>>>>> \method{@}{newclass}(object, name) <- value
+>>>> 
+>>>>> Throws this error during R CMD check ?as-cran
+>>>> 
+>>>>> Bad \usage lines found in documentation object ?code?:
+>>>>> <unescaped bksl>method{@}{newclass}(object, name) <- value
+>>>> 
+>>>>> This error is due to tools::checkDocFiles eventually calling tools:::.S3_method_markup_regexp and not finding `@` as a valid for S3.
+>>>>> This error is gone if we adjust tools:::.S3_method_markup_regexp to pass for ?@? by adding ?\\@? to regexp.
+>>>> 
+>>>>> Please note that this now is not dependant on using or not using roxygen2
+>>>>> KK.
+>>>> 
+>>>>>> On Apr 29, 2023, at 12:53 AM, Karolis Koncevi?ius <karolis.koncevicius at gmail.com> wrote:
+>>>>>> 
+>>>>>> Thank you for such a quick reply, Gabriel,
+>>>>>> 
+>>>>>> I am not too familiar with the package tools, so cannot speak too confidently, but below is how I see the issue currently.
+>>>>>> 
+>>>>>> The issue is not for external packages to rely on unexported functions from tools::, rather the issue is that 'R CMD check ?as-cran' runs those functions from tools:: in order to check the validity of Rd files (from any package). R 4.3.0 added @ as internal S3 generic. However, package tools does not recognise it as valid in Rd files and throws errors when it sees S3 method declared for @ in the Rd usage lines.
+>>>>>> 
+>>>>>> So any package that will try to use @ generic will run into the issue, without attempting to use internal S3 functions in their code, but during the R CMD check step.
+>>>>>> 
+>>>>>> Hope I am being clearer now, and not missing something important (all these things: both @ as generic and tools:: package are quite new to me),
+>>>>>> Karolis K.
+>>>>>> 
+>>>>>> On Apr 29, 2023, at 12:38 AM, Gabriel Becker <gabembecker at gmail.com> wrote:
+>>>>>> 
+>>>>>> Karolis,
+>>>>>> 
+>>>>>> It seems likely, without having looked myself, that you could be correct about the issue, but it does seem worth noting that both of the functions you have mentioned are not exported, and thus not part of the API that extension packages are allowed to use and rely on.
+>>>>>> 
+>>>>>> If retrieving the list of "internal S3 generics" is something package and user code is allowed to do, the real fix seems to go beyond what you're suggesting, to actually providing an API entry point that gives the relevant information (maybe in an identical form to how those internal functions do so, maybe not). If it's not, for some principled reason, something R-core wants to support package and user code doing, then the fact that the new thing doesn't work automatically with roxygen2 would become the roxygen maintainers' job to fix or document. 
+>>>>>> 
+>>>>>> I do not know whether R-core feels this is something packages/users should be able to do; both decisions strike me as possible, to be honest, depending on details I don't know and/or am not privy to.
+>>>>>> 
+>>>>>> Best,
+>>>>>> ~G 
+>>>>>> 
+>>>>>> On Fri, Apr 28, 2023 at 1:49?PM Karolis Koncevi?ius <karolis.koncevicius at gmail.com <mailto:karolis.koncevicius at gmail.com> <mailto:karolis.koncevicius at gmail.com>> wrote:
+>>>>>>>> This issue might go deeper - I was not successful in passing R CMD checks for the usage files. R CMD check kept showing errors for `@` declarations, even thou they were identical to `$` declarations (which passed fine).
+>>>>>>>> 
+>>>>>>>> Seems like the usage check functions are not prepared for `@` - also in tools:::.S3_method_markup_regexp
+>>>>>>>> 
+>>>>>>>>> On Apr 28, 2023, at 10:34 PM, Karolis Koncevi?ius <karolis.koncevicius at gmail.com <mailto:karolis.koncevicius at gmail.com> <mailto:karolis.koncevicius at gmail.com>> wrote:
+>>>>>>>>> 
+>>>>>>>>> I was building a package that uses the new generic @ and kept having errors with ?roxygen2? documentation. ?roxygen2? generated NAMESPACE added `@.newclass` as a newly exported function, not as a S3method.
+>>>>>>>>> 
+>>>>>>>>> At first I thought this must be a bug in roxygen2 and they lag behind the new developments in R. But after some investigation I found that ?roxygen2? is using tools:::.get_internal_S3_generis() to decide if the method should be exported as S3method or not. For some reason ?@<-? is listed in there, but ?@? is not.
+>>>>>>>>> 
+>>>>>>>>> Am I missing some context, or is this an oversight?
+>>>>>>>>> 
+>>>>>>>>> Kind regards,
+>>>>>>>>> Karolis Koncevicius
+>>>>>>>> 
+>>>>>>>> ______________________________________________
+>>>>>>>> R-devel at r-project.org <mailto:R-devel at r-project.org> <mailto:R-devel at r-project.org> mailing list
+>>>>>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>>>> 
+>>>> 
+>>>> 
+>>>>> [[alternative HTML version deleted]]
+>>>> 
+>>>>> ______________________________________________
+>>>>> R-devel at r-project.org <mailto:R-devel at r-project.org> mailing list
+>>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>> 
+> 
+> 
+>> 	[[alternative HTML version deleted]]
+> 
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+	[[alternative HTML version deleted]]
+
+
