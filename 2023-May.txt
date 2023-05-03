@@ -1,0 +1,632 @@
+From d@v|@ @end|ng |rom po@|t@co  Mon May  1 14:46:33 2023
+From: d@v|@ @end|ng |rom po@|t@co (Davis Vaughan)
+Date: Mon, 1 May 2023 08:46:33 -0400
+Subject: [Rd] range() for Date and POSIXct could respect `finite = TRUE`
+In-Reply-To: <25677.33376.349216.862139@stat.math.ethz.ch>
+References: <CABzLhzyRuxgHnToS4CPn_g8NOsc6M5Tx+14Sf7X+cjD8NvZgRg@mail.gmail.com>
+ <25677.33376.349216.862139@stat.math.ethz.ch>
+Message-ID: <CABzLhzzq2W3JsDP6KoRfLi0K1roD+3RH8mvnjWs_AnhP3A2SQg@mail.gmail.com>
+
+Martin,
+
+Yes, I missed that those have `Summary.*` methods, thanks!
+
+Tweaking those to respect `finite = TRUE` sounds great. It seems like
+it might be a little tricky since the Summary methods call
+`NextMethod()`, and `range.default()` uses `is.numeric()` to determine
+whether or not to apply `finite`. Because `is.numeric.Date()` is
+defined, that always returns `FALSE` for Dates (and POSIXt). Because
+of that, it may still be easier to just write a specific
+`range.Date()` method, but I'm not sure.
+
+-Davis
+
+On Sat, Apr 29, 2023 at 4:47?PM Martin Maechler
+<maechler at stat.math.ethz.ch> wrote:
+>
+> >>>>> Davis Vaughan via R-devel
+> >>>>>     on Fri, 28 Apr 2023 11:12:27 -0400 writes:
+>
+>     > Hi all,
+>
+>     > I noticed that `range.default()` has a nice `finite =
+>     > TRUE` argument, but it doesn't actually apply to Date or
+>     > POSIXct due to how `is.numeric()` works.
+>
+> Well, I think it would / should never apply:
+>
+> range() belongs to the "Summary" group generics (as min, max, ...)
+>
+> and there  *are*  Summary.Date()  and Summary.POSIX{c,l}t() methods.
+>
+> Without checking further for now, I think you are indirectly
+> suggesting to enhance these three Summary.*() methods so they do
+> obey  'finite = TRUE' .
+>
+> I think I agree they should.
+>
+> Martin
+>
+>     > ``` x <- .Date(c(0, Inf, 1, 2, Inf)) x #> [1] "1970-01-01"
+>     > "Inf" "1970-01-02" "1970-01-03" "Inf"
+>
+>     > # Darn!  range(x, finite = TRUE) #> [1] "1970-01-01" "Inf"
+>
+>     > # What I want .Date(range(unclass(x), finite = TRUE)) #>
+>     > [1] "1970-01-01" "1970-01-03" ```
+>
+>     > I think `finite = TRUE` would be pretty nice for Dates in
+>     > particular.
+>
+>     > As a motivating example, sometimes you have ranges of
+>     > dates represented by start/end pairs. It is fairly natural
+>     > to represent an event that hasn't ended yet with an
+>     > infinite date. If you need to then compute a sequence of
+>     > dates spanning the full range of the start/end pairs, it
+>     > would be nice to be able to use `range(finite = TRUE)` to
+>     > do so:
+>
+>     > ``` start <- as.Date(c("2019-01-05", "2019-01-10",
+>     > "2019-01-11", "2019-01-14")) end <-
+>     > as.Date(c("2019-01-07", NA, "2019-01-14", NA))
+>     > end[is.na(end)] <- Inf
+>
+>     > # `end = Inf` means that the event hasn't "ended" yet
+>     > data.frame(start, end) #> start end #> 1 2019-01-05
+>     > 2019-01-07 #> 2 2019-01-10 Inf #> 3 2019-01-11 2019-01-14
+>     > #> 4 2019-01-14 Inf
+>
+>     > # Create a full sequence along all days in start/end range
+>     > <- .Date(range(unclass(c(start, end)), finite = TRUE))
+>     > seq(range[1], range[2], by = 1) #> [1] "2019-01-05"
+>     > "2019-01-06" "2019-01-07" "2019-01-08" "2019-01-09" #> [6]
+>     > "2019-01-10" "2019-01-11" "2019-01-12" "2019-01-13"
+>     > "2019-01-14" ```
+>
+>     > It seems like one option is to create a `range.Date()`
+>     > method that unclasses, forwards the arguments on to a
+>     > second call to `range()`, and then reclasses?
+>
+>     > ``` range.Date <- function(x, ..., na.rm = FALSE, finite =
+>     > FALSE) { .Date(range(unclass(x), na.rm = na.rm, finite =
+>     > finite), oldClass(x)) } ```
+>
+>     > This is similar to how `rep.Date()` works.
+>
+>     > Thanks, Davis Vaughan
+>
+>     > ______________________________________________
+>     > R-devel at r-project.org mailing list
+>     > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Tue May  2 13:59:36 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Tue, 2 May 2023 14:59:36 +0300
+Subject: [Rd] save.image Non-responsive to Interrupt
+In-Reply-To: <SY2PR01MB300358E3EDF589B5A20227C8CD6B9@SY2PR01MB3003.ausprd01.prod.outlook.com>
+References: <SY2PR01MB300358E3EDF589B5A20227C8CD6B9@SY2PR01MB3003.ausprd01.prod.outlook.com>
+Message-ID: <20230502145936.0ee6dc91@arachnoid>
+
+? Sat, 29 Apr 2023 00:00:02 +0000
+Dario Strbenac via R-devel <r-devel at r-project.org> ?????:
+
+> Could save.image() be redesigned so that it promptly responds to
+> Ctrl+C? It prevents the command line from being used for a number of
+> hours if the contents of the workspace are large.
+
+This is ultimately caused by serialize() being non-interruptible. A
+relatively simple way to hang an R session for a long-ish time would
+therefore be:
+
+f <- xzfile(nullfile(), 'a+b')
+x <- rep(0, 1e9) # approx. 8 gigabytes, adjust for your RAM size
+serialize(x, f)
+close(f)
+
+This means that calling R_CheckUserInterrupt() between saving
+individual objects is not enough: R also needs to check for interrupts
+while saving sufficiently long vectors.
+
+Since the serialize() infrastructure is carefully written to avoid
+resource leaks on allocation failures, it looks relatively safe to
+liberally sprinkle R_CheckUserInterrupt() where it makes sense to do
+so, i.e. once per WriteItem() (which calls itself recursively and
+non-recursively) and once per every downstream for loop iteration.
+Valgrind doesn't show any new leaks if I apply the patch, interrupt
+serialize() and then exit. R also passes make check after the applied
+patch.
+
+Do these changes make sense, or am I overlooking some other problem?
+
+-- 
+Best regards,
+Ivan
+
+-------------- next part --------------
+A non-text attachment was scrubbed...
+Name: interrupt-serialize.patch
+Type: text/x-patch
+Size: 4173 bytes
+Desc: not available
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20230502/ab1d7f31/attachment.bin>
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Tue May  2 15:28:48 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Tue, 2 May 2023 15:28:48 +0200
+Subject: [Rd] save.image Non-responsive to Interrupt
+In-Reply-To: <20230502145936.0ee6dc91@arachnoid>
+References: <SY2PR01MB300358E3EDF589B5A20227C8CD6B9@SY2PR01MB3003.ausprd01.prod.outlook.com>
+ <20230502145936.0ee6dc91@arachnoid>
+Message-ID: <25681.4112.978286.30568@stat.math.ethz.ch>
+
+>>>>> Ivan Krylov 
+>>>>>     on Tue, 2 May 2023 14:59:36 +0300 writes:
+
+    > ? Sat, 29 Apr 2023 00:00:02 +0000
+    > Dario Strbenac via R-devel <r-devel at r-project.org> ?????:
+
+    >> Could save.image() be redesigned so that it promptly responds to
+    >> Ctrl+C? It prevents the command line from being used for a number of
+    >> hours if the contents of the workspace are large.
+
+    > This is ultimately caused by serialize() being non-interruptible. A
+    > relatively simple way to hang an R session for a long-ish time would
+    > therefore be:
+
+    > f <- xzfile(nullfile(), 'a+b')
+    > x <- rep(0, 1e9) # approx. 8 gigabytes, adjust for your RAM size
+    > serialize(x, f)
+    > close(f)
+
+    > This means that calling R_CheckUserInterrupt() between saving
+    > individual objects is not enough: R also needs to check for interrupts
+    > while saving sufficiently long vectors.
+
+    > Since the serialize() infrastructure is carefully written to avoid
+    > resource leaks on allocation failures, it looks relatively safe to
+    > liberally sprinkle R_CheckUserInterrupt() where it makes sense to do
+    > so, i.e. once per WriteItem() (which calls itself recursively and
+    > non-recursively) and once per every downstream for loop iteration.
+    > Valgrind doesn't show any new leaks if I apply the patch, interrupt
+    > serialize() and then exit. R also passes make check after the applied
+    > patch.
+
+    > Do these changes make sense, or am I overlooking some other problem?
+
+Thank you, Ivan!
+
+They do make sense... but :
+
+OTOH, in the past we have had to *disable*  R_CheckUserInterrupt()
+in parts of R's code because it was too expensive,
+{see current src/main/{seq.c,unique.c}  for a series of commented-out
+ R_CheckUserInterrupt() for such speed-loss reasons}
+
+so  adding these may need a lot of care when we simultaneously
+want to remain  efficient for "morally valid" use of serialization...
+where we really don't want to pay too much of a premium.
+
+{{ saving the whole user workspace is not "valid" in that sense
+   in my view.  I tell all my (non-beginner) Rstudio-using
+   students they should turn *off* the automatic saving and
+   loading at session end / beginning; and for reproducibility
+   only saveRDS() [or save()] *explicitly* a few precious
+   objects ..
+}}
+
+Again, we don't want to punish people who know what they are
+doing, just because other R users manage to hang their R session
+by too little thinking ... 
+
+Your patch adds 15 such interrupt checking calls which may
+really be too much -- I'm not claiming they are: with our
+recursive objects it's surely not very easy to determine the
+"minimally necessary" such calls.
+
+In addition, we may still consider adding an extra optional
+argument, say   `check.interrupt = TRUE`
+which we may default to TRUE when  save.image() is called
+but e.g., not when serialize() is called..
+
+Martin
+
+    > -- 
+    > Best regards,
+    > Ivan
+    > x[DELETED ATTACHMENT external: Rd_IvanKrylov_interrupt-serialize.patch, text/x-patch]
+    > ______________________________________________
+    > R-devel at r-project.org mailing list
+    > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From ru@@e|| @end|ng |rom r@|mond@net  Tue May  2 22:42:47 2023
+From: ru@@e|| @end|ng |rom r@|mond@net (Russell Almond)
+Date: Tue, 2 May 2023 16:42:47 -0400
+Subject: [Rd] is(x,"ANY") is FALSE
+Message-ID: <7BAB2953-CF25-484C-925F-CD460AC90A23@ralmond.net>
+
+I?m somewhat puzzled by the following bit of code on R 4.2.3 (also R 4.2.2)
+
+> df <- data.frame(x=1:3)
+> is (df,"ANY")
+[1] FALSE
+
+This seem to be false when the first argument is any S3 class, while I would think that ?ANY? would be true for S3, S4 and reference classes, as well as primitive types.
+
+This also seems to be a regression, as code that was previously working no longer works.
+
+
+A little more context on my use.
+
+I?m defining a slot for a reference class using a type union, 
+setClass(?MongoDB?,c(?NULL?,?ANY?))
+
+[I should be using setOldClass(?mongo?) here, but I was having trouble promoting the S3 ?mongo? class I was getting from the library.]
+
+Then when I try to set the corresopnding slot I?m getting an error, because ?mongo? is not of type MongoDB (even through that is a class union which contains ?ANY?).  
+
+I can work around the problem by setting the slot to type ?ANY?, but then I loose the documentation that the intention is that it should a mongo database connection.
+
+Did I miss something here?  Or is this an unintended consequence of some other change?
+
+Thanks,
+  ?Russell Almond
+
+
+
+
+	[[alternative HTML version deleted]]
+
+
+From jeroenoom@ @end|ng |rom gm@||@com  Wed May  3 00:55:48 2023
+From: jeroenoom@ @end|ng |rom gm@||@com (Jeroen Ooms)
+Date: Wed, 3 May 2023 00:55:48 +0200
+Subject: [Rd] save.image Non-responsive to Interrupt
+In-Reply-To: <25681.4112.978286.30568@stat.math.ethz.ch>
+References: <SY2PR01MB300358E3EDF589B5A20227C8CD6B9@SY2PR01MB3003.ausprd01.prod.outlook.com>
+ <20230502145936.0ee6dc91@arachnoid>
+ <25681.4112.978286.30568@stat.math.ethz.ch>
+Message-ID: <CABFfbXtru7PyV_1ecknsSLg6C3HqzVw9Mja2rybvwM76oOiT5A@mail.gmail.com>
+
+On Tue, May 2, 2023 at 3:29?PM Martin Maechler
+<maechler at stat.math.ethz.ch> wrote:
+>
+> >>>>> Ivan Krylov
+> >>>>>     on Tue, 2 May 2023 14:59:36 +0300 writes:
+>
+>     > ? Sat, 29 Apr 2023 00:00:02 +0000
+>     > Dario Strbenac via R-devel <r-devel at r-project.org> ?????:
+>
+>     >> Could save.image() be redesigned so that it promptly responds to
+>     >> Ctrl+C? It prevents the command line from being used for a number of
+>     >> hours if the contents of the workspace are large.
+>
+>     > This is ultimately caused by serialize() being non-interruptible. A
+>     > relatively simple way to hang an R session for a long-ish time would
+>     > therefore be:
+>
+>     > f <- xzfile(nullfile(), 'a+b')
+>     > x <- rep(0, 1e9) # approx. 8 gigabytes, adjust for your RAM size
+>     > serialize(x, f)
+>     > close(f)
+>
+>     > This means that calling R_CheckUserInterrupt() between saving
+>     > individual objects is not enough: R also needs to check for interrupts
+>     > while saving sufficiently long vectors.
+>
+>     > Since the serialize() infrastructure is carefully written to avoid
+>     > resource leaks on allocation failures, it looks relatively safe to
+>     > liberally sprinkle R_CheckUserInterrupt() where it makes sense to do
+>     > so, i.e. once per WriteItem() (which calls itself recursively and
+>     > non-recursively) and once per every downstream for loop iteration.
+>     > Valgrind doesn't show any new leaks if I apply the patch, interrupt
+>     > serialize() and then exit. R also passes make check after the applied
+>     > patch.
+>
+>     > Do these changes make sense, or am I overlooking some other problem?
+>
+> Thank you, Ivan!
+>
+> They do make sense... but :
+>
+> OTOH, in the past we have had to *disable*  R_CheckUserInterrupt()
+> in parts of R's code because it was too expensive,
+> {see current src/main/{seq.c,unique.c}  for a series of commented-out
+>  R_CheckUserInterrupt() for such speed-loss reasons}
+>
+> so  adding these may need a lot of care when we simultaneously
+> want to remain  efficient for "morally valid" use of serialization...
+> where we really don't want to pay too much of a premium.
+
+Alternatively, one could consider making R throttle or debounce calls
+to R_CheckUserInterrupt such that a repeated calls within x time are
+ignored, cf: https://www.freecodecamp.org/news/javascript-debounce-example/
+
+The reasoning being that it may be difficult for (contributed) code to
+determine when/where it is appropriate to check for interrupts, given
+varying code paths and cpu speed. Maybe it makes more sense to call
+R_CheckUserInterrupt frequently wherever it is safe to do so, and let
+R decide if reasonable time has elapsed to actually run the (possibly
+expensive) ui check again.
+
+Basic example: https://github.com/r-devel/r-svn/pull/125/files
+
+
+
+
+>
+> {{ saving the whole user workspace is not "valid" in that sense
+>    in my view.  I tell all my (non-beginner) Rstudio-using
+>    students they should turn *off* the automatic saving and
+>    loading at session end / beginning; and for reproducibility
+>    only saveRDS() [or save()] *explicitly* a few precious
+>    objects ..
+> }}
+>
+> Again, we don't want to punish people who know what they are
+> doing, just because other R users manage to hang their R session
+> by too little thinking ...
+>
+> Your patch adds 15 such interrupt checking calls which may
+> really be too much -- I'm not claiming they are: with our
+> recursive objects it's surely not very easy to determine the
+> "minimally necessary" such calls.
+>
+> In addition, we may still consider adding an extra optional
+> argument, say   `check.interrupt = TRUE`
+> which we may default to TRUE when  save.image() is called
+> but e.g., not when serialize() is called..
+>
+> Martin
+>
+>     > --
+>     > Best regards,
+>     > Ivan
+>     > x[DELETED ATTACHMENT external: Rd_IvanKrylov_interrupt-serialize.patch, text/x-patch]
+>     > ______________________________________________
+>     > R-devel at r-project.org mailing list
+>     > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From |@wrence@m|ch@e| @end|ng |rom gene@com  Wed May  3 01:01:41 2023
+From: |@wrence@m|ch@e| @end|ng |rom gene@com (Michael Lawrence (MICHAFLA))
+Date: Tue, 2 May 2023 16:01:41 -0700
+Subject: [Rd] [Sender Not Verified]  is(x,"ANY") is FALSE
+In-Reply-To: <7BAB2953-CF25-484C-925F-CD460AC90A23@ralmond.net>
+References: <7BAB2953-CF25-484C-925F-CD460AC90A23@ralmond.net>
+Message-ID: <CAOQ5Nyes-9gU1=efynk66nEbZc0XvaGVhgky_4o79g9iD6+1mA@mail.gmail.com>
+
+Hi,
+
+This does seem to be a bug in is(); I'll take a look. I'm curious
+about what stopped you from using setOldClass(), since that seems to
+be the most appropriate solution.
+
+Michael
+
+On Tue, May 2, 2023 at 2:59?PM Russell Almond <russell at ralmond.net> wrote:
+>
+> I?m somewhat puzzled by the following bit of code on R 4.2.3 (also R 4.2.2)
+>
+> > df <- data.frame(x=1:3)
+> > is (df,"ANY")
+> [1] FALSE
+>
+> This seem to be false when the first argument is any S3 class, while I would think that ?ANY? would be true for S3, S4 and reference classes, as well as primitive types.
+>
+> This also seems to be a regression, as code that was previously working no longer works.
+>
+>
+> A little more context on my use.
+>
+> I?m defining a slot for a reference class using a type union,
+> setClass(?MongoDB?,c(?NULL?,?ANY?))
+>
+> [I should be using setOldClass(?mongo?) here, but I was having trouble promoting the S3 ?mongo? class I was getting from the library.]
+>
+> Then when I try to set the corresopnding slot I?m getting an error, because ?mongo? is not of type MongoDB (even through that is a class union which contains ?ANY?).
+>
+> I can work around the problem by setting the slot to type ?ANY?, but then I loose the documentation that the intention is that it should a mongo database connection.
+>
+> Did I miss something here?  Or is this an unintended consequence of some other change?
+>
+> Thanks,
+>   ?Russell Almond
+>
+>
+>
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+
+-- 
+Michael Lawrence
+Senior Principal Scientist, Director of Data Science and Statistical Computing
+Genentech, A Member of the Roche Group
+Office +1 (650) 225-7760
+michafla at gene.com
+
+Join Genentech on LinkedIn | Twitter | Facebook | Instagram | YouTube
+
+
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Wed May  3 01:25:41 2023
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Tue, 2 May 2023 16:25:41 -0700
+Subject: [Rd] save.image Non-responsive to Interrupt
+In-Reply-To: <CABFfbXtru7PyV_1ecknsSLg6C3HqzVw9Mja2rybvwM76oOiT5A@mail.gmail.com>
+References: <SY2PR01MB300358E3EDF589B5A20227C8CD6B9@SY2PR01MB3003.ausprd01.prod.outlook.com>
+ <20230502145936.0ee6dc91@arachnoid>
+ <25681.4112.978286.30568@stat.math.ethz.ch>
+ <CABFfbXtru7PyV_1ecknsSLg6C3HqzVw9Mja2rybvwM76oOiT5A@mail.gmail.com>
+Message-ID: <CAFDcVCRxU8KiDcT7yNxxDGWzMgckg2gDQQ7f-mmqGhYhseVcJA@mail.gmail.com>
+
+Along the lines of calling R_CheckUserInterrupt() only onces in a while:
+
+> OTOH, in the past we have had to *disable*  R_CheckUserInterrupt()
+> in parts of R's code because it was too expensive,
+> {see current src/main/{seq.c,unique.c}  for a series of commented-out
+> R_CheckUserInterrupt() for such speed-loss reasons}
+
+First, here are links to these two files viewable online:
+
+ * https://github.com/wch/r-source/blob/trunk/src/main/seq.c
+
+ * https://github.com/wch/r-source/blob/trunk/src/main/unique.c
+
+When not commented out, R_CheckUserInterrupt() would have been called
+every 1,000,000 times per:
+
+  /* interval at which to check interrupts */
+  #define NINTERRUPT 1000000
+
+and
+
+  if ((i+1) % NINTERRUPT == 0) R_CheckUserInterrupt()
+
+in each iteration. That '(i+1) % NINTERRUPT == 0' expression can be
+quite expensive too.  However, if we change the code to use NINTERRUPT
+= 2^k where k = {1, 2, ...}, say
+
+  #define NINTERRUPT 1048576
+
+the compiler would optimize the condition to use "the modulo of powers
+of 2 can alternatively be expressed as a bitwise AND operation"
+(Thomas Lumley, 2015-06-15).  The speedup is quite impressive, cf.
+<https://www.jottr.org/2015/06/05/checkuserinterrupt/>.
+Alternatively, one can increment a counter and reset to zero after
+calling R_CheckUserInterrupt(); I think that's equally performant.
+
+Regarding making serialize() / unserialize() interruptible: I think
+can be a good idea since we work with larger objects these days.
+However, if we implement this, we probably have to consider what
+happens when an interrupt happens. For example, transfers between a
+client and a server are no longer atomic at this level, which means we
+might end up in a corrupt state. This may, for instance, happen to
+database transactions, and PSOCK parallel worker communication.  A
+quick fix would be to use base::suspendInterrupts(), but better would
+of course be to handle interrupts gracefully.
+
+My $.02 + $0.02
+
+/Henrik
+
+On Tue, May 2, 2023 at 3:56?PM Jeroen Ooms <jeroenooms at gmail.com> wrote:
+>
+> On Tue, May 2, 2023 at 3:29?PM Martin Maechler
+> <maechler at stat.math.ethz.ch> wrote:
+> >
+> > >>>>> Ivan Krylov
+> > >>>>>     on Tue, 2 May 2023 14:59:36 +0300 writes:
+> >
+> >     > ? Sat, 29 Apr 2023 00:00:02 +0000
+> >     > Dario Strbenac via R-devel <r-devel at r-project.org> ?????:
+> >
+> >     >> Could save.image() be redesigned so that it promptly responds to
+> >     >> Ctrl+C? It prevents the command line from being used for a number of
+> >     >> hours if the contents of the workspace are large.
+> >
+> >     > This is ultimately caused by serialize() being non-interruptible. A
+> >     > relatively simple way to hang an R session for a long-ish time would
+> >     > therefore be:
+> >
+> >     > f <- xzfile(nullfile(), 'a+b')
+> >     > x <- rep(0, 1e9) # approx. 8 gigabytes, adjust for your RAM size
+> >     > serialize(x, f)
+> >     > close(f)
+> >
+> >     > This means that calling R_CheckUserInterrupt() between saving
+> >     > individual objects is not enough: R also needs to check for interrupts
+> >     > while saving sufficiently long vectors.
+> >
+> >     > Since the serialize() infrastructure is carefully written to avoid
+> >     > resource leaks on allocation failures, it looks relatively safe to
+> >     > liberally sprinkle R_CheckUserInterrupt() where it makes sense to do
+> >     > so, i.e. once per WriteItem() (which calls itself recursively and
+> >     > non-recursively) and once per every downstream for loop iteration.
+> >     > Valgrind doesn't show any new leaks if I apply the patch, interrupt
+> >     > serialize() and then exit. R also passes make check after the applied
+> >     > patch.
+> >
+> >     > Do these changes make sense, or am I overlooking some other problem?
+> >
+> > Thank you, Ivan!
+> >
+> > They do make sense... but :
+> >
+> > OTOH, in the past we have had to *disable*  R_CheckUserInterrupt()
+> > in parts of R's code because it was too expensive,
+> > {see current src/main/{seq.c,unique.c}  for a series of commented-out
+> >  R_CheckUserInterrupt() for such speed-loss reasons}
+> >
+> > so  adding these may need a lot of care when we simultaneously
+> > want to remain  efficient for "morally valid" use of serialization...
+> > where we really don't want to pay too much of a premium.
+>
+> Alternatively, one could consider making R throttle or debounce calls
+> to R_CheckUserInterrupt such that a repeated calls within x time are
+> ignored, cf: https://www.freecodecamp.org/news/javascript-debounce-example/
+>
+> The reasoning being that it may be difficult for (contributed) code to
+> determine when/where it is appropriate to check for interrupts, given
+> varying code paths and cpu speed. Maybe it makes more sense to call
+> R_CheckUserInterrupt frequently wherever it is safe to do so, and let
+> R decide if reasonable time has elapsed to actually run the (possibly
+> expensive) ui check again.
+>
+> Basic example: https://github.com/r-devel/r-svn/pull/125/files
+>
+>
+>
+>
+> >
+> > {{ saving the whole user workspace is not "valid" in that sense
+> >    in my view.  I tell all my (non-beginner) Rstudio-using
+> >    students they should turn *off* the automatic saving and
+> >    loading at session end / beginning; and for reproducibility
+> >    only saveRDS() [or save()] *explicitly* a few precious
+> >    objects ..
+> > }}
+> >
+> > Again, we don't want to punish people who know what they are
+> > doing, just because other R users manage to hang their R session
+> > by too little thinking ...
+> >
+> > Your patch adds 15 such interrupt checking calls which may
+> > really be too much -- I'm not claiming they are: with our
+> > recursive objects it's surely not very easy to determine the
+> > "minimally necessary" such calls.
+> >
+> > In addition, we may still consider adding an extra optional
+> > argument, say   `check.interrupt = TRUE`
+> > which we may default to TRUE when  save.image() is called
+> > but e.g., not when serialize() is called..
+> >
+> > Martin
+> >
+> >     > --
+> >     > Best regards,
+> >     > Ivan
+> >     > x[DELETED ATTACHMENT external: Rd_IvanKrylov_interrupt-serialize.patch, text/x-patch]
+> >     > ______________________________________________
+> >     > R-devel at r-project.org mailing list
+> >     > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
