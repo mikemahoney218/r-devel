@@ -630,3 +630,368 @@ On Tue, May 2, 2023 at 3:56?PM Jeroen Ooms <jeroenooms at gmail.com> wrote:
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From k@ro||@@koncev|c|u@ @end|ng |rom gm@||@com  Wed May  3 09:36:30 2023
+From: k@ro||@@koncev|c|u@ @end|ng |rom gm@||@com (=?utf-8?Q?Karolis_Koncevi=C4=8Dius?=)
+Date: Wed, 3 May 2023 10:36:30 +0300
+Subject: [Rd] Inquiry about the behaviour of subsetting and names in matrices
+Message-ID: <EC0F4F60-0817-4FAB-90DC-F5C0B7FD1125@gmail.com>
+
+Hello,
+
+I have stumbled upon a few cases where the behaviour of naming and subsetting in matrices seems unintuitive.
+All those look related so wanted to put everything in one message.
+
+
+1. Why row/col selection by names with NAs is not allowed?
+
+  x <- setNames(1:10, letters[1:10])
+  X <- matrix(x, nrow=2, dimnames = list(letters[1:2], LETTERS[1:5]))
+
+  x[c(1, NA, 3)]       # vector: works and adds "NA"
+  x[c("a", NA, "c")]   # vector: works and adds "NA"
+  X[,c(1, NA, 3)]      # works and selects "NA" column
+  X[,c("A", NA, "C")]  # <error>
+
+
+2. Should setting names() for a matrix be allowed?
+
+  names(X) <- paste0("e", 1:length(X))
+  X["e4"]  # works
+
+  # but any operation on a matrix drops the names
+  X <- X[,-1]  # all names are gone
+  X["e4"]      # <error>
+
+  Maybe names() should not be allowed on a matrix?
+
+
+3. Should selection of non-existent dimension names really be an error?
+
+  x[22]   # works on a vector - gives "NA"
+  X[,22]  # <error>
+
+
+  A potential useful use-case is matching a smaller matrix to a larger one:
+  A <- matrix(rnorm(10), nrow=2, dimnames = list(c("a","c")))
+  B <- matrix(rnorm(20), nrow=4, dimnames = list(c("a", "b", "c", "d")))
+
+  # matching larger matrix to the smaller one <works>
+  B[rownames(A),]
+
+  # matching smaller matrix to the larger one <error>
+  A[rownames(B),]
+
+
+These also doesn't seem to be documented in '[', 'names', 'rownames?.
+
+Interested if there specific reasons for this behaviour, or could these potentially be adjusted?
+
+Kind regards,
+Karolis K.
+
+
+From Andre@G||||bert @end|ng |rom chu-rouen@|r  Wed May  3 10:15:52 2023
+From: Andre@G||||bert @end|ng |rom chu-rouen@|r (GILLIBERT, Andre)
+Date: Wed, 3 May 2023 08:15:52 +0000
+Subject: [Rd] Inquiry about the behaviour of subsetting and names in
+ matrices
+In-Reply-To: <EC0F4F60-0817-4FAB-90DC-F5C0B7FD1125@gmail.com>
+References: <EC0F4F60-0817-4FAB-90DC-F5C0B7FD1125@gmail.com>
+Message-ID: <55788649253e44f7b5fb4bcb46cde7c6@chu-rouen.fr>
+
+
+Karolis wrote:
+> Hello,
+
+> I have stumbled upon a few cases where the behaviour of naming and subsetting in matrices seems unintuitive.
+> All those look related so wanted to put everything in one message.
+
+
+> 1. Why row/col selection by names with NAs is not allowed?
+
+>   x <- setNames(1:10, letters[1:10])
+>   X <- matrix(x, nrow=2, dimnames = list(letters[1:2], LETTERS[1:5]))
+
+>   x[c(1, NA, 3)]       # vector: works and adds "NA"
+>   x[c("a", NA, "c")]   # vector: works and adds "NA"
+>   X[,c(1, NA, 3)]      # works and selects "NA" column
+>   X[,c("A", NA, "C")]  # <error>
+
+I would state the question the other way : why are NAs integer indices allowed?
+In my experience, they are sometimes useful but they often delay the detection of bugs. However, due to backward compatibility, this feature cannot be removed. Adding this feature to character indices would worsen the problem.
+
+I see another reason to keep the behavior as is currently : character indices are most often used with column names in contexts were they are unlikely to be NAs except as a consequence of a bug. In other words, I fear that the valid-use-case/bug ratio would be quite poor with this feature.
+
+> 2. Should setting names() for a matrix be allowed?
+>
+>   names(X) <- paste0("e", 1:length(X))
+>   X["e4"]  # works
+>
+>   # but any operation on a matrix drops the names
+>   X <- X[,-1]  # all names are gone
+>   X["e4"]      # <error>
+>
+>   Maybe names() should not be allowed on a matrix?
+
+Setting names() on a matrix is a rarely used feature that has practically no positive and no negative consequences. I see no incentive to change the behavior and break existing code.
+
+> 3. Should selection of non-existent dimension names really be an error?
+>
+>   x[22]   # works on a vector - gives "NA"
+>   X[,22]  # <error>
+
+This is very often a bug on vectors and should not have been allowed on vectors in the first place... But for backwards compatibility, it is hard to remove. Adding this unsafe feature to matrices is a poor idea in my opinion.
+
+>   A potential useful use-case is matching a smaller matrix to a larger one:
+
+This is a valid use-case, but in my opinion, it adds more problems than it solves.
+
+> These also doesn't seem to be documented in '[', 'names', 'rownames?.
+
+Indeed, the documentation of '[' seems to be unclear on indices out of range. It can be improved.
+
+> Interested if there specific reasons for this behaviour, or could these potentially be adjusted?
+
+In my opinion adding these features would improve the consistency of R but would add more sources of bugs in an already unsafe language.
+
+Sincerely
+Andr? GILLIBERT
+
+From k@ro||@@koncev|c|u@ @end|ng |rom gm@||@com  Wed May  3 11:08:28 2023
+From: k@ro||@@koncev|c|u@ @end|ng |rom gm@||@com (=?utf-8?Q?Karolis_Koncevi=C4=8Dius?=)
+Date: Wed, 3 May 2023 12:08:28 +0300
+Subject: [Rd] Inquiry about the behaviour of subsetting and names in
+ matrices
+In-Reply-To: <55788649253e44f7b5fb4bcb46cde7c6@chu-rouen.fr>
+References: <EC0F4F60-0817-4FAB-90DC-F5C0B7FD1125@gmail.com>
+ <55788649253e44f7b5fb4bcb46cde7c6@chu-rouen.fr>
+Message-ID: <DC33ED02-B1F4-4252-BB22-BDBC09207855@gmail.com>
+
+Thank you for such a quick reply, here are some points that I think might have been missed:
+
+> I would state the question the other way : why are NAs integer indices allowed?
+> In my experience, they are sometimes useful but they often delay the detection of bugs. However, due to backward compatibility, this feature cannot be removed. Adding this feature to character indices would worsen the problem.
+
+But please also note that character indices with NA are allowed for vectors. This is more an inconsistency between vectors and matrices. In vectors both numeric and character sub-setting works with NAs. In matrices only numberic and not character sub-setting works with NAs. Potentially this in itself can also be a source of bugs, or, at least surprises.
+
+> Setting names() on a matrix is a rarely used feature that has practically no positive and no negative consequences. I see no incentive to change the behavior and break existing code.
+
+When writing this message I had the opposite opinion. That this 2nd point is one of the most bug-probe points of all 3. As I would assume most users setting names() on a matrix would only do it by accident.
+
+> In my opinion adding these features would improve the consistency of R but would add more sources of bugs in an already unsafe language.
+
+I think this maybe is a crux of the thing.
+
+My original impression was that R was ?clever? about the usage of NAs by design. i.e. when you choose an unknown object from a set of objects the result is an object, but nobody knows which - hence NA. Is it really accepted now that such a decision was a mistake and lead to bugs in user code?
+
+Kind regards,
+Karolis K.
+
+> On May 3, 2023, at 11:15 AM, GILLIBERT, Andre <Andre.Gillibert at chu-rouen.fr> wrote:
+> 
+> 
+> Karolis wrote:
+>> Hello,
+> 
+>> I have stumbled upon a few cases where the behaviour of naming and subsetting in matrices seems unintuitive.
+>> All those look related so wanted to put everything in one message.
+> 
+> 
+>> 1. Why row/col selection by names with NAs is not allowed?
+> 
+>>  x <- setNames(1:10, letters[1:10])
+>>  X <- matrix(x, nrow=2, dimnames = list(letters[1:2], LETTERS[1:5]))
+> 
+>>  x[c(1, NA, 3)]       # vector: works and adds "NA"
+>>  x[c("a", NA, "c")]   # vector: works and adds "NA"
+>>  X[,c(1, NA, 3)]      # works and selects "NA" column
+>>  X[,c("A", NA, "C")]  # <error>
+> 
+> I would state the question the other way : why are NAs integer indices allowed?
+> In my experience, they are sometimes useful but they often delay the detection of bugs. However, due to backward compatibility, this feature cannot be removed. Adding this feature to character indices would worsen the problem.
+> 
+> I see another reason to keep the behavior as is currently : character indices are most often used with column names in contexts were they are unlikely to be NAs except as a consequence of a bug. In other words, I fear that the valid-use-case/bug ratio would be quite poor with this feature.
+> 
+>> 2. Should setting names() for a matrix be allowed?
+>> 
+>>  names(X) <- paste0("e", 1:length(X))
+>>  X["e4"]  # works
+>> 
+>>  # but any operation on a matrix drops the names
+>>  X <- X[,-1]  # all names are gone
+>>  X["e4"]      # <error>
+>> 
+>>  Maybe names() should not be allowed on a matrix?
+> 
+> Setting names() on a matrix is a rarely used feature that has practically no positive and no negative consequences. I see no incentive to change the behavior and break existing code.
+> 
+>> 3. Should selection of non-existent dimension names really be an error?
+>> 
+>>  x[22]   # works on a vector - gives "NA"
+>>  X[,22]  # <error>
+> 
+> This is very often a bug on vectors and should not have been allowed on vectors in the first place... But for backwards compatibility, it is hard to remove. Adding this unsafe feature to matrices is a poor idea in my opinion.
+> 
+>>  A potential useful use-case is matching a smaller matrix to a larger one:
+> 
+> This is a valid use-case, but in my opinion, it adds more problems than it solves.
+> 
+>> These also doesn't seem to be documented in '[', 'names', 'rownames?.
+> 
+> Indeed, the documentation of '[' seems to be unclear on indices out of range. It can be improved.
+> 
+>> Interested if there specific reasons for this behaviour, or could these potentially be adjusted?
+> 
+> In my opinion adding these features would improve the consistency of R but would add more sources of bugs in an already unsafe language.
+> 
+> Sincerely
+> Andr? GILLIBERT
+
+
+	[[alternative HTML version deleted]]
+
+
+From Andre@G||||bert @end|ng |rom chu-rouen@|r  Wed May  3 23:11:07 2023
+From: Andre@G||||bert @end|ng |rom chu-rouen@|r (GILLIBERT, Andre)
+Date: Wed, 3 May 2023 21:11:07 +0000
+Subject: [Rd] Inquiry about the behaviour of subsetting and names in
+ matrices
+In-Reply-To: <DC33ED02-B1F4-4252-BB22-BDBC09207855@gmail.com>
+References: <EC0F4F60-0817-4FAB-90DC-F5C0B7FD1125@gmail.com>
+ <55788649253e44f7b5fb4bcb46cde7c6@chu-rouen.fr>,
+ <DC33ED02-B1F4-4252-BB22-BDBC09207855@gmail.com>
+Message-ID: <e9c6873bbafe420b8e27542998d9bf70@chu-rouen.fr>
+
+
+Karolis K wrote:
+
+> This is more an inconsistency between vectors and matrices.
+
+> In vectors both numeric and character sub-setting works with NAs.
+
+> In matrices only numberic and not character sub-setting works with NAs.
+
+> Potentially this in itself can also be a source of bugs, or, at least surprises.
+
+
+Indeed.
+
+
+Karolis K wrote:
+
+> My original impression was that R was ?clever? about the usage of NAs by design. i.e. when you choose an unknown object
+
+> from a set of objects the result is an object, but nobody knows which - hence NA. Is it really accepted now that such a
+
+> decision was a mistake and lead to bugs in user code?
+
+
+This makes sense but my personal opinion (I do not speak for R developers, as I am not an R developer at all) is that the R language is so "clever" that it often becomes unsafe.
+
+Sometimes, this cleverness is handy for fast programming, such as NA propagation at many places. Other times, it causes more bugs than it helps, such as partial matching for the '$' operator. Indexation of column names in a matrix is probably not the place where NA propagation is the most useful, although it has its use cases. Consistency may be the main reason to add that feature, but I am not sure that this is a major incentive.
+
+
+Of course, the opinion of R developers would be more useful than my own personal views.
+
+
+--
+
+Sincerely
+
+Andr? GILLIBERT
+
+________________________________
+De : Karolis Koncevi?ius <karolis.koncevicius at gmail.com>
+Envoy? : mercredi 3 mai 2023 11:08:28
+? : GILLIBERT, Andre
+Cc : r-devel at r-project.org
+Objet : Re: [Rd] Inquiry about the behaviour of subsetting and names in matrices
+
+
+ATTENTION: Cet e-mail provient d?une adresse mail ext?rieure au CHU de Rouen. Ne cliquez pas sur les liens ou n'ouvrez pas les pi?ces jointes ? moins de conna?tre l'exp?diteur et de savoir que le contenu est s?r. En cas de doute, transf?rer le mail ? ? DSI, S?curit? ? pour analyse. Merci de votre vigilance
+
+
+Thank you for such a quick reply, here are some points that I think might have been missed:
+
+I would state the question the other way : why are NAs integer indices allowed?
+In my experience, they are sometimes useful but they often delay the detection of bugs. However, due to backward compatibility, this feature cannot be removed. Adding this feature to character indices would worsen the problem.
+
+But please also note that character indices with NA are allowed for vectors. This is more an inconsistency between vectors and matrices. In vectors both numeric and character sub-setting works with NAs. In matrices only numberic and not character sub-setting works with NAs. Potentially this in itself can also be a source of bugs, or, at least surprises.
+
+Setting names() on a matrix is a rarely used feature that has practically no positive and no negative consequences. I see no incentive to change the behavior and break existing code.
+
+When writing this message I had the opposite opinion. That this 2nd point is one of the most bug-probe points of all 3. As I would assume most users setting names() on a matrix would only do it by accident.
+
+In my opinion adding these features would improve the consistency of R but would add more sources of bugs in an already unsafe language.
+
+I think this maybe is a crux of the thing.
+
+My original impression was that R was ?clever? about the usage of NAs by design. i.e. when you choose an unknown object from a set of objects the result is an object, but nobody knows which - hence NA. Is it really accepted now that such a decision was a mistake and lead to bugs in user code?
+
+Kind regards,
+Karolis K.
+
+On May 3, 2023, at 11:15 AM, GILLIBERT, Andre <Andre.Gillibert at chu-rouen.fr> wrote:
+
+
+Karolis wrote:
+Hello,
+
+I have stumbled upon a few cases where the behaviour of naming and subsetting in matrices seems unintuitive.
+All those look related so wanted to put everything in one message.
+
+
+1. Why row/col selection by names with NAs is not allowed?
+
+ x <- setNames(1:10, letters[1:10])
+ X <- matrix(x, nrow=2, dimnames = list(letters[1:2], LETTERS[1:5]))
+
+ x[c(1, NA, 3)]       # vector: works and adds "NA"
+ x[c("a", NA, "c")]   # vector: works and adds "NA"
+ X[,c(1, NA, 3)]      # works and selects "NA" column
+ X[,c("A", NA, "C")]  # <error>
+
+I would state the question the other way : why are NAs integer indices allowed?
+In my experience, they are sometimes useful but they often delay the detection of bugs. However, due to backward compatibility, this feature cannot be removed. Adding this feature to character indices would worsen the problem.
+
+I see another reason to keep the behavior as is currently : character indices are most often used with column names in contexts were they are unlikely to be NAs except as a consequence of a bug. In other words, I fear that the valid-use-case/bug ratio would be quite poor with this feature.
+
+2. Should setting names() for a matrix be allowed?
+
+ names(X) <- paste0("e", 1:length(X))
+ X["e4"]  # works
+
+ # but any operation on a matrix drops the names
+ X <- X[,-1]  # all names are gone
+ X["e4"]      # <error>
+
+ Maybe names() should not be allowed on a matrix?
+
+Setting names() on a matrix is a rarely used feature that has practically no positive and no negative consequences. I see no incentive to change the behavior and break existing code.
+
+3. Should selection of non-existent dimension names really be an error?
+
+ x[22]   # works on a vector - gives "NA"
+ X[,22]  # <error>
+
+This is very often a bug on vectors and should not have been allowed on vectors in the first place... But for backwards compatibility, it is hard to remove. Adding this unsafe feature to matrices is a poor idea in my opinion.
+
+ A potential useful use-case is matching a smaller matrix to a larger one:
+
+This is a valid use-case, but in my opinion, it adds more problems than it solves.
+
+These also doesn't seem to be documented in '[', 'names', 'rownames?.
+
+Indeed, the documentation of '[' seems to be unclear on indices out of range. It can be improved.
+
+Interested if there specific reasons for this behaviour, or could these potentially be adjusted?
+
+In my opinion adding these features would improve the consistency of R but would add more sources of bugs in an already unsafe language.
+
+Sincerely
+Andr? GILLIBERT
+
+
+	[[alternative HTML version deleted]]
+
+
