@@ -1574,3 +1574,363 @@ R-devel to this one yesterday
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Fri May  5 23:41:45 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Fri, 5 May 2023 23:41:45 +0200
+Subject: [Rd] save.image Non-responsive to Interrupt
+In-Reply-To: <CAFDcVCQezw-LOnR2YecByQC+pGdT7UYrSdQ5DmYmaQwWoOCNkw@mail.gmail.com>
+References: <SY2PR01MB300358E3EDF589B5A20227C8CD6B9@SY2PR01MB3003.ausprd01.prod.outlook.com>
+ <20230502145936.0ee6dc91@arachnoid>
+ <25681.4112.978286.30568@stat.math.ethz.ch>
+ <CABFfbXtru7PyV_1ecknsSLg6C3HqzVw9Mja2rybvwM76oOiT5A@mail.gmail.com>
+ <CAFDcVCRxU8KiDcT7yNxxDGWzMgckg2gDQQ7f-mmqGhYhseVcJA@mail.gmail.com>
+ <18059965-1c70-a509-6ffb-81663d87e8f6@insa-toulouse.fr>
+ <CAFDcVCQezw-LOnR2YecByQC+pGdT7UYrSdQ5DmYmaQwWoOCNkw@mail.gmail.com>
+Message-ID: <25685.30745.829297.335910@stat.math.ethz.ch>
+
+>>>>> Henrik Bengtsson 
+>>>>>     on Thu, 4 May 2023 18:38:14 +0200 writes:
+
+    > On Thu, May 4, 2023 at 3:02?PM Serguei Sokol via R-devel
+    > <r-devel at r-project.org> wrote:
+    >> 
+    >> Le 03/05/2023 ? 01:25, Henrik Bengtsson a ?crit : > Along
+    >> the lines of calling R_CheckUserInterrupt() only onces in
+    >> a while:
+    >> >
+    >> >> OTOH, in the past we have had to *disable*
+    >> R_CheckUserInterrupt() >> in parts of R's code because it
+    >> was too expensive, >> {see current
+    >> src/main/{seq.c,unique.c} for a series of commented-out
+    >> >> R_CheckUserInterrupt() for such speed-loss reasons} >
+    >> First, here are links to these two files viewable online:
+    >> >
+    >> > *
+    >> https://github.com/wch/r-source/blob/trunk/src/main/seq.c
+    >> >
+    >> > *
+    >> https://github.com/wch/r-source/blob/trunk/src/main/unique.c
+    >> >
+    >> > When not commented out, R_CheckUserInterrupt() would
+    >> have been called > every 1,000,000 times per:
+    >> >
+    >> > /* interval at which to check interrupts */ > #define
+    >> NINTERRUPT 1000000
+    >> >
+    >> > and
+    >> >
+    >> > if ((i+1) % NINTERRUPT == 0) R_CheckUserInterrupt()
+    >> >
+    >> > in each iteration. That '(i+1) % NINTERRUPT == 0'
+    >> expression can be > quite expensive too.  I vaguely
+    >> remember a hack that was mentioned on this list as close
+    >> to 0-cost. It looked something like:
+    >> 
+    >> iint = NINTERRUPT; for (...) { if (--iint == 0) {
+    >> R_CheckUserInterrupt(); iint = NINTERRUPT; } }
+    >> 
+    >> Best, Serguei.
+
+    >> > Alternatively, one can increment a counter and reset to
+    >> zero after > calling R_CheckUserInterrupt(); I think
+    >> that's equally performant.
+
+    > Yes, that's the one, e.g. Tomas K migrated some "modulo"
+    > ones in R-devel to this one yesterday
+    > (https://github.com/wch/r-source/commit/1ca6c6c6246629c6a98a526a2906595e5cfcd45e).
+
+    > /Henrik
+
+Indeed.
+I have now (svn rev 84399) committed a version Ivan's patch which uses
+Tomas' approach (I think) in all cases, making uniformly use of
+this macro (derived from a version of what Tomas used):
+
+#define IF_IC_R_CheckUserInterrupt()		\
+    if(!(--ic)) {				\
+	R_CheckUserInterrupt();			\
+	ic = 9999;				\
+    }
+
+I confirm that I now can interrupt Ivan's example.  The
+interrupt is not handled immediately but within a second or so.
+
+Martin
+
+    >> > However, if we change the code to use NINTERRUPT > =
+    >> 2^k where k = {1, 2, ...}, say
+    >> >
+    >> > #define NINTERRUPT 1048576
+    >> >
+    >> > the compiler would optimize the condition to use "the
+    >> modulo of powers > of 2 can alternatively be expressed as
+    >> a bitwise AND operation" > (Thomas Lumley, 2015-06-15).
+    >> The speedup is quite impressive, cf.  >
+    >> <https://www.jottr.org/2015/06/05/checkuserinterrupt/>.
+    >> > Alternatively, one can increment a counter and reset to
+    >> zero after > calling R_CheckUserInterrupt(); I think
+    >> that's equally performant.
+    >> >
+    >> > Regarding making serialize() / unserialize()
+    >> interruptible: I think > can be a good idea since we work
+    >> with larger objects these days.  > However, if we
+    >> implement this, we probably have to consider what >
+    >> happens when an interrupt happens. For example, transfers
+    >> between a > client and a server are no longer atomic at
+    >> this level, which means we > might end up in a corrupt
+    >> state. This may, for instance, happen to > database
+    >> transactions, and PSOCK parallel worker communication.  A
+    >> > quick fix would be to use base::suspendInterrupts(),
+    >> but better would > of course be to handle interrupts
+    >> gracefully.
+    >> >
+    >> > My $.02 + $0.02
+    >> >
+    >> > /Henrik
+    >> >
+    >> > On Tue, May 2, 2023 at 3:56?PM Jeroen Ooms
+    >> <jeroenooms at gmail.com> wrote: >> On Tue, May 2, 2023 at
+    >> 3:29?PM Martin Maechler >> <maechler at stat.math.ethz.ch>
+    >> wrote: >>>>>>>> Ivan Krylov >>>>>>>> on Tue, 2 May 2023
+    >> 14:59:36 +0300 writes: >>> > ? Sat, 29 Apr 2023 00:00:02
+    >> +0000 >>> > Dario Strbenac via R-devel
+    >> <r-devel at r-project.org> ?????:
+    >> >>>
+    >> >>> >> Could save.image() be redesigned so that it
+    >> promptly responds to >>> >> Ctrl+C? It prevents the
+    >> command line from being used for a number of >>> >> hours
+    >> if the contents of the workspace are large.
+    >> >>>
+    >> >>> > This is ultimately caused by serialize() being
+    >> non-interruptible. A >>> > relatively simple way to hang
+    >> an R session for a long-ish time would >>> > therefore
+    >> be:
+    >> >>>
+    >> >>> > f <- xzfile(nullfile(), 'a+b') >>> > x <- rep(0,
+    >> 1e9) # approx. 8 gigabytes, adjust for your RAM size >>>
+    >> > serialize(x, f) >>> > close(f)
+    >> >>>
+    >> >>> > This means that calling R_CheckUserInterrupt()
+    >> between saving >>> > individual objects is not enough: R
+    >> also needs to check for interrupts >>> > while saving
+    >> sufficiently long vectors.
+    >> >>>
+    >> >>> > Since the serialize() infrastructure is carefully
+    >> written to avoid >>> > resource leaks on allocation
+    >> failures, it looks relatively safe to >>> > liberally
+    >> sprinkle R_CheckUserInterrupt() where it makes sense to
+    >> do >>> > so, i.e. once per WriteItem() (which calls
+    >> itself recursively and >>> > non-recursively) and once
+    >> per every downstream for loop iteration.  >>> > Valgrind
+    >> doesn't show any new leaks if I apply the patch,
+    >> interrupt >>> > serialize() and then exit. R also passes
+    >> make check after the applied >>> > patch.
+    >> >>>
+    >> >>> > Do these changes make sense, or am I overlooking
+    >> some other problem?
+    >> >>>
+    >> >>> Thank you, Ivan!
+    >> >>>
+    >> >>> They do make sense... but :
+    >> >>>
+    >> >>> OTOH, in the past we have had to *disable*
+    >> R_CheckUserInterrupt() >>> in parts of R's code because
+    >> it was too expensive, >>> {see current
+    >> src/main/{seq.c,unique.c} for a series of commented-out
+    >> >>> R_CheckUserInterrupt() for such speed-loss reasons}
+    >> >>>
+    >> >>> so adding these may need a lot of care when we
+    >> simultaneously >>> want to remain efficient for "morally
+    >> valid" use of serialization...  >>> where we really don't
+    >> want to pay too much of a premium.  >> Alternatively, one
+    >> could consider making R throttle or debounce calls >> to
+    >> R_CheckUserInterrupt such that a repeated calls within x
+    >> time are >> ignored, cf:
+    >> https://www.freecodecamp.org/news/javascript-debounce-example/
+    >> >>
+    >> >> The reasoning being that it may be difficult for
+    >> (contributed) code to >> determine when/where it is
+    >> appropriate to check for interrupts, given >> varying
+    >> code paths and cpu speed. Maybe it makes more sense to
+    >> call >> R_CheckUserInterrupt frequently wherever it is
+    >> safe to do so, and let >> R decide if reasonable time has
+    >> elapsed to actually run the (possibly >> expensive) ui
+    >> check again.
+    >> >>
+    >> >> Basic example:
+    >> https://github.com/r-devel/r-svn/pull/125/files
+    >> >>
+    >> >>
+    >> >>
+    >> >>
+    >> >>> {{ saving the whole user workspace is not "valid" in
+    >> that sense >>> in my view.  I tell all my (non-beginner)
+    >> Rstudio-using >>> students they should turn *off* the
+    >> automatic saving and >>> loading at session end /
+    >> beginning; and for reproducibility >>> only saveRDS() [or
+    >> save()] *explicitly* a few precious >>> objects ..  >>>
+    >> }}
+    >> >>>
+    >> >>> Again, we don't want to punish people who know what
+    >> they are >>> doing, just because other R users manage to
+    >> hang their R session >>> by too little thinking ...
+    >> >>>
+    >> >>> Your patch adds 15 such interrupt checking calls
+    >> which may >>> really be too much -- I'm not claiming they
+    >> are: with our >>> recursive objects it's surely not very
+    >> easy to determine the >>> "minimally necessary" such
+    >> calls.
+    >> >>>
+    >> >>> In addition, we may still consider adding an extra
+    >> optional >>> argument, say `check.interrupt = TRUE` >>>
+    >> which we may default to TRUE when save.image() is called
+    >> >>> but e.g., not when serialize() is called..
+    >> >>>
+    >> >>> Martin
+    >> >>>
+    >> >>>      > --
+    >> >>> > Best regards, >>> > Ivan >>> > x[DELETED ATTACHMENT
+    >> external: Rd_IvanKrylov_interrupt-serialize.patch,
+    >> text/x-patch] >>> >
+    >> ______________________________________________ >>> >
+    >> R-devel at r-project.org mailing list >>> >
+    >> https://stat.ethz.ch/mailman/listinfo/r-devel
+    >> >>>
+    >> >>> ______________________________________________ >>>
+    >> R-devel at r-project.org mailing list >>>
+    >> https://stat.ethz.ch/mailman/listinfo/r-devel >>
+    >> ______________________________________________ >>
+    >> R-devel at r-project.org mailing list >>
+    >> https://stat.ethz.ch/mailman/listinfo/r-devel >
+    >> ______________________________________________ >
+    >> R-devel at r-project.org mailing list >
+    >> https://stat.ethz.ch/mailman/listinfo/r-devel
+    >> 
+    >> 
+    >> --
+    >> Serguei Sokol Ingenieur de recherche INRAE
+    >> 
+    >> Cellule Math?matiques TBI, INSA/INRAE UMR 792, INSA/CNRS
+    >> UMR 5504 135 Avenue de Rangueil 31077 Toulouse Cedex 04
+    >> 
+    >> tel: +33 5 61 55 98 49 email: sokol at insa-toulouse.fr
+    >> http://www.toulouse-biotechnology-institute.fr/en/technology_platforms/mathematics-cell.html
+    >> 
+    >> ______________________________________________
+    >> R-devel at r-project.org mailing list
+    >> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+    > ______________________________________________
+    > R-devel at r-project.org mailing list
+    > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From j@g@nmn2 @end|ng |rom gm@||@com  Sat May  6 18:26:29 2023
+From: j@g@nmn2 @end|ng |rom gm@||@com (Mikael Jagan)
+Date: Sat, 6 May 2023 12:26:29 -0400
+Subject: [Rd] Change DEFAULTDEPARSE to DEFAULTDEPARSE | SHOWATTRIBUTES ?
+Message-ID: <fdc5b57c-b401-38df-1090-2109080eb98f@gmail.com>
+
+The deparse options used by default by 'deparse' and 'dput' are
+
+     c("keepNA", "keepInteger", "niceNames", "showAttributes")
+
+but Defn.h still has
+
+     #define DEFAULTDEPARSE		1089 /* KEEPINTEGER | KEEPNA | NICE_NAMES, used for 
+calls */
+
+i.e., with the SHOWATTRIBUTES bit turned off.  Is that on purpose?
+Note that this leads to weird things like:
+
+     > (expr <- call("is.matrix", matrix(1:4, 2L, 2L)))
+     is.matrix(1:4)
+     > eval(expr)
+     [1] TRUE
+
+which can confuse anyone not paying close attention ...
+
+Mikael
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sat May  6 19:12:09 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sat, 6 May 2023 13:12:09 -0400
+Subject: [Rd] Change DEFAULTDEPARSE to DEFAULTDEPARSE | SHOWATTRIBUTES ?
+In-Reply-To: <fdc5b57c-b401-38df-1090-2109080eb98f@gmail.com>
+References: <fdc5b57c-b401-38df-1090-2109080eb98f@gmail.com>
+Message-ID: <d2880934-7914-3af2-dd1c-56eea5825d50@gmail.com>
+
+On 06/05/2023 12:26 p.m., Mikael Jagan wrote:
+> The deparse options used by default by 'deparse' and 'dput' are
+> 
+>       c("keepNA", "keepInteger", "niceNames", "showAttributes")
+> 
+> but Defn.h still has
+> 
+>       #define DEFAULTDEPARSE		1089 /* KEEPINTEGER | KEEPNA | NICE_NAMES, used for
+> calls */
+> 
+> i.e., with the SHOWATTRIBUTES bit turned off.  Is that on purpose?
+> Note that this leads to weird things like:
+> 
+>       > (expr <- call("is.matrix", matrix(1:4, 2L, 2L)))
+>       is.matrix(1:4)
+>       > eval(expr)
+>       [1] TRUE
+> 
+> which can confuse anyone not paying close attention ...
+
+I agree that deparse does a better job in this case, but I'm not sure 
+I'd recommend the change.  You should try it, and see if any tests are 
+broken.  I'd guess there will be some in base R, but I might be wrong.
+
+Contributed packages are another issue.  Lots of packages test for 
+changes in their output; this change could break those.
+
+I think the underlying issue is that call("is.matrix", matrix(1:4, 2L, 
+2L)) produces something that would never be produced by the parser, so 
+"deparsing" isn't really well defined.
+
+For example deparse(expr) also gets it wrong:
+
+   [1] "is.matrix(structure(1:4, dim = c(2L, 2L)))"
+
+Even though that evaluates to the same result, it isn't the expression I 
+put into expr.  There are also many examples where you don't get the 
+right answer from either version.  A simple one is this:
+
+    > (expr <- call("identity", pi))
+    identity(3.14159265358979)
+    > eval(expr)
+    [1] 3.141593
+    > eval(expr) == identity(3.14159265358979)
+    [1] FALSE
+
+Here the issue is that the deparsed expression doesn't include the full 
+precision for pi that is stored in expr.
+
+(Aside:  This is one reason why it's such a bad idea to use the common 
+pattern:
+
+    deparse expression
+    modify part of it
+    parse the result
+
+You can often get more changes than you intended.  It's better to work 
+on the expression directly.)
+
+BTW, I just noticed something else in deparse() that's probably a bug.
+
+    > deparse(expr, control = "exact")
+    [1] "quote(I(0x1.921fb54442d18p+1))"
+
+I don't know why "quote" is now showing up; it means that
+
+    parse(text = deparse(expr, control = "exact"))
+
+produces something that's really quite different from expr.
+
+Duncan Murdoch
+
+
