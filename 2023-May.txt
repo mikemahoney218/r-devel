@@ -1934,3 +1934,227 @@ produces something that's really quite different from expr.
 Duncan Murdoch
 
 
+From d@v|@ @end|ng |rom po@|t@co  Tue May  9 15:49:41 2023
+From: d@v|@ @end|ng |rom po@|t@co (Davis Vaughan)
+Date: Tue, 9 May 2023 09:49:41 -0400
+Subject: [Rd] range() for Date and POSIXct could respect `finite = TRUE`
+In-Reply-To: <25683.31504.509548.721569@stat.math.ethz.ch>
+References: <CABzLhzyRuxgHnToS4CPn_g8NOsc6M5Tx+14Sf7X+cjD8NvZgRg@mail.gmail.com>
+ <25677.33376.349216.862139@stat.math.ethz.ch>
+ <CABzLhzzq2W3JsDP6KoRfLi0K1roD+3RH8mvnjWs_AnhP3A2SQg@mail.gmail.com>
+ <25683.31504.509548.721569@stat.math.ethz.ch>
+Message-ID: <CABzLhzxsUbgG2kQDovN_2droJtraFCqmn9G+_vkwrdTXivvj0Q@mail.gmail.com>
+
+It seems like the main problem is that `is.numeric(x)` isn't fully
+indicative of whether or not `is.finite(x)` makes sense for `x` (i.e.
+Date isn't numeric but does allow infinite dates).
+
+So I could also imagine a new `allows.infinite()` S3 generic that
+would return a single TRUE/FALSE for whether or not the type allows
+infinite values, this would also be indicative of whether or not
+`is.finite()` and `is.infinite()` make sense on that type. I imagine
+it being used like:
+
+```
+allows.infinite <- function(x) {
+  UseMethod("allows.infinite")
+}
+allows.infinite.default <- function(x) {
+  is.numeric(x) # For backwards compatibility, maybe? Not sure.
+}
+allows.infinite.Date <- function(x) {
+  TRUE
+}
+allows.infinite.POSIXct <- function(x) {
+  TRUE
+}
+
+range.default <- function (..., na.rm = FALSE, finite = FALSE) {
+  x <- c(..., recursive = TRUE)
+  if (allows.infinite(x)) { # changed from `is.numeric()`
+    if (finite)
+      x <- x[is.finite(x)]
+    else if (na.rm)
+      x <- x[!is.na(x)]
+    c(min(x), max(x))
+  }
+  else {
+    if (finite)
+      na.rm <- TRUE
+    c(min(x, na.rm = na.rm), max(x, na.rm = na.rm))
+  }
+}
+```
+
+It could allow other R developers to also use the pattern of:
+
+```
+if (allows.infinite(x)) {
+  # conditionally do stuff with is.infinite(x)
+}
+```
+
+and that seems like it could be rather nice.
+
+It would avoid the need for `range.Date()` and `range.POSIXct()` methods too.
+
+-Davis
+
+On Thu, May 4, 2023 at 5:29?AM Martin Maechler
+<maechler at stat.math.ethz.ch> wrote:
+>
+> >>>>> Davis Vaughan
+> >>>>>     on Mon, 1 May 2023 08:46:33 -0400 writes:
+>
+>     > Martin,
+>     > Yes, I missed that those have `Summary.*` methods, thanks!
+>
+>     > Tweaking those to respect `finite = TRUE` sounds great. It seems like
+>     > it might be a little tricky since the Summary methods call
+>     > `NextMethod()`, and `range.default()` uses `is.numeric()` to determine
+>     > whether or not to apply `finite`. Because `is.numeric.Date()` is
+>     > defined, that always returns `FALSE` for Dates (and POSIXt). Because
+>     > of that, it may still be easier to just write a specific
+>     > `range.Date()` method, but I'm not sure.
+>
+>     > -Davis
+>
+> I've looked more closely now, and indeed,
+> range() is the only function in the  Summary  group
+> where (only) the default method has a 'finite' argument.
+> which strikes me as somewhat asymmetric / inconsequential, as
+> after all,  range(.) := c(min(.), max(.)) ,
+> but  min() and max() do not obey an finite=TRUE setting, note
+>
+> > min(c(-Inf,3:5), finite=TRUE)
+> Error: attempt to use zero-length variable name
+>
+> where the error message also is not particularly friendly
+> and of course has nothing to with 'finite' :
+>
+> > max(1:4, foo="bar")
+> Error: attempt to use zero-length variable name
+> >
+>
+> ... but that is diverting;  coming back to the topic:  Given
+> that 'finite' only applies to range() {and there is just a convenience},
+> I do agree that from my own work & support to make `Date` and
+> `POSIX(c)t` behave more number-like, it would be "nice" to have
+> range() obey a `finite=TRUE` also for these.
+>
+> OTOH, there are quite a few other 'number-like' thingies for
+> which I would then like to have  range(*, finite=TRUE) work,
+> e.g.,  "mpfr" (package {Rmpfr}) or "bigz" {gmp} numbers, numeric
+> sparse matrices, ...
+>
+> To keep such methods all internally consistent with
+> range.default(), I could envision something like this
+>
+>
+> .rangeNum <- function(..., na.rm = FALSE, finite = FALSE, isNumeric)
+> {
+>     x <- c(..., recursive = TRUE)
+>     if(isNumeric(x)) {
+>         if(finite) x <- x[is.finite(x)]
+>         else if(na.rm) x <- x[!is.na(x)]
+>         c(min(x), max(x))
+>     } else {
+>         if(finite) na.rm <- TRUE
+>         c(min(x, na.rm=na.rm), max(x, na.rm=na.rm))
+>     }
+> }
+>
+> range.default <- function(..., na.rm = FALSE, finite = FALSE)
+>     .rangeNum(..., na.rm=na.rm, finite=finite, isNumeric = is.numeric)
+>
+> range.POSIXct <- range.Date <- function(..., na.rm = FALSE, finite = FALSE)
+>     .rangeNum(..., na.rm=na.rm, finite=finite, isNumeric = function(.)TRUE)
+>
+>
+>
+> which would also provide .rangeNum() to be used by implementors
+> of other numeric-like classes to provide their own range()
+> method as a 1-liner *and* be future-consistent with the default method..
+>
+>
+>
+>
+>     > On Sat, Apr 29, 2023 at 4:47?PM Martin Maechler
+>     > <maechler at stat.math.ethz.ch> wrote:
+>     >>
+>     >> >>>>> Davis Vaughan via R-devel
+>     >> >>>>>     on Fri, 28 Apr 2023 11:12:27 -0400 writes:
+>     >>
+>     >> > Hi all,
+>     >>
+>     >> > I noticed that `range.default()` has a nice `finite =
+>     >> > TRUE` argument, but it doesn't actually apply to Date or
+>     >> > POSIXct due to how `is.numeric()` works.
+>     >>
+>     >> Well, I think it would / should never apply:
+>     >>
+>     >> range() belongs to the "Summary" group generics (as min, max, ...)
+>     >>
+>     >> and there  *are*  Summary.Date()  and Summary.POSIX{c,l}t() methods.
+>     >>
+>     >> Without checking further for now, I think you are indirectly
+>     >> suggesting to enhance these three Summary.*() methods so they do
+>     >> obey  'finite = TRUE' .
+>     >>
+>     >> I think I agree they should.
+>     >>
+>     >> Martin
+>     >>
+>     >> > ``` x <- .Date(c(0, Inf, 1, 2, Inf)) x #> [1] "1970-01-01"
+>     >> > "Inf" "1970-01-02" "1970-01-03" "Inf"
+>     >>
+>     >> > # Darn!  range(x, finite = TRUE) #> [1] "1970-01-01" "Inf"
+>     >>
+>     >> > # What I want .Date(range(unclass(x), finite = TRUE)) #>
+>     >> > [1] "1970-01-01" "1970-01-03" ```
+>     >>
+>     >> > I think `finite = TRUE` would be pretty nice for Dates in
+>     >> > particular.
+>     >>
+>     >> > As a motivating example, sometimes you have ranges of
+>     >> > dates represented by start/end pairs. It is fairly natural
+>     >> > to represent an event that hasn't ended yet with an
+>     >> > infinite date. If you need to then compute a sequence of
+>     >> > dates spanning the full range of the start/end pairs, it
+>     >> > would be nice to be able to use `range(finite = TRUE)` to
+>     >> > do so:
+>     >>
+>     >> > ``` start <- as.Date(c("2019-01-05", "2019-01-10",
+>     >> > "2019-01-11", "2019-01-14")) end <-
+>     >> > as.Date(c("2019-01-07", NA, "2019-01-14", NA))
+>     >> > end[is.na(end)] <- Inf
+>     >>
+>     >> > # `end = Inf` means that the event hasn't "ended" yet
+>     >> > data.frame(start, end) #> start end #> 1 2019-01-05
+>     >> > 2019-01-07 #> 2 2019-01-10 Inf #> 3 2019-01-11 2019-01-14
+>     >> > #> 4 2019-01-14 Inf
+>     >>
+>     >> > # Create a full sequence along all days in start/end range
+>     >> > <- .Date(range(unclass(c(start, end)), finite = TRUE))
+>     >> > seq(range[1], range[2], by = 1) #> [1] "2019-01-05"
+>     >> > "2019-01-06" "2019-01-07" "2019-01-08" "2019-01-09" #> [6]
+>     >> > "2019-01-10" "2019-01-11" "2019-01-12" "2019-01-13"
+>     >> > "2019-01-14" ```
+>     >>
+>     >> > It seems like one option is to create a `range.Date()`
+>     >> > method that unclasses, forwards the arguments on to a
+>     >> > second call to `range()`, and then reclasses?
+>     >>
+>     >> > ``` range.Date <- function(x, ..., na.rm = FALSE, finite =
+>     >> > FALSE) { .Date(range(unclass(x), na.rm = na.rm, finite =
+>     >> > finite), oldClass(x)) } ```
+>     >>
+>     >> > This is similar to how `rep.Date()` works.
+>     >>
+>     >> > Thanks, Davis Vaughan
+>     >>
+>     >> > ______________________________________________
+>     >> > R-devel at r-project.org mailing list
+>     >> > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
