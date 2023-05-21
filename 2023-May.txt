@@ -4108,3 +4108,76 @@ wrote:
 	[[alternative HTML version deleted]]
 
 
+From hp@ge@@on@g|thub @end|ng |rom gm@||@com  Sat May 20 11:47:18 2023
+From: hp@ge@@on@g|thub @end|ng |rom gm@||@com (=?UTF-8?B?SGVydsOpIFBhZ8Oocw==?=)
+Date: Sat, 20 May 2023 02:47:18 -0700
+Subject: [Rd] issue with .local() hack used in S4 methods
+Message-ID: <d1e06be5-7be8-f77c-1f5f-77af9eb1957e@gmail.com>
+
+Hi,
+
+Just ran across this:
+
+ ??? foo <- function(x, ..., z=22) z
+
+ ??? setMethod("foo", "character", function(x, y=-5, z=22) y)
+ ??? # Creating a generic function from function ?foo? in the global 
+environment
+
+Then:
+
+ ??? foo("a")
+ ??? # [1] 22
+
+Should return -5, not 22.
+
+That's because the call to .local() used internally by the foo() method 
+does not name the arguments placed after the ellipsis:
+
+> selectMethod("foo", "character")
+Method Definition:
+
+function (x, ..., z = 22)
+{
+ ??? .local <- function (x, y = 5, z = 22)
+ ??? y
+ ??? .local(x, ..., z)? <--- should be .local(x, ..., z=z)
+}
+
+Thanks,
+
+H.
+
+> sessionInfo()
+R version 4.3.0 (2023-04-21)
+Platform: x86_64-pc-linux-gnu (64-bit)
+Running under: Ubuntu 23.04
+
+Matrix products: default
+BLAS:?? /home/hpages/R/R-4.3.0/lib/libRblas.so
+LAPACK: /home/hpages/R/R-4.3.0/lib/libRlapack.so;? LAPACK version 3.11.0
+
+locale:
+ ?[1] LC_CTYPE=en_US.UTF-8?????? LC_NUMERIC=C
+ ?[3] LC_TIME=en_US.UTF-8??????? LC_COLLATE=en_US.UTF-8
+ ?[5] LC_MONETARY=en_US.UTF-8??? LC_MESSAGES=en_US.UTF-8
+ ?[7] LC_PAPER=en_US.UTF-8?????? LC_NAME=C
+ ?[9] LC_ADDRESS=C?????????????? LC_TELEPHONE=C
+[11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C
+
+time zone: America/Los_Angeles
+tzcode source: system (glibc)
+
+attached base packages:
+[1] stats???? graphics? grDevices utils???? datasets? methods base
+
+loaded via a namespace (and not attached):
+[1] compiler_4.3.0?? codetools_0.2-19
+
+-- 
+Herv? Pag?s
+
+Bioconductor Core Team
+hpages.on.github at gmail.com
+
+
