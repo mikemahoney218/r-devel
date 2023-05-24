@@ -4587,3 +4587,275 @@ Martin
     > [[alternative HTML version deleted]]
 
 
+From peter@me||@trup @end|ng |rom gm@||@com  Tue May 23 20:29:19 2023
+From: peter@me||@trup @end|ng |rom gm@||@com (Peter Meilstrup)
+Date: Tue, 23 May 2023 11:29:19 -0700
+Subject: [Rd] How to locate references to an environment?
+Message-ID: <CAJoaRhY53Xh5x2WO=zcMwxeRJ2SLo7mN3=_AfiqcoNiAN=Q8sQ@mail.gmail.com>
+
+R developers,
+
+I am trying to track down a memory leak in my R package.
+
+I have a complex object O which comprises a lot of closures and such.
+Among which, the object uses an environment E to perform computations
+and keep intermediate values in. When O closes/finishes with its task
+it nulls out its reference to E so that that intermediate data can be
+garbage collected; I've verified that it does null the reference.
+
+However, it seems there is another reference to E floating around. I
+can tell because I can ask O to put a large array in E, then tell O to
+close, which nulls the reference to E, but then if I serialize(O,
+ascii=TRUE) I can still see the array in the output.
+
+Dangling references to E could come from a closure created in E, or an
+unforced promise from a function call evaluated in E that created a
+closure I still have a reference to, or, ... my question is how do I
+locate the reference?
+
+Is there a way to scan the workspace for objects that refer to a given object?
+
+Or is there a tool that will unpack/explain serialize()'s .rds format
+in a more human-readable way so that I can tell where the reference to
+E occurs?
+
+Peter
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Tue May 23 21:58:12 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 23 May 2023 15:58:12 -0400
+Subject: [Rd] How to locate references to an environment?
+In-Reply-To: <CAJoaRhY53Xh5x2WO=zcMwxeRJ2SLo7mN3=_AfiqcoNiAN=Q8sQ@mail.gmail.com>
+References: <CAJoaRhY53Xh5x2WO=zcMwxeRJ2SLo7mN3=_AfiqcoNiAN=Q8sQ@mail.gmail.com>
+Message-ID: <067ff6c9-e8bd-b448-95d5-7072db6acd00@gmail.com>
+
+On 23/05/2023 2:29 p.m., Peter Meilstrup wrote:
+> R developers,
+> 
+> I am trying to track down a memory leak in my R package.
+> 
+> I have a complex object O which comprises a lot of closures and such.
+> Among which, the object uses an environment E to perform computations
+> and keep intermediate values in. When O closes/finishes with its task
+> it nulls out its reference to E so that that intermediate data can be
+> garbage collected; I've verified that it does null the reference.
+> 
+> However, it seems there is another reference to E floating around. I
+> can tell because I can ask O to put a large array in E, then tell O to
+> close, which nulls the reference to E, but then if I serialize(O,
+> ascii=TRUE) I can still see the array in the output.
+> 
+> Dangling references to E could come from a closure created in E, or an
+> unforced promise from a function call evaluated in E that created a
+> closure I still have a reference to, or, ... my question is how do I
+> locate the reference?
+> 
+> Is there a way to scan the workspace for objects that refer to a given object?
+> 
+> Or is there a tool that will unpack/explain serialize()'s .rds format
+> in a more human-readable way so that I can tell where the reference to
+> E occurs?
+
+I don't know of such a tool.  You can generate a lot of data about the 
+internals of an object by using
+
+  .Internal(inspect(O))
+
+If your O is complex as you say, you probably won't want to read through 
+all of that output, but you can save it to a file and search for ENVSXP 
+for an environment, or if you have printed E and it shows up as 
+something like
+
+<environment: 0x7fb3761d1d98>
+
+you can search for that address in the output, e.g. in an example I just 
+ran, an environment and a closure that uses that environment were printed as
+
+   @7fb3761d1d98 04 ENVSXP g1c0 [MARK,REF(4)] <0x7fb3761d1d98>
+
+and
+
+   @7fb3762befd0 03 CLOSXP g1c0 [MARK,REF(2),ATT]
+   FORMALS:
+     @7fb3c00f7ee0 00 NILSXP g1c0 [MARK,REF(65535)]
+   BODY:
+     @7fb376e5bc88 14 REALSXP g1c1 [MARK,REF(2)] (len=1, tl=0) 123
+   CLOENV:
+     @7fb3761d1d98 04 ENVSXP g1c0 [MARK,REF(4)] <0x7fb3761d1d98>
+
+
+   The hard part might be to identify what you've found once you find 
+it, because names of objects aren't printed with the object, they come 
+later when the "names" attribute gets printed.
+
+So it might be easier to do it by trial and error:
+
+  rm(O) and save the workspace.  Does your test array get saved?  If so, 
+it's referenced from something outside of O.  If not, remove the 
+elements of O one by one, until saving it doesn't save the array.  The 
+last thing removed is a culprit. (There may be others...)
+
+Duncan Murdoch
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue May 23 22:24:43 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 23 May 2023 22:24:43 +0200
+Subject: [Rd] How to locate references to an environment?
+In-Reply-To: <CAJoaRhY53Xh5x2WO=zcMwxeRJ2SLo7mN3=_AfiqcoNiAN=Q8sQ@mail.gmail.com>
+References: <CAJoaRhY53Xh5x2WO=zcMwxeRJ2SLo7mN3=_AfiqcoNiAN=Q8sQ@mail.gmail.com>
+Message-ID: <7267f2df-c2dd-b5a5-51ec-77886baf69de@gmail.com>
+
+
+On 5/23/23 20:29, Peter Meilstrup wrote:
+> R developers,
+>
+> I am trying to track down a memory leak in my R package.
+>
+> I have a complex object O which comprises a lot of closures and such.
+> Among which, the object uses an environment E to perform computations
+> and keep intermediate values in. When O closes/finishes with its task
+> it nulls out its reference to E so that that intermediate data can be
+> garbage collected; I've verified that it does null the reference.
+>
+> However, it seems there is another reference to E floating around. I
+> can tell because I can ask O to put a large array in E, then tell O to
+> close, which nulls the reference to E, but then if I serialize(O,
+> ascii=TRUE) I can still see the array in the output.
+>
+> Dangling references to E could come from a closure created in E, or an
+> unforced promise from a function call evaluated in E that created a
+> closure I still have a reference to, or, ... my question is how do I
+> locate the reference?
+>
+> Is there a way to scan the workspace for objects that refer to a given object?
+>
+> Or is there a tool that will unpack/explain serialize()'s .rds format
+> in a more human-readable way so that I can tell where the reference to
+> E occurs?
+
+Maybe you could re-use my script used for finding a particular string in 
+the R heap (captured temporary installation directory name during staged 
+installation). It should be fairly easy to modify it to look for a 
+particular environment object.
+
+Best
+Tomas
+
+https://github.com/kalibera/rstagedinst/blob/master/sicheck.R
+https://blog.r-project.org/2019/02/14/staged-install/index.html
+>
+> Peter
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From pik@pp@@devei m@iii@g oii gm@ii@com  Wed May 24 02:08:25 2023
+From: pik@pp@@devei m@iii@g oii gm@ii@com (pik@pp@@devei m@iii@g oii gm@ii@com)
+Date: Wed, 24 May 2023 02:08:25 +0200
+Subject: [Rd] Heap access across multiple calls from R to C++
+Message-ID: <006001d98dd3$dc3d21b0$94b76510$@gmail.com>
+
+Dear all,
+
+ 
+
+I have a question about maintaining state in native code during the lifetime
+of an object of R6Class type. The background is the following. I have a
+class derived from the standard model class of the R port of Keras, and I
+want to perform some calculations in native code using a third-party
+library. I am working with R's C interface. To avoid memory initializations
+and some indexing calculations during the model's training, I want to
+initialize a native structure on the heap during the construction of the
+R6Class, prepare everything, and use this structure later to perform the
+calculations on the native side. As you can see, this requires maintaining
+the state during successive calls to my native code, and because of the
+third-party software I am relying on, I do not see an efficient way to
+organize my code differently.
+
+ 
+
+I think I have a working way of doing what I intend, but I am skeptical
+about its portability, and I would like to get some feedback or ideas for a
+better implementation. So, a minimalistic description of my approach goes
+along the following line (not tested example snippet):
+
+ 
+
+In R:
+
+R6::R6Class("my_model", public = list(
+
+  native_obj = double(1),
+
+  initialize = function() {
+
+    .C("make_native_obj", self$native_obj)
+
+  }), private = list (
+
+  finalize = function() {
+
+    .C("release_native_obj", self$native_obj)
+
+  }))
+
+ 
+
+In C(++):
+
+extern "C" void make_native_obj(double *obj) {
+
+  auto native_obj = new NativeObjStruct();
+
+  memcpy(obj, &native_obj, sizeof(obj));  
+
+}
+
+extern "C" void release_native_obj(double *obj) {
+
+  NativeObjStruct *native_obj{nullptr};
+
+  memcpy(&native_obj, obj, sizeof(native_obj));  
+
+   delete native_obj ;
+
+}
+
+ 
+
+This assumes that sizeof(double)=8=sizeof(native_obj*) and works on my
+machine with g++, clang, and msvc. Although I have never personally used a
+setup in which this condition is false, I wonder if it is universal in all
+the platforms relevant to R.
+
+ 
+
+Is there a better way to do this? From the C++ side, uintptr_t would be
+cleaner, but if I am not mistaken, I would then need integer(2) on the R
+side. Would this be better? Is there maybe a more standard way that this
+problem is solved in other cases? I have searched the R internals page, but
+I could not find something to help me. Essentially, I am asking for an
+approach corresponding to PyCapsule of the Python C API. I am looking for
+alternatives, preferably as lightweight as possible and, at least portable
+to the CRAN platforms.
+
+ 
+
+I would be very thankful for any suggestions or tips! 
+
+ 
+
+Kind Regards,
+
+Pantelis
+
+ 
+
+
+	[[alternative HTML version deleted]]
+
+
