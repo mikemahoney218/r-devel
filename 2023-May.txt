@@ -4859,3 +4859,187 @@ Pantelis
 	[[alternative HTML version deleted]]
 
 
+From kry|ov@r00t @end|ng |rom gm@||@com  Wed May 24 08:09:52 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Wed, 24 May 2023 09:09:52 +0300
+Subject: [Rd] Heap access across multiple calls from R to C++
+In-Reply-To: <006001d98dd3$dc3d21b0$94b76510$@gmail.com>
+References: <006001d98dd3$dc3d21b0$94b76510$@gmail.com>
+Message-ID: <20230524090952.1b348925@Tarkus>
+
+On Wed, 24 May 2023 02:08:25 +0200
+<pikappa.devel at gmail.com> wrote:
+
+>   initialize = function() {
+> 
+>     .C("make_native_obj", self$native_obj)
+> 
+>   })
+
+> extern "C" void make_native_obj(double *obj) {
+> 
+>   auto native_obj = new NativeObjStruct();
+> 
+>   memcpy(obj, &native_obj, sizeof(obj));  
+> 
+> }
+
+> Is there a better way to do this?
+
+The .Call() interface (where functions take an arbitrary number of
+native R objects and return a native R object) combined with external
+pointers is likely to be a better approach here:
+
+https://cran.r-project.org/doc/manuals/R-exts.html#External-pointers-and-weak-references
+
+On the R side, the returned SEXP will have class 'externalptr', with
+not much to do about it programmatically. C code can additionally
+register a finalizer on the object in order to release the memory
+automatically after the it is discarded.
+
+-- 
+Best regards,
+Ivan
+
+
+From @nto|ne@|@br| @end|ng |rom gm@||@com  Wed May 24 15:29:36 2023
+From: @nto|ne@|@br| @end|ng |rom gm@||@com (Antoine Fabri)
+Date: Wed, 24 May 2023 15:29:36 +0200
+Subject: [Rd] How to locate references to an environment?
+In-Reply-To: <mailman.53495.7.1684922402.37676.r-devel@r-project.org>
+References: <mailman.53495.7.1684922402.37676.r-devel@r-project.org>
+Message-ID: <CAEKh8uhoiH4j=Mw21LDUywJzTzPjx2Pk7ZNMxJ_FqpmEa0pAKg@mail.gmail.com>
+
+You could try {constructive} : https://github.com/cynkra/constructive/
+
+Here's how it might help:
+
+```
+E <- new.env()
+fun <- function(x) x
+environment(fun) <- E
+O <- list(
+  a = 1,
+  b = fun
+)
+# remotes::install_github("cynkra/constructive")
+library(constructive)
+
+construct(E)
+#> constructive::env("0x1075b2380", parents = "global")
+
+construct(O)
+#> list(
+#>   a = 1,
+#>   b = (function(x) x) |>
+#>     (`environment<-`)(constructive::env("0x1075b2380", parents =
+"global"))
+#> )
+```
+
+By searching for `0x1075b2380` here you'd easily find where it's referenced.
+If you have S4 objects in there you might want to try again in a few days
+since they're not supported yet.
+
+If the output is too big consider `construct_dump(list(O = O), "out.R")`
+
+Thanks,
+
+Antoine
+
+
+> Message: 1
+> Date: Tue, 23 May 2023 11:29:19 -0700
+> From: Peter Meilstrup <peter.meilstrup at gmail.com>
+> To: r-devel <r-devel at r-project.org>
+> Subject: [Rd] How to locate references to an environment?
+> Message-ID:
+>         <CAJoaRhY53Xh5x2WO=zcMwxeRJ2SLo7mN3=_AfiqcoNiAN=
+> Q8sQ at mail.gmail.com>
+> Content-Type: text/plain; charset="utf-8"
+>
+> R developers,
+>
+> I am trying to track down a memory leak in my R package.
+>
+> I have a complex object O which comprises a lot of closures and such.
+> Among which, the object uses an environment E to perform computations
+> and keep intermediate values in. When O closes/finishes with its task
+> it nulls out its reference to E so that that intermediate data can be
+> garbage collected; I've verified that it does null the reference.
+>
+> However, it seems there is another reference to E floating around. I
+> can tell because I can ask O to put a large array in E, then tell O to
+> close, which nulls the reference to E, but then if I serialize(O,
+> ascii=TRUE) I can still see the array in the output.
+>
+> Dangling references to E could come from a closure created in E, or an
+> unforced promise from a function call evaluated in E that created a
+> closure I still have a reference to, or, ... my question is how do I
+> locate the reference?
+>
+> Is there a way to scan the workspace for objects that refer to a given
+> object?
+>
+> Or is there a tool that will unpack/explain serialize()'s .rds format
+> in a more human-readable way so that I can tell where the reference to
+> E occurs?
+>
+> Peter
+>
+>
+>
+
+	[[alternative HTML version deleted]]
+
+
+From edd @end|ng |rom deb|@n@org  Wed May 24 16:16:09 2023
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Wed, 24 May 2023 09:16:09 -0500
+Subject: [Rd] Heap access across multiple calls from R to C++
+In-Reply-To: <20230524090952.1b348925@Tarkus>
+References: <006001d98dd3$dc3d21b0$94b76510$@gmail.com>
+ <20230524090952.1b348925@Tarkus>
+Message-ID: <25710.7209.833944.338196@rob.eddelbuettel.com>
+
+
+On 24 May 2023 at 09:09, Ivan Krylov wrote:
+| On Wed, 24 May 2023 02:08:25 +0200
+| <pikappa.devel at gmail.com> wrote:
+| > Is there a better way to do this?
+| 
+| The .Call() interface (where functions take an arbitrary number of
+| native R objects and return a native R object) combined with external
+| pointers is likely to be a better approach here:
+| 
+| https://cran.r-project.org/doc/manuals/R-exts.html#External-pointers-and-weak-references
+
+Yes. We had numerous threads here and on r-package-devel (better list for the
+question IMHO, maybe follow-up there?) stating that new code really should
+avoid .C() and stick with .Call().
+
+| On the R side, the returned SEXP will have class 'externalptr', with
+| not much to do about it programmatically. C code can additionally
+| register a finalizer on the object in order to release the memory
+| automatically after the it is discarded.
+
+(And Rcpp::XPtr sets those for you if you define RCPP_USE_FINALIZE_ON_EXIT.)
+
+A simpler approach is of course available too, and I used it too.  Define
+your class as you would in C++.  Then define
+ - a helper function to initialize a class object via `new`, assign it to a
+   static variable or a global pointer
+ - helper functions for setters and getters of the values you need
+ - a teardown function you can call, you may even tie it to R's on.exit()
+
+Now _you_ control lifetime and allocation. From R. If anything breaks, you
+get to keep the pieces.
+
+We can also help on the rcpp-devel list.
+
+Cheers, Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
