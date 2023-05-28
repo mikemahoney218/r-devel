@@ -5092,3 +5092,68 @@ DM
 	[[alternative HTML version deleted]]
 
 
+From pik@pp@@devei m@iii@g oii gm@ii@com  Wed May 24 21:05:28 2023
+From: pik@pp@@devei m@iii@g oii gm@ii@com (pik@pp@@devei m@iii@g oii gm@ii@com)
+Date: Wed, 24 May 2023 21:05:28 +0200
+Subject: [Rd] Heap access across multiple calls from R to C++
+In-Reply-To: <25710.7209.833944.338196@rob.eddelbuettel.com>
+References: <006001d98dd3$dc3d21b0$94b76510$@gmail.com>	<20230524090952.1b348925@Tarkus>
+ <25710.7209.833944.338196@rob.eddelbuettel.com>
+Message-ID: <000801d98e72$b4c5ad10$1e510730$-422@gmail.com>
+
+
+Thanks a lot! Also, for suggesting using `.Call`. I will try all three and
+follow up on the relevant list if I hit a dead-end.
+
+Best wishes,
+Pantelis
+
+-----Original Message-----
+From: Dirk Eddelbuettel <edd at debian.org> 
+Sent: Wednesday, May 24, 2023 4:16 PM
+To: Ivan Krylov <krylov.r00t at gmail.com>
+Cc: pikappa.devel at gmail.com; r-devel at r-project.org
+Subject: Re: [Rd] Heap access across multiple calls from R to C++
+
+
+On 24 May 2023 at 09:09, Ivan Krylov wrote:
+| On Wed, 24 May 2023 02:08:25 +0200
+| <pikappa.devel at gmail.com> wrote:
+| > Is there a better way to do this?
+| 
+| The .Call() interface (where functions take an arbitrary number of 
+| native R objects and return a native R object) combined with external 
+| pointers is likely to be a better approach here:
+| 
+| https://cran.r-project.org/doc/manuals/R-exts.html#External-pointers-a
+| nd-weak-references
+
+Yes. We had numerous threads here and on r-package-devel (better list for
+the question IMHO, maybe follow-up there?) stating that new code really
+should avoid .C() and stick with .Call().
+
+| On the R side, the returned SEXP will have class 'externalptr', with 
+| not much to do about it programmatically. C code can additionally 
+| register a finalizer on the object in order to release the memory 
+| automatically after the it is discarded.
+
+(And Rcpp::XPtr sets those for you if you define RCPP_USE_FINALIZE_ON_EXIT.)
+
+A simpler approach is of course available too, and I used it too.  Define
+your class as you would in C++.  Then define
+ - a helper function to initialize a class object via `new`, assign it to a
+   static variable or a global pointer
+ - helper functions for setters and getters of the values you need
+ - a teardown function you can call, you may even tie it to R's on.exit()
+
+Now _you_ control lifetime and allocation. From R. If anything breaks, you
+get to keep the pieces.
+
+We can also help on the rcpp-devel list.
+
+Cheers, Dirk
+
+--
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
