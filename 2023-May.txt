@@ -5157,3 +5157,254 @@ Cheers, Dirk
 dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
 
 
+From bbo|ker @end|ng |rom gm@||@com  Tue May 30 17:45:20 2023
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Tue, 30 May 2023 11:45:20 -0400
+Subject: [Rd] why does [A-Z] include 'T' in an Estonian locale?
+Message-ID: <f00a6b75-7e53-03fa-f3ef-cd3d46cd38dc@mcmaster.ca>
+
+   Inspired by this old Stack Overflow question
+
+https://stackoverflow.com/questions/19765610/when-does-locale-affect-rs-regular-expressions
+
+I was wondering why this is TRUE:
+
+Sys.setlocale("LC_ALL", "et_EE")
+grepl("[A-Z]", "T")
+
+TRE's documentation at 
+<https://laurikari.net/tre/documentation/regex-syntax/> says that a 
+range "is shorthand for the full range of characters between those two 
+[endpoints] (inclusive) in the collating sequence".
+
+Yet, T is *not* between A and Z in the Estonian collating sequence:
+
+  sort(LETTERS)
+  [1] "A" "B" "C" "D" "E" "F" "G" "H" "I" "J" "K" "L" "M" "N" "O" "P" 
+"Q" "R" "S"
+[20] "Z" "T" "U" "V" "W" "X" "Y"
+
+   I realize that this may be a question about TRE rather than about R 
+*per se* (FWIW the grepl() result is also TRUE with `perl = TRUE`, so 
+the question also applies to PCRE), but I'm wondering if anyone has any 
+insights ...  (and yes, I know that the correct answer is "use [:alpha:] 
+and don't worry about it")
+
+(In contrast, the ICU engine underlying stringi/stringr says "[t]he 
+characters to include are determined by Unicode code point ordering" - see
+
+https://stackoverflow.com/questions/76365426/does-stringrs-regex-engine-translate-a-z-into-abcdefghijklmnopqrstuvwyz/76366163#76366163
+
+for links)
+
+
+From mtmorg@n@b|oc @end|ng |rom gm@||@com  Tue May 30 22:09:53 2023
+From: mtmorg@n@b|oc @end|ng |rom gm@||@com (Martin Morgan)
+Date: Tue, 30 May 2023 20:09:53 +0000
+Subject: [Rd] Building R from source always fails on
+ tools:::sysdata2LazyLoadDB
+Message-ID: <BY5PR04MB66277011F94F9C4DDDD46287F94B9@BY5PR04MB6627.namprd04.prod.outlook.com>
+
+I build my own R from source on an M1 mac. I have a clean svn checkout in one directory ~/src/R-devel. I switch to ~/bin/R-devel and the first time run
+
+cd ~/bin/R-devel
+~/src/R-devel/configure --enable-R-shlib 'CFLAGS=-g -O0' CPPFLAGS=-I/opt/R/arm64/include 'CXXFLAGS=-g -O0'
+make -j
+
+At some point in the future I svn update src/R-devel, then
+
+cd ~/bin/R-devel
+make -j
+
+This always ends with
+
+installing 'sysdata.rda'
+/bin/sh: line 1: 99497 Done                    echo "tools:::sysdata2LazyLoadDB(\"/Users/XXX/src/R-devel/src/library/utils/R/sysdata.rda\",\"../../../library/utils/R\")"
+     99498 Killed: 9               | R_DEFAULT_PACKAGES=NULL LC_ALL=C ../../../bin/R --vanilla --no-echo
+make[4]: *** [sysdata] Error 137
+make[3]: *** [all] Error 2
+make[2]: *** [R] Error 1
+make[1]: *** [R] Error 1
+make: *** [R] Error 1
+
+what am I doing wrong? Is there a graceful way to fix this (my current solution is basically to start over, with `make distclean`)? If I cd into ~/bin/R-devel/src/library/utils I can start an interactive session and reproduce the error
+
+~/bin/R-devel/src/library/utils $   R_DEFAULT_PACKAGES=NULL ../../../bin/R --vanilla
+> tools:::sysdata2LazyLoadDB("/Users/ma38727/src/R-devel/src/library/utils/R/sysdata.rda","../../../library/utils/R")
+zsh: killed     R_DEFAULT_PACKAGES=NULL ../../../bin/R --vanilla
+
+or simply
+
+> tools:::sysdata2LazyLoadDB
+zsh: killed     R_DEFAULT_PACKAGES=NULL LC_ALL=C R_ENABLE_JIT=0 TZ=UTC ../../../bin/R
+
+	[[alternative HTML version deleted]]
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Tue May 30 22:37:26 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Tue, 30 May 2023 23:37:26 +0300
+Subject: [Rd] Building R from source always fails on
+ tools:::sysdata2LazyLoadDB
+In-Reply-To: <BY5PR04MB66277011F94F9C4DDDD46287F94B9@BY5PR04MB6627.namprd04.prod.outlook.com>
+References: <BY5PR04MB66277011F94F9C4DDDD46287F94B9@BY5PR04MB6627.namprd04.prod.outlook.com>
+Message-ID: <20230530233726.687ac8ee@Tarkus>
+
+On Tue, 30 May 2023 20:09:53 +0000
+Martin Morgan <mtmorgan.bioc at gmail.com> wrote:
+
+> ~/bin/R-devel/src/library/utils $   R_DEFAULT_PACKAGES=NULL
+> ../../../bin/R --vanilla
+> > tools:::sysdata2LazyLoadDB("/Users/ma38727/src/R-devel/src/library/utils/R/sysdata.rda","../../../library/utils/R")
+> >  
+> zsh: killed     R_DEFAULT_PACKAGES=NULL ../../../bin/R --vanilla
+
+Can you add the -d lldb flag to the command line (substitute lldb for a
+different debugger if that's what you prefer) and get a backtrace at
+the moment where R gets killed?
+
+That signal 9 is suspicious. On Linux, I would expect a SIGKILL sent by
+the OOM-Killer to a runaway process. On a Mac, I'm not sure at all, but
+could it be related to some of the security features? (Does the system
+save a crash report somewhere?)
+
+-- 
+Best regards,
+Ivan
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue May 30 22:54:14 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 30 May 2023 22:54:14 +0200
+Subject: [Rd] Building R from source always fails on
+ tools:::sysdata2LazyLoadDB
+In-Reply-To: <BY5PR04MB66277011F94F9C4DDDD46287F94B9@BY5PR04MB6627.namprd04.prod.outlook.com>
+References: <BY5PR04MB66277011F94F9C4DDDD46287F94B9@BY5PR04MB6627.namprd04.prod.outlook.com>
+Message-ID: <3417b3f8-9be3-cb3b-c7a6-68d2efbd3185@gmail.com>
+
+
+On 5/30/23 22:09, Martin Morgan wrote:
+> I build my own R from source on an M1 mac. I have a clean svn checkout in one directory ~/src/R-devel. I switch to ~/bin/R-devel and the first time run
+>
+> cd ~/bin/R-devel
+> ~/src/R-devel/configure --enable-R-shlib 'CFLAGS=-g -O0' CPPFLAGS=-I/opt/R/arm64/include 'CXXFLAGS=-g -O0'
+> make -j
+>
+> At some point in the future I svn update src/R-devel, then
+>
+> cd ~/bin/R-devel
+> make -j
+>
+> This always ends with
+>
+> installing 'sysdata.rda'
+> /bin/sh: line 1: 99497 Done                    echo "tools:::sysdata2LazyLoadDB(\"/Users/XXX/src/R-devel/src/library/utils/R/sysdata.rda\",\"../../../library/utils/R\")"
+>       99498 Killed: 9               | R_DEFAULT_PACKAGES=NULL LC_ALL=C ../../../bin/R --vanilla --no-echo
+> make[4]: *** [sysdata] Error 137
+> make[3]: *** [all] Error 2
+> make[2]: *** [R] Error 1
+> make[1]: *** [R] Error 1
+> make: *** [R] Error 1
+>
+> what am I doing wrong? Is there a graceful way to fix this (my current solution is basically to start over, with `make distclean`)? If I cd into ~/bin/R-devel/src/library/utils I can start an interactive session and reproduce the error
+>
+> ~/bin/R-devel/src/library/utils $   R_DEFAULT_PACKAGES=NULL ../../../bin/R --vanilla
+>> tools:::sysdata2LazyLoadDB("/Users/ma38727/src/R-devel/src/library/utils/R/sysdata.rda","../../../library/utils/R")
+> zsh: killed     R_DEFAULT_PACKAGES=NULL ../../../bin/R --vanilla
+>
+> or simply
+>
+>> tools:::sysdata2LazyLoadDB
+> zsh: killed     R_DEFAULT_PACKAGES=NULL LC_ALL=C R_ENABLE_JIT=0 TZ=UTC ../../../bin/R
+
+If it is macOS, it might be worth checking the system logs (Console 
+app). It may be some system security feature.
+
+Tomas
+
+>
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From mtmorg@n@b|oc @end|ng |rom gm@||@com  Tue May 30 23:57:42 2023
+From: mtmorg@n@b|oc @end|ng |rom gm@||@com (Martin Morgan)
+Date: Tue, 30 May 2023 21:57:42 +0000
+Subject: [Rd] Building R from source always fails on
+ tools:::sysdata2LazyLoadDB
+In-Reply-To: <3417b3f8-9be3-cb3b-c7a6-68d2efbd3185@gmail.com>
+References: <BY5PR04MB66277011F94F9C4DDDD46287F94B9@BY5PR04MB6627.namprd04.prod.outlook.com>
+ <3417b3f8-9be3-cb3b-c7a6-68d2efbd3185@gmail.com>
+Message-ID: <BY5PR04MB66273F4FDF771042BE5A3CFDF94B9@BY5PR04MB6627.namprd04.prod.outlook.com>
+
+Thanks Ivan & Tomas
+
+A simpler way to trigger the problem is library(tools) or library.dynam("tools", "tools", ".") so I guess it is loading src/tools.so
+
+Ivan, adding -d lldb I need to tell lldb where to find the R library
+
+(lldb) process launch --environment DYLD_LIBRARY_PATH=/Users/ma38727/bin/R-devel/lib
+
+And then `library(tools)` works. To run lldb I needed to grant Xcode permissions using my local administrator account.
+
+@Thomas I can't see anything in the Console app logs, but this might be partly my ineptitude.
+
+Martin
+
+From: Tomas Kalibera <tomas.kalibera at gmail.com>
+Date: Tuesday, May 30, 2023 at 4:54 PM
+To: Martin Morgan <mtmorgan.bioc at gmail.com>, R-devel <R-devel at r-project.org>
+Subject: Re: [Rd] Building R from source always fails on tools:::sysdata2LazyLoadDB
+
+On 5/30/23 22:09, Martin Morgan wrote:
+> I build my own R from source on an M1 mac. I have a clean svn checkout in one directory ~/src/R-devel. I switch to ~/bin/R-devel and the first time run
+>
+> cd ~/bin/R-devel
+> ~/src/R-devel/configure --enable-R-shlib 'CFLAGS=-g -O0' CPPFLAGS=-I/opt/R/arm64/include 'CXXFLAGS=-g -O0'
+> make -j
+>
+> At some point in the future I svn update src/R-devel, then
+>
+> cd ~/bin/R-devel
+> make -j
+>
+> This always ends with
+>
+> installing 'sysdata.rda'
+> /bin/sh: line 1: 99497 Done                    echo "tools:::sysdata2LazyLoadDB(\"/Users/XXX/src/R-devel/src/library/utils/R/sysdata.rda\",\"../../../library/utils/R\")"
+>       99498 Killed: 9               | R_DEFAULT_PACKAGES=NULL LC_ALL=C ../../../bin/R --vanilla --no-echo
+> make[4]: *** [sysdata] Error 137
+> make[3]: *** [all] Error 2
+> make[2]: *** [R] Error 1
+> make[1]: *** [R] Error 1
+> make: *** [R] Error 1
+>
+> what am I doing wrong? Is there a graceful way to fix this (my current solution is basically to start over, with `make distclean`)? If I cd into ~/bin/R-devel/src/library/utils I can start an interactive session and reproduce the error
+>
+> ~/bin/R-devel/src/library/utils $   R_DEFAULT_PACKAGES=NULL ../../../bin/R --vanilla
+>> tools:::sysdata2LazyLoadDB("/Users/ma38727/src/R-devel/src/library/utils/R/sysdata.rda","../../../library/utils/R")
+> zsh: killed     R_DEFAULT_PACKAGES=NULL ../../../bin/R --vanilla
+>
+> or simply
+>
+>> tools:::sysdata2LazyLoadDB
+> zsh: killed     R_DEFAULT_PACKAGES=NULL LC_ALL=C R_ENABLE_JIT=0 TZ=UTC ../../../bin/R
+
+If it is macOS, it might be worth checking the system logs (Console
+app). It may be some system security feature.
+
+Tomas
+
+>
+>        [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+	[[alternative HTML version deleted]]
+
+
