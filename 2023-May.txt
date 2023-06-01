@@ -5408,3 +5408,203 @@ Tomas
 	[[alternative HTML version deleted]]
 
 
+From r|p|ey @end|ng |rom @t@t@@ox@@c@uk  Wed May 31 09:46:25 2023
+From: r|p|ey @end|ng |rom @t@t@@ox@@c@uk (Prof Brian Ripley)
+Date: Wed, 31 May 2023 08:46:25 +0100
+Subject: [Rd] Building R from source always fails on
+ tools:::sysdata2LazyLoadDB
+In-Reply-To: <BY5PR04MB66273F4FDF771042BE5A3CFDF94B9@BY5PR04MB6627.namprd04.prod.outlook.com>
+References: <BY5PR04MB66277011F94F9C4DDDD46287F94B9@BY5PR04MB6627.namprd04.prod.outlook.com>
+ <3417b3f8-9be3-cb3b-c7a6-68d2efbd3185@gmail.com>
+ <BY5PR04MB66273F4FDF771042BE5A3CFDF94B9@BY5PR04MB6627.namprd04.prod.outlook.com>
+Message-ID: <bfaf9d9b-ec6b-ab9b-1560-e1d6ed3c6f33@stats.ox.ac.uk>
+
+On 30/05/2023 22:57, Martin Morgan wrote:
+> Thanks Ivan & Tomas
+> 
+> A simpler way to trigger the problem is library(tools) or library.dynam("tools", "tools", ".") so I guess it is loading src/tools.so
+> 
+> Ivan, adding -d lldb I need to tell lldb where to find the R library
+> 
+> (lldb) process launch --environment DYLD_LIBRARY_PATH=/Users/ma38727/bin/R-devel/lib
+> 
+> And then `library(tools)` works. To run lldb I needed to grant Xcode permissions using my local administrator account.
+> 
+> @Thomas I can't see anything in the Console app logs, but this might be partly my ineptitude.
+
+Which version of macOS is this?
+
+- Prior to Ventura it is the known behaviour.
+
+- With Ventura the same happens if any R process from the current build 
+is in use, even a crashed one. (The latter happened to me this morning: 
+there were reports under Crash Reports in the Console App.)
+
+As the R-admin manual says
+
+"Updating an ?arm64? build may fail because of the bug described at 
+https://openradar.appspot.com/FB8914243 but ab initio builds work. This 
+has been far rarer since macOS 13."
+
+Once it happens, you need to rebuild (make clean;make all should suffice).
+
+> 
+> Martin
+> 
+> From: Tomas Kalibera <tomas.kalibera at gmail.com>
+> Date: Tuesday, May 30, 2023 at 4:54 PM
+> To: Martin Morgan <mtmorgan.bioc at gmail.com>, R-devel <R-devel at r-project.org>
+> Subject: Re: [Rd] Building R from source always fails on tools:::sysdata2LazyLoadDB
+> 
+> On 5/30/23 22:09, Martin Morgan wrote:
+>> I build my own R from source on an M1 mac. I have a clean svn checkout in one directory ~/src/R-devel. I switch to ~/bin/R-devel and the first time run
+>>
+>> cd ~/bin/R-devel
+>> ~/src/R-devel/configure --enable-R-shlib 'CFLAGS=-g -O0' CPPFLAGS=-I/opt/R/arm64/include 'CXXFLAGS=-g -O0'
+>> make -j
+>>
+>> At some point in the future I svn update src/R-devel, then
+>>
+>> cd ~/bin/R-devel
+>> make -j
+>>
+>> This always ends with
+>>
+>> installing 'sysdata.rda'
+>> /bin/sh: line 1: 99497 Done                    echo "tools:::sysdata2LazyLoadDB(\"/Users/XXX/src/R-devel/src/library/utils/R/sysdata.rda\",\"../../../library/utils/R\")"
+>>        99498 Killed: 9               | R_DEFAULT_PACKAGES=NULL LC_ALL=C ../../../bin/R --vanilla --no-echo
+>> make[4]: *** [sysdata] Error 137
+>> make[3]: *** [all] Error 2
+>> make[2]: *** [R] Error 1
+>> make[1]: *** [R] Error 1
+>> make: *** [R] Error 1
+>>
+>> what am I doing wrong? Is there a graceful way to fix this (my current solution is basically to start over, with `make distclean`)? If I cd into ~/bin/R-devel/src/library/utils I can start an interactive session and reproduce the error
+>>
+>> ~/bin/R-devel/src/library/utils $   R_DEFAULT_PACKAGES=NULL ../../../bin/R --vanilla
+>>> tools:::sysdata2LazyLoadDB("/Users/ma38727/src/R-devel/src/library/utils/R/sysdata.rda","../../../library/utils/R")
+>> zsh: killed     R_DEFAULT_PACKAGES=NULL ../../../bin/R --vanilla
+>>
+>> or simply
+>>
+>>> tools:::sysdata2LazyLoadDB
+>> zsh: killed     R_DEFAULT_PACKAGES=NULL LC_ALL=C R_ENABLE_JIT=0 TZ=UTC ../../../bin/R
+> 
+> If it is macOS, it might be worth checking the system logs (Console
+> app). It may be some system security feature.
+> 
+> Tomas
+
+-- 
+Brian D. Ripley,                  ripley at stats.ox.ac.uk
+Emeritus Professor of Applied Statistics, University of Oxford
+
+
+From mtmorg@n@b|oc @end|ng |rom gm@||@com  Wed May 31 16:48:38 2023
+From: mtmorg@n@b|oc @end|ng |rom gm@||@com (Martin Morgan)
+Date: Wed, 31 May 2023 14:48:38 +0000
+Subject: [Rd] Building R from source always fails on
+ tools:::sysdata2LazyLoadDB
+In-Reply-To: <bfaf9d9b-ec6b-ab9b-1560-e1d6ed3c6f33@stats.ox.ac.uk>
+References: <BY5PR04MB66277011F94F9C4DDDD46287F94B9@BY5PR04MB6627.namprd04.prod.outlook.com>
+ <3417b3f8-9be3-cb3b-c7a6-68d2efbd3185@gmail.com>
+ <BY5PR04MB66273F4FDF771042BE5A3CFDF94B9@BY5PR04MB6627.namprd04.prod.outlook.com>
+ <bfaf9d9b-ec6b-ab9b-1560-e1d6ed3c6f33@stats.ox.ac.uk>
+Message-ID: <BY5PR04MB662785A2B46A42F2FE8E71D7F9489@BY5PR04MB6627.namprd04.prod.outlook.com>
+
+Thank you, especially for the R-admin link and link to the underlying issue.
+
+This is macOS Monterey version 12.6.5, so I am stuck with rebuilding -- empirically it seems like make distclean && <reconfigure> && make all is needed. This doesn't seem to make sense (shouldn't `make clean` remove all the compiled libraries?) so I'll investigate a bit more; maybe it is because I do not `make install`? I know there is no value in papering over upstream issues, but wonder if I were to unlink all (or some?) *so / *dylib before `make all` would be effective?
+
+After the fact I realized that the R-SIG-mac mailing list might have been more appropriate, but I did not see the issue discussed there.
+
+Martin
+
+From: Prof Brian Ripley <ripley at stats.ox.ac.uk>
+Date: Wednesday, May 31, 2023 at 3:46 AM
+To: Martin Morgan <mtmorgan.bioc at gmail.com>
+Cc: Tomas Kalibera <tomas.kalibera at gmail.com>, R-devel <R-devel at r-project.org>
+Subject: Re: [Rd] Building R from source always fails on tools:::sysdata2LazyLoadDB
+On 30/05/2023 22:57, Martin Morgan wrote:
+> Thanks Ivan & Tomas
+>
+> A simpler way to trigger the problem is library(tools) or library.dynam("tools", "tools", ".") so I guess it is loading src/tools.so
+>
+> Ivan, adding -d lldb I need to tell lldb where to find the R library
+>
+> (lldb) process launch --environment DYLD_LIBRARY_PATH=/Users/ma38727/bin/R-devel/lib
+>
+> And then `library(tools)` works. To run lldb I needed to grant Xcode permissions using my local administrator account.
+>
+> @Thomas I can't see anything in the Console app logs, but this might be partly my ineptitude.
+
+Which version of macOS is this?
+
+- Prior to Ventura it is the known behaviour.
+
+- With Ventura the same happens if any R process from the current build
+is in use, even a crashed one. (The latter happened to me this morning:
+there were reports under Crash Reports in the Console App.)
+
+As the R-admin manual says
+
+"Updating an ?arm64? build may fail because of the bug described at
+https://openradar.appspot.com/FB8914243 but ab initio builds work. This
+has been far rarer since macOS 13."
+
+Once it happens, you need to rebuild (make clean;make all should suffice).
+
+>
+> Martin
+>
+> From: Tomas Kalibera <tomas.kalibera at gmail.com>
+> Date: Tuesday, May 30, 2023 at 4:54 PM
+> To: Martin Morgan <mtmorgan.bioc at gmail.com>, R-devel <R-devel at r-project.org>
+> Subject: Re: [Rd] Building R from source always fails on tools:::sysdata2LazyLoadDB
+>
+> On 5/30/23 22:09, Martin Morgan wrote:
+>> I build my own R from source on an M1 mac. I have a clean svn checkout in one directory ~/src/R-devel. I switch to ~/bin/R-devel and the first time run
+>>
+>> cd ~/bin/R-devel
+>> ~/src/R-devel/configure --enable-R-shlib 'CFLAGS=-g -O0' CPPFLAGS=-I/opt/R/arm64/include 'CXXFLAGS=-g -O0'
+>> make -j
+>>
+>> At some point in the future I svn update src/R-devel, then
+>>
+>> cd ~/bin/R-devel
+>> make -j
+>>
+>> This always ends with
+>>
+>> installing 'sysdata.rda'
+>> /bin/sh: line 1: 99497 Done                    echo "tools:::sysdata2LazyLoadDB(\"/Users/XXX/src/R-devel/src/library/utils/R/sysdata.rda\",\"../../../library/utils/R\")"
+>>        99498 Killed: 9               | R_DEFAULT_PACKAGES=NULL LC_ALL=C ../../../bin/R --vanilla --no-echo
+>> make[4]: *** [sysdata] Error 137
+>> make[3]: *** [all] Error 2
+>> make[2]: *** [R] Error 1
+>> make[1]: *** [R] Error 1
+>> make: *** [R] Error 1
+>>
+>> what am I doing wrong? Is there a graceful way to fix this (my current solution is basically to start over, with `make distclean`)? If I cd into ~/bin/R-devel/src/library/utils I can start an interactive session and reproduce the error
+>>
+>> ~/bin/R-devel/src/library/utils $   R_DEFAULT_PACKAGES=NULL ../../../bin/R --vanilla
+>>> tools:::sysdata2LazyLoadDB("/Users/ma38727/src/R-devel/src/library/utils/R/sysdata.rda","../../../library/utils/R")
+>> zsh: killed     R_DEFAULT_PACKAGES=NULL ../../../bin/R --vanilla
+>>
+>> or simply
+>>
+>>> tools:::sysdata2LazyLoadDB
+>> zsh: killed     R_DEFAULT_PACKAGES=NULL LC_ALL=C R_ENABLE_JIT=0 TZ=UTC ../../../bin/R
+>
+> If it is macOS, it might be worth checking the system logs (Console
+> app). It may be some system security feature.
+>
+> Tomas
+
+--
+Brian D. Ripley,                  ripley at stats.ox.ac.uk
+Emeritus Professor of Applied Statistics, University of Oxford
+
+	[[alternative HTML version deleted]]
+
+
