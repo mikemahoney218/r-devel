@@ -1,0 +1,453 @@
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Jun  1 10:11:22 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 1 Jun 2023 10:11:22 +0200
+Subject: [Rd] why does [A-Z] include 'T' in an Estonian locale?
+In-Reply-To: <f00a6b75-7e53-03fa-f3ef-cd3d46cd38dc@mcmaster.ca>
+References: <f00a6b75-7e53-03fa-f3ef-cd3d46cd38dc@mcmaster.ca>
+Message-ID: <25720.21162.617743.216354@stat.math.ethz.ch>
+
+>>>>> Ben Bolker 
+>>>>>     on Tue, 30 May 2023 11:45:20 -0400 writes:
+
+    > Inspired by this old Stack Overflow question
+
+    > https://stackoverflow.com/questions/19765610/when-does-locale-affect-rs-regular-expressions
+
+    > I was wondering why this is TRUE:
+
+    > Sys.setlocale("LC_ALL", "et_EE")
+    > grepl("[A-Z]", "T")
+
+    > TRE's documentation at 
+    > <https://laurikari.net/tre/documentation/regex-syntax/> says that a 
+    > range "is shorthand for the full range of characters between those two 
+    > [endpoints] (inclusive) in the collating sequence".
+
+    > Yet, T is *not* between A and Z in the Estonian collating sequence:
+
+    > sort(LETTERS)
+    > [1] "A" "B" "C" "D" "E" "F" "G" "H" "I" "J" "K" "L" "M" "N" "O" "P" 
+    > "Q" "R" "S"
+    > [20] "Z" "T" "U" "V" "W" "X" "Y"
+
+    > I realize that this may be a question about TRE rather than about R 
+    > *per se* (FWIW the grepl() result is also TRUE with `perl = TRUE`, so 
+    > the question also applies to PCRE), but I'm wondering if anyone has any 
+    > insights ...  (and yes, I know that the correct answer is "use [:alpha:] 
+    > and don't worry about it")
+
+    > (In contrast, the ICU engine underlying stringi/stringr says "[t]he 
+    > characters to include are determined by Unicode code point ordering" - see
+
+    > https://stackoverflow.com/questions/76365426/does-stringrs-regex-engine-translate-a-z-into-abcdefghijklmnopqrstuvwyz/76366163#76366163
+
+    > for links)
+
+Your last (<sentence>)  may point to the solution of the riddle:
+Nowadays, typically in R
+
+> capabilities()[["ICU"]]
+[1] TRUE
+
+but of course now one has to study if / why  ICU seems to take
+precedence over the locale's internal "sort"ing ..
+
+
+Best regards,
+Martin
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Thu Jun  1 11:53:19 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Thu, 1 Jun 2023 11:53:19 +0200
+Subject: [Rd] why does [A-Z] include 'T' in an Estonian locale?
+In-Reply-To: <f00a6b75-7e53-03fa-f3ef-cd3d46cd38dc@mcmaster.ca>
+References: <f00a6b75-7e53-03fa-f3ef-cd3d46cd38dc@mcmaster.ca>
+Message-ID: <f55de17d-5be1-113b-bf52-ca054ba675fe@gmail.com>
+
+
+On 5/30/23 17:45, Ben Bolker wrote:
+> Inspired by this old Stack Overflow question
+>
+> https://stackoverflow.com/questions/19765610/when-does-locale-affect-rs-regular-expressions 
+>
+>
+> I was wondering why this is TRUE:
+>
+> Sys.setlocale("LC_ALL", "et_EE")
+> grepl("[A-Z]", "T")
+>
+> TRE's documentation at 
+> <https://laurikari.net/tre/documentation/regex-syntax/> says that a 
+> range "is shorthand for the full range of characters between those two 
+> [endpoints] (inclusive) in the collating sequence".
+>
+> Yet, T is *not* between A and Z in the Estonian collating sequence:
+>
+> ?sort(LETTERS)
+> ?[1] "A" "B" "C" "D" "E" "F" "G" "H" "I" "J" "K" "L" "M" "N" "O" "P" 
+> "Q" "R" "S"
+> [20] "Z" "T" "U" "V" "W" "X" "Y"
+>
+> ? I realize that this may be a question about TRE rather than about R 
+> *per se* (FWIW the grepl() result is also TRUE with `perl = TRUE`, so 
+> the question also applies to PCRE), but I'm wondering if anyone has 
+> any insights ...? (and yes, I know that the correct answer is "use 
+> [:alpha:] and don't worry about it")
+
+The correct answer depends on what you want to do, but please see 
+?regexp in R:
+
+"Because their interpretation is locale- and implementation-dependent, 
+character ranges are best avoided."
+
+and
+
+"The only portable way to specify all ASCII letters is to list them all 
+as the character class
+?[ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz]?."
+
+This is from POSIX specification:
+
+"In the POSIX locale, a range expression represents the set of collating 
+elements that fall between two elements in the collation sequence, 
+inclusive. In other locales, a range expression has unspecified 
+behavior: strictly conforming applications shall not rely on whether the 
+range expression is valid, or on the set of collating elements matched. 
+A range expression shall be expressed as the starting point and the 
+ending point separated by a <hyphen-minus> ( '-' )."
+
+If you really want to know why the current implementation of R, TRE and 
+PCRE2 works in a certain way, you can check the code, but I don't think 
+it would be a good use of the time given what is written above.
+
+It may be that TRE has a bug, maybe it doesn't do what was intended (see 
+comment "XXX - Should use collation order instead of encoding values in 
+character ranges." in the code), but I didn't check the code thoroughly.
+
+Best
+Tomas
+
+>
+> (In contrast, the ICU engine underlying stringi/stringr says "[t]he 
+> characters to include are determined by Unicode code point ordering" - 
+> see
+>
+> https://stackoverflow.com/questions/76365426/does-stringrs-regex-engine-translate-a-z-into-abcdefghijklmnopqrstuvwyz/76366163#76366163 
+>
+>
+> for links)
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From georg|@bo@hn@kov @end|ng |rom m@nche@ter@@c@uk  Fri Jun  2 00:00:39 2023
+From: georg|@bo@hn@kov @end|ng |rom m@nche@ter@@c@uk (Georgi Boshnakov)
+Date: Thu, 1 Jun 2023 22:00:39 +0000
+Subject: [Rd] bug in na.contiguous? Doesn't give the first tied stretch if
+ it is at the start
+Message-ID: <CWLP265MB3505B9953F00D15BB7F3D39EAE49A@CWLP265MB3505.GBRP265.PROD.OUTLOOK.COM>
+
+Hi.
+
+The description of na.contiguous says:
+
+"Find the longest consecutive stretch of non-missing values in a
+     time series object.  (In the event of a tie, the first such
+     stretch.)"
+
+But this seems not to be the case if one of the tied longest stretches is at the start of the sequence/series. In the following example, there are three stretches of length 3, so I expect the result to be [1 2 3]. But:
+
+> x <- c(1:3, NA, NA, 6:8, NA, 10:12)
+> x
+[1]  1  2  3 NA NA  6  7  8 NA 10 11 12
+> na.contiguous(x)
+[1] 6 7 8
+## expected: [1] 1 2 3
+
+(I have stripped attributes from the output for clarity.)
+
+Below is the beginning of stats:::na.contiguous.default.
+The source of the issue appears to be  the line containing the assignment to 'seg' (marked with exclamation marks).
+The calculation leading to it does
+
+cumsum(!good)
+
+where !good in this case is
+
+[1] FALSE FALSE FALSE  TRUE  TRUE FALSE FALSE FALSE  TRUE FALSE FALSE FALSE
+
+And its cumsum is:
+
+[1] 0 0 0 1 2 2 2 2 3 3 3 3
+
+
+Then the assignment to 'seg' below picks the first longest stretch and subtracts 1, since the cumsum at indices corresponding to FALSE stays constant but the length of the constant stretch is one more then the number of FALSEs, ... except for the stretch at the start of the series which is not preceded by TRUE! So it is missed.
+
+One way to patch this could be by the two commented assignments added by me to the code below to prepend a 0 to tt and then drop the first element of 'keep' to allow correct indexing later.
+
+Georgi Boshnakov
+
+
+> stats:::na.contiguous.default
+function (object, ...)
+{
+    tm <- time(object)
+    xfreq <- frequency(object)
+    if (is.matrix(object))
+        good <- apply(!is.na(object), 1L, all)
+    else good <- !is.na(object)
+    if (!sum(good))
+        stop("all times contain an NA")
+    tt <- cumsum(!good)
+## tt <- c(0, tt)
+    ln <- sapply(0:max(tt), function(i) sum(tt == i))
+    seg <- (seq_along(ln)[ln == max(ln)])[1L] - 1          ## !!!
+    keep <- (tt == seg)
+## keep <- keep[-1]
+    st <- min(which(keep))
+
+	[[alternative HTML version deleted]]
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Fri Jun  2 10:38:45 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Fri, 2 Jun 2023 10:38:45 +0200
+Subject: [Rd] 
+ bug in na.contiguous? Doesn't give the first tied stretch if
+ it is at the start
+In-Reply-To: <CWLP265MB3505B9953F00D15BB7F3D39EAE49A@CWLP265MB3505.GBRP265.PROD.OUTLOOK.COM>
+References: <CWLP265MB3505B9953F00D15BB7F3D39EAE49A@CWLP265MB3505.GBRP265.PROD.OUTLOOK.COM>
+Message-ID: <25721.43669.105512.603349@stat.math.ethz.ch>
+
+>>>>> Georgi Boshnakov 
+>>>>>     on Thu, 1 Jun 2023 22:00:39 +0000 writes:
+
+    > Hi.
+    > The description of na.contiguous says:
+
+    > "Find the longest consecutive stretch of non-missing values in a
+    > time series object.  (In the event of a tie, the first such
+    > stretch.)"
+
+    > But this seems not to be the case if one of the tied longest stretches is at the start of the sequence/series. In the following example, there are three stretches of length 3, so I expect the result to be [1 2 3]. But:
+
+    >> x <- c(1:3, NA, NA, 6:8, NA, 10:12)
+    >> x
+    > [1]  1  2  3 NA NA  6  7  8 NA 10 11 12
+    >> na.contiguous(x)
+    > [1] 6 7 8
+    > ## expected: [1] 1 2 3
+
+    > (I have stripped attributes from the output for clarity.)
+
+    > Below is the beginning of stats:::na.contiguous.default.
+    > The source of the issue appears to be  the line containing the assignment to 'seg' (marked with exclamation marks).
+    > The calculation leading to it does
+
+    > cumsum(!good)
+
+    > where !good in this case is
+
+    > [1] FALSE FALSE FALSE  TRUE  TRUE FALSE FALSE FALSE  TRUE FALSE FALSE FALSE
+
+    > And its cumsum is:
+
+    > [1] 0 0 0 1 2 2 2 2 3 3 3 3
+
+
+    > Then the assignment to 'seg' below picks the first longest stretch and subtracts 1, since the cumsum at indices corresponding to FALSE stays constant but the length of the constant stretch is one more then the number of FALSEs, ... except for the stretch at the start of the series which is not preceded by TRUE! So it is missed.
+
+    > One way to patch this could be by the two commented assignments added by me to the code below to prepend a 0 to tt and then drop the first element of 'keep' to allow correct indexing later.
+
+    > Georgi Boshnakov
+
+Thanks a lot, Georgi, for raising this.
+
+I think you are right :
+
+1) this is a bug {in the R code base since the beginning
+                  (na.contiguous added to R in 1999)}
+2) your proposition is a good solution
+
+I've started to prepare a commit to fix it.
+(but will not haste to do that.. so more comments are welcome!)
+
+Martin
+
+
+
+    >> stats:::na.contiguous.default
+    > function (object, ...)
+    > {
+    > tm <- time(object)
+    > xfreq <- frequency(object)
+    > if (is.matrix(object))
+    > good <- apply(!is.na(object), 1L, all)
+    > else good <- !is.na(object)
+    > if (!sum(good))
+    > stop("all times contain an NA")
+    > tt <- cumsum(!good)
+    > ## tt <- c(0, tt)
+    > ln <- sapply(0:max(tt), function(i) sum(tt == i))
+    > seg <- (seq_along(ln)[ln == max(ln)])[1L] - 1          ## !!!
+    > keep <- (tt == seg)
+    > ## keep <- keep[-1]
+    > st <- min(which(keep))
+
+    > [[alternative HTML version deleted]]
+
+    > ______________________________________________
+    > R-devel at r-project.org mailing list
+    > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From th|erry@onke||nx @end|ng |rom |nbo@be  Fri Jun  2 16:55:59 2023
+From: th|erry@onke||nx @end|ng |rom |nbo@be (Thierry Onkelinx)
+Date: Fri, 2 Jun 2023 16:55:59 +0200
+Subject: [Rd] bug in utils:::format.person
+Message-ID: <CAJuCY5zbzYooG+MX-b2-4Lm-=znQd4xiBe6Wh=akM7huP9AMxw@mail.gmail.com>
+
+Dear all,
+
+I think I found a bug in utils::format.person when using style = "R" with a
+vector of comments. The comment section is not parsed properly. Please find
+below the mwe and the session info.
+
+Best regards,
+
+Thierry
+
+maintainer <- person(
+  given = "Thierry", family = "Onkelinx", role = c("aut", "cre"),
+  email = "thierry.onkelinx at inbo.be",
+  comment = c(
+    ORCID = "0000-0001-8804-4216",
+    affiliation = "Research Institute for Nature and Forest (INBO)"
+  )
+)
+format(maintainer, style = "R") |>
+  cat(sep = "\n")
+# output
+person(given = "Thierry",
+       family = "Onkelinx",
+       role = c("aut", "cre"),
+       email = "thierry.onkelinx at inbo.be",
+       comment = c("c(ORCID = \"0000-0001-8804-4216\", affiliation =
+\"Research Institute for Nature and Forest (INBO)\"", ")"))
+
+? Session info
+??????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????
+ setting  value
+ version  R version 4.3.0 (2023-04-21)
+ os       Ubuntu 22.04.2 LTS
+ system   x86_64, linux-gnu
+ ui       X11
+ language nl_BE:nl
+ collate  nl_BE.UTF-8
+ ctype    nl_BE.UTF-8
+ tz       Europe/Brussels
+ date     2023-06-02
+ pandoc   NA
+
+? Packages
+??????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????
+ package     * version date (UTC) lib source
+ cli           3.6.1   2023-03-23 [1] CRAN (R 4.3.0)
+ fortunes      1.5-4   2016-12-29 [1] CRAN (R 4.3.0)
+ sessioninfo   1.2.2   2021-12-06 [1] CRAN (R 4.3.0)
+
+
+
+ir. Thierry Onkelinx
+Statisticus / Statistician
+
+Vlaamse Overheid / Government of Flanders
+INSTITUUT VOOR NATUUR- EN BOSONDERZOEK / RESEARCH INSTITUTE FOR NATURE AND
+FOREST
+Team Biometrie & Kwaliteitszorg / Team Biometrics & Quality Assurance
+thierry.onkelinx at inbo.be
+Havenlaan 88 bus 73, 1000 Brussel
+www.inbo.be
+
+///////////////////////////////////////////////////////////////////////////////////////////
+To call in the statistician after the experiment is done may be no more
+than asking him to perform a post-mortem examination: he may be able to say
+what the experiment died of. ~ Sir Ronald Aylmer Fisher
+The plural of anecdote is not data. ~ Roger Brinner
+The combination of some data and an aching desire for an answer does not
+ensure that a reasonable answer can be extracted from a given body of data.
+~ John Tukey
+///////////////////////////////////////////////////////////////////////////////////////////
+
+<https://www.inbo.be>
+
+	[[alternative HTML version deleted]]
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Fri Jun  2 19:58:54 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Fri, 2 Jun 2023 20:58:54 +0300
+Subject: [Rd] bug in utils:::format.person
+In-Reply-To: <CAJuCY5zbzYooG+MX-b2-4Lm-=znQd4xiBe6Wh=akM7huP9AMxw@mail.gmail.com>
+References: <CAJuCY5zbzYooG+MX-b2-4Lm-=znQd4xiBe6Wh=akM7huP9AMxw@mail.gmail.com>
+Message-ID: <20230602205854.31df81b3@Tarkus>
+
+On Fri, 2 Jun 2023 16:55:59 +0200
+Thierry Onkelinx via R-devel <r-devel at r-project.org> wrote:
+
+> I think I found a bug in utils::format.person when using style = "R"
+> with a vector of comments. The comment section is not parsed
+> properly.
+
+Good catch! This looks like another occasion of deparse() suddenly
+returning a multi-element character vector where the caller expects a
+single string:
+
+format(person(c('J.', 'Random'), 'Hacker', comment = c(ORCID =
+'0000-0000-0000-0000', foo = 'bar bar bar bar bar')), style = 'R')
+# [1] "person(given = c(\"J.\", \"Random\"),"
+# [2] "       family = \"Hacker\","
+# [3] "       comment = c(ORCID = \"0000-0000-0000-0000\", foo = \"bar
+# bar bar bar bar\"))"
+format(person(c('J.', 'Random'), 'Hacker', comment = c(ORCID =
+'0000-0000-0000-0000', foo = 'bar bar bar bar bar bar')), style = 'R')
+# [1] "person(given = c(\"J.\", \"Random\"),"
+# [2] "       family = \"Hacker\","
+# [3] "       comment = c(\"c(ORCID = \\\"0000-0000-0000-0000\\\", foo =
+# \\\"bar bar bar bar bar bar\\\"\", \")\"))"
+
+The following seems to fix it:
+
+--- src/library/utils/R/citation.R	(revision 84486)
++++ src/library/utils/R/citation.R	(working copy)
+@@ -1014,7 +1014,7 @@
+                 function(e) {
+                     e <- e[!vapply(e, is.null, NA)]
+                     cargs <-
+-                        sprintf("%s = %s", names(e), sapply(e, deparse))
++                        sprintf("%s = %s", names(e), sapply(e, deparse1))
+                     .format_call_RR("person", cargs)
+                 })
+     if(length(s) > 1L)
+
+A regression test could be along the lines of:
+
+p <- person(
+ 'foo', 'bar', comment = c(
+  comment = 'just enough to deparse into multiple lines',
+  needs = 'multiple entries'
+ )
+)
+stopifnot(all.equal(
+ eval(parse(text = format(p, style = 'R')))$comment,
+ p$comment
+))
+
+-- 
+Best regards,
+Ivan
+
+
