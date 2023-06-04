@@ -451,3 +451,476 @@ Best regards,
 Ivan
 
 
+From Ach|m@Ze||e|@ @end|ng |rom u|bk@@c@@t  Sat Jun  3 03:45:47 2023
+From: Ach|m@Ze||e|@ @end|ng |rom u|bk@@c@@t (Achim Zeileis)
+Date: Sat, 3 Jun 2023 03:45:47 +0200 (CEST)
+Subject: [Rd] bug in utils:::format.person
+In-Reply-To: <CAJuCY5zbzYooG+MX-b2-4Lm-=znQd4xiBe6Wh=akM7huP9AMxw@mail.gmail.com>
+References: <CAJuCY5zbzYooG+MX-b2-4Lm-=znQd4xiBe6Wh=akM7huP9AMxw@mail.gmail.com>
+Message-ID: <6ef2cf25-87f5-89ca-7383-dab77a9ea2c8@uibk.ac.at>
+
+Thierry,
+
+thanks for this, this is a bug in utils:::.format_person_as_R_code(). This 
+calls deparse() on the elements of the person object with the default 
+width.cutoff = 60. As your comment exceeds this width, the erroneous 
+formatting is produced. The simplest reproducible example I could come up 
+with was:
+
+p <- person(".", comment = c(foo = ".....................",
+   bar = "....................."))
+writeLines(format(p, style = "R"))
+
+This can be fixed in line 1017 of utils/R/citation.R either by increasing 
+the width.cutoff, e.g.,
+
+   sprintf("%s = %s", names(e), sapply(e, deparse, width.cutoff = 500L))
+
+but, of course, this still has an arbitrary cutoff. So maybe better
+
+   sprintf("%s = %s", names(e), sapply(e,
+     function(x) paste(deparse(x), collapse = "")))
+
+which should work.
+
+I'll ping Kurt about this and try to coordinate a fix.
+
+Best wishes,
+Achim
+
+
+On Fri, 2 Jun 2023, Thierry Onkelinx via R-devel wrote:
+
+> Dear all,
+>
+> I think I found a bug in utils::format.person when using style = "R" with a
+> vector of comments. The comment section is not parsed properly. Please find
+> below the mwe and the session info.
+>
+> Best regards,
+>
+> Thierry
+>
+> maintainer <- person(
+>  given = "Thierry", family = "Onkelinx", role = c("aut", "cre"),
+>  email = "thierry.onkelinx at inbo.be",
+>  comment = c(
+>    ORCID = "0000-0001-8804-4216",
+>    affiliation = "Research Institute for Nature and Forest (INBO)"
+>  )
+> )
+> format(maintainer, style = "R") |>
+>  cat(sep = "\n")
+> # output
+> person(given = "Thierry",
+>       family = "Onkelinx",
+>       role = c("aut", "cre"),
+>       email = "thierry.onkelinx at inbo.be",
+>       comment = c("c(ORCID = \"0000-0001-8804-4216\", affiliation =
+> \"Research Institute for Nature and Forest (INBO)\"", ")"))
+>
+> ? Session info
+> ??????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????
+> setting  value
+> version  R version 4.3.0 (2023-04-21)
+> os       Ubuntu 22.04.2 LTS
+> system   x86_64, linux-gnu
+> ui       X11
+> language nl_BE:nl
+> collate  nl_BE.UTF-8
+> ctype    nl_BE.UTF-8
+> tz       Europe/Brussels
+> date     2023-06-02
+> pandoc   NA
+>
+> ? Packages
+> ??????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????
+> package     * version date (UTC) lib source
+> cli           3.6.1   2023-03-23 [1] CRAN (R 4.3.0)
+> fortunes      1.5-4   2016-12-29 [1] CRAN (R 4.3.0)
+> sessioninfo   1.2.2   2021-12-06 [1] CRAN (R 4.3.0)
+>
+>
+>
+> ir. Thierry Onkelinx
+> Statisticus / Statistician
+>
+> Vlaamse Overheid / Government of Flanders
+> INSTITUUT VOOR NATUUR- EN BOSONDERZOEK / RESEARCH INSTITUTE FOR NATURE AND
+> FOREST
+> Team Biometrie & Kwaliteitszorg / Team Biometrics & Quality Assurance
+> thierry.onkelinx at inbo.be
+> Havenlaan 88 bus 73, 1000 Brussel
+> www.inbo.be
+>
+> ///////////////////////////////////////////////////////////////////////////////////////////
+> To call in the statistician after the experiment is done may be no more
+> than asking him to perform a post-mortem examination: he may be able to say
+> what the experiment died of. ~ Sir Ronald Aylmer Fisher
+> The plural of anecdote is not data. ~ Roger Brinner
+> The combination of some data and an aching desire for an answer does not
+> ensure that a reasonable answer can be extracted from a given body of data.
+> ~ John Tukey
+> ///////////////////////////////////////////////////////////////////////////////////////////
+>
+> <https://www.inbo.be>
+>
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+From Ach|m@Ze||e|@ @end|ng |rom u|bk@@c@@t  Sat Jun  3 03:49:14 2023
+From: Ach|m@Ze||e|@ @end|ng |rom u|bk@@c@@t (Achim Zeileis)
+Date: Sat, 3 Jun 2023 03:49:14 +0200 (CEST)
+Subject: [Rd] bug in utils:::format.person
+In-Reply-To: <6ef2cf25-87f5-89ca-7383-dab77a9ea2c8@uibk.ac.at>
+References: <CAJuCY5zbzYooG+MX-b2-4Lm-=znQd4xiBe6Wh=akM7huP9AMxw@mail.gmail.com>
+ <6ef2cf25-87f5-89ca-7383-dab77a9ea2c8@uibk.ac.at>
+Message-ID: <14e2ef8b-3fbc-806c-2e2d-fb1e61e857bd@uibk.ac.at>
+
+Apologies, I missed Ivan's fix to the problem (my day was too long...) 
+which is, of course, better than mine.
+
+On Sat, 3 Jun 2023, Achim Zeileis wrote:
+
+> Thierry,
+>
+> thanks for this, this is a bug in utils:::.format_person_as_R_code(). This 
+> calls deparse() on the elements of the person object with the default 
+> width.cutoff = 60. As your comment exceeds this width, the erroneous 
+> formatting is produced. The simplest reproducible example I could come up 
+> with was:
+>
+> p <- person(".", comment = c(foo = ".....................",
+>  bar = "....................."))
+> writeLines(format(p, style = "R"))
+>
+> This can be fixed in line 1017 of utils/R/citation.R either by increasing the 
+> width.cutoff, e.g.,
+>
+>  sprintf("%s = %s", names(e), sapply(e, deparse, width.cutoff = 500L))
+>
+> but, of course, this still has an arbitrary cutoff. So maybe better
+>
+>  sprintf("%s = %s", names(e), sapply(e,
+>    function(x) paste(deparse(x), collapse = "")))
+>
+> which should work.
+>
+> I'll ping Kurt about this and try to coordinate a fix.
+>
+> Best wishes,
+> Achim
+>
+>
+> On Fri, 2 Jun 2023, Thierry Onkelinx via R-devel wrote:
+>
+>> Dear all,
+>> 
+>> I think I found a bug in utils::format.person when using style = "R" with a
+>> vector of comments. The comment section is not parsed properly. Please find
+>> below the mwe and the session info.
+>> 
+>> Best regards,
+>> 
+>> Thierry
+>> 
+>> maintainer <- person(
+>>  given = "Thierry", family = "Onkelinx", role = c("aut", "cre"),
+>>  email = "thierry.onkelinx at inbo.be",
+>>  comment = c(
+>>    ORCID = "0000-0001-8804-4216",
+>>    affiliation = "Research Institute for Nature and Forest (INBO)"
+>>  )
+>> )
+>> format(maintainer, style = "R") |>
+>>  cat(sep = "\n")
+>> # output
+>> person(given = "Thierry",
+>>       family = "Onkelinx",
+>>       role = c("aut", "cre"),
+>>       email = "thierry.onkelinx at inbo.be",
+>>       comment = c("c(ORCID = \"0000-0001-8804-4216\", affiliation =
+>> \"Research Institute for Nature and Forest (INBO)\"", ")"))
+>> 
+>> ? Session info
+>> ??????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????
+>> setting  value
+>> version  R version 4.3.0 (2023-04-21)
+>> os       Ubuntu 22.04.2 LTS
+>> system   x86_64, linux-gnu
+>> ui       X11
+>> language nl_BE:nl
+>> collate  nl_BE.UTF-8
+>> ctype    nl_BE.UTF-8
+>> tz       Europe/Brussels
+>> date     2023-06-02
+>> pandoc   NA
+>> 
+>> ? Packages
+>> ??????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????
+>> package     * version date (UTC) lib source
+>> cli           3.6.1   2023-03-23 [1] CRAN (R 4.3.0)
+>> fortunes      1.5-4   2016-12-29 [1] CRAN (R 4.3.0)
+>> sessioninfo   1.2.2   2021-12-06 [1] CRAN (R 4.3.0)
+>> 
+>> 
+>> 
+>> ir. Thierry Onkelinx
+>> Statisticus / Statistician
+>> 
+>> Vlaamse Overheid / Government of Flanders
+>> INSTITUUT VOOR NATUUR- EN BOSONDERZOEK / RESEARCH INSTITUTE FOR NATURE AND
+>> FOREST
+>> Team Biometrie & Kwaliteitszorg / Team Biometrics & Quality Assurance
+>> thierry.onkelinx at inbo.be
+>> Havenlaan 88 bus 73, 1000 Brussel
+>> www.inbo.be
+>> 
+>> ///////////////////////////////////////////////////////////////////////////////////////////
+>> To call in the statistician after the experiment is done may be no more
+>> than asking him to perform a post-mortem examination: he may be able to say
+>> what the experiment died of. ~ Sir Ronald Aylmer Fisher
+>> The plural of anecdote is not data. ~ Roger Brinner
+>> The combination of some data and an aching desire for an answer does not
+>> ensure that a reasonable answer can be extracted from a given body of data.
+>> ~ John Tukey
+>> ///////////////////////////////////////////////////////////////////////////////////////////
+>> 
+>> <https://www.inbo.be>
+>>
+>> 	[[alternative HTML version deleted]]
+>> 
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+From bbo|ker @end|ng |rom gm@||@com  Sat Jun  3 17:34:20 2023
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Sat, 3 Jun 2023 11:34:20 -0400
+Subject: [Rd] why does [A-Z] include 'T' in an Estonian locale?
+In-Reply-To: <f55de17d-5be1-113b-bf52-ca054ba675fe@gmail.com>
+References: <f00a6b75-7e53-03fa-f3ef-cd3d46cd38dc@mcmaster.ca>
+ <f55de17d-5be1-113b-bf52-ca054ba675fe@gmail.com>
+Message-ID: <c230de2a-f261-bf41-50a0-eaa3346d9dba@gmail.com>
+
+   Thanks, I do know about the docs you quoted.  Thanks for pointing me 
+to the comment in the code.
+
+  I've posted an issue (a request to make the documentation match the 
+code) at the TRE repository:
+
+https://github.com/laurikari/tre/issues/88
+
+
+On 2023-06-01 5:53 a.m., Tomas Kalibera wrote:
+> 
+> On 5/30/23 17:45, Ben Bolker wrote:
+>> Inspired by this old Stack Overflow question
+>>
+>> https://stackoverflow.com/questions/19765610/when-does-locale-affect-rs-regular-expressions
+>>
+>> I was wondering why this is TRUE:
+>>
+>> Sys.setlocale("LC_ALL", "et_EE")
+>> grepl("[A-Z]", "T")
+>>
+>> TRE's documentation at 
+>> <https://laurikari.net/tre/documentation/regex-syntax/> says that a 
+>> range "is shorthand for the full range of characters between those two 
+>> [endpoints] (inclusive) in the collating sequence".
+>>
+>> Yet, T is *not* between A and Z in the Estonian collating sequence:
+>>
+>> ?sort(LETTERS)
+>> ?[1] "A" "B" "C" "D" "E" "F" "G" "H" "I" "J" "K" "L" "M" "N" "O" "P" 
+>> "Q" "R" "S"
+>> [20] "Z" "T" "U" "V" "W" "X" "Y"
+>>
+>> ? I realize that this may be a question about TRE rather than about R 
+>> *per se* (FWIW the grepl() result is also TRUE with `perl = TRUE`, so 
+>> the question also applies to PCRE), but I'm wondering if anyone has 
+>> any insights ...? (and yes, I know that the correct answer is "use 
+>> [:alpha:] and don't worry about it")
+> 
+> The correct answer depends on what you want to do, but please see 
+> ?regexp in R:
+> 
+> "Because their interpretation is locale- and implementation-dependent, 
+> character ranges are best avoided."
+> 
+> and
+> 
+> "The only portable way to specify all ASCII letters is to list them all 
+> as the character class
+> ?[ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz]?."
+> 
+> This is from POSIX specification:
+> 
+> "In the POSIX locale, a range expression represents the set of collating 
+> elements that fall between two elements in the collation sequence, 
+> inclusive. In other locales, a range expression has unspecified 
+> behavior: strictly conforming applications shall not rely on whether the 
+> range expression is valid, or on the set of collating elements matched. 
+> A range expression shall be expressed as the starting point and the 
+> ending point separated by a <hyphen-minus> ( '-' )."
+> 
+> If you really want to know why the current implementation of R, TRE and 
+> PCRE2 works in a certain way, you can check the code, but I don't think 
+> it would be a good use of the time given what is written above.
+> 
+> It may be that TRE has a bug, maybe it doesn't do what was intended (see 
+> comment "XXX - Should use collation order instead of encoding values in 
+> character ranges." in the code), but I didn't check the code thoroughly.
+> 
+> Best
+> Tomas
+> 
+>>
+>> (In contrast, the ICU engine underlying stringi/stringr says "[t]he 
+>> characters to include are determined by Unicode code point ordering" - 
+>> see
+>>
+>> https://stackoverflow.com/questions/76365426/does-stringrs-regex-engine-translate-a-z-into-abcdefghijklmnopqrstuvwyz/76366163#76366163
+>>
+>> for links)
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From j@g@nmn2 @end|ng |rom gm@||@com  Sat Jun  3 17:50:59 2023
+From: j@g@nmn2 @end|ng |rom gm@||@com (Mikael Jagan)
+Date: Sat, 3 Jun 2023 11:50:59 -0400
+Subject: [Rd] codetools wrongly complains about lazy evaluation in S4 methods
+Message-ID: <2cde2aab-8491-2f99-657e-ecb41ceda039@gmail.com>
+
+In a package, I define a method for not-yet-generic function 'qr.X' like so:
+
+     > setOldClass("qr")
+     > setMethod("qr.X", signature(qr = "qr"), function(qr, complete, ncol) NULL)
+
+The formals of the newly generic 'qr.X' are inherited from the non-generic
+function in the base namespace.  Notably, the inherited default value of
+formal argument 'ncol' relies on lazy evaluation:
+
+     > formals(qr.X)[["ncol"]]
+     if (complete) nrow(R) else min(dim(R))
+
+where 'R' must be defined in the body of any method that might evaluate 'ncol'.
+To my surprise, tools:::.check_code_usage_in_package() complains about the
+undefined symbol:
+
+     qr.X: no visible binding for global variable 'R'
+     qr.X,qr: no visible binding for global variable 'R'
+     Undefined global functions or variables:
+       R
+
+I claim that it should _not_ complain, given that lazy evaluation is a really
+a feature of the language _and_ given that it already does not complain about
+the formals of functions that are not S4 methods.
+
+Having said that, it is not obvious to me what in codetools would need to change
+here.  Any ideas?
+
+I've attached a script that creates and installs a test package and reproduces
+the check output by calling tools:::.check_code_usage_in_package().  Hope it
+gets through.
+
+Mikael
+-------------- next part --------------
+An embedded and charset-unspecified text was scrubbed...
+Name: TestPackage.txt
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20230603/20664345/attachment.txt>
+
+From bbo|ker @end|ng |rom gm@||@com  Sat Jun  3 19:06:41 2023
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Sat, 3 Jun 2023 13:06:41 -0400
+Subject: [Rd] infelicity in `na.print = ""` for numeric columns of data
+ frames/formatting numeric values
+Message-ID: <20d39a8a-95a3-523f-385e-18e767b2c89c@gmail.com>
+
+   format(c(1:2, NA)) gives the last value as "NA" rather than 
+preserving it as NA, even if na.encode = FALSE (which does the 
+'expected' thing for character vectors, but not numeric vectors).
+
+   This was already brought up in 2008 in 
+https://bugs.r-project.org/show_bug.cgi?id=12318 where Gregor Gorjanc 
+pointed out the issue. Documentation was added and the bug closed as 
+invalid. GG ended with:
+
+ > IMHO it would be better that na.encode argument would also have an
+effect for numeric like vectors. Nearly any function in R returns NA 
+values and I expected the same for format, at least when na.encode=FALSE.
+
+   I agree!
+
+   I encountered this in the context of printing a data frame with 
+na.print = "", which works as expected when printing the individual 
+columns but not when printing the whole data frame (because 
+print.data.frame calls format.data.frame, which calls format.default 
+...).  Example below.
+
+   It's also different from what you would get if you converted to 
+character before formatting and printing:
+
+print(format(as.character(c(1:2, NA)), na.encode=FALSE), na.print ="")
+
+   Everything about this is documented (if you look carefully enough), 
+but IMO it violates the principle of least surprise 
+https://en.wikipedia.org/wiki/Principle_of_least_astonishment , so I 
+would call it at least an 'infelicity' (sensu Bill Venables)
+
+   Is there any chance that this design decision could be revisited?
+
+   cheers
+    Ben Bolker
+
+
+---
+
+   Consider
+
+dd <- data.frame(f = factor(1:2), c = as.character(1:2), n = 
+as.numeric(1:2), i = 1:2)
+dd[3,] <- rep(NA, 4)
+print(dd, na.print = "")
+
+
+print(dd, na.print = "")
+   f c  n  i
+1 1 1  1  1
+2 2 2  2  2
+3     NA NA
+
+This is in fact as documented (see below), but seems suboptimal given 
+that printing the columns separately with na.print = "" would 
+successfully print the NA entries as blank even in the numeric columns:
+
+invisible(lapply(dd, print, na.print = ""))
+[1] 1 2
+Levels: 1 2
+[1] "1" "2"
+[1] 1 2
+[1] 1 2
+
+* ?print.data.frame documents that it calls format() for each column 
+before printing
+* the code of print.data.frame() shows that it calls format.data.frame() 
+with na.encode = FALSE
+* ?format.data.frame specifically notes that na.encode "only applies to 
+elements of character vectors, not to numerical, complex nor logical 
+?NA?s, which are always encoded as ?"NA"?.
+
+    So the NA values in the numeric columns become "NA" rather than 
+remaining as NA values, and are thus printed rather than being affected 
+by the na.print argument.
+
+
