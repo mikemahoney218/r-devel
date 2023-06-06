@@ -924,3 +924,427 @@ remaining as NA values, and are thus printed rather than being affected
 by the na.print argument.
 
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Mon Jun  5 15:27:16 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Mon, 5 Jun 2023 15:27:16 +0200
+Subject: [Rd] infelicity in `na.print = ""` for numeric columns of data
+ frames/formatting numeric values
+In-Reply-To: <20d39a8a-95a3-523f-385e-18e767b2c89c@gmail.com>
+References: <20d39a8a-95a3-523f-385e-18e767b2c89c@gmail.com>
+Message-ID: <25725.58036.626708.216615@stat.math.ethz.ch>
+
+>>>>> Ben Bolker 
+>>>>>     on Sat, 3 Jun 2023 13:06:41 -0400 writes:
+
+    > format(c(1:2, NA)) gives the last value as "NA" rather than 
+    > preserving it as NA, even if na.encode = FALSE (which does the 
+    > 'expected' thing for character vectors, but not numeric vectors).
+
+    > This was already brought up in 2008 in 
+    > https://bugs.r-project.org/show_bug.cgi?id=12318 where Gregor Gorjanc 
+    > pointed out the issue. Documentation was added and the bug closed as 
+    > invalid. GG ended with:
+
+    >> IMHO it would be better that na.encode argument would also have an
+    > effect for numeric like vectors. Nearly any function in R returns NA 
+    > values and I expected the same for format, at least when na.encode=FALSE.
+
+    > I agree!
+
+I do too, at least "in principle", keeping in mind that
+backward compatibility is also an important principle ...
+
+Not sure if the 'na.encode' argument should matter or possibly a
+new optional argument, but "in principle" I think that
+
+  format(c(1:2, NA, 4))
+
+should preserve is.na(.) even by default.
+
+    > I encountered this in the context of printing a data frame with 
+    > na.print = "", which works as expected when printing the individual 
+    > columns but not when printing the whole data frame (because 
+    > print.data.frame calls format.data.frame, which calls format.default 
+    > ...).  Example below.
+
+    > It's also different from what you would get if you converted to 
+    > character before formatting and printing:
+
+    > print(format(as.character(c(1:2, NA)), na.encode=FALSE), na.print ="")
+
+    > Everything about this is documented (if you look carefully enough), 
+    > but IMO it violates the principle of least surprise 
+    > https://en.wikipedia.org/wiki/Principle_of_least_astonishment , so I 
+    > would call it at least an 'infelicity' (sensu Bill Venables)
+
+    > Is there any chance that this design decision could be revisited?
+
+We'd have to hear other opinions / gut feelings.
+
+Also, someone (not me) would ideally volunteer to run
+'R CMD check <pkg>' for a few 1000 (not necessarily all) CRAN &
+BioC packages with an accordingly patched version of R-devel
+(I might volunteer to create such a branch, e.g., a bit before the R
+ Sprint 2023 end of August).
+
+
+    > cheers
+    > Ben Bolker
+
+
+    > ---
+
+The following issue you are raising
+may really be a *different* one, as it involves format() and
+print() methods for "data.frame", i.e.,
+
+   format.data.frame() vs
+    print.data.frame()
+
+which is quite a bit related, of course, to how 'numeric'
+columns are formatted -- as you note yourself below;
+I vaguely recall that the data.frame method could be an even
+"harder problem" .. but I don't remember the details.
+
+It may also be that there are no changes necessary to the
+*.data.frame() methods, and only the documentation (you mention)
+should be updated ...
+
+Martin
+
+    > Consider
+
+    > dd <- data.frame(f = factor(1:2), c = as.character(1:2), n = 
+    > as.numeric(1:2), i = 1:2)
+    > dd[3,] <- rep(NA, 4)
+    > print(dd, na.print = "")
+
+
+    > print(dd, na.print = "")
+    >   f c  n  i
+    > 1 1 1  1  1
+    > 2 2 2  2  2
+    > 3     NA NA
+
+    > This is in fact as documented (see below), but seems suboptimal given 
+    > that printing the columns separately with na.print = "" would 
+    > successfully print the NA entries as blank even in the numeric columns:
+
+    > invisible(lapply(dd, print, na.print = ""))
+    > [1] 1 2
+    > Levels: 1 2
+    > [1] "1" "2"
+    > [1] 1 2
+    > [1] 1 2
+
+    > * ?print.data.frame documents that it calls format() for each column 
+    > before printing
+    > * the code of print.data.frame() shows that it calls format.data.frame() 
+    > with na.encode = FALSE
+    > * ?format.data.frame specifically notes that na.encode "only applies to 
+    > elements of character vectors, not to numerical, complex nor logical 
+    > ?NA?s, which are always encoded as ?"NA"?.
+
+    > So the NA values in the numeric columns become "NA" rather than 
+    > remaining as NA values, and are thus printed rather than being affected 
+    > by the na.print argument.
+
+    > ______________________________________________
+    > R-devel at r-project.org mailing list
+    > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Mon Jun  5 19:02:32 2023
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Mon, 5 Jun 2023 19:02:32 +0200
+Subject: [Rd] bug in utils:::format.person
+In-Reply-To: <14e2ef8b-3fbc-806c-2e2d-fb1e61e857bd@uibk.ac.at>
+References: <CAJuCY5zbzYooG+MX-b2-4Lm-=znQd4xiBe6Wh=akM7huP9AMxw@mail.gmail.com>
+ <6ef2cf25-87f5-89ca-7383-dab77a9ea2c8@uibk.ac.at>
+ <14e2ef8b-3fbc-806c-2e2d-fb1e61e857bd@uibk.ac.at>
+Message-ID: <25726.5416.834614.682475@hornik.net>
+
+>>>>> Achim Zeileis writes:
+
+Thanks---Ivan's fix committed now with c84497.
+
+Best
+-k
+
+> Apologies, I missed Ivan's fix to the problem (my day was too long...) 
+> which is, of course, better than mine.
+
+> On Sat, 3 Jun 2023, Achim Zeileis wrote:
+
+>> Thierry,
+>> 
+>> thanks for this, this is a bug in utils:::.format_person_as_R_code(). This 
+>> calls deparse() on the elements of the person object with the default 
+>> width.cutoff = 60. As your comment exceeds this width, the erroneous 
+>> formatting is produced. The simplest reproducible example I could come up 
+>> with was:
+>> 
+>> p <- person(".", comment = c(foo = ".....................",
+>> bar = "....................."))
+>> writeLines(format(p, style = "R"))
+>> 
+>> This can be fixed in line 1017 of utils/R/citation.R either by increasing the 
+>> width.cutoff, e.g.,
+>> 
+>> sprintf("%s = %s", names(e), sapply(e, deparse, width.cutoff = 500L))
+>> 
+>> but, of course, this still has an arbitrary cutoff. So maybe better
+>> 
+>> sprintf("%s = %s", names(e), sapply(e,
+>> function(x) paste(deparse(x), collapse = "")))
+>> 
+>> which should work.
+>> 
+>> I'll ping Kurt about this and try to coordinate a fix.
+>> 
+>> Best wishes,
+>> Achim
+>> 
+>> 
+>> On Fri, 2 Jun 2023, Thierry Onkelinx via R-devel wrote:
+>> 
+>>> Dear all,
+>>> 
+>>> I think I found a bug in utils::format.person when using style = "R" with a
+>>> vector of comments. The comment section is not parsed properly. Please find
+>>> below the mwe and the session info.
+>>> 
+>>> Best regards,
+>>> 
+>>> Thierry
+>>> 
+>>> maintainer <- person(
+>>> given = "Thierry", family = "Onkelinx", role = c("aut", "cre"),
+>>> email = "thierry.onkelinx at inbo.be",
+>>> comment = c(
+>>> ORCID = "0000-0001-8804-4216",
+>>> affiliation = "Research Institute for Nature and Forest (INBO)"
+>>> )
+>>> )
+>>> format(maintainer, style = "R") |>
+>>> cat(sep = "\n")
+>>> # output
+>>> person(given = "Thierry",
+>>> family = "Onkelinx",
+>>> role = c("aut", "cre"),
+>>> email = "thierry.onkelinx at inbo.be",
+>>> comment = c("c(ORCID = \"0000-0001-8804-4216\", affiliation =
+>>> \"Research Institute for Nature and Forest (INBO)\"", ")"))
+>>> 
+>>> ? Session info
+>>> ??????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????
+>>> setting  value
+>>> version  R version 4.3.0 (2023-04-21)
+>>> os       Ubuntu 22.04.2 LTS
+>>> system   x86_64, linux-gnu
+>>> ui       X11
+>>> language nl_BE:nl
+>>> collate  nl_BE.UTF-8
+>>> ctype    nl_BE.UTF-8
+>>> tz       Europe/Brussels
+>>> date     2023-06-02
+>>> pandoc   NA
+>>> 
+>>> ? Packages
+>>> ??????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????????
+>>> package     * version date (UTC) lib source
+>>> cli           3.6.1   2023-03-23 [1] CRAN (R 4.3.0)
+>>> fortunes      1.5-4   2016-12-29 [1] CRAN (R 4.3.0)
+>>> sessioninfo   1.2.2   2021-12-06 [1] CRAN (R 4.3.0)
+>>> 
+>>> 
+>>> 
+>>> ir. Thierry Onkelinx
+>>> Statisticus / Statistician
+>>> 
+>>> Vlaamse Overheid / Government of Flanders
+>>> INSTITUUT VOOR NATUUR- EN BOSONDERZOEK / RESEARCH INSTITUTE FOR NATURE AND
+>>> FOREST
+>>> Team Biometrie & Kwaliteitszorg / Team Biometrics & Quality Assurance
+>>> thierry.onkelinx at inbo.be
+>>> Havenlaan 88 bus 73, 1000 Brussel
+>>> www.inbo.be
+>>> 
+>>> ///////////////////////////////////////////////////////////////////////////////////////////
+>>> To call in the statistician after the experiment is done may be no more
+>>> than asking him to perform a post-mortem examination: he may be able to say
+>>> what the experiment died of. ~ Sir Ronald Aylmer Fisher
+>>> The plural of anecdote is not data. ~ Roger Brinner
+>>> The combination of some data and an aching desire for an answer does not
+>>> ensure that a reasonable answer can be extracted from a given body of data.
+>>> ~ John Tukey
+>>> ///////////////////////////////////////////////////////////////////////////////////////////
+>>> 
+>>> <https://www.inbo.be>
+>>> 
+>>> [[alternative HTML version deleted]]
+>>> 
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From bbo|ker @end|ng |rom gm@||@com  Mon Jun  5 19:27:19 2023
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Mon, 5 Jun 2023 13:27:19 -0400
+Subject: [Rd] infelicity in `na.print = ""` for numeric columns of data
+ frames/formatting numeric values
+In-Reply-To: <25725.58036.626708.216615@stat.math.ethz.ch>
+References: <20d39a8a-95a3-523f-385e-18e767b2c89c@gmail.com>
+ <25725.58036.626708.216615@stat.math.ethz.ch>
+Message-ID: <94ab73d2-25c7-e7d0-9fb5-ee69a9be6116@gmail.com>
+
+
+
+On 2023-06-05 9:27 a.m., Martin Maechler wrote:
+>>>>>> Ben Bolker
+>>>>>>      on Sat, 3 Jun 2023 13:06:41 -0400 writes:
+> 
+>      > format(c(1:2, NA)) gives the last value as "NA" rather than
+>      > preserving it as NA, even if na.encode = FALSE (which does the
+>      > 'expected' thing for character vectors, but not numeric vectors).
+> 
+>      > This was already brought up in 2008 in
+>      > https://bugs.r-project.org/show_bug.cgi?id=12318 where Gregor Gorjanc
+>      > pointed out the issue. Documentation was added and the bug closed as
+>      > invalid. GG ended with:
+> 
+>      >> IMHO it would be better that na.encode argument would also have an
+>      > effect for numeric like vectors. Nearly any function in R returns NA
+>      > values and I expected the same for format, at least when na.encode=FALSE.
+> 
+>      > I agree!
+> 
+> I do too, at least "in principle", keeping in mind that
+> backward compatibility is also an important principle ...
+> 
+> Not sure if the 'na.encode' argument should matter or possibly a
+> new optional argument, but "in principle" I think that
+> 
+>    format(c(1:2, NA, 4))
+> 
+> should preserve is.na(.) even by default.
+
+    I would say it should preserve `is.na` *only* if na.encode = FALSE - 
+that seems like the minimal appropriate change away from the current 
+behaviour.
+
+> 
+>      > I encountered this in the context of printing a data frame with
+>      > na.print = "", which works as expected when printing the individual
+>      > columns but not when printing the whole data frame (because
+>      > print.data.frame calls format.data.frame, which calls format.default
+>      > ...).  Example below.
+> 
+>      > It's also different from what you would get if you converted to
+>      > character before formatting and printing:
+> 
+>      > print(format(as.character(c(1:2, NA)), na.encode=FALSE), na.print ="")
+> 
+>      > Everything about this is documented (if you look carefully enough),
+>      > but IMO it violates the principle of least surprise
+>      > https://en.wikipedia.org/wiki/Principle_of_least_astonishment , so I
+>      > would call it at least an 'infelicity' (sensu Bill Venables)
+> 
+>      > Is there any chance that this design decision could be revisited?
+> 
+> We'd have to hear other opinions / gut feelings.
+> 
+> Also, someone (not me) would ideally volunteer to run
+> 'R CMD check <pkg>' for a few 1000 (not necessarily all) CRAN &
+> BioC packages with an accordingly patched version of R-devel
+> (I might volunteer to create such a branch, e.g., a bit before the R
+>   Sprint 2023 end of August).
+
+   I might be willing to do that, although it would be nice if there 
+were a pre-existing framework (analogous to r-lib/revdepcheck) for 
+automating it and collecting the results ...
+
+
+> 
+> 
+>      > cheers
+>      > Ben Bolker
+> 
+> 
+>      > ---
+> 
+> The following issue you are raising
+> may really be a *different* one, as it involves format() and
+> print() methods for "data.frame", i.e.,
+> 
+>     format.data.frame() vs
+>      print.data.frame()
+> 
+> which is quite a bit related, of course, to how 'numeric'
+> columns are formatted -- as you note yourself below;
+> I vaguely recall that the data.frame method could be an even
+> "harder problem" .. but I don't remember the details.
+> 
+> It may also be that there are no changes necessary to the
+> *.data.frame() methods, and only the documentation (you mention)
+> should be updated ...
+
+
+   I *think* that if format.default() were changed so that 
+na.encode=FALSE also applied to numeric types, then data frame printing 
+would naturally work 'right' (since print.data.frame calls 
+format.data.frame which calls format() for the individual columns 
+specifying encode=FALSE ...)
+> 
+> Martin
+> 
+>      > Consider
+> 
+>      > dd <- data.frame(f = factor(1:2), c = as.character(1:2), n =
+>      > as.numeric(1:2), i = 1:2)
+>      > dd[3,] <- rep(NA, 4)
+>      > print(dd, na.print = "")
+> 
+> 
+>      > print(dd, na.print = "")
+>      >   f c  n  i
+>      > 1 1 1  1  1
+>      > 2 2 2  2  2
+>      > 3     NA NA
+> 
+>      > This is in fact as documented (see below), but seems suboptimal given
+>      > that printing the columns separately with na.print = "" would
+>      > successfully print the NA entries as blank even in the numeric columns:
+> 
+>      > invisible(lapply(dd, print, na.print = ""))
+>      > [1] 1 2
+>      > Levels: 1 2
+>      > [1] "1" "2"
+>      > [1] 1 2
+>      > [1] 1 2
+> 
+>      > * ?print.data.frame documents that it calls format() for each column
+>      > before printing
+>      > * the code of print.data.frame() shows that it calls format.data.frame()
+>      > with na.encode = FALSE
+>      > * ?format.data.frame specifically notes that na.encode "only applies to
+>      > elements of character vectors, not to numerical, complex nor logical
+>      > ?NA?s, which are always encoded as ?"NA"?.
+> 
+>      > So the NA values in the numeric columns become "NA" rather than
+>      > remaining as NA values, and are thus printed rather than being affected
+>      > by the na.print argument.
+> 
+>      > ______________________________________________
+>      > R-devel at r-project.org mailing list
+>      > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
