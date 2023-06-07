@@ -1348,3 +1348,181 @@ specifying encode=FALSE ...)
 >      > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From peter@me||@trup @end|ng |rom gm@||@com  Tue Jun  6 06:34:37 2023
+From: peter@me||@trup @end|ng |rom gm@||@com (Peter Meilstrup)
+Date: Mon, 5 Jun 2023 21:34:37 -0700
+Subject: [Rd] readLines() fails on non-blocking connections when
+ encoding="UTF-8" or encoding="ASCII"
+Message-ID: <CAJoaRhbts3J=CB10PgTHpVPhhoi1mG1BPsBaF8pV7rVz+9P63g@mail.gmail.com>
+
+Hello R-devel,
+
+I have been trying to wrap my head around non-blocking connections and
+have not been having them behave as advertised.
+
+The issue I am having is that readLines() gets "stuck." If it reaches
+the end of a stream once, it does not ever return any more data, even
+when more is available on the stream. It turns out this behavior
+happens when I specify encoding="ASCII" or encoding="UTF-8". However
+things behave more as expected if I use encoding="native.enc".
+
+The following code demonstrates what is happening, using socket
+connections. I also observe this behavior for fifo() and
+file(blocking=FALSE) connections:
+
+sock <- serverSocket(45678)
+# encoding="native.enc" works; encoding="UTF-8" fails; encoding="ASCII" fails
+outgoing <- socketConnection("localhost", 45678, encoding="UTF-8")
+incoming <- socketAccept(sock, encoding="UTF-8")
+writeLines("hello", outgoing)
+flush(outgoing)
+readLines(incoming, 1) # "hello"
+readLines(incoming, 1) # character(0)
+writeLines("again", outgoing)
+flush(outgoing)
+socketSelect(list(incoming)) #TRUE
+readLines(incoming, 1) # I get character(0) (incorrect)
+socketSelect(list(incoming), timeout=0) #TRUE, so there is still data?
+writeLines("again", outgoing)
+writeLines("again", outgoing)
+flush(outgoing)
+readLines(incoming, 1) # character(0)
+isIncomplete(incoming) # FALSE, which also seems wrong bc there is unread data?
+readChar(incoming, 100) # "again\nagain\nagain\n", so readChar saw
+what readLines() did not
+close(incoming)
+close(outgoing)
+close(sock)
+
+I have observed this with recent versions of R installed on Debian and
+OSX. I also found a report of similar behavior from 2018:
+
+https://stat.ethz.ch/pipermail/r-devel/2018-April/075883.html
+
+Note that that report did not mention encodings being an issue;
+perhaps the original bug was fixed for native encoding only?
+
+Peter Meilstrup
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Tue Jun  6 13:03:24 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Tue, 6 Jun 2023 14:03:24 +0300
+Subject: [Rd] readLines() fails on non-blocking connections when
+ encoding="UTF-8" or encoding="ASCII"
+In-Reply-To: <CAJoaRhbts3J=CB10PgTHpVPhhoi1mG1BPsBaF8pV7rVz+9P63g@mail.gmail.com>
+References: <CAJoaRhbts3J=CB10PgTHpVPhhoi1mG1BPsBaF8pV7rVz+9P63g@mail.gmail.com>
+Message-ID: <20230606140324.333e92bb@arachnoid>
+
+? Mon, 5 Jun 2023 21:34:37 -0700
+Peter Meilstrup <peter.meilstrup at gmail.com> ?????:
+
+> socketSelect(list(incoming)) #TRUE
+> readLines(incoming, 1) # I get character(0) (incorrect)
+
+> readChar(incoming, 100)
+> # "again\nagain\nagain\n", so readChar saw what readLines() did not
+
+The difference turns out to be that readChar() uses con->read
+in order to get data from the connection, which resolves to sock_read,
+which does the right thing.
+
+readLines(), on the other hand, uses Rconn_fgetc, which (naturally)
+calls con->fgetc, which turns out to be dummy_fgetc for this connection.
+
+The dummy_fgetc function checks whether the current connection has an
+encoding translation layer active (a non-null iconv context in
+con->inconv). If it does exist, a check for con->EOF_signalled is
+eventually performed, returning R_EOF without trying to read more data
+from the connection if the flag is set. This means that once a read
+operation fails, Rconn_fgetc will keep returning EOF, even if some data
+later appears on the wire.
+
+As far as I can tell, con->EOF_signalled is only used by dummy_fgetc,
+and it needs to be there in order to avoid an infinite loop where the
+connection is actually at EOF (so con->navail will always be <= 0). But
+should it be persistent? Can we make the flag local to a given
+invocation of dummy_fgetc?
+
+With the following patch, the problem seems to go away without causing
+any `make check` failures:
+
+--- src/main/connections.c	(revision 84506)
++++ src/main/connections.c	(working copy)
+@@ -533,6 +533,7 @@
+     Rboolean checkBOM = FALSE, checkBOM8 = FALSE;
+ 
+     if(con->inconv) {
++	con->EOF_signalled = FALSE;
+ 	while(con->navail <= 0) {
+ 	    /* Probably in all cases there will be at most one iteration
+ 	       of the loop. It could iterate multiple times only if
+ 	       the input
+
+But in that case, it seems to be possible to move EOF_signalled out of
+the connection structure:
+
+--- src/include/R_ext/Connections.h	(revision 84506)
++++ src/include/R_ext/Connections.h	(working copy)
+@@ -74,7 +74,6 @@
+     /* The idea here is that no MBCS char will ever not fit */
+     char iconvbuff[25], oconvbuff[50], *next, init_out[25];
+     short navail, inavail;
+-    Rboolean EOF_signalled;
+     Rboolean UTF8out;
+     void *id;
+     void *ex_ptr;
+--- src/main/connections.c	(revision 84506)
++++ src/main/connections.c	(working copy)
+@@ -400,7 +400,6 @@
+ 	tmp = Riconv_open(useUTF8 ? "UTF-8" : "", enc);
+ 	if(tmp != (void *)-1) con->inconv = tmp;
+ 	else set_iconv_error(con, con->encname, useUTF8 ? "UTF-8" : "");
+-	con->EOF_signalled = FALSE;
+ 	/* initialize state, and prepare any initial bytes */
+ 	Riconv(tmp, NULL, NULL, &ob, &onb);
+ 	con->navail = (short)(50-onb); con->inavail = 0;
+@@ -533,6 +532,7 @@
+     Rboolean checkBOM = FALSE, checkBOM8 = FALSE;
+ 
+     if(con->inconv) {
++	Rboolean EOF_signalled = FALSE;
+ 	while(con->navail <= 0) {
+ 	    /* Probably in all cases there will be at most one iteration
+ 	       of the loop. It could iterate multiple times only if the input
+@@ -544,7 +544,7 @@
+ 	    const char *ib;
+ 	    size_t inb, onb, res;
+ 
+-	    if(con->EOF_signalled) return R_EOF;
++	    if(EOF_signalled) return R_EOF;
+ 	    if(con->inavail == -2) {
+ 		con->inavail = 0;
+ 		checkBOM = TRUE;
+@@ -559,7 +559,7 @@
+ 		    c = buff_fgetc(con);
+ 		else
+ 		    c = con->fgetc_internal(con);
+-		if(c == R_EOF){ con->EOF_signalled = TRUE; break; }
++		if(c == R_EOF){ EOF_signalled = TRUE; break; }
+ 		*p++ = (char) c;
+ 		con->inavail++;
+ 		inew++;
+@@ -600,7 +600,7 @@
+ 			    con->description);
+ 		    con->inavail = 0;
+ 		    if (con->navail == 0) return R_EOF;
+-		    con->EOF_signalled = TRUE;
++		    EOF_signalled = TRUE;
+ 		}
+ 	    }
+ 	}
+
+Again, no apparent `make check` failures. Am I introducing a
+performance problem? A breaking API change?
+
+-- 
+Best regards,
+Ivan
+
+
