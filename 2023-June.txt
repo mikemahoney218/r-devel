@@ -1526,3 +1526,168 @@ Best regards,
 Ivan
 
 
+From @oko| @end|ng |rom |n@@-tou|ou@e@|r  Wed Jun  7 10:06:38 2023
+From: @oko| @end|ng |rom |n@@-tou|ou@e@|r (Serguei Sokol)
+Date: Wed, 7 Jun 2023 10:06:38 +0200
+Subject: [Rd] codetools wrongly complains about lazy evaluation in S4
+ methods
+In-Reply-To: <2cde2aab-8491-2f99-657e-ecb41ceda039@gmail.com>
+References: <2cde2aab-8491-2f99-657e-ecb41ceda039@gmail.com>
+Message-ID: <c48ac4d5-4464-f040-cc2d-6fefa6f02f57@insa-toulouse.fr>
+
+Le 03/06/2023 ? 17:50, Mikael Jagan a ?crit?:
+> In a package, I define a method for not-yet-generic function 'qr.X' 
+> like so:
+>
+> ??? > setOldClass("qr")
+> ??? > setMethod("qr.X", signature(qr = "qr"), function(qr, complete, 
+> ncol) NULL)
+>
+> The formals of the newly generic 'qr.X' are inherited from the 
+> non-generic
+> function in the base namespace.? Notably, the inherited default value of
+> formal argument 'ncol' relies on lazy evaluation:
+>
+> ??? > formals(qr.X)[["ncol"]]
+> ??? if (complete) nrow(R) else min(dim(R))
+>
+> where 'R' must be defined in the body of any method that might 
+> evaluate 'ncol'.
+> To my surprise, tools:::.check_code_usage_in_package() complains about 
+> the
+> undefined symbol:
+>
+> ??? qr.X: no visible binding for global variable 'R'
+> ??? qr.X,qr: no visible binding for global variable 'R'
+> ??? Undefined global functions or variables:
+> ????? R
+I think this issue is similar to the complaints about non defined 
+variables in expressions involving non standard evaluation, e.g. column 
+names in a data frame which are used as unquoted symbols. One of 
+workarounds is simply to declare them somewhere in your code. In your 
+case, it could be something as simple as:
+
+ ? R=NULL
+
+Best,
+Serguei.
+
+>
+> I claim that it should _not_ complain, given that lazy evaluation is a 
+> really
+> a feature of the language _and_ given that it already does not 
+> complain about
+> the formals of functions that are not S4 methods.
+>
+> Having said that, it is not obvious to me what in codetools would need 
+> to change
+> here.? Any ideas?
+>
+> I've attached a script that creates and installs a test package and 
+> reproduces
+> the check output by calling tools:::.check_code_usage_in_package().? 
+> Hope it
+> gets through.
+>
+> Mikael
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From g@bembecker @end|ng |rom gm@||@com  Wed Jun  7 11:13:16 2023
+From: g@bembecker @end|ng |rom gm@||@com (Gabriel Becker)
+Date: Wed, 7 Jun 2023 02:13:16 -0700
+Subject: [Rd] codetools wrongly complains about lazy evaluation in S4
+ methods
+In-Reply-To: <c48ac4d5-4464-f040-cc2d-6fefa6f02f57@insa-toulouse.fr>
+References: <2cde2aab-8491-2f99-657e-ecb41ceda039@gmail.com>
+ <c48ac4d5-4464-f040-cc2d-6fefa6f02f57@insa-toulouse.fr>
+Message-ID: <CAD4oTHFTi3SF0g-qEcA8R7YePQ6dZG+7-D7M7TMu7FgB9j-UWQ@mail.gmail.com>
+
+The API supported workaround is to call globalVariables, which,
+essentially, declares the variables without defining them (a distinction R
+does not usually make).
+
+The issue with this approach, of course, is that its a very blunt
+instrument. It will cause false negatives if you accidentally use the same
+symbol in a standard evaluation context elsewhere in your code.
+Nonetheless, that's the intended approach as far as i know.
+
+Best,
+~G
+
+
+
+On Wed, Jun 7, 2023 at 1:07?AM Serguei Sokol via R-devel <
+r-devel at r-project.org> wrote:
+
+> Le 03/06/2023 ? 17:50, Mikael Jagan a ?crit :
+> > In a package, I define a method for not-yet-generic function 'qr.X'
+> > like so:
+> >
+> >     > setOldClass("qr")
+> >     > setMethod("qr.X", signature(qr = "qr"), function(qr, complete,
+> > ncol) NULL)
+> >
+> > The formals of the newly generic 'qr.X' are inherited from the
+> > non-generic
+> > function in the base namespace.  Notably, the inherited default value of
+> > formal argument 'ncol' relies on lazy evaluation:
+> >
+> >     > formals(qr.X)[["ncol"]]
+> >     if (complete) nrow(R) else min(dim(R))
+> >
+> > where 'R' must be defined in the body of any method that might
+> > evaluate 'ncol'.
+> > To my surprise, tools:::.check_code_usage_in_package() complains about
+> > the
+> > undefined symbol:
+> >
+> >     qr.X: no visible binding for global variable 'R'
+> >     qr.X,qr: no visible binding for global variable 'R'
+> >     Undefined global functions or variables:
+> >       R
+> I think this issue is similar to the complaints about non defined
+> variables in expressions involving non standard evaluation, e.g. column
+> names in a data frame which are used as unquoted symbols. One of
+> workarounds is simply to declare them somewhere in your code. In your
+> case, it could be something as simple as:
+>
+>    R=NULL
+>
+> Best,
+> Serguei.
+>
+> >
+> > I claim that it should _not_ complain, given that lazy evaluation is a
+> > really
+> > a feature of the language _and_ given that it already does not
+> > complain about
+> > the formals of functions that are not S4 methods.
+> >
+> > Having said that, it is not obvious to me what in codetools would need
+> > to change
+> > here.  Any ideas?
+> >
+> > I've attached a script that creates and installs a test package and
+> > reproduces
+> > the check output by calling tools:::.check_code_usage_in_package().
+> > Hope it
+> > gets through.
+> >
+> > Mikael
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
