@@ -1691,3 +1691,410 @@ r-devel at r-project.org> wrote:
 	[[alternative HTML version deleted]]
 
 
+From j@g@nmn2 @end|ng |rom gm@||@com  Mon Jun 12 19:55:16 2023
+From: j@g@nmn2 @end|ng |rom gm@||@com (Mikael Jagan)
+Date: Mon, 12 Jun 2023 13:55:16 -0400
+Subject: [Rd] Rd macros are not expanded inside of \eqn{} or \deqn{}
+Message-ID: <98fe9032-aa03-60f0-841f-29812031071c@gmail.com>
+
+I was a bit surprised to learn that, if one has an Rd file as below:
+
+     %% zzz.Rd
+     \newcommand{\zzz}{whatever}
+     \name{zzz}
+     \title{zzz}
+     \description{ \zzz{} \eqn{\zzz{}} \deqn{\zzz{}} }
+
+then the macro is _not_ expanded inside of \eqn{} or \deqn{} when parsed to text
+or HTML.  Is this behaviour intentional?  Could it be changed?  Inside of \eqn{}
+and \deqn{} is where I am _most_ likely to want to use macros, at least since
+R 4.2.0, which added KaTeX support ...
+
+See output pasted below.
+
+Mikael
+
+ > tools::Rd2txt(tools::parse_Rd("zzz.Rd"))
+zzz
+
+Description:
+
+      whatever \zzz{}
+
+                                    \zzz{}
+
+ > tools::Rd2HTML(tools::parse_Rd("zzz.Rd"))
+<!DOCTYPE html><html><head><title>R: zzz</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, 
+user-scalable=yes" />
+<link rel="stylesheet" 
+href="https://cdn.jsdelivr.net/npm/katex at 0.15.3/dist/katex.min.css">
+<script type="text/javascript">
+const macros = { "\\R": "\\textsf{R}", "\\code": "\\texttt"};
+function processMathHTML() {
+     var l = document.getElementsByClassName('reqn');
+     for (let e of l) { katex.render(e.textContent, e, { throwOnError: false, 
+macros }); }
+     return;
+}</script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex at 0.15.3/dist/katex.min.js"
+     onload="processMathHTML();"></script>
+<link rel="stylesheet" type="text/css" href="R.css" />
+</head><body><div class="container">
+
+<table style="width: 100%;"><tr><td>zzz</td><td style="text-align: right;">R 
+Documentation</td></tr></table>
+
+<h2 id='zzz'>zzz</h2>
+
+<h3>Description</h3>
+
+  <p>whatever <code class="reqn">\zzz{}</code> </p>
+<p style="text-align: center;"><code class="reqn">\zzz{}</code>
+</p>
+
+
+</div>
+</body></html>
+
+
+From j@g@nmn2 @end|ng |rom gm@||@com  Mon Jun 12 20:03:57 2023
+From: j@g@nmn2 @end|ng |rom gm@||@com (Mikael Jagan)
+Date: Mon, 12 Jun 2023 14:03:57 -0400
+Subject: [Rd] codetools wrongly complains about lazy evaluation in S4
+ methods
+In-Reply-To: <CAD4oTHFTi3SF0g-qEcA8R7YePQ6dZG+7-D7M7TMu7FgB9j-UWQ@mail.gmail.com>
+References: <2cde2aab-8491-2f99-657e-ecb41ceda039@gmail.com>
+ <c48ac4d5-4464-f040-cc2d-6fefa6f02f57@insa-toulouse.fr>
+ <CAD4oTHFTi3SF0g-qEcA8R7YePQ6dZG+7-D7M7TMu7FgB9j-UWQ@mail.gmail.com>
+Message-ID: <d3fc634f-a952-8637-daae-bc1427c32b9d@gmail.com>
+
+Thanks both.  Yes, I was aware of globalVariables, etc.  I guess I was hoping
+to be pointed to the right place in the source code, in case the issue could
+be addressed properly, notably as it seems to have already been addressed for
+functions that are not S4 methods, i.e., codetools is apparently not bothered
+by
+
+     def <- function(x = y) { y <- 0; x }
+
+but still complains about
+
+     setMethod("someGeneric", "someClass", def)
+
+...
+
+Mikael
+
+On 2023-06-07 5:13 am, Gabriel Becker wrote:
+> The API supported workaround is to call globalVariables, which,
+> essentially, declares the variables without defining them (a distinction R
+> does not usually make).
+> 
+> The issue with this approach, of course, is that its a very blunt
+> instrument. It will cause false negatives if you accidentally use the same
+> symbol in a standard evaluation context elsewhere in your code.
+> Nonetheless, that's the intended approach as far as i know.
+> 
+> Best,
+> ~G
+> 
+> 
+> 
+> On Wed, Jun 7, 2023 at 1:07?AM Serguei Sokol via R-devel <
+> r-devel at r-project.org> wrote:
+> 
+>> Le 03/06/2023 ? 17:50, Mikael Jagan a ?crit :
+>>> In a package, I define a method for not-yet-generic function 'qr.X'
+>>> like so:
+>>>
+>>>      > setOldClass("qr")
+>>>      > setMethod("qr.X", signature(qr = "qr"), function(qr, complete,
+>>> ncol) NULL)
+>>>
+>>> The formals of the newly generic 'qr.X' are inherited from the
+>>> non-generic
+>>> function in the base namespace.  Notably, the inherited default value of
+>>> formal argument 'ncol' relies on lazy evaluation:
+>>>
+>>>      > formals(qr.X)[["ncol"]]
+>>>      if (complete) nrow(R) else min(dim(R))
+>>>
+>>> where 'R' must be defined in the body of any method that might
+>>> evaluate 'ncol'.
+>>> To my surprise, tools:::.check_code_usage_in_package() complains about
+>>> the
+>>> undefined symbol:
+>>>
+>>>      qr.X: no visible binding for global variable 'R'
+>>>      qr.X,qr: no visible binding for global variable 'R'
+>>>      Undefined global functions or variables:
+>>>        R
+>> I think this issue is similar to the complaints about non defined
+>> variables in expressions involving non standard evaluation, e.g. column
+>> names in a data frame which are used as unquoted symbols. One of
+>> workarounds is simply to declare them somewhere in your code. In your
+>> case, it could be something as simple as:
+>>
+>>     R=NULL
+>>
+>> Best,
+>> Serguei.
+>>
+>>>
+>>> I claim that it should _not_ complain, given that lazy evaluation is a
+>>> really
+>>> a feature of the language _and_ given that it already does not
+>>> complain about
+>>> the formals of functions that are not S4 methods.
+>>>
+>>> Having said that, it is not obvious to me what in codetools would need
+>>> to change
+>>> here.  Any ideas?
+>>>
+>>> I've attached a script that creates and installs a test package and
+>>> reproduces
+>>> the check output by calling tools:::.check_code_usage_in_package().
+>>> Hope it
+>>> gets through.
+>>>
+>>> Mikael
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Mon Jun 12 20:19:44 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Mon, 12 Jun 2023 14:19:44 -0400
+Subject: [Rd] Rd macros are not expanded inside of \eqn{} or \deqn{}
+In-Reply-To: <98fe9032-aa03-60f0-841f-29812031071c@gmail.com>
+References: <98fe9032-aa03-60f0-841f-29812031071c@gmail.com>
+Message-ID: <660808d5-c2c5-f810-c848-541bc124209c@gmail.com>
+
+A description of the format is given in this document:
+
+   https://developer.r-project.org/parseRd.pdf
+
+As far as I know that document is still up to date.  As it says in Table 
+3, \eqn and \deqn take "Verbatim" arguments.  That mode is described in 
+the introduction to Section 2; it contains text and comments, so by 
+design no macros are expanded.
+
+I think it's unlikely that this would change.  The problem is that the 
+equation markup can contain LaTeX macros.  So the parser would have to 
+have a new mode where it distinguished between LaTeX macros and Rd 
+macros.  But then how would you write true verbatim text, where you're 
+trying to discuss the macros?  It gets complicated very quickly.
+
+What you could conceivably do is write your own macro that passed its 
+content to R code that expanded your user-defined macros. It sounds 
+complicated, and would probably be hard to get right.
+
+Duncan Murdoch
+
+On 12/06/2023 1:55 p.m., Mikael Jagan wrote:
+> I was a bit surprised to learn that, if one has an Rd file as below:
+> 
+>       %% zzz.Rd
+>       \newcommand{\zzz}{whatever}
+>       \name{zzz}
+>       \title{zzz}
+>       \description{ \zzz{} \eqn{\zzz{}} \deqn{\zzz{}} }
+> 
+> then the macro is _not_ expanded inside of \eqn{} or \deqn{} when parsed to text
+> or HTML.  Is this behaviour intentional?  Could it be changed?  Inside of \eqn{}
+> and \deqn{} is where I am _most_ likely to want to use macros, at least since
+> R 4.2.0, which added KaTeX support ...
+> 
+> See output pasted below.
+> 
+> Mikael
+> 
+>   > tools::Rd2txt(tools::parse_Rd("zzz.Rd"))
+> zzz
+> 
+> Description:
+> 
+>        whatever \zzz{}
+> 
+>                                      \zzz{}
+> 
+>   > tools::Rd2HTML(tools::parse_Rd("zzz.Rd"))
+> <!DOCTYPE html><html><head><title>R: zzz</title>
+> <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+> <meta name="viewport" content="width=device-width, initial-scale=1.0,
+> user-scalable=yes" />
+> <link rel="stylesheet"
+> href="https://cdn.jsdelivr.net/npm/katex at 0.15.3/dist/katex.min.css">
+> <script type="text/javascript">
+> const macros = { "\\R": "\\textsf{R}", "\\code": "\\texttt"};
+> function processMathHTML() {
+>       var l = document.getElementsByClassName('reqn');
+>       for (let e of l) { katex.render(e.textContent, e, { throwOnError: false,
+> macros }); }
+>       return;
+> }</script>
+> <script defer src="https://cdn.jsdelivr.net/npm/katex at 0.15.3/dist/katex.min.js"
+>       onload="processMathHTML();"></script>
+> <link rel="stylesheet" type="text/css" href="R.css" />
+> </head><body><div class="container">
+> 
+> <table style="width: 100%;"><tr><td>zzz</td><td style="text-align: right;">R
+> Documentation</td></tr></table>
+> 
+> <h2 id='zzz'>zzz</h2>
+> 
+> <h3>Description</h3>
+> 
+>    <p>whatever <code class="reqn">\zzz{}</code> </p>
+> <p style="text-align: center;"><code class="reqn">\zzz{}</code>
+> </p>
+> 
+> 
+> </div>
+> </body></html>
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Mon Jun 12 20:42:32 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Mon, 12 Jun 2023 14:42:32 -0400
+Subject: [Rd] codetools wrongly complains about lazy evaluation in S4
+ methods
+In-Reply-To: <d3fc634f-a952-8637-daae-bc1427c32b9d@gmail.com>
+References: <2cde2aab-8491-2f99-657e-ecb41ceda039@gmail.com>
+ <c48ac4d5-4464-f040-cc2d-6fefa6f02f57@insa-toulouse.fr>
+ <CAD4oTHFTi3SF0g-qEcA8R7YePQ6dZG+7-D7M7TMu7FgB9j-UWQ@mail.gmail.com>
+ <d3fc634f-a952-8637-daae-bc1427c32b9d@gmail.com>
+Message-ID: <1cd9092f-a21d-e3f0-48b3-445c8b13bd2d@gmail.com>
+
+Most of the errors, warnings and notes generated by R CMD check are 
+generated by code in the tools package, usually in the tools/R/QC.R 
+source file.  Search that file for the error message, then backtrack to 
+find the code that causes it to be triggered.
+
+If I recall correctly, it works on the evaluated source rather than the 
+actual source, so it will only see the result of evaluating `setMethod` 
+in your example.  I don't know the methods package well enough to know 
+exactly what that does, but presumably it produces a function and hides 
+it somewhere so that the S4 dispatch can find it when it needs to.
+
+Duncan Murdoch
+
+On 12/06/2023 2:03 p.m., Mikael Jagan wrote:
+> Thanks both.  Yes, I was aware of globalVariables, etc.  I guess I was hoping
+> to be pointed to the right place in the source code, in case the issue could
+> be addressed properly, notably as it seems to have already been addressed for
+> functions that are not S4 methods, i.e., codetools is apparently not bothered
+> by
+> 
+>       def <- function(x = y) { y <- 0; x }
+> 
+> but still complains about
+> 
+>       setMethod("someGeneric", "someClass", def)
+> 
+> ...
+> 
+> Mikael
+> 
+> On 2023-06-07 5:13 am, Gabriel Becker wrote:
+>> The API supported workaround is to call globalVariables, which,
+>> essentially, declares the variables without defining them (a distinction R
+>> does not usually make).
+>>
+>> The issue with this approach, of course, is that its a very blunt
+>> instrument. It will cause false negatives if you accidentally use the same
+>> symbol in a standard evaluation context elsewhere in your code.
+>> Nonetheless, that's the intended approach as far as i know.
+>>
+>> Best,
+>> ~G
+>>
+>>
+>>
+>> On Wed, Jun 7, 2023 at 1:07?AM Serguei Sokol via R-devel <
+>> r-devel at r-project.org> wrote:
+>>
+>>> Le 03/06/2023 ? 17:50, Mikael Jagan a ?crit :
+>>>> In a package, I define a method for not-yet-generic function 'qr.X'
+>>>> like so:
+>>>>
+>>>>       > setOldClass("qr")
+>>>>       > setMethod("qr.X", signature(qr = "qr"), function(qr, complete,
+>>>> ncol) NULL)
+>>>>
+>>>> The formals of the newly generic 'qr.X' are inherited from the
+>>>> non-generic
+>>>> function in the base namespace.  Notably, the inherited default value of
+>>>> formal argument 'ncol' relies on lazy evaluation:
+>>>>
+>>>>       > formals(qr.X)[["ncol"]]
+>>>>       if (complete) nrow(R) else min(dim(R))
+>>>>
+>>>> where 'R' must be defined in the body of any method that might
+>>>> evaluate 'ncol'.
+>>>> To my surprise, tools:::.check_code_usage_in_package() complains about
+>>>> the
+>>>> undefined symbol:
+>>>>
+>>>>       qr.X: no visible binding for global variable 'R'
+>>>>       qr.X,qr: no visible binding for global variable 'R'
+>>>>       Undefined global functions or variables:
+>>>>         R
+>>> I think this issue is similar to the complaints about non defined
+>>> variables in expressions involving non standard evaluation, e.g. column
+>>> names in a data frame which are used as unquoted symbols. One of
+>>> workarounds is simply to declare them somewhere in your code. In your
+>>> case, it could be something as simple as:
+>>>
+>>>      R=NULL
+>>>
+>>> Best,
+>>> Serguei.
+>>>
+>>>>
+>>>> I claim that it should _not_ complain, given that lazy evaluation is a
+>>>> really
+>>>> a feature of the language _and_ given that it already does not
+>>>> complain about
+>>>> the formals of functions that are not S4 methods.
+>>>>
+>>>> Having said that, it is not obvious to me what in codetools would need
+>>>> to change
+>>>> here.  Any ideas?
+>>>>
+>>>> I've attached a script that creates and installs a test package and
+>>>> reproduces
+>>>> the check output by calling tools:::.check_code_usage_in_package().
+>>>> Hope it
+>>>> gets through.
+>>>>
+>>>> Mikael
+>>>>
+>>>> ______________________________________________
+>>>> R-devel at r-project.org mailing list
+>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>
+>>
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
