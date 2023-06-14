@@ -2098,3 +2098,150 @@ On 12/06/2023 2:03 p.m., Mikael Jagan wrote:
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From kry|ov@r00t @end|ng |rom gm@||@com  Tue Jun 13 10:23:23 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Tue, 13 Jun 2023 11:23:23 +0300
+Subject: [Rd] codetools wrongly complains about lazy evaluation in S4
+ methods
+In-Reply-To: <2cde2aab-8491-2f99-657e-ecb41ceda039@gmail.com>
+References: <2cde2aab-8491-2f99-657e-ecb41ceda039@gmail.com>
+Message-ID: <20230613112323.4a0b5e35@Tarkus>
+
+On Sat, 3 Jun 2023 11:50:59 -0400
+Mikael Jagan <jaganmn2 at gmail.com> wrote:
+
+>      > setOldClass("qr")
+>      > setMethod("qr.X", signature(qr = "qr"), function(qr, complete,
+>      > ncol) NULL)  
+> 
+> The formals of the newly generic 'qr.X' are inherited from the
+> non-generic function in the base namespace.  Notably, the inherited
+> default value of formal argument 'ncol' relies on lazy evaluation:
+> 
+>      > formals(qr.X)[["ncol"]]  
+>      if (complete) nrow(R) else min(dim(R))
+> 
+> where 'R' must be defined in the body of any method that might
+> evaluate 'ncol'. To my surprise,
+> tools:::.check_code_usage_in_package() complains about the undefined
+> symbol:
+> 
+>      qr.X: no visible binding for global variable 'R'
+>      qr.X,qr: no visible binding for global variable 'R'
+>      Undefined global functions or variables:
+>        R
+
+In other words, codetools::checkUsage(base::qr.X) says nothing while
+codetools::checkUsage(TestPackage::qr.X) complains. I think the
+difference is that codetools::findFuncLocals sees an assignment to `R`
+in the body of base::qr.X:
+
+codetools::findFuncLocals(formals(base::qr.X), body(base::qr.X))
+# [1] "cmplx"   "cn"      "ip"      "p"       "pivoted" "R"       "res"
+# [8] "tmp"    
+
+The problem, then, is that an S4 generic shouldn't be having such
+assignments in its body. One way to fix this would be to modify
+codetools::checkUsage to immediately return if inherits(fun,
+'standardGeneric'), but I don't know enough about S4 to say whether
+this is safe. (A more comprehensive fix would be to check every
+encountered method against the formals of the generic, but that sounds
+complicated.) Arguably, static analysis will always be wrong about
+something, so we're trading a false positive for potential false
+negatives.
+
+-- 
+Best regards,
+Ivan
+
+
+From k@@perd@n|e|h@n@en @end|ng |rom gm@||@com  Tue Jun 13 20:03:08 2023
+From: k@@perd@n|e|h@n@en @end|ng |rom gm@||@com (Kasper Daniel Hansen)
+Date: Tue, 13 Jun 2023 14:03:08 -0400
+Subject: [Rd] codetools wrongly complains about lazy evaluation in S4
+ methods
+In-Reply-To: <2cde2aab-8491-2f99-657e-ecb41ceda039@gmail.com>
+References: <2cde2aab-8491-2f99-657e-ecb41ceda039@gmail.com>
+Message-ID: <CAC2h7uu_8m=xC7KcB1i_uk=WW8bDvx4P7ACSPOp-s1PK=1nGQg@mail.gmail.com>
+
+On Sat, Jun 3, 2023 at 11:51?AM Mikael Jagan <jaganmn2 at gmail.com> wrote:
+
+> The formals of the newly generic 'qr.X' are inherited from the non-generic
+> function in the base namespace.  Notably, the inherited default value of
+> formal argument 'ncol' relies on lazy evaluation:
+>
+>      > formals(qr.X)[["ncol"]]
+>      if (complete) nrow(R) else min(dim(R))
+>
+> where 'R' must be defined in the body of any method that might evaluate
+> 'ncol'.
+>
+
+Perhaps I am misunderstanding something, but I think Mikael's expectations
+about the scoping rules of R are wrong.  The enclosing environment of ncol
+is where it was _defined_ not where it is _called_ (apologies if I am
+messing up the computer science terminology here).
+
+This suggests to me that codetools is right.  But a more extended example
+would be useful. Perhaps there is something special with setOldClass()
+which I am no aware of.
+
+Also, Bioconductor has 100s of packages with S4 where codetools works well.
+
+Kasper
+
+	[[alternative HTML version deleted]]
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Wed Jun 14 02:01:04 2023
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Wed, 14 Jun 2023 12:01:04 +1200
+Subject: [Rd] codetools wrongly complains about lazy evaluation in S4
+ methods
+In-Reply-To: <CAC2h7uu_8m=xC7KcB1i_uk=WW8bDvx4P7ACSPOp-s1PK=1nGQg@mail.gmail.com>
+References: <2cde2aab-8491-2f99-657e-ecb41ceda039@gmail.com>
+ <CAC2h7uu_8m=xC7KcB1i_uk=WW8bDvx4P7ACSPOp-s1PK=1nGQg@mail.gmail.com>
+Message-ID: <ED9261FE-2E8C-4312-B388-0FF18652E973@R-project.org>
+
+I agree that this is not an R issue, but rather user error of not defining a proper generic so the check is right. Obviously, defining a generic with implementation-specific ncol default makes no sense at all, it should only be part of the method implementation. If one was to implement the same default behavior in the generic itself (not necessarily a good idea) the default would be ncol = if (complete) nrow(qr.R(qr, TRUE)) else min(dim(qr.R(qr, TRUE))) to not rely on the internals of the implementation.
+
+Cheers,
+Simon
+
+
+> On 14/06/2023, at 6:03 AM, Kasper Daniel Hansen <kasperdanielhansen at gmail.com> wrote:
+> 
+> On Sat, Jun 3, 2023 at 11:51?AM Mikael Jagan <jaganmn2 at gmail.com> wrote:
+> 
+>> The formals of the newly generic 'qr.X' are inherited from the non-generic
+>> function in the base namespace.  Notably, the inherited default value of
+>> formal argument 'ncol' relies on lazy evaluation:
+>> 
+>>> formals(qr.X)[["ncol"]]
+>>     if (complete) nrow(R) else min(dim(R))
+>> 
+>> where 'R' must be defined in the body of any method that might evaluate
+>> 'ncol'.
+>> 
+> 
+> Perhaps I am misunderstanding something, but I think Mikael's expectations
+> about the scoping rules of R are wrong.  The enclosing environment of ncol
+> is where it was _defined_ not where it is _called_ (apologies if I am
+> messing up the computer science terminology here).
+> 
+> This suggests to me that codetools is right.  But a more extended example
+> would be useful. Perhaps there is something special with setOldClass()
+> which I am no aware of.
+> 
+> Also, Bioconductor has 100s of packages with S4 where codetools works well.
+> 
+> Kasper
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
