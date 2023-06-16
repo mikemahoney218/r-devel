@@ -2258,3 +2258,603 @@ Best,
 Gabor
 
 
+From j@g@nmn2 @end|ng |rom gm@||@com  Thu Jun 15 05:57:36 2023
+From: j@g@nmn2 @end|ng |rom gm@||@com (Mikael Jagan)
+Date: Wed, 14 Jun 2023 23:57:36 -0400
+Subject: [Rd] codetools wrongly complains about lazy evaluation in S4
+ methods
+In-Reply-To: <ED9261FE-2E8C-4312-B388-0FF18652E973@R-project.org>
+References: <2cde2aab-8491-2f99-657e-ecb41ceda039@gmail.com>
+ <CAC2h7uu_8m=xC7KcB1i_uk=WW8bDvx4P7ACSPOp-s1PK=1nGQg@mail.gmail.com>
+ <ED9261FE-2E8C-4312-B388-0FF18652E973@R-project.org>
+Message-ID: <2d0ac002-df3e-eba7-b184-ebbf5940deaf@gmail.com>
+
+Thanks all - yes, I think that Simon's diagnosis ("user error") is correct:
+in this situation one should define a reasonable generic function explicitly,
+with a call to setGeneric, and not rely on the call inside of setMethod ...
+
+But it is still not clear what the way forward should be (for package Matrix,
+where we would like to export a method for 'qr.X').  If we do nothing, then
+there is the note, already mentioned:
+
+     * checking R code for possible problems ... NOTE
+     qr.X: no visible binding for global variable ?R?
+     Undefined global functions or variables:
+       R
+
+If we add the following to our R/AllGenerics.R :
+
+     setGeneric("qr.X",
+                function(qr, complete = FALSE, ncol, ...)
+                    standardGeneric("qr.X"),
+                useAsDefault = function(qr, complete = FALSE, ncol, ...) {
+                    if(missing(ncol))
+                        base::qr.X(qr, complete = complete)
+                    else base::qr.X(qr, complete = complete, ncol = ncol)
+                },
+                signature = "qr")
+
+then we get a startup message, which would be quite disruptive on CRAN :
+
+     The following object is masked from 'package:base':
+
+         qr.X
+
+and if we further add setGenericImplicit("qr.X", restore = (TRUE|FALSE))
+to our R/zzz.R, then for either value of 'restore' we encounter :
+
+     ** testing if installed package can be loaded from temporary location
+     Error: package or namespace load failed for 'Matrix':
+      Function found when exporting methods from the namespace 'Matrix' which is 
+not S4 generic: 'qr.X'
+
+Are there possibilities that I have missed?
+
+It seems to me that the best option might be to define an implicit generic
+'qr.X' in methods via '.initImplicitGenerics' in methods/R/makeBasicFunsList.R,
+where I see that an implicit generic 'qr.R' is already defined ... ?
+
+The patch pasted below "solves everything", though we'd still have to think
+about how to work for versions of R without the patch ...
+
+Mikael
+
+Index: src/library/methods/R/makeBasicFunsList.R
+===================================================================
+--- src/library/methods/R/makeBasicFunsList.R	(revision 84541)
++++ src/library/methods/R/makeBasicFunsList.R	(working copy)
+@@ -263,6 +263,17 @@
+  	       signature = "qr", where = where)
+      setGenericImplicit("qr.R", where, FALSE)
+
++    setGeneric("qr.X",
++               function(qr, complete = FALSE, ncol, ...)
++                   standardGeneric("qr.X"),
++               useAsDefault = function(qr, complete = FALSE, ncol, ...) {
++                   if(missing(ncol))
++                       base::qr.X(qr, complete = complete)
++                   else base::qr.X(qr, complete = complete, ncol = ncol)
++               },
++               signature = "qr", where = where)
++    setGenericImplicit("qr.X", where, FALSE)
++
+      ## our toeplitz() only has 'x'; want the generic "here" rather than "out 
+there"
+      setGeneric("toeplitz", function(x, ...) standardGeneric("toeplitz"),
+  	       useAsDefault= function(x, ...) stats::toeplitz(x),
+
+On 2023-06-13 8:01 pm, Simon Urbanek wrote:
+> I agree that this is not an R issue, but rather user error of not defining a proper generic so the check is right. Obviously, defining a generic with implementation-specific ncol default makes no sense at all, it should only be part of the method implementation. If one was to implement the same default behavior in the generic itself (not necessarily a good idea) the default would be ncol = if (complete) nrow(qr.R(qr, TRUE)) else min(dim(qr.R(qr, TRUE))) to not rely on the internals of the implementation.
+> 
+> Cheers,
+> Simon
+> 
+> 
+>> On 14/06/2023, at 6:03 AM, Kasper Daniel Hansen <kasperdanielhansen at gmail.com> wrote:
+>>
+>> On Sat, Jun 3, 2023 at 11:51?AM Mikael Jagan <jaganmn2 at gmail.com> wrote:
+>>
+>>> The formals of the newly generic 'qr.X' are inherited from the non-generic
+>>> function in the base namespace.  Notably, the inherited default value of
+>>> formal argument 'ncol' relies on lazy evaluation:
+>>>
+>>>> formals(qr.X)[["ncol"]]
+>>>      if (complete) nrow(R) else min(dim(R))
+>>>
+>>> where 'R' must be defined in the body of any method that might evaluate
+>>> 'ncol'.
+>>>
+>>
+>> Perhaps I am misunderstanding something, but I think Mikael's expectations
+>> about the scoping rules of R are wrong.  The enclosing environment of ncol
+>> is where it was _defined_ not where it is _called_ (apologies if I am
+>> messing up the computer science terminology here).
+>>
+>> This suggests to me that codetools is right.  But a more extended example
+>> would be useful. Perhaps there is something special with setOldClass()
+>> which I am no aware of.
+>>
+>> Also, Bioconductor has 100s of packages with S4 where codetools works well.
+>>
+>> Kasper
+>>
+>> 	[[alternative HTML version deleted]]
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+
+
+From m|kko@korpe|@ @end|ng |rom m@@nm|tt@u@|@|to@@||  Thu Jun 15 11:57:03 2023
+From: m|kko@korpe|@ @end|ng |rom m@@nm|tt@u@|@|to@@|| (Korpela Mikko)
+Date: Thu, 15 Jun 2023 09:57:03 +0000
+Subject: [Rd] Parts of test in datetime3.R not working
+Message-ID: <AM9PR09MB4563DC6EF1BC1D7FE20931069C5BA@AM9PR09MB4563.eurprd09.prod.outlook.com>
+
+In test file datetime3.R, one call to stopifnot() has an argument named "expr" which should probably be "exprs". There are three tests wrapped in braces of which only the last one, "omitted 195 entries", is currently checked.
+
+Proposed patch:
+
+--- tests/datetime3.R	(revision 84544)
++++ tests/datetime3.R	(working copy)
+@@ -45,7 +45,7 @@
+ c2 <- capture.output(print(dt, max = 6))
+ writeLines(tail(cc, 4))
+ writeLines(c2)
+-stopifnot(expr = {
++stopifnot(exprs = {
+     grepl("omitted 151 entries", tail(cc, 1))
+                   !anyDuplicated(tail(cc, 2))
+     grepl("omitted 195 entries", tail(c2, 1))
+
+-- 
+Best regards,
+Mikko
+
+
+From pd@|gd @end|ng |rom gm@||@com  Thu Jun 15 18:23:13 2023
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Thu, 15 Jun 2023 18:23:13 +0200
+Subject: [Rd] https://cran.r-project.org/src/base-prerelease/ is not
+ updating
+In-Reply-To: <CABtg=KkSPoKV_rxbiroPAqXLHv7Eq-buo786Sz9+EAp6H5kB3Q@mail.gmail.com>
+References: <CABtg=KkSPoKV_rxbiroPAqXLHv7Eq-buo786Sz9+EAp6H5kB3Q@mail.gmail.com>
+Message-ID: <88EA581B-1237-4B65-A925-B1C9613F548D@gmail.com>
+
+Yes that was not intentional. Unexpected interaction between installed R version and build tools. Should be OK now.
+
+-pd
+
+> On 14 Jun 2023, at 14:57 , G?bor Cs?rdi <csardi.gabor at gmail.com> wrote:
+> 
+> https://cran.r-project.org/src/base-prerelease/ has not updated for
+> about a week now, I guess this is not intentional?
+> 
+> Best,
+> Gabor
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From hp@ge@@on@g|thub @end|ng |rom gm@||@com  Thu Jun 15 22:51:14 2023
+From: hp@ge@@on@g|thub @end|ng |rom gm@||@com (=?UTF-8?B?SGVydsOpIFBhZ8Oocw==?=)
+Date: Thu, 15 Jun 2023 13:51:14 -0700
+Subject: [Rd] codetools wrongly complains about lazy evaluation in S4
+ methods
+In-Reply-To: <2d0ac002-df3e-eba7-b184-ebbf5940deaf@gmail.com>
+References: <2cde2aab-8491-2f99-657e-ecb41ceda039@gmail.com>
+ <CAC2h7uu_8m=xC7KcB1i_uk=WW8bDvx4P7ACSPOp-s1PK=1nGQg@mail.gmail.com>
+ <ED9261FE-2E8C-4312-B388-0FF18652E973@R-project.org>
+ <2d0ac002-df3e-eba7-b184-ebbf5940deaf@gmail.com>
+Message-ID: <95f0ff5a-edb1-032d-d971-43ca0b848eb0@gmail.com>
+
+I'd argue that at the root of the problem is that your qr.X() generic 
+dispatches on all its arguments, including the 'ncol' argument which I 
+think the dispatch mechanism needs to evaluate **before** dispatch can 
+actually happen.
+
+So yes lazy evaluation is a real feature but it does not play well for 
+arguments of a generic that are involved in the dispatch.
+
+If you explicitly defined your generic with:
+
+ ?? setGeneric("qr.X", signature="qr")
+
+you should be fine.
+
+More generally speaking, it's a good idea to restrict the signature of a 
+generic to the arguments "that make sense". For unary operations this is 
+usually the 1st argument, for binary operations the first two arguments 
+etc... Additional arguments that control the operation like modiflers, 
+toggles, flags, rng seed, and other parameters, usually have not place 
+in the signature of the generic.
+
+H.
+
+On 6/14/23 20:57, Mikael Jagan wrote:
+> Thanks all - yes, I think that Simon's diagnosis ("user error") is 
+> correct:
+> in this situation one should define a reasonable generic function 
+> explicitly,
+> with a call to setGeneric, and not rely on the call inside of 
+> setMethod ...
+>
+> But it is still not clear what the way forward should be (for package 
+> Matrix,
+> where we would like to export a method for 'qr.X').? If we do nothing, 
+> then
+> there is the note, already mentioned:
+>
+> ??? * checking R code for possible problems ... NOTE
+> ??? qr.X: no visible binding for global variable ?R?
+> ??? Undefined global functions or variables:
+> ????? R
+>
+> If we add the following to our R/AllGenerics.R :
+>
+> ??? setGeneric("qr.X",
+> ?????????????? function(qr, complete = FALSE, ncol, ...)
+> ?????????????????? standardGeneric("qr.X"),
+> ?????????????? useAsDefault = function(qr, complete = FALSE, ncol, ...) {
+> ?????????????????? if(missing(ncol))
+> ?????????????????????? base::qr.X(qr, complete = complete)
+> ?????????????????? else base::qr.X(qr, complete = complete, ncol = ncol)
+> ?????????????? },
+> ?????????????? signature = "qr")
+>
+> then we get a startup message, which would be quite disruptive on CRAN :
+>
+> ??? The following object is masked from 'package:base':
+>
+> ??????? qr.X
+>
+> and if we further add setGenericImplicit("qr.X", restore = (TRUE|FALSE))
+> to our R/zzz.R, then for either value of 'restore' we encounter :
+>
+> ??? ** testing if installed package can be loaded from temporary location
+> ??? Error: package or namespace load failed for 'Matrix':
+> ???? Function found when exporting methods from the namespace 'Matrix' 
+> which is not S4 generic: 'qr.X'
+>
+> Are there possibilities that I have missed?
+>
+> It seems to me that the best option might be to define an implicit 
+> generic
+> 'qr.X' in methods via '.initImplicitGenerics' in 
+> methods/R/makeBasicFunsList.R,
+> where I see that an implicit generic 'qr.R' is already defined ... ?
+>
+> The patch pasted below "solves everything", though we'd still have to 
+> think
+> about how to work for versions of R without the patch ...
+>
+> Mikael
+>
+> Index: src/library/methods/R/makeBasicFunsList.R
+> ===================================================================
+> --- src/library/methods/R/makeBasicFunsList.R??? (revision 84541)
+> +++ src/library/methods/R/makeBasicFunsList.R??? (working copy)
+> @@ -263,6 +263,17 @@
+> ??????????? signature = "qr", where = where)
+> ???? setGenericImplicit("qr.R", where, FALSE)
+>
+> +??? setGeneric("qr.X",
+> +?????????????? function(qr, complete = FALSE, ncol, ...)
+> +?????????????????? standardGeneric("qr.X"),
+> +?????????????? useAsDefault = function(qr, complete = FALSE, ncol, 
+> ...) {
+> +?????????????????? if(missing(ncol))
+> +?????????????????????? base::qr.X(qr, complete = complete)
+> +?????????????????? else base::qr.X(qr, complete = complete, ncol = ncol)
+> +?????????????? },
+> +?????????????? signature = "qr", where = where)
+> +??? setGenericImplicit("qr.X", where, FALSE)
+> +
+> ???? ## our toeplitz() only has 'x'; want the generic "here" rather 
+> than "out there"
+> ???? setGeneric("toeplitz", function(x, ...) standardGeneric("toeplitz"),
+> ??????????? useAsDefault= function(x, ...) stats::toeplitz(x),
+>
+> On 2023-06-13 8:01 pm, Simon Urbanek wrote:
+>> I agree that this is not an R issue, but rather user error of not 
+>> defining a proper generic so the check is right. Obviously, defining 
+>> a generic with implementation-specific ncol default makes no sense at 
+>> all, it should only be part of the method implementation. If one was 
+>> to implement the same default behavior in the generic itself (not 
+>> necessarily a good idea) the default would be ncol = if (complete) 
+>> nrow(qr.R(qr, TRUE)) else min(dim(qr.R(qr, TRUE))) to not rely on the 
+>> internals of the implementation.
+>>
+>> Cheers,
+>> Simon
+>>
+>>
+>>> On 14/06/2023, at 6:03 AM, Kasper Daniel Hansen 
+>>> <kasperdanielhansen at gmail.com> wrote:
+>>>
+>>> On Sat, Jun 3, 2023 at 11:51?AM Mikael Jagan <jaganmn2 at gmail.com> 
+>>> wrote:
+>>>
+>>>> The formals of the newly generic 'qr.X' are inherited from the 
+>>>> non-generic
+>>>> function in the base namespace.? Notably, the inherited default 
+>>>> value of
+>>>> formal argument 'ncol' relies on lazy evaluation:
+>>>>
+>>>>> formals(qr.X)[["ncol"]]
+>>>> ???? if (complete) nrow(R) else min(dim(R))
+>>>>
+>>>> where 'R' must be defined in the body of any method that might 
+>>>> evaluate
+>>>> 'ncol'.
+>>>>
+>>>
+>>> Perhaps I am misunderstanding something, but I think Mikael's 
+>>> expectations
+>>> about the scoping rules of R are wrong.? The enclosing environment 
+>>> of ncol
+>>> is where it was _defined_ not where it is _called_ (apologies if I am
+>>> messing up the computer science terminology here).
+>>>
+>>> This suggests to me that codetools is right.? But a more extended 
+>>> example
+>>> would be useful. Perhaps there is something special with setOldClass()
+>>> which I am no aware of.
+>>>
+>>> Also, Bioconductor has 100s of packages with S4 where codetools 
+>>> works well.
+>>>
+>>> Kasper
+>>>
+>>> ????[[alternative HTML version deleted]]
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>
+>>
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Herv? Pag?s
+
+Bioconductor Core Team
+hpages.on.github at gmail.com
+
+	[[alternative HTML version deleted]]
+
+
+From hp@ge@@on@g|thub @end|ng |rom gm@||@com  Thu Jun 15 23:25:17 2023
+From: hp@ge@@on@g|thub @end|ng |rom gm@||@com (=?UTF-8?B?SGVydsOpIFBhZ8Oocw==?=)
+Date: Thu, 15 Jun 2023 14:25:17 -0700
+Subject: [Rd] codetools wrongly complains about lazy evaluation in S4
+ methods
+In-Reply-To: <95f0ff5a-edb1-032d-d971-43ca0b848eb0@gmail.com>
+References: <2cde2aab-8491-2f99-657e-ecb41ceda039@gmail.com>
+ <CAC2h7uu_8m=xC7KcB1i_uk=WW8bDvx4P7ACSPOp-s1PK=1nGQg@mail.gmail.com>
+ <ED9261FE-2E8C-4312-B388-0FF18652E973@R-project.org>
+ <2d0ac002-df3e-eba7-b184-ebbf5940deaf@gmail.com>
+ <95f0ff5a-edb1-032d-d971-43ca0b848eb0@gmail.com>
+Message-ID: <0f8b6036-3b55-f9cc-81ff-e56cb1e9d96b@gmail.com>
+
+Oh but I see now that you've already tried this in your R/AllGenerics.R, 
+sorry for missing that, but that you worry about the following message 
+being disruptive on CRAN:
+
+ ??? The following object is masked from 'package:base':
+
+ ??????? qr.X
+
+Why would that be? As long as you only define methods for objects that 
+**you** control everything is fine. In other words you're not allowed to 
+define a method for "qr" objects because that method would override 
+base::qr.X(). But the generic itself and the method that you define for 
+your objects don't override anything so should not disrupt anything.
+
+H.
+
+On 6/15/23 13:51, Herv? Pag?s wrote:
+>
+> I'd argue that at the root of the problem is that your qr.X() generic 
+> dispatches on all its arguments, including the 'ncol' argument which I 
+> think the dispatch mechanism needs to evaluate **before** dispatch can 
+> actually happen.
+>
+> So yes lazy evaluation is a real feature but it does not play well for 
+> arguments of a generic that are involved in the dispatch.
+>
+> If you explicitly defined your generic with:
+>
+> ?? setGeneric("qr.X", signature="qr")
+>
+> you should be fine.
+>
+> More generally speaking, it's a good idea to restrict the signature of 
+> a generic to the arguments "that make sense". For unary operations 
+> this is usually the 1st argument, for binary operations the first two 
+> arguments etc... Additional arguments that control the operation like 
+> modiflers, toggles, flags, rng seed, and other parameters, usually 
+> have not place in the signature of the generic.
+>
+> H.
+>
+> On 6/14/23 20:57, Mikael Jagan wrote:
+>> Thanks all - yes, I think that Simon's diagnosis ("user error") is 
+>> correct:
+>> in this situation one should define a reasonable generic function 
+>> explicitly,
+>> with a call to setGeneric, and not rely on the call inside of 
+>> setMethod ...
+>>
+>> But it is still not clear what the way forward should be (for package 
+>> Matrix,
+>> where we would like to export a method for 'qr.X').? If we do 
+>> nothing, then
+>> there is the note, already mentioned:
+>>
+>> ??? * checking R code for possible problems ... NOTE
+>> ??? qr.X: no visible binding for global variable ?R?
+>> ??? Undefined global functions or variables:
+>> ????? R
+>>
+>> If we add the following to our R/AllGenerics.R :
+>>
+>> ??? setGeneric("qr.X",
+>> ?????????????? function(qr, complete = FALSE, ncol, ...)
+>> ?????????????????? standardGeneric("qr.X"),
+>> ?????????????? useAsDefault = function(qr, complete = FALSE, ncol, 
+>> ...) {
+>> ?????????????????? if(missing(ncol))
+>> ?????????????????????? base::qr.X(qr, complete = complete)
+>> ?????????????????? else base::qr.X(qr, complete = complete, ncol = ncol)
+>> ?????????????? },
+>> ?????????????? signature = "qr")
+>>
+>> then we get a startup message, which would be quite disruptive on CRAN :
+>>
+>> ??? The following object is masked from 'package:base':
+>>
+>> ??????? qr.X
+>>
+>> and if we further add setGenericImplicit("qr.X", restore = (TRUE|FALSE))
+>> to our R/zzz.R, then for either value of 'restore' we encounter :
+>>
+>> ??? ** testing if installed package can be loaded from temporary 
+>> location
+>> ??? Error: package or namespace load failed for 'Matrix':
+>> ???? Function found when exporting methods from the namespace 
+>> 'Matrix' which is not S4 generic: 'qr.X'
+>>
+>> Are there possibilities that I have missed?
+>>
+>> It seems to me that the best option might be to define an implicit 
+>> generic
+>> 'qr.X' in methods via '.initImplicitGenerics' in 
+>> methods/R/makeBasicFunsList.R,
+>> where I see that an implicit generic 'qr.R' is already defined ... ?
+>>
+>> The patch pasted below "solves everything", though we'd still have to 
+>> think
+>> about how to work for versions of R without the patch ...
+>>
+>> Mikael
+>>
+>> Index: src/library/methods/R/makeBasicFunsList.R
+>> ===================================================================
+>> --- src/library/methods/R/makeBasicFunsList.R??? (revision 84541)
+>> +++ src/library/methods/R/makeBasicFunsList.R??? (working copy)
+>> @@ -263,6 +263,17 @@
+>> ??????????? signature = "qr", where = where)
+>> ???? setGenericImplicit("qr.R", where, FALSE)
+>>
+>> +??? setGeneric("qr.X",
+>> +?????????????? function(qr, complete = FALSE, ncol, ...)
+>> +?????????????????? standardGeneric("qr.X"),
+>> +?????????????? useAsDefault = function(qr, complete = FALSE, ncol, 
+>> ...) {
+>> +?????????????????? if(missing(ncol))
+>> +?????????????????????? base::qr.X(qr, complete = complete)
+>> +?????????????????? else base::qr.X(qr, complete = complete, ncol = 
+>> ncol)
+>> +?????????????? },
+>> +?????????????? signature = "qr", where = where)
+>> +??? setGenericImplicit("qr.X", where, FALSE)
+>> +
+>> ???? ## our toeplitz() only has 'x'; want the generic "here" rather 
+>> than "out there"
+>> ???? setGeneric("toeplitz", function(x, ...) 
+>> standardGeneric("toeplitz"),
+>> ??????????? useAsDefault= function(x, ...) stats::toeplitz(x),
+>>
+>> On 2023-06-13 8:01 pm, Simon Urbanek wrote:
+>>> I agree that this is not an R issue, but rather user error of not 
+>>> defining a proper generic so the check is right. Obviously, defining 
+>>> a generic with implementation-specific ncol default makes no sense 
+>>> at all, it should only be part of the method implementation. If one 
+>>> was to implement the same default behavior in the generic itself 
+>>> (not necessarily a good idea) the default would be ncol = if 
+>>> (complete) nrow(qr.R(qr, TRUE)) else min(dim(qr.R(qr, TRUE))) to not 
+>>> rely on the internals of the implementation.
+>>>
+>>> Cheers,
+>>> Simon
+>>>
+>>>
+>>>> On 14/06/2023, at 6:03 AM, Kasper Daniel Hansen 
+>>>> <kasperdanielhansen at gmail.com> wrote:
+>>>>
+>>>> On Sat, Jun 3, 2023 at 11:51?AM Mikael Jagan <jaganmn2 at gmail.com> 
+>>>> wrote:
+>>>>
+>>>>> The formals of the newly generic 'qr.X' are inherited from the 
+>>>>> non-generic
+>>>>> function in the base namespace.? Notably, the inherited default 
+>>>>> value of
+>>>>> formal argument 'ncol' relies on lazy evaluation:
+>>>>>
+>>>>>> formals(qr.X)[["ncol"]]
+>>>>> ???? if (complete) nrow(R) else min(dim(R))
+>>>>>
+>>>>> where 'R' must be defined in the body of any method that might 
+>>>>> evaluate
+>>>>> 'ncol'.
+>>>>>
+>>>>
+>>>> Perhaps I am misunderstanding something, but I think Mikael's 
+>>>> expectations
+>>>> about the scoping rules of R are wrong.? The enclosing environment 
+>>>> of ncol
+>>>> is where it was _defined_ not where it is _called_ (apologies if I am
+>>>> messing up the computer science terminology here).
+>>>>
+>>>> This suggests to me that codetools is right.? But a more extended 
+>>>> example
+>>>> would be useful. Perhaps there is something special with setOldClass()
+>>>> which I am no aware of.
+>>>>
+>>>> Also, Bioconductor has 100s of packages with S4 where codetools 
+>>>> works well.
+>>>>
+>>>> Kasper
+>>>>
+>>>> ????[[alternative HTML version deleted]]
+>>>>
+>>>> ______________________________________________
+>>>> R-devel at r-project.org mailing list
+>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>>
+>>>
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> -- 
+> Herv? Pag?s
+>
+> Bioconductor Core Team
+> hpages.on.github at gmail.com
+
+-- 
+Herv? Pag?s
+
+Bioconductor Core Team
+hpages.on.github at gmail.com
+
+	[[alternative HTML version deleted]]
+
+
