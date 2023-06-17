@@ -2858,3 +2858,982 @@ hpages.on.github at gmail.com
 	[[alternative HTML version deleted]]
 
 
+From j@g@nmn2 @end|ng |rom gm@||@com  Fri Jun 16 04:00:45 2023
+From: j@g@nmn2 @end|ng |rom gm@||@com (Mikael Jagan)
+Date: Thu, 15 Jun 2023 22:00:45 -0400
+Subject: [Rd] codetools wrongly complains about lazy evaluation in S4
+ methods
+In-Reply-To: <0f8b6036-3b55-f9cc-81ff-e56cb1e9d96b@gmail.com>
+References: <2cde2aab-8491-2f99-657e-ecb41ceda039@gmail.com>
+ <CAC2h7uu_8m=xC7KcB1i_uk=WW8bDvx4P7ACSPOp-s1PK=1nGQg@mail.gmail.com>
+ <ED9261FE-2E8C-4312-B388-0FF18652E973@R-project.org>
+ <2d0ac002-df3e-eba7-b184-ebbf5940deaf@gmail.com>
+ <95f0ff5a-edb1-032d-d971-43ca0b848eb0@gmail.com>
+ <0f8b6036-3b55-f9cc-81ff-e56cb1e9d96b@gmail.com>
+Message-ID: <8eb9b665-35ab-9011-cc36-4ecf561f18a8@gmail.com>
+
+
+
+On 2023-06-15 5:25 pm, Herv? Pag?s wrote:
+> Oh but I see now that you've already tried this in your R/AllGenerics.R,
+> sorry for missing that, but that you worry about the following message
+> being disruptive on CRAN:
+> 
+>   ??? The following object is masked from 'package:base':
+> 
+>   ??????? qr.X
+> 
+> Why would that be? As long as you only define methods for objects that
+> **you** control everything is fine. In other words you're not allowed to
+> define a method for "qr" objects because that method would override
+> base::qr.X(). But the generic itself and the method that you define for
+> your objects don't override anything so should not disrupt anything.
+> 
+
+Yes, maybe it would be fine in principle, and of course many popular
+packages emit startup messages.  Still, in practice, I think that
+people are quite accustomed to library(Matrix) being "silent",
+and probably a nontrivial fraction of our reverse dependencies would
+encounter new NOTEs about differences between *.Rout and *.Rout.save,
+etc.
+
+The fraction of users who will ever call this method for qr.X is very
+very small compared to the fraction who will be confused or annoyed
+by the message.  Hence my hope that an implicit generic qr.X could
+become part of package methods, notably as an implicit generic qr.R
+already lives there ...
+
+Or maybe there is a way for Matrix to define qr.X as an implicit generic
+without creating other problems, but my experiments with setGenericImplicit
+were not promising ...
+
+Mikael
+
+> H.
+> 
+> On 6/15/23 13:51, Herv? Pag?s wrote:
+>>
+>> I'd argue that at the root of the problem is that your qr.X() generic
+>> dispatches on all its arguments, including the 'ncol' argument which I
+>> think the dispatch mechanism needs to evaluate **before** dispatch can
+>> actually happen.
+>>
+>> So yes lazy evaluation is a real feature but it does not play well for
+>> arguments of a generic that are involved in the dispatch.
+>>
+>> If you explicitly defined your generic with:
+>>
+>>  ?? setGeneric("qr.X", signature="qr")
+>>
+>> you should be fine.
+>>
+>> More generally speaking, it's a good idea to restrict the signature of
+>> a generic to the arguments "that make sense". For unary operations
+>> this is usually the 1st argument, for binary operations the first two
+>> arguments etc... Additional arguments that control the operation like
+>> modiflers, toggles, flags, rng seed, and other parameters, usually
+>> have not place in the signature of the generic.
+>>
+>> H.
+>>
+>> On 6/14/23 20:57, Mikael Jagan wrote:
+>>> Thanks all - yes, I think that Simon's diagnosis ("user error") is
+>>> correct:
+>>> in this situation one should define a reasonable generic function
+>>> explicitly,
+>>> with a call to setGeneric, and not rely on the call inside of
+>>> setMethod ...
+>>>
+>>> But it is still not clear what the way forward should be (for package
+>>> Matrix,
+>>> where we would like to export a method for 'qr.X').? If we do
+>>> nothing, then
+>>> there is the note, already mentioned:
+>>>
+>>>  ??? * checking R code for possible problems ... NOTE
+>>>  ??? qr.X: no visible binding for global variable ?R?
+>>>  ??? Undefined global functions or variables:
+>>>  ????? R
+>>>
+>>> If we add the following to our R/AllGenerics.R :
+>>>
+>>>  ??? setGeneric("qr.X",
+>>>  ?????????????? function(qr, complete = FALSE, ncol, ...)
+>>>  ?????????????????? standardGeneric("qr.X"),
+>>>  ?????????????? useAsDefault = function(qr, complete = FALSE, ncol,
+>>> ...) {
+>>>  ?????????????????? if(missing(ncol))
+>>>  ?????????????????????? base::qr.X(qr, complete = complete)
+>>>  ?????????????????? else base::qr.X(qr, complete = complete, ncol = ncol)
+>>>  ?????????????? },
+>>>  ?????????????? signature = "qr")
+>>>
+>>> then we get a startup message, which would be quite disruptive on CRAN :
+>>>
+>>>  ??? The following object is masked from 'package:base':
+>>>
+>>>  ??????? qr.X
+>>>
+>>> and if we further add setGenericImplicit("qr.X", restore = (TRUE|FALSE))
+>>> to our R/zzz.R, then for either value of 'restore' we encounter :
+>>>
+>>>  ??? ** testing if installed package can be loaded from temporary
+>>> location
+>>>  ??? Error: package or namespace load failed for 'Matrix':
+>>>  ???? Function found when exporting methods from the namespace
+>>> 'Matrix' which is not S4 generic: 'qr.X'
+>>>
+>>> Are there possibilities that I have missed?
+>>>
+>>> It seems to me that the best option might be to define an implicit
+>>> generic
+>>> 'qr.X' in methods via '.initImplicitGenerics' in
+>>> methods/R/makeBasicFunsList.R,
+>>> where I see that an implicit generic 'qr.R' is already defined ... ?
+>>>
+>>> The patch pasted below "solves everything", though we'd still have to
+>>> think
+>>> about how to work for versions of R without the patch ...
+>>>
+>>> Mikael
+>>>
+>>> Index: src/library/methods/R/makeBasicFunsList.R
+>>> ===================================================================
+>>> --- src/library/methods/R/makeBasicFunsList.R??? (revision 84541)
+>>> +++ src/library/methods/R/makeBasicFunsList.R??? (working copy)
+>>> @@ -263,6 +263,17 @@
+>>>  ??????????? signature = "qr", where = where)
+>>>  ???? setGenericImplicit("qr.R", where, FALSE)
+>>>
+>>> +??? setGeneric("qr.X",
+>>> +?????????????? function(qr, complete = FALSE, ncol, ...)
+>>> +?????????????????? standardGeneric("qr.X"),
+>>> +?????????????? useAsDefault = function(qr, complete = FALSE, ncol,
+>>> ...) {
+>>> +?????????????????? if(missing(ncol))
+>>> +?????????????????????? base::qr.X(qr, complete = complete)
+>>> +?????????????????? else base::qr.X(qr, complete = complete, ncol =
+>>> ncol)
+>>> +?????????????? },
+>>> +?????????????? signature = "qr", where = where)
+>>> +??? setGenericImplicit("qr.X", where, FALSE)
+>>> +
+>>>  ???? ## our toeplitz() only has 'x'; want the generic "here" rather
+>>> than "out there"
+>>>  ???? setGeneric("toeplitz", function(x, ...)
+>>> standardGeneric("toeplitz"),
+>>>  ??????????? useAsDefault= function(x, ...) stats::toeplitz(x),
+>>>
+>>> On 2023-06-13 8:01 pm, Simon Urbanek wrote:
+>>>> I agree that this is not an R issue, but rather user error of not
+>>>> defining a proper generic so the check is right. Obviously, defining
+>>>> a generic with implementation-specific ncol default makes no sense
+>>>> at all, it should only be part of the method implementation. If one
+>>>> was to implement the same default behavior in the generic itself
+>>>> (not necessarily a good idea) the default would be ncol = if
+>>>> (complete) nrow(qr.R(qr, TRUE)) else min(dim(qr.R(qr, TRUE))) to not
+>>>> rely on the internals of the implementation.
+>>>>
+>>>> Cheers,
+>>>> Simon
+>>>>
+>>>>
+>>>>> On 14/06/2023, at 6:03 AM, Kasper Daniel Hansen
+>>>>> <kasperdanielhansen at gmail.com> wrote:
+>>>>>
+>>>>> On Sat, Jun 3, 2023 at 11:51?AM Mikael Jagan <jaganmn2 at gmail.com>
+>>>>> wrote:
+>>>>>
+>>>>>> The formals of the newly generic 'qr.X' are inherited from the
+>>>>>> non-generic
+>>>>>> function in the base namespace.? Notably, the inherited default
+>>>>>> value of
+>>>>>> formal argument 'ncol' relies on lazy evaluation:
+>>>>>>
+>>>>>>> formals(qr.X)[["ncol"]]
+>>>>>>  ???? if (complete) nrow(R) else min(dim(R))
+>>>>>>
+>>>>>> where 'R' must be defined in the body of any method that might
+>>>>>> evaluate
+>>>>>> 'ncol'.
+>>>>>>
+>>>>>
+>>>>> Perhaps I am misunderstanding something, but I think Mikael's
+>>>>> expectations
+>>>>> about the scoping rules of R are wrong.? The enclosing environment
+>>>>> of ncol
+>>>>> is where it was _defined_ not where it is _called_ (apologies if I am
+>>>>> messing up the computer science terminology here).
+>>>>>
+>>>>> This suggests to me that codetools is right.? But a more extended
+>>>>> example
+>>>>> would be useful. Perhaps there is something special with setOldClass()
+>>>>> which I am no aware of.
+>>>>>
+>>>>> Also, Bioconductor has 100s of packages with S4 where codetools
+>>>>> works well.
+>>>>>
+>>>>> Kasper
+>>>>>
+>>>>>  ????[[alternative HTML version deleted]]
+>>>>>
+>>>>> ______________________________________________
+>>>>> R-devel at r-project.org mailing list
+>>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>>>
+>>>>
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>> -- 
+>> Herv? Pag?s
+>>
+>> Bioconductor Core Team
+>> hpages.on.github at gmail.com
+>
+
+
+From pd@me@ @end|ng |rom cb@@dk  Fri Jun 16 10:36:58 2023
+From: pd@me@ @end|ng |rom cb@@dk (Peter Dalgaard)
+Date: Fri, 16 Jun 2023 08:36:58 +0000
+Subject: [Rd] R 4.3.1 is released
+Message-ID: <766DF86F-36F4-4144-829E-DCB1B6A59DE5@cbs.dk>
+
+The build system rolled up R-4.3.1.tar.gz (codename "Beagle Scouts") this morning.
+
+This is a minor update, with a few bug fixes.
+
+The list below details the changes in this release. 
+
+You can get the source code from
+
+https://cran.r-project.org/src/base/R-4/R-4.3.1.tar.gz
+
+or wait for it to be mirrored at a CRAN site nearer to you.
+
+Binaries for various platforms will appear in due course.
+
+
+For the R Core Team,
+
+Peter Dalgaard
+
+
+These are the checksums (md5 and SHA-256) for the freshly created files, in case you wish
+to check that they are uncorrupted:
+
+MD5 (AUTHORS) = 320967884b547734d6279dedbc739dd4
+MD5 (COPYING) = eb723b61539feef013de476e68b5c50a
+MD5 (COPYING.LIB) = a6f89e2100d9b6cdffcea4f398e37343
+MD5 (FAQ) = 97a3ddc25aab502a70bfb1a79ab6f862
+MD5 (INSTALL) = 7893f754308ca31f1ccf62055090ad7b
+MD5 (NEWS) = 7ea998dffa2b8d4f5a6aee84c45a383a
+MD5 (NEWS.0) = bfcd7c147251b5474d96848c6f57e5a8
+MD5 (NEWS.1) = 4108ab429e768e29b1c3b418c224246e
+MD5 (NEWS.2) = b38d94569700664205a76a7de836ba83
+MD5 (NEWS.3) = e55ed2c8a547b827b46e08eb7137ba23
+MD5 (R-latest.tar.gz) = b83cee497046d4aef649eb79e6df83e8
+MD5 (README) = f468f281c919665e276a1b691decbbe6
+MD5 (RESOURCES) = a79b9b338cab09bd665f6b62ac6f455b
+MD5 (THANKS) = 45b6d2e88a6ecb5b24fa33a781351cd5
+MD5 (VERSION-INFO.dcf) = 3d4c6bf5bf44d34766f90ed67d05c34a
+MD5 (R-4/R-4.3.1.tar.gz) = b83cee497046d4aef649eb79e6df83e8
+
+60a0d150e6fc1f424be76ad7b645d236b56e747692a4679f81ce6536c550e949  AUTHORS
+e6d6a009505e345fe949e1310334fcb0747f28dae2856759de102ab66b722cb4  COPYING
+6095e9ffa777dd22839f7801aa845b31c9ed07f3d6bf8a26dc5d2dec8ccc0ef3  COPYING.LIB
+3a47bca1e2a7db27c0ca12be388c238e2608ff2f768e627650a71a0ffc826038  FAQ
+f87461be6cbaecc4dce44ac58e5bd52364b0491ccdadaf846cb9b452e9550f31  INSTALL
+a8167cfe28e748b67476d4a21a968cfa24d0935da89cd4514c483f45f3f2a83b  NEWS
+4e21b62f515b749f80997063fceab626d7258c7d650e81a662ba8e0640f12f62  NEWS.0
+5de7657c5e58e481403c0dd1a74a5c090b3ef481ce75a91dfe05d4b03f63163f  NEWS.1
+cde079b6beab7d700d3d4ecda494e2681ad3b7f8fab13b68be090f949393ec62  NEWS.2
+1910a2405300b9bc7c76beeb0753a5249cf799afe175ce28f8d782fab723e012  NEWS.3
+8dd0bf24f1023c6f618c3b317383d291b4a494f40d73b983ac22ffea99e4ba99  R-latest.tar.gz
+2fdd3e90f23f32692d4b3a0c0452f2c219a10882033d1774f8cadf25886c3ddc  README
+8b7d3856100220f4555d4d57140829f2e81c27eccec5b441f5dce616e9ec9061  RESOURCES
+8319c5415de58ee10d4bc058d79c370fd8e6b2ad09e25d7a1e04b74ca5f380a6  THANKS
+032260f31c56c011a9724930e356eac4d7ddfcaa63c559f95986063ede3bf91a  VERSION-INFO.dcf
+8dd0bf24f1023c6f618c3b317383d291b4a494f40d73b983ac22ffea99e4ba99  R-4/R-4.3.1.tar.gz
+
+This is the relevant part of the NEWS file
+
+CHANGES IN R 4.3.1:
+
+  C-LEVEL FACILITIES:
+
+    * The C-level API version of R's integrate(), Rdqags() in Applic.h,
+      now returns the correct number of integrand evaluations neval,
+      fixing PR#18515 reported and diagnosed by Stephen Wade.
+
+    * The C prototypes for LAPACK calls dspgv and dtptrs in
+      R_exts/Lapack.h had one too many and one too few character length
+      arguments - but this has not caused any known issues. To get the
+      corrected prototypes, include
+
+              #include <Rconfig.h> // for PR18534fixed
+              #ifdef PR18534fixed
+              # define usePR18534fix 1
+              #endif
+              #include <R_exts/Lapack.h>
+      
+      in your C/C++ code (PR#18534).
+
+  INSTALLATION:
+
+    * Many of the checks of esoteric Internet operations and those
+      using unreliable external sites have been moved to a new target
+      that is not run by default and primarily intended for the core
+      developers.  To run them use
+
+              cd tests; make test-Internet-dev
+      
+  BUG FIXES:
+
+    * .S3methods(), typically called from methods(), again marks
+      methods from package base as visible.
+
+      Also, the visibility of non-base methods is again determined by
+      the method's presence in search().
+
+    * tools::Rdiff() is now more robust against invalid strings, fixing
+      installation tests on Windows without Rtools installed
+      (PR#18530).
+
+    * Fix (new) bug in hcl.colors(2, *), by Achim Zeileis (PR#18523).
+
+    * head(., <illegal>) and tail(..) now produce more useful "Error in
+      ...." error messages, fixing PR#18362.
+
+    * Package code syntax on Windows is checked in UTF-8 when UTF-8 is
+      the native encoding.
+
+    * na.contiguous(x) now also returns the first run, when it is at
+      the beginning and there is a later one of the same length;
+      reported to R-devel, including a fix, by Georgi Boshnakov.
+      Further, by default, it modifies only an existing attr(*,"tsp")
+      but otherwise no longer sets one.
+
+    * chol(<not pos.def>, pivot = <T|F>) now gives a correct error or
+      warning message (depending on pivot), thanks to Mikael Jagan's
+      (PR#18541).
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From pd@|gd @end|ng |rom gm@||@com  Fri Jun 16 11:16:52 2023
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Fri, 16 Jun 2023 11:16:52 +0200
+Subject: [Rd] why does [A-Z] include 'T' in an Estonian locale?
+In-Reply-To: <f00a6b75-7e53-03fa-f3ef-cd3d46cd38dc@mcmaster.ca>
+References: <f00a6b75-7e53-03fa-f3ef-cd3d46cd38dc@mcmaster.ca>
+Message-ID: <1F2110A5-094F-4693-BBC5-AD997DA64FFA@gmail.com>
+
+Just for amusement: Similar messups occur with Danish and its three extra letters:
+
+> Sys.setlocale("LC_ALL", "da_DK")
+[1] "da_DK/da_DK/da_DK/C/da_DK/en_US.UTF-8"
+> sort(c(LETTERS,"?","?","?"))
+ [1] "A" "B" "C" "D" "E" "F" "G" "H" "I" "J" "K" "L" "M" "N" "O" "P" "Q" "R" "S"
+[20] "T" "U" "V" "W" "X" "Y" "Z" "?" "?" "?"
+
+> grepl("[A-?]", "?")
+[1] FALSE
+> grepl("[A-?]", "?")
+[1] FALSE
+> grepl("[A-?]", "?")
+[1] TRUE
+> grepl("[A-?]", "?")
+[1] FALSE
+> grepl("[A-?]", "?")
+[1] TRUE
+> grepl("[A-?]", "?")
+[1] TRUE
+
+So for character ranges, the order is ?,?,? (which is how they'd collate in Swedish, except that Swedish uses diacriticals rather than ? and ?).
+
+> Sys.setlocale("LC_ALL", "sv_SE")
+[1] "sv_SE/sv_SE/sv_SE/C/sv_SE/en_US.UTF-8"
+> sort(c(LETTERS,"?","?","?"))
+ [1] "A" "B" "C" "D" "E" "F" "G" "H" "I" "J" "K" "L" "M" "N" "O" "P" "Q" "R" "S"
+[20] "T" "U" "V" "W" "X" "Y" "Z" "?" "?" "?"
+> sort(c(LETTERS,"?","?","?"))
+ [1] "A" "B" "C" "D" "E" "F" "G" "H" "I" "J" "K" "L" "M" "N" "O" "P" "Q" "R" "S"
+[20] "T" "U" "V" "W" "X" "Y" "Z" "?" "?" "?"
+
+
+
+> On 30 May 2023, at 17:45 , Ben Bolker <bbolker at gmail.com> wrote:
+> 
+>  Inspired by this old Stack Overflow question
+> 
+> https://stackoverflow.com/questions/19765610/when-does-locale-affect-rs-regular-expressions
+> 
+> I was wondering why this is TRUE:
+> 
+> Sys.setlocale("LC_ALL", "et_EE")
+> grepl("[A-Z]", "T")
+> 
+> TRE's documentation at <https://laurikari.net/tre/documentation/regex-syntax/> says that a range "is shorthand for the full range of characters between those two [endpoints] (inclusive) in the collating sequence".
+> 
+> Yet, T is *not* between A and Z in the Estonian collating sequence:
+> 
+> sort(LETTERS)
+> [1] "A" "B" "C" "D" "E" "F" "G" "H" "I" "J" "K" "L" "M" "N" "O" "P" "Q" "R" "S"
+> [20] "Z" "T" "U" "V" "W" "X" "Y"
+> 
+>  I realize that this may be a question about TRE rather than about R *per se* (FWIW the grepl() result is also TRUE with `perl = TRUE`, so the question also applies to PCRE), but I'm wondering if anyone has any insights ...  (and yes, I know that the correct answer is "use [:alpha:] and don't worry about it")
+> 
+> (In contrast, the ICU engine underlying stringi/stringr says "[t]he characters to include are determined by Unicode code point ordering" - see
+> 
+> https://stackoverflow.com/questions/76365426/does-stringrs-regex-engine-translate-a-z-into-abcdefghijklmnopqrstuvwyz/76366163#76366163
+> 
+> for links)
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Fri Jun 16 11:41:12 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Fri, 16 Jun 2023 11:41:12 +0200
+Subject: [Rd] codetools wrongly complains about lazy evaluation in S4
+ methods
+In-Reply-To: <8eb9b665-35ab-9011-cc36-4ecf561f18a8@gmail.com>
+References: <2cde2aab-8491-2f99-657e-ecb41ceda039@gmail.com>
+ <CAC2h7uu_8m=xC7KcB1i_uk=WW8bDvx4P7ACSPOp-s1PK=1nGQg@mail.gmail.com>
+ <ED9261FE-2E8C-4312-B388-0FF18652E973@R-project.org>
+ <2d0ac002-df3e-eba7-b184-ebbf5940deaf@gmail.com>
+ <95f0ff5a-edb1-032d-d971-43ca0b848eb0@gmail.com>
+ <0f8b6036-3b55-f9cc-81ff-e56cb1e9d96b@gmail.com>
+ <8eb9b665-35ab-9011-cc36-4ecf561f18a8@gmail.com>
+Message-ID: <25740.11832.599065.198535@stat.math.ethz.ch>
+
+>>>>> Mikael Jagan 
+>>>>>     on Thu, 15 Jun 2023 22:00:45 -0400 writes:
+
+    > On 2023-06-15 5:25 pm, Herv? Pag?s wrote:
+    >> Oh but I see now that you've already tried this in your
+    >> R/AllGenerics.R, sorry for missing that, 
+
+yes, this one:
+
+  setGeneric("qr.X",
+	     function(qr, complete = FALSE, ncol, ...)
+		 standardGeneric("qr.X"),
+	     useAsDefault = function(qr, complete = FALSE, ncol, ...) {
+		 if(missing(ncol))
+		     base::qr.X(qr, complete = complete)
+		 else base::qr.X(qr, complete = complete, ncol = ncol)
+	     },
+	     signature = "qr")
+
+where the 'signature = "qr"' is perfect (and as Herv? suggests).
+
+but the complication in useAsDefault = ..  is really a bit ugly
+... notably if one compares with the nice original  base :: qr.X ()
+
+    >> but that you worry about the following message being 
+    >> disruptive on CRAN:
+    >> 
+    >> ??? The following object is masked from 'package:base':
+    >> 
+    >> ??????? qr.X
+    >> 
+    >> Why would that be? As long as you only define methods for
+    >> objects that **you** control everything is fine. In other
+    >> words you're not allowed to define a method for "qr"
+    >> objects because that method would override
+    >> base::qr.X(). But the generic itself and the method that
+    >> you define for your objects don't override anything so
+    >> should not disrupt anything.
+
+    > Yes, maybe it would be fine in principle, and of course
+    > many popular packages emit startup messages.  Still, in
+    > practice, I think that people are quite accustomed to
+    > library(Matrix) being "silent", and probably a nontrivial
+    > fraction of our reverse dependencies would encounter new
+    > NOTEs about differences between *.Rout and *.Rout.save,
+    > etc.
+
+I tend to agree with Herv? that the  "masked" warning here is
+a false positive.
+
+I also agree with Mikael  that we would not want this for every
+default use of   library(Matrix)
+
+I believe we should fix it by using conflictRules(), and from
+reading ?conflictRules I understand we could do that by setting
+
+  options(conflict.policy = list(mask.ok = "qr.X"))
+
+possibly even in Matrix package's load or attach hook
+[[and if really really necessary even as hack inside library()'s checks]]
+
+    > The fraction of users who will ever call this method for
+    > qr.X is very very small compared to the fraction who will
+    > be confused or annoyed by the message.  Hence my hope that
+    > an implicit generic qr.X could become part of package
+    > methods, notably as an implicit generic qr.R already lives
+    > there ...
+
+    > Or maybe there is a way for Matrix to define qr.X as an
+    > implicit generic without creating other problems, but my
+    > experiments with setGenericImplicit were not promising ...
+
+In principle, I'd say that setGenericImplicit() would be a good
+/ "the correct" approach,  but as you already tried
+unsuccessfully, I'm not claiming the principle.
+
+Martin
+
+
+    > Mikael
+
+    >> H.
+
+    >> On 6/15/23 13:51, Herv? Pag?s wrote:
+    >>> 
+    >>> I'd argue that at the root of the problem is that your
+    >>> qr.X() generic dispatches on all its arguments,
+    >>> including the 'ncol' argument which I think the dispatch
+    >>> mechanism needs to evaluate **before** dispatch can
+    >>> actually happen.
+    >>> 
+    >>> So yes lazy evaluation is a real feature but it does not
+    >>> play well for arguments of a generic that are involved
+    >>> in the dispatch.
+    >>> 
+    >>> If you explicitly defined your generic with:
+    >>> 
+    >>> ?? setGeneric("qr.X", signature="qr")
+    >>> 
+    >>> you should be fine.
+    >>> 
+    >>> More generally speaking, it's a good idea to restrict
+    >>> the signature of a generic to the arguments "that make
+    >>> sense". For unary operations this is usually the 1st
+    >>> argument, for binary operations the first two arguments
+    >>> etc... Additional arguments that control the operation
+    >>> like modiflers, toggles, flags, rng seed, and other
+    >>> parameters, usually have not place in the signature of
+    >>> the generic.
+    >>> 
+    >>> H.
+    >>> 
+    >>> On 6/14/23 20:57, Mikael Jagan wrote:
+    >>>> Thanks all - yes, I think that Simon's diagnosis ("user
+    >>>> error") is correct: in this situation one should define
+    >>>> a reasonable generic function explicitly, with a call
+    >>>> to setGeneric, and not rely on the call inside of
+    >>>> setMethod ...
+    >>>> 
+    >>>> But it is still not clear what the way forward should
+    >>>> be (for package Matrix, where we would like to export a
+    >>>> method for 'qr.X').? If we do nothing, then there is
+    >>>> the note, already mentioned:
+    >>>> 
+    >>>> ??? * checking R code for possible problems ... NOTE
+    >>>> ??? qr.X: no visible binding for global variable ?R?
+    >>>> ??? Undefined global functions or variables: ????? R
+    >>>> 
+    >>>> If we add the following to our R/AllGenerics.R :
+    >>>> 
+    >>>> ??? setGeneric("qr.X", ?????????????? function(qr,
+    >>>> complete = FALSE, ncol, ...)  ??????????????????
+    >>>> standardGeneric("qr.X"), ?????????????? useAsDefault =
+    >>>> function(qr, complete = FALSE, ncol, ...) {
+    >>>> ?????????????????? if(missing(ncol))
+    >>>> ?????????????????????? base::qr.X(qr, complete =
+    >>>> complete) ?????????????????? else base::qr.X(qr,
+    >>>> complete = complete, ncol = ncol) ?????????????? },
+    >>>> ?????????????? signature = "qr")
+    >>>> 
+    >>>> then we get a startup message, which would be quite
+    >>>> disruptive on CRAN :
+    >>>> 
+    >>>> ??? The following object is masked from 'package:base':
+    >>>> 
+    >>>> ??????? qr.X
+    >>>> 
+    >>>> and if we further add setGenericImplicit("qr.X",
+    >>>> restore = (TRUE|FALSE)) to our R/zzz.R, then for either
+    >>>> value of 'restore' we encounter :
+    >>>> 
+    >>>> ??? ** testing if installed package can be loaded from
+    >>>> temporary location ??? Error: package or namespace load
+    >>>> failed for 'Matrix': ???? Function found when exporting
+    >>>> methods from the namespace 'Matrix' which is not S4
+    >>>> generic: 'qr.X'
+    >>>> 
+    >>>> Are there possibilities that I have missed?
+    >>>> 
+    >>>> It seems to me that the best option might be to define
+    >>>> an implicit generic 'qr.X' in methods via
+    >>>> '.initImplicitGenerics' in
+    >>>> methods/R/makeBasicFunsList.R, where I see that an
+    >>>> implicit generic 'qr.R' is already defined ... ?
+    >>>> 
+    >>>> The patch pasted below "solves everything", though we'd
+    >>>> still have to think about how to work for versions of R
+    >>>> without the patch ...
+    >>>> 
+    >>>> Mikael
+    >>>> 
+    >>>> Index: src/library/methods/R/makeBasicFunsList.R
+    >>>> ===================================================================
+    >>>> --- src/library/methods/R/makeBasicFunsList.R???
+    >>>> (revision 84541) +++
+    >>>> src/library/methods/R/makeBasicFunsList.R??? (working
+    >>>> copy) @@ -263,6 +263,17 @@ ??????????? signature =
+    >>>> "qr", where = where) ???? setGenericImplicit("qr.R",
+    >>>> where, FALSE)
+    >>>> 
+    >>>> +??? setGeneric("qr.X", +?????????????? function(qr,
+    >>>> complete = FALSE, ncol, ...)  +??????????????????
+    >>>> standardGeneric("qr.X"), +?????????????? useAsDefault =
+    >>>> function(qr, complete = FALSE, ncol, ...) {
+    >>>> +?????????????????? if(missing(ncol))
+    >>>> +?????????????????????? base::qr.X(qr, complete =
+    >>>> complete) +?????????????????? else base::qr.X(qr,
+    >>>> complete = complete, ncol = ncol) +?????????????? },
+    >>>> +?????????????? signature = "qr", where = where) +???
+    >>>> setGenericImplicit("qr.X", where, FALSE) + ???? ## our
+    >>>> toeplitz() only has 'x'; want the generic "here" rather
+    >>>> than "out there" ???? setGeneric("toeplitz",
+    >>>> function(x, ...)  standardGeneric("toeplitz"),
+    >>>> ??????????? useAsDefault= function(x, ...)
+    >>>> stats::toeplitz(x),
+    >>>> 
+    >>>> On 2023-06-13 8:01 pm, Simon Urbanek wrote:
+    >>>>> I agree that this is not an R issue, but rather user
+    >>>>> error of not defining a proper generic so the check is
+    >>>>> right. Obviously, defining a generic with
+    >>>>> implementation-specific ncol default makes no sense at
+    >>>>> all, it should only be part of the method
+    >>>>> implementation. If one was to implement the same
+    >>>>> default behavior in the generic itself (not
+    >>>>> necessarily a good idea) the default would be ncol =
+    >>>>> if (complete) nrow(qr.R(qr, TRUE)) else
+    >>>>> min(dim(qr.R(qr, TRUE))) to not rely on the internals
+    >>>>> of the implementation.
+    >>>>> 
+    >>>>> Cheers, Simon
+    >>>>> 
+    >>>>> 
+>>>>> On 14/06/2023, at 6:03 AM, Kasper Daniel Hansen
+>>>>> <kasperdanielhansen at gmail.com> wrote:
+    >>>>>> 
+>>>>> On Sat, Jun 3, 2023 at 11:51?AM Mikael Jagan
+    >>>>>> <jaganmn2 at gmail.com>
+>>>>> wrote:
+    >>>>>> 
+    >>>>>>> The formals of the newly generic 'qr.X' are
+    >>>>>>> inherited from the non-generic function in the base
+    >>>>>>> namespace.? Notably, the inherited default value of
+    >>>>>>> formal argument 'ncol' relies on lazy evaluation:
+    >>>>>>> 
+    >>>>>>>> formals(qr.X)[["ncol"]]
+    >>>>>>> ???? if (complete) nrow(R) else min(dim(R))
+    >>>>>>> 
+    >>>>>>> where 'R' must be defined in the body of any method
+    >>>>>>> that might evaluate 'ncol'.
+    >>>>>>> 
+    >>>>>> 
+>>>>> Perhaps I am misunderstanding something, but I think
+    >>>>>> Mikael's
+>>>>> expectations
+>>>>> about the scoping rules of R are wrong.? The enclosing
+    >>>>>> environment
+>>>>> of ncol
+>>>>> is where it was _defined_ not where it is _called_
+    >>>>>> (apologies if I am
+>>>>> messing up the computer science terminology here).
+    >>>>>> 
+>>>>> This suggests to me that codetools is right.? But a more
+    >>>>>> extended
+>>>>> example
+>>>>> would be useful. Perhaps there is something special with
+    >>>>>> setOldClass()
+>>>>> which I am no aware of.
+    >>>>>> 
+>>>>> Also, Bioconductor has 100s of packages with S4 where
+    >>>>>> codetools
+>>>>> works well.
+    >>>>>> 
+>>>>> Kasper
+    >>>>>> 
+>>>>> ????[[alternative HTML version deleted]]
+    >>>>>> 
+>>>>> ______________________________________________
+>>>>> R-devel at r-project.org mailing list
+>>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+    >>>>>> 
+    >>>>> 
+    >>>> 
+    >>>> ______________________________________________
+    >>>> R-devel at r-project.org mailing list
+    >>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+    >>> -- 
+    >>> Herv? Pag?s
+    >>> 
+    >>> Bioconductor Core Team hpages.on.github at gmail.com
+    >>
+
+
+From @ndre@@@b|@ette @end|ng |rom un|-due@de  Fri Jun 16 13:00:47 2023
+From: @ndre@@@b|@ette @end|ng |rom un|-due@de (Andreas =?UTF-8?B?QmzDpHR0ZQ==?=)
+Date: Fri, 16 Jun 2023 13:00:47 +0200
+Subject: [Rd] download.file() issue with pdf docs on Windows: Set mode="wb"
+ automatically?
+Message-ID: <3C3BEE0D-446C-40D1-AB37-0FF543E32F65@uni-due.de>
+
+Dear colleagues,
+
+ 
+
+Windows users in an R course I teach encountered issues with downloading a pdf document with `download.file()` when trying to open it with `pdftools::pdf_info()`.
+
+ 
+
+Indeed, on Windows pdf files downloaded using `download.file() are corrupted unless you set `mode="wb"`. This scenario is actually to be anticipated. The? documentation of download.file() says clearly:
+
+? 
+
+"""
+
+The choice of binary transfer (mode = "wb" or "ab") is important on Windows, since unlike Unix-alikes it does distinguish between text and binary files and for text transfers changes \n line endings to \r\n (aka ?CRLF?).
+
+ 
+
+On Windows, if mode is not supplied (missing()) and url ends in one of .gz, .bz2, .xz, .tgz, .zip, .jar, .rda, .rds or .RData, mode = "wb" is set so that a binary transfer is done to help unwary users.
+
+ 
+
+Code written to download binary files must use mode = "wb" (or "ab"), but the problems incurred by a text transfer will only be seen on Windows.
+
+"""
+
+ 
+
+However, many "unwary users" will not read the (very clear) documentation. So I suggest to consider including pdf documents into the list of documents for which mode = "wb" is set automatically.
+
+ 
+
+This would require to change this line of the R source code:
+
+https://github.com/wch/r-source/blob/197d25ca9c5a5132dbc366667137ed11255c099b/src/library/utils/R/windows/download.file.R#L30
+
+ 
+
+As follows:
+
+if(missing(mode) && length(grep(\\.(gz|bz2|xz|tgz|zip|jar|rd[as]|RData|pdf)$, URLdecode(url))))
+
+??? mode <- "wb"
+
+ 
+
+I am not sure whether you would see this as arbitrarily violating some logic. Yet I am quite sure that many users not used to reading the documentation carefully have struggled with this issue.
+
+ 
+
+This is an issue I wrote for my course:
+
+https://github.com/ablaette/learningR/issues/24
+
+ 
+
+And this is the code that we used:
+
+gruene_btw2021 <- "https://cms.gruene.de/uploads/documents/2021_Wahlprogrammentwurf.pdf"
+
+gruene_btw2021_local <- tempfile()
+
+download.file(url = gruene_btw2021, destfile = gruene_btw2021_local)
+
+pdftools::pdf_info(gruene_btw2021_local)
+
+ 
+
+ 
+
+Kind regards
+
+Andreas
+
+ 
+
+ 
+
+ 
+
+--
+
+Prof. Dr. Andreas Blaette
+
+Professor of Public Policy 
+
+University of Duisburg-Essen 
+
+
+	[[alternative HTML version deleted]]
+
+
+From pd@|gd @end|ng |rom gm@||@com  Fri Jun 16 14:26:09 2023
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Fri, 16 Jun 2023 14:26:09 +0200
+Subject: [Rd] Parts of test in datetime3.R not working
+In-Reply-To: <AM9PR09MB4563DC6EF1BC1D7FE20931069C5BA@AM9PR09MB4563.eurprd09.prod.outlook.com>
+References: <AM9PR09MB4563DC6EF1BC1D7FE20931069C5BA@AM9PR09MB4563.eurprd09.prod.outlook.com>
+Message-ID: <796CB56B-5C46-45AA-AB4D-007C14F8D48A@gmail.com>
+
+Yep, that is a pretty straightforward blunder. It's "stopifnot <- function(..., exprs =", so partial matching does not happen.
+
+Fixed in R-patched and R-devel (a last-minute addition to 4.3.1 during code freeze would only happen with truly disastrous bugs).
+
+Peter
+
+> On 15 Jun 2023, at 11:57 , Korpela Mikko <mikko.korpela at maanmittauslaitos.fi> wrote:
+> 
+> In test file datetime3.R, one call to stopifnot() has an argument named "expr" which should probably be "exprs". There are three tests wrapped in braces of which only the last one, "omitted 195 entries", is currently checked.
+> 
+> Proposed patch:
+> 
+> --- tests/datetime3.R	(revision 84544)
+> +++ tests/datetime3.R	(working copy)
+> @@ -45,7 +45,7 @@
+> c2 <- capture.output(print(dt, max = 6))
+> writeLines(tail(cc, 4))
+> writeLines(c2)
+> -stopifnot(expr = {
+> +stopifnot(exprs = {
+>     grepl("omitted 151 entries", tail(cc, 1))
+>                   !anyDuplicated(tail(cc, 2))
+>     grepl("omitted 195 entries", tail(c2, 1))
+> 
+> -- 
+> Best regards,
+> Mikko
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From bbo|ker @end|ng |rom gm@||@com  Fri Jun 16 14:56:51 2023
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Fri, 16 Jun 2023 08:56:51 -0400
+Subject: [Rd] why does [A-Z] include 'T' in an Estonian locale?
+In-Reply-To: <1F2110A5-094F-4693-BBC5-AD997DA64FFA@gmail.com>
+References: <f00a6b75-7e53-03fa-f3ef-cd3d46cd38dc@mcmaster.ca>
+ <1F2110A5-094F-4693-BBC5-AD997DA64FFA@gmail.com>
+Message-ID: <7d766eba-0e40-24ed-7b8e-38acdc750ace@gmail.com>
+
+   Yes.
+   FWIW I submitted a request for a documentation fix to TRE (to 
+document that it actually uses Unicode order, not collation order, to 
+define ranges, just like most (but not all) other regex engines ...)
+
+https://github.com/laurikari/tre/issues/88
+
+On 2023-06-16 5:16 a.m., peter dalgaard wrote:
+> Just for amusement: Similar messups occur with Danish and its three extra letters:
+> 
+>> Sys.setlocale("LC_ALL", "da_DK")
+> [1] "da_DK/da_DK/da_DK/C/da_DK/en_US.UTF-8"
+>> sort(c(LETTERS,"?","?","?"))
+>   [1] "A" "B" "C" "D" "E" "F" "G" "H" "I" "J" "K" "L" "M" "N" "O" "P" "Q" "R" "S"
+> [20] "T" "U" "V" "W" "X" "Y" "Z" "?" "?" "?"
+> 
+>> grepl("[A-?]", "?")
+> [1] FALSE
+>> grepl("[A-?]", "?")
+> [1] FALSE
+>> grepl("[A-?]", "?")
+> [1] TRUE
+>> grepl("[A-?]", "?")
+> [1] FALSE
+>> grepl("[A-?]", "?")
+> [1] TRUE
+>> grepl("[A-?]", "?")
+> [1] TRUE
+> 
+> So for character ranges, the order is ?,?,? (which is how they'd collate in Swedish, except that Swedish uses diacriticals rather than ? and ?).
+> 
+>> Sys.setlocale("LC_ALL", "sv_SE")
+> [1] "sv_SE/sv_SE/sv_SE/C/sv_SE/en_US.UTF-8"
+>> sort(c(LETTERS,"?","?","?"))
+>   [1] "A" "B" "C" "D" "E" "F" "G" "H" "I" "J" "K" "L" "M" "N" "O" "P" "Q" "R" "S"
+> [20] "T" "U" "V" "W" "X" "Y" "Z" "?" "?" "?"
+>> sort(c(LETTERS,"?","?","?"))
+>   [1] "A" "B" "C" "D" "E" "F" "G" "H" "I" "J" "K" "L" "M" "N" "O" "P" "Q" "R" "S"
+> [20] "T" "U" "V" "W" "X" "Y" "Z" "?" "?" "?"
+> 
+> 
+> 
+>> On 30 May 2023, at 17:45 , Ben Bolker <bbolker at gmail.com> wrote:
+>>
+>>   Inspired by this old Stack Overflow question
+>>
+>> https://stackoverflow.com/questions/19765610/when-does-locale-affect-rs-regular-expressions
+>>
+>> I was wondering why this is TRUE:
+>>
+>> Sys.setlocale("LC_ALL", "et_EE")
+>> grepl("[A-Z]", "T")
+>>
+>> TRE's documentation at <https://laurikari.net/tre/documentation/regex-syntax/> says that a range "is shorthand for the full range of characters between those two [endpoints] (inclusive) in the collating sequence".
+>>
+>> Yet, T is *not* between A and Z in the Estonian collating sequence:
+>>
+>> sort(LETTERS)
+>> [1] "A" "B" "C" "D" "E" "F" "G" "H" "I" "J" "K" "L" "M" "N" "O" "P" "Q" "R" "S"
+>> [20] "Z" "T" "U" "V" "W" "X" "Y"
+>>
+>>   I realize that this may be a question about TRE rather than about R *per se* (FWIW the grepl() result is also TRUE with `perl = TRUE`, so the question also applies to PCRE), but I'm wondering if anyone has any insights ...  (and yes, I know that the correct answer is "use [:alpha:] and don't worry about it")
+>>
+>> (In contrast, the ICU engine underlying stringi/stringr says "[t]he characters to include are determined by Unicode code point ordering" - see
+>>
+>> https://stackoverflow.com/questions/76365426/does-stringrs-regex-engine-translate-a-z-into-abcdefghijklmnopqrstuvwyz/76366163#76366163
+>>
+>> for links)
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+-- 
+Dr. Benjamin Bolker
+Professor, Mathematics & Statistics and Biology, McMaster University
+Director, School of Computational Science and Engineering
+(Acting) Graduate chair, Mathematics & Statistics
+ > E-mail is sent at my convenience; I don't expect replies outside of 
+working hours.
+
+
