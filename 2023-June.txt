@@ -3837,3 +3837,210 @@ Director, School of Computational Science and Engineering
 working hours.
 
 
+From pd@|gd @end|ng |rom gm@||@com  Tue Jun 20 12:54:36 2023
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Tue, 20 Jun 2023 12:54:36 +0200
+Subject: [Rd] https://cran.r-project.org/src/base-prerelease/ is not
+ updating
+In-Reply-To: <88EA581B-1237-4B65-A925-B1C9613F548D@gmail.com>
+References: <CABtg=KkSPoKV_rxbiroPAqXLHv7Eq-buo786Sz9+EAp6H5kB3Q@mail.gmail.com>
+ <88EA581B-1237-4B65-A925-B1C9613F548D@gmail.com>
+Message-ID: <BA673773-A54A-494D-8229-848BFB1A64F8@gmail.com>
+
+To be more precise, the thing that happened was that Simon had changed the installation directory for texi2any with the 4.3.0 Mac binaries. 
+
+The release manager (me) needed to update materials for Mon-Wed oral exams, so upgraded to a recent prerelease. This broke the nightly builds because it would no longer build the FAQ and RESOURCES files. Being busy with exams, I didn't notice until G?bor chimed in. Fortunately, there was still a little time before release so that I could fix up the situation.
+
+So, thank you very much to G?bor! 
+
+To everyone: It is very helpful if you keep an eye on such matters, not only for testing whether we fixed your favourite bug, but also because the whole prerelease regime can be a bit brittle. R Core only has a limited set of (aging!) eyes and we may all become distracted by our regular chores.
+
+- Peter D.
+
+> On 15 Jun 2023, at 18:23 , peter dalgaard <pdalgd at gmail.com> wrote:
+> 
+> Yes that was not intentional. Unexpected interaction between installed R version and build tools. Should be OK now.
+> 
+> -pd
+> 
+>> On 14 Jun 2023, at 14:57 , G?bor Cs?rdi <csardi.gabor at gmail.com> wrote:
+>> 
+>> https://cran.r-project.org/src/base-prerelease/ has not updated for
+>> about a week now, I guess this is not intentional?
+>> 
+>> Best,
+>> Gabor
+>> 
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> -- 
+> Peter Dalgaard, Professor,
+> Center for Statistics, Copenhagen Business School
+> Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+> Phone: (+45)38153501
+> Office: A 4.23
+> Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+> 
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From g|u@eppe@c@|o @end|ng |rom cmcc@|t  Tue Jun 20 18:47:20 2023
+From: g|u@eppe@c@|o @end|ng |rom cmcc@|t (=?utf-8?Q?Giuseppe_Cal=C3=B2?=)
+Date: Tue, 20 Jun 2023 18:47:20 +0200
+Subject: [Rd] Installation of R-4.3.1 with intel 2022
+Message-ID: <D3CA6786-F972-46D6-AC83-8A026BDA10B9@cmcc.it>
+
+Hi all,
+I have the issue:
+
+icc -std=c99 -std=gnu11 -I../../src/extra -I../../src/extra/xdr -I. -I../../src/include -I../../src/include  -I/usr/local/include -I../../src/nmath -DHAVE_CONFIG_H   -fopenmp -fpic  -g -O3 -wd188 -ip -mp  -c eval.c -o eval.o
+arithmetic.c(66): warning #274: declaration is not visible outside of function
+  int matherr(struct exception *exc)
+                     ^
+
+arithmetic.c(68): error: pointer to incomplete class type is not allowed
+      switch (exc->type) {
+              ^
+
+arithmetic.c(69): error: identifier "DOMAIN" is undefined
+      case DOMAIN:
+           ^
+
+arithmetic.c(70): error: identifier "SING" is undefined
+      case SING:
+           ^
+
+arithmetic.c(73): error: identifier "OVERFLOW" is undefined
+      case OVERFLOW:
+           ^
+
+arithmetic.c(76): error: identifier "UNDERFLOW" is undefined
+      case UNDERFLOW:
+           ^
+
+arithmetic.c(77): error: pointer to incomplete class type is not allowed
+  	exc->retval = 0.0;
+
+icc -std=c99 -std=gnu11 -I../../src/extra -I../../src/extra/xdr -I. -I../../src/include -I../../src/include  -I/usr/local/include -I../../src/nmath -DHAVE_CONFIG_H   -fopenmp -fpic  -g -O3 -wd188 -ip -mp  -c flexiblas.c -o flexiblas.o
+icc: command line remark #10148: option '-mp' not supported
+compilation aborted for arithmetic.c (code 2)
+make[3]: *** [../../Makeconf:129: arithmetic.o] Error 2
+make[3]: *** Waiting for unfinished jobs....
+icc: command line remark #10148: option '-mp' not supported
+make[3]: Leaving directory '/opt/sources/R/R-4.3.1-intel21/src/main'
+make[2]: *** [Makefile:140: R] Error 2
+make[2]: Leaving directory '/opt/sources/R/R-4.3.1-intel21/src/main'
+make[1]: *** [Makefile:28: R] Error 1
+make[1]: Leaving directory '/opt/sources/R/R-4.3.1-intel21/src'
+make: *** [Makefile:62: R] Error 1
+
+with oneapi-2022.1.0/compiler-rt/2022.1.0; oneapi-2022.1.0/mkl/2022.1.0 while building R-4.3.1 on redhat 8.4 glibc2.28-189
+
+I followed a workaround proposed:
+https://community.intel.com/t5/Intel-C-Compiler/Error-when-compiling-R-from-source-code-ubuntu-18-04/m-p/1176401/thread-id/36575 <https://community.intel.com/t5/Intel-C-Compiler/Error-when-compiling-R-from-source-code-ubuntu-18-04/m-p/1176401/thread-id/36575>
+
+Deactivate  HAVE_MATHERR macro in src/include/config.h
+
+Using this workaroud I get R with:
+
+BLAS/LAPACK: /opt/intel/oneapi_2022.2.0/mkl/2022.1.0/lib/intel64/libmkl_intel_lp64.so.2;  LAPACK version 3.9.0
+
+is correct?
+
+Is these a way to avoid arithmetic issue?
+
+My configure is:
+
+module load intel-2021.6.0/2021.6.0 oneapi-2022.1.0/mkl
+MKL="-L${MKLROOT}/lib/intel64 -lmkl_gf_lp64 -lmkl_core -lmkl_gnu_thread -dl -fopenmp"
+export CC="icc -std=c99"
+export CFLAGS="-g -O3 -wd188 -ip -mp"
+export FC=ifort
+export FLAGS="-g -O3 -mp"
+export CXX=icpc
+export CXXFLAGS="-g -O3 -mp"
+SHLIB_CXXLD=icpc
+export MKL_INTERFACE_LAYER=GNU,LP64 
+export MKL_THREADING_LAYER=GNU
+./configure --prefix=/opt/intel-2021.6.0/R/4.3.1 --with-blas="$MKL" --with-lapack  --enable-memory-profiling --enable-BLAS-shlib --enable-R-shlib --enable-R-static-lib --with-pcre2
+
+Thanks a lot,
+Giuseppe.
+
+???????????????????????????????????????
+Giuseppe Cal?
+
+Fondazione CMCC
+Centro Euro-Mediterraneo sui Cambiamenti Climatici presso Complesso Ecotekne 
+Universit? del Salento - Strada Prov.le Lecce - Monteroni 73100 Lecce  IT
+http://www.cmcc.it <http://www.cmcc.it/>
+https://goo.gl/maps/wtahPDbNVen
+
+mobile: (+39) 3208190020
+email: giuseppe.calo at cmcc.it
+
+Le informazioni contenute in questo messaggio di posta elettronica e negli allegati se presenti sono riservate e confidenziali: ne ? vietata la diffusione in qualsiasi modo o forma (GDPR 2016/679).
+Qualora lei non fosse il destinatario del messaggio, la invito a non diffonderlo e ad eliminarlo dandone gentilmente comunicazione al mittente.
+
+The information included in this e-mail and any attachments are confidential and may also be privileged (GDPR 2016/679).
+If you are not the correct recipient, you are kindly requested to notify the sender immediately, to cancel it and not disclose the contents to any other person.
+
+
+
+
+
+	[[alternative HTML version deleted]]
+
+
+From dj@@mper| @end|ng |rom gm@||@com  Tue Jun 20 23:38:18 2023
+From: dj@@mper| @end|ng |rom gm@||@com (Dominick Samperi)
+Date: Tue, 20 Jun 2023 17:38:18 -0400
+Subject: [Rd] New behavior when running script in package directory?
+Message-ID: <CADUbQ5iZxcc5=itHQoTUdfRfynUpLhBP7SZrvq1zn8D4ZQ4yFA@mail.gmail.com>
+
+When I run a script foo.R containing some trivial code in my home
+directory, via Emacs/ESS, everything works as expected: R
+starts, and a setwd() command to set the working directory is
+run automatically before the code in the script is run.
+
+But if I copy foo.R to some package/R directory strange
+things happen. When I use Emacs/ESS to run the script
+in its new location, R starts, and setwd() is called to set
+the working directory, but then one or more libraries that the
+package depends on are loaded, even though I am using no
+libraries in foo.R.
+
+Now consider foo.R that contains the following trivial code:
+secsToRDateTime <- function(secs) {
+  day2sec <- 60*60*24
+  days <- secs/day2sec
+}
+
+When I try to run this from package/R I get...
+
+Error in ss(file, echo = visibly, local = local, print.eval = output,  :
+  /tmp/gpstime.R!CuSewT:2:0: unexpected end of input
+1: secsToRDateTime <- function(secs) {
+   ^
+
+As I said, there are no problems when the script is run from my
+home directory. This suggests that test scripts can no longer be
+tested in a package's R directory?
+
+Is this true?
+
+Thanks,
+Dominick
+
+	[[alternative HTML version deleted]]
+
+
