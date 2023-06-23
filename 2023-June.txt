@@ -5670,3 +5670,1162 @@ On 2023-06-21 6:00 am, r-devel-request at r-project.org wrote:
 > Dominick
 
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Jun 22 14:34:50 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 22 Jun 2023 14:34:50 +0200
+Subject: [Rd] Installation of R-4.3.1 with intel 2022
+In-Reply-To: <60BCDC7D-12B7-4797-8A6C-541D3148B900@cmcc.it>
+References: <D3CA6786-F972-46D6-AC83-8A026BDA10B9@cmcc.it>
+ <a92fb92f-db4d-7c0e-5b88-696dc05c83f1@gmail.com>
+ <DDAE8FF5-9CDE-4535-AE1A-ECD11DDFF09E@cmcc.it>
+ <25746.54426.106445.189078@stat.math.ethz.ch>
+ <60BCDC7D-12B7-4797-8A6C-541D3148B900@cmcc.it>
+Message-ID: <25748.16362.161061.135277@stat.math.ethz.ch>
+
+>>>>> Giuseppe Cal? 
+>>>>>     on Wed, 21 Jun 2023 13:26:23 +0200 writes:
+
+    > Ok, I?ll reinstall in /juno/opt/sources/R/R-4.3.1-intel21/
+    > Other outputs:
+
+    > ************
+    > [root at juno-n001][/root]>  tail -n 20 /juno/opt/sources/R/R-4.3.1-intel21/tests/d-p-q-r-tst-2.Rout.fail 
+
+    > 0  1  2  3  4  5  6 
+    > 13 22 30 22 10  1  2 
+    >> (t2 <- table(rbinom(100, 10*M, pr = 1e-10)) )
+
+    > 0  1  2  3  4  5 
+    > 10 35 28 18  4  5 
+    >> stopifnot(0:6 %in% names(tt), sum(tt) == 100, sum(t2) == 100) ## no NaN there
+    >> ## related qbinom() tests:
+    >> k <- 0:32
+    >> for(n in c((M+1)/2, M, 2*M, 10*M)) {
+    > +     for(pr in c(1e-8, 1e-9, 1e-10)) {
+    > +         nDup <- !duplicated( pb <- pbinom(k, n, pr) )
+    > +         qb <- qbinom(pb[nDup], n, pr)
+    > +         pn1 <- pb[nDup] < if(b64) 1 else 1 - 3*.Machine$double.eps
+    > +         stopifnot(k[nDup][pn1] == qb[pn1]) ##^^^^^ fudge needed (Linux 32-b)
+    > +     }
+    > + }
+    > Error: k[nDup][pn1] == qb[pn1] are not all TRUE
+    > Execution halted
+
+Ok, thank you, Giuseppe!
+
+>From your .Machine below, indeed b64 is TRUE above
+
+Now, I'd like to get the details: can you please send me (or
+make available for  download) the binary file
+ "pqBinom_res.rds"
+
+which will result from this:
+
+-------------------------------------------------------------------------
+
+## qbinom() tests:
+M <- .Machine$integer.max
+k <- 0:32
+pqBinom <- function(epsF = 0, details=FALSE, pr = c(e_8=1e-8, e_9=1e-9, e10=1e-10)) {
+    lapply(c(M.2 = (M+1)/2, M=M, `2M`=2*M, `10M`=10*M), # 'n'
+           function(n)
+               lapply(pr, function(pr) {
+                   nDup <- !duplicated( pb <- pbinom(k, n, pr) )
+                   qb <- qbinom(pb[nDup], n, pr)
+                   pn1 <- pb[nDup] < 1 - epsF * .Machine$double.eps
+                   ok <- k[nDup][pn1] == qb[pn1]
+                   if(details)
+                       list(pb=pb, qb=qb, nDup=nDup, ok=ok, epsF=epsF)
+                   else ok
+               })
+           )
+}
+
+Dpqb0    <- pqBinom(details=TRUE)
+Dpqb.3e  <- pqBinom(3, details=TRUE)
+
+saveRDS(list(M=M, k=k, Dpqb0=Dpqb0, Dpqb.3e=Dpqb.3e),
+        file = "pqBinom_res.rds")
+
+-------------------------------------------------------------------------
+
+You may can also reply in public, posting the summary output
+you'll get from
+
+pqb0   <- pqBinom()
+pqb.3e <- pqBinom(3)
+table(unlist(pqb0))
+table(unlist(pqb.3e))
+
+In case the 2nd table would show all TRUE also on your platform,
+*AND* if you also send the results of  sessionInfo()
+{I've also asked you about in the last e-mail !}
+we'd already know enough to adapt the test, but I'd be
+interested to learn a bit more (via the above *.rds file).   
+
+Thank you for helping to find more about the internal accuracy
+achievement on a not-so-common (yet?) platform.
+
+Best,
+Martin
+
+
+    > ************
+    > /juno/opt/intel-2021.6.0/R/4.3.1/bin/R
+
+    > R version 4.3.1 (2023-06-16) -- "Beagle Scouts"
+    > Copyright (C) 2023 The R Foundation for Statistical Computing
+    > Platform: x86_64-pc-linux-gnu (64-bit)
+
+    > R is free software and comes with ABSOLUTELY NO WARRANTY.
+    > You are welcome to redistribute it under certain conditions.
+    > Type 'license()' or 'licence()' for distribution details.
+
+    > Natural language support but running in an English locale
+
+    > R is a collaborative project with many contributors.
+    > Type 'contributors()' for more information and
+    > 'citation()' on how to cite R or R packages in publications.
+
+    > Type 'demo()' for some demos, 'help()' for on-line help, or
+    > 'help.start()' for an HTML browser interface to help.
+    > Type 'q()' to quit R.
+
+    >> str(.Machine)
+    > List of 29
+    > $ double.eps               : num 2.22e-16
+    > $ double.neg.eps           : num 1.11e-16
+    > $ double.xmin              : num 2.23e-308
+    > $ double.xmax              : num 1.8e+308
+    > $ double.base              : int 2
+    > $ double.digits            : int 53
+    > $ double.rounding          : int 5
+    > $ double.guard             : int 0
+    > $ double.ulp.digits        : int -52
+    > $ double.neg.ulp.digits    : int -53
+    > $ double.exponent          : int 11
+    > $ double.min.exp           : int -1022
+    > $ double.max.exp           : int 1024
+    > $ integer.max              : int 2147483647
+    > $ sizeof.long              : int 8
+    > $ sizeof.longlong          : int 8
+    > $ sizeof.longdouble        : int 16
+    > $ sizeof.pointer           : int 8
+    > $ sizeof.time_t            : int 8
+    > $ longdouble.eps           : num 1.08e-19
+    > $ longdouble.neg.eps       : num 5.42e-20
+    > $ longdouble.digits        : int 64
+    > $ longdouble.rounding      : int 5
+    > $ longdouble.guard         : int 0
+    > $ longdouble.ulp.digits    : int -63
+    > $ longdouble.neg.ulp.digits: int -64
+    > $ longdouble.exponent      : int 15
+    > $ longdouble.min.exp       : int -16382
+    > $ longdouble.max.exp       : int 16384
+
+    > Thanks
+
+    >> On 21 Jun 2023, at 12:44, Martin Maechler <maechler at stat.math.ethz.ch> wrote:
+    >> 
+    >>>>>>> Giuseppe Cal? 
+    >>>>>>> on Wed, 21 Jun 2023 09:17:14 +0200 writes:
+    >> 
+    >>> Thanks Tomas,
+    >>> With my configure (I follower Admin manual for intel) and deleting  HAVE_MATHERR in config I?m able to perform, configure, make and make install, only make check has this issue:
+    >> 
+    >>> running code in 'array-subset.R' ... OK
+    >>> running code in 'reg-tests-1a.R' ... OK
+    >>> running code in 'reg-tests-1b.R' ... OK
+    >>> running code in 'reg-tests-1c.R' ... OK
+    >>> running code in 'reg-tests-1d.R' ... OK
+    >>> running code in 'reg-tests-1e.R' ... OK
+    >>> running code in 'reg-tests-2.R' ... OK
+    >>> comparing 'reg-tests-2.Rout' to './reg-tests-2.Rout.save' ... OK
+    >>> running code in 'reg-examples1.R' ... OK
+    >>> running code in 'reg-examples2.R' ... OK
+    >>> running code in 'reg-packages.R' ... OK
+    >>> running code in 'p-qbeta-strict-tst.R' ... OK
+    >>> running code in 'd-p-q-r-tst-2.R' ...make[3]: *** [Makefile.common:117: d-p-q-r-tst-2.Rout] Error 1
+    >>> make[3]: Leaving directory '/juno/opt/sources/R/R-4.3.1-intel21/tests'
+    >>> make[2]: *** [Makefile.common:320: test-Reg] Error 2
+    >>> make[2]: Leaving directory '/juno/opt/sources/R/R-4.3.1-intel21/tests'
+    >>> make[1]: *** [Makefile.common:190: test-all-basics] Error 1
+    >>> make[1]: Leaving directory '/juno/opt/sources/R/R-4.3.1-intel21/tests'
+    >>> make: *** [Makefile:307: check] Error 2
+    >> 
+    >>> Do you have some suggestion about this error?
+    >> 
+    >> Only if you tell us more about the resulting
+    >> 
+    >> d-p-q-r-tst-2.Rout.fail
+    >> ^^^^^   file
+    >> 
+    >> e.g. giving us the last 20 lines or so, e.g. from
+    >> tail -n 20 /juno/opt/sources/R/R-4.3.1-intel21/tests/d-p-q-r-tst-2.Rout.fail 
+    >> 
+    >> Also, in addition to the output of sessionInfo(),  the  output of
+    >> 
+    >> str(.Machine)
+    >> 
+    >> maybe interesting.  Once I'd see these, I might have to ask further questions
+    >> (possibly off-mailinglist), so it'd be good if you keep the
+    >> R "installation" in  '/juno/opt/sources/R/R-4.3.1-intel21/  for
+    >> minor "experiments".
+    >> 
+    >> Best regards,
+    >> Martin
+    >> 
+    >> Martin Maechler
+    >> ETH Zurich  and  R Core team
+    >> 
+    >> 
+    >>> Checking MKL on installing R it is:
+    >> 
+    >>> Matrix products: default
+    >>> BLAS/LAPACK: /juno/opt/intel/oneapi_2022.2.0/mkl/2022.1.0/lib/intel64/libmkl_intel_lp64.so.2;  LAPACK version 3.9.0
+    >> 
+    >>> And 
+    >> 
+    >>> ldd /juno/opt/intel-2021.6.0/R/4.3.1/lib64/R/lib/libRblas.so| grep mkl
+    >>> libmkl_intel_lp64.so.2 => /juno/opt/intel/oneapi_2022.2.0/mkl/2022.1.0/lib/intel64/libmkl_intel_lp64.so.2 (0x00007f01ba508000)
+    >>> libmkl_intel_thread.so.2 => /juno/opt/intel/oneapi_2022.2.0/mkl/2022.1.0/lib/intel64/libmkl_intel_thread.so.2 (0x00007f01b6d94000)
+    >>> libmkl_core.so.2 => /juno/opt/intel/oneapi_2022.2.0/mkl/2022.1.0/lib/intel64/libmkl_core.so.2 (0x00007f01b29be000)
+    >> 
+    >>> About you, is R using right mkl? (Oneapi mkl)
+    >> 
+    >>> Thanks,
+    >>> Giuseppe.
+    >> 
+    >>> ???????????????????????????????????????
+    >>> Giuseppe Cal?
+    >> 
+    >>> Fondazione CMCC
+    >>> Centro Euro-Mediterraneo sui Cambiamenti Climatici presso Complesso Ecotekne 
+    >>> Universit? del Salento - Strada Prov.le Lecce - Monteroni 73100 Lecce  IT
+    >>> http://www.cmcc.it
+    >>> https://goo.gl/maps/wtahPDbNVen
+    >> 
+    >>> mobile: (+39) 3208190020
+    >>> email: giuseppe.calo at cmcc.it
+    >> 
+    >>> Le informazioni contenute in questo messaggio di posta elettronica e negli allegati se presenti sono riservate e confidenziali: ne ? vietata la diffusione in qualsiasi modo o forma (GDPR 2016/679).
+    >>> Qualora lei non fosse il destinatario del messaggio, la invito a non diffonderlo e ad eliminarlo dandone gentilmente comunicazione al mittente.
+    >> 
+    >>> The information included in this e-mail and any attachments are confidential and may also be privileged (GDPR 2016/679).
+    >>> If you are not the correct recipient, you are kindly requested to notify the sender immediately, to cancel it and not disclose the contents to any other person.
+    >> 
+    >> 
+    >> 
+    >> 
+    >>>> On 21 Jun 2023, at 09:10, Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+    >>>> 
+    >>>> 
+    >>>> On 6/20/23 18:47, Giuseppe Cal? wrote:
+    >>>>> Hi all,
+    >>>>> I have the issue:
+    >>>>> 
+    >>>>> icc -std=c99 -std=gnu11 -I../../src/extra -I../../src/extra/xdr -I. -I../../src/include -I../../src/include  -I/usr/local/include -I../../src/nmath -DHAVE_CONFIG_H   -fopenmp -fpic  -g -O3 -wd188 -ip -mp  -c eval.c -o eval.o
+    >>>>> arithmetic.c(66): warning #274: declaration is not visible outside of function
+    >>>>> int matherr(struct exception *exc)
+    >>>>> ^
+    >>>>> 
+    >>>>> arithmetic.c(68): error: pointer to incomplete class type is not allowed
+    >>>>> switch (exc->type) {
+    >>>>> ^
+    >>>>> 
+    >>>>> arithmetic.c(69): error: identifier "DOMAIN" is undefined
+    >>>>> case DOMAIN:
+    >>>>> ^
+    >>>>> 
+    >>>>> arithmetic.c(70): error: identifier "SING" is undefined
+    >>>>> case SING:
+    >>>>> ^
+    >>>>> 
+    >>>>> arithmetic.c(73): error: identifier "OVERFLOW" is undefined
+    >>>>> case OVERFLOW:
+    >>>>> ^
+    >>>>> 
+    >>>>> arithmetic.c(76): error: identifier "UNDERFLOW" is undefined
+    >>>>> case UNDERFLOW:
+    >>>>> ^
+    >>>>> 
+    >>>>> arithmetic.c(77): error: pointer to incomplete class type is not allowed
+    exc-> retval = 0.0;
+    >>>>> 
+    >>>>> icc -std=c99 -std=gnu11 -I../../src/extra -I../../src/extra/xdr -I. -I../../src/include -I../../src/include  -I/usr/local/include -I../../src/nmath -DHAVE_CONFIG_H   -fopenmp -fpic  -g -O3 -wd188 -ip -mp  -c flexiblas.c -o flexiblas.o
+    >>>>> icc: command line remark #10148: option '-mp' not supported
+    >>>>> compilation aborted for arithmetic.c (code 2)
+    >>>>> make[3]: *** [../../Makeconf:129: arithmetic.o] Error 2
+    >>>>> make[3]: *** Waiting for unfinished jobs....
+    >>>>> icc: command line remark #10148: option '-mp' not supported
+    >>>>> make[3]: Leaving directory '/opt/sources/R/R-4.3.1-intel21/src/main'
+    >>>>> make[2]: *** [Makefile:140: R] Error 2
+    >>>>> make[2]: Leaving directory '/opt/sources/R/R-4.3.1-intel21/src/main'
+    >>>>> make[1]: *** [Makefile:28: R] Error 1
+    >>>>> make[1]: Leaving directory '/opt/sources/R/R-4.3.1-intel21/src'
+    >>>>> make: *** [Makefile:62: R] Error 1
+    >>>>> 
+    >>>>> with oneapi-2022.1.0/compiler-rt/2022.1.0; oneapi-2022.1.0/mkl/2022.1.0 while building R-4.3.1 on redhat 8.4 glibc2.28-189
+    >>>>> 
+    >>>>> I followed a workaround proposed:
+    >>>>> https://community.intel.com/t5/Intel-C-Compiler/Error-when-compiling-R-from-source-code-ubuntu-18-04/m-p/1176401/thread-id/36575 <https://community.intel.com/t5/Intel-C-Compiler/Error-when-compiling-R-from-source-code-ubuntu-18-04/m-p/1176401/thread-id/36575>
+    >>>>> 
+    >>>>> Deactivate  HAVE_MATHERR macro in src/include/config.h
+    >>>> 
+    >>>> Hi Giuseppe,
+    >>>> 
+    >>>> thanks for the report. Undefining HAVE_MATHERR seems a valid work-around to me, based on reading the thread above and the sources.
+    >>>> 
+    >>>> We could improve this in R, if keeping this code, at least improve the configure check so that it also tests for the presence of the macros.
+    >>>> 
+    >>>>> Using this workaroud I get R with:
+    >>>>> 
+    >>>>> BLAS/LAPACK: /opt/intel/oneapi_2022.2.0/mkl/2022.1.0/lib/intel64/libmkl_intel_lp64.so.2;  LAPACK version 3.9.0
+    >>>>> 
+    >>>>> is correct?
+    >>>>> 
+    >>>>> Is these a way to avoid arithmetic issue?
+    >>>>> 
+    >>>>> My configure is:
+    >>>>> 
+    >>>>> module load intel-2021.6.0/2021.6.0 oneapi-2022.1.0/mkl
+    >>>>> MKL="-L${MKLROOT}/lib/intel64 -lmkl_gf_lp64 -lmkl_core -lmkl_gnu_thread -dl -fopenmp"
+    >>>>> export CC="icc -std=c99"
+    >>>>> export CFLAGS="-g -O3 -wd188 -ip -mp"
+    >>>>> export FC=ifort
+    >>>>> export FLAGS="-g -O3 -mp"
+    >>>>> export CXX=icpc
+    >>>>> export CXXFLAGS="-g -O3 -mp"
+    >>>>> SHLIB_CXXLD=icpc
+    >>>>> export MKL_INTERFACE_LAYER=GNU,LP64
+    >>>>> export MKL_THREADING_LAYER=GNU
+    >>>>> ./configure --prefix=/opt/intel-2021.6.0/R/4.3.1 --with-blas="$MKL" --with-lapack  --enable-memory-profiling --enable-BLAS-shlib --enable-R-shlib --enable-R-static-lib --with-pcre2
+    >>>> 
+    >>>> AFAIK, neither icc nor MKL is regularly tested with R/CRAN packages, so the risk of running into some issues is somewhat higher than for say GCC and the reference BLAS/LAPACK.
+    >>>> 
+    >>>> Some hints on using icc and MKL can be found in the R Admin manual, https://cran.r-project.org/doc/manuals/r-release/R-admin.html. Unless you have done that already, you might want to check your configuration against those, I didn't spot any obvious issue. If you find any other problem, please report, so that it could be fixed or the hints updated.
+    >>>> 
+    >>>> Thanks,
+    >>>> Tomas
+    >>>> 
+    >>>>> 
+    >>>>> Thanks a lot,
+    >>>>> Giuseppe.
+    >>>>> 
+    >>>>> ???????????????????????????????????????
+    >>>>> Giuseppe Cal?
+    >>>>> 
+    >>>>> Fondazione CMCC
+    >>>>> Centro Euro-Mediterraneo sui Cambiamenti Climatici presso Complesso Ecotekne
+    >>>>> Universit? del Salento - Strada Prov.le Lecce - Monteroni 73100 Lecce  IT
+    >>>>> http://www.cmcc.it <http://www.cmcc.it/>
+    >>>>> https://goo.gl/maps/wtahPDbNVen
+    >>>>> 
+    >>>>> mobile: (+39) 3208190020
+    >>>>> email: giuseppe.calo at cmcc.it
+    >>>>> 
+    >>>>> Le informazioni contenute in questo messaggio di posta elettronica e negli allegati se presenti sono riservate e confidenziali: ne ? vietata la diffusione in qualsiasi modo o forma (GDPR 2016/679).
+    >>>>> Qualora lei non fosse il destinatario del messaggio, la invito a non diffonderlo e ad eliminarlo dandone gentilmente comunicazione al mittente.
+    >>>>> 
+    >>>>> The information included in this e-mail and any attachments are confidential and may also be privileged (GDPR 2016/679).
+    >>>>> If you are not the correct recipient, you are kindly requested to notify the sender immediately, to cancel it and not disclose the contents to any other person.
+    >>>>> 
+    >>>>> 
+    >>>>> 
+    >>>>> 
+    >>>>> 
+    >>>>> [[alternative HTML version deleted]]
+    >>>>> 
+    >>>>> ______________________________________________
+    >>>>> R-devel at r-project.org mailing list
+    >>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+    >> 
+    >> 
+    >>> [[alternative HTML version deleted]]
+    >> 
+    >>> ______________________________________________
+    >>> R-devel at r-project.org mailing list
+    >>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+    > [[alternative HTML version deleted]]
+
+
+From g|u@eppe@c@|o @end|ng |rom cmcc@|t  Thu Jun 22 14:52:00 2023
+From: g|u@eppe@c@|o @end|ng |rom cmcc@|t (=?utf-8?Q?Giuseppe_Cal=C3=B2?=)
+Date: Thu, 22 Jun 2023 14:52:00 +0200
+Subject: [Rd] Installation of R-4.3.1 with intel 2022
+In-Reply-To: <25748.16362.161061.135277@stat.math.ethz.ch>
+References: <D3CA6786-F972-46D6-AC83-8A026BDA10B9@cmcc.it>
+ <a92fb92f-db4d-7c0e-5b88-696dc05c83f1@gmail.com>
+ <DDAE8FF5-9CDE-4535-AE1A-ECD11DDFF09E@cmcc.it>
+ <25746.54426.106445.189078@stat.math.ethz.ch>
+ <60BCDC7D-12B7-4797-8A6C-541D3148B900@cmcc.it>
+ <25748.16362.161061.135277@stat.math.ethz.ch>
+Message-ID: <417FA9FD-983A-44D8-9762-CDCE9F58C045@cmcc.it>
+
+Hello Martin, this is output
+
+R version 4.3.1 (2023-06-16) -- "Beagle Scouts"
+Copyright (C) 2023 The R Foundation for Statistical Computing
+Platform: x86_64-pc-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+> ## qbinom() tests:
+> M <- .Machine$integer.max
+> k <- 0:32
+> pqBinom <- function(epsF = 0, details=FALSE, pr = c(e_8=1e-8, e_9=1e-9, e10=1e-10)) {
++    lapply(c(M.2 = (M+1)/2, M=M, `2M`=2*M, `10M`=10*M), # 'n'
++           function(n)
++               lapply(pr, function(pr) {
++                   nDup <- !duplicated( pb <- pbinom(k, n, pr) )
++                   qb <- qbinom(pb[nDup], n, pr)
++                   pn1 <- pb[nDup] < 1 - epsF * .Machine$double.eps
++                   ok <- k[nDup][pn1] == qb[pn1]
++                   if(details)
++                       list(pb=pb, qb=qb, nDup=nDup, ok=ok, epsF=epsF)
++                   else ok
++               })
++           )
++ }
+> 
+> Dpqb0    <- pqBinom(details=TRUE)
+> Dpqb.3e  <- pqBinom(3, details=TRUE)
+> 
+> saveRDS(list(M=M, k=k, Dpqb0=Dpqb0, Dpqb.3e=Dpqb.3e),
++        file = "pqBinom_res.rds")
+> pqb0   <- pqBinom()
+> pqb.3e <- pqBinom(3)
+> table(unlist(pqb0))
+
+FALSE  TRUE 
+    2   292 
+> table(unlist(pqb.3e))
+
+TRUE 
+ 288 
+> sessionInfo()
+R version 4.3.1 (2023-06-16)
+Platform: x86_64-pc-linux-gnu (64-bit)
+Running under: Red Hat Enterprise Linux 8.4 (Ootpa)
+
+Matrix products: default
+BLAS/LAPACK: /juno/opt/intel/oneapi_2022.2.0/mkl/2022.1.0/lib/intel64/libmkl_intel_lp64.so.2;  LAPACK version 3.9.0
+
+locale:
+ [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C              
+ [3] LC_TIME=en_US.UTF-8        LC_COLLATE=en_US.UTF-8    
+ [5] LC_MONETARY=en_US.UTF-8    LC_MESSAGES=en_US.UTF-8   
+ [7] LC_PAPER=en_US.UTF-8       LC_NAME=C                 
+ [9] LC_ADDRESS=C               LC_TELEPHONE=C            
+[11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C       
+
+time zone: Europe/Rome
+tzcode source: system (glibc)
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base     
+
+loaded via a namespace (and not attached):
+[1] compiler_4.3.1
+> quit()
+
+File attached 
+
+Thanks,
+Giuseppe.
+
+
+???????????????????????????????????????
+Giuseppe Cal?
+
+Fondazione CMCC
+Centro Euro-Mediterraneo sui Cambiamenti Climatici presso Complesso Ecotekne 
+Universit? del Salento - Strada Prov.le Lecce - Monteroni 73100 Lecce  IT
+http://www.cmcc.it
+https://goo.gl/maps/wtahPDbNVen
+
+mobile: (+39) 3208190020
+email: giuseppe.calo at cmcc.it
+
+Le informazioni contenute in questo messaggio di posta elettronica e negli allegati se presenti sono riservate e confidenziali: ne ? vietata la diffusione in qualsiasi modo o forma (GDPR 2016/679).
+Qualora lei non fosse il destinatario del messaggio, la invito a non diffonderlo e ad eliminarlo dandone gentilmente comunicazione al mittente.
+
+The information included in this e-mail and any attachments are confidential and may also be privileged (GDPR 2016/679).
+If you are not the correct recipient, you are kindly requested to notify the sender immediately, to cancel it and not disclose the contents to any other person.
+
+
+
+
+> On 22 Jun 2023, at 14:34, Martin Maechler <maechler at stat.math.ethz.ch> wrote:
+> 
+>>>>>> Giuseppe Cal? 
+>>>>>>    on Wed, 21 Jun 2023 13:26:23 +0200 writes:
+> 
+>> Ok, I?ll reinstall in /juno/opt/sources/R/R-4.3.1-intel21/
+>> Other outputs:
+> 
+>> ************
+>> [root at juno-n001][/root]>  tail -n 20 /juno/opt/sources/R/R-4.3.1-intel21/tests/d-p-q-r-tst-2.Rout.fail 
+> 
+>> 0  1  2  3  4  5  6 
+>> 13 22 30 22 10  1  2 
+>>> (t2 <- table(rbinom(100, 10*M, pr = 1e-10)) )
+> 
+>> 0  1  2  3  4  5 
+>> 10 35 28 18  4  5 
+>>> stopifnot(0:6 %in% names(tt), sum(tt) == 100, sum(t2) == 100) ## no NaN there
+>>> ## related qbinom() tests:
+>>> k <- 0:32
+>>> for(n in c((M+1)/2, M, 2*M, 10*M)) {
+>> +     for(pr in c(1e-8, 1e-9, 1e-10)) {
+>> +         nDup <- !duplicated( pb <- pbinom(k, n, pr) )
+>> +         qb <- qbinom(pb[nDup], n, pr)
+>> +         pn1 <- pb[nDup] < if(b64) 1 else 1 - 3*.Machine$double.eps
+>> +         stopifnot(k[nDup][pn1] == qb[pn1]) ##^^^^^ fudge needed (Linux 32-b)
+>> +     }
+>> + }
+>> Error: k[nDup][pn1] == qb[pn1] are not all TRUE
+>> Execution halted
+> 
+> Ok, thank you, Giuseppe!
+> 
+> From your .Machine below, indeed b64 is TRUE above
+> 
+> Now, I'd like to get the details: can you please send me (or
+> make available for  download) the binary file
+> "pqBinom_res.rds"
+> 
+> which will result from this:
+> 
+> -------------------------------------------------------------------------
+> 
+> ## qbinom() tests:
+> M <- .Machine$integer.max
+> k <- 0:32
+> pqBinom <- function(epsF = 0, details=FALSE, pr = c(e_8=1e-8, e_9=1e-9, e10=1e-10)) {
+>    lapply(c(M.2 = (M+1)/2, M=M, `2M`=2*M, `10M`=10*M), # 'n'
+>           function(n)
+>               lapply(pr, function(pr) {
+>                   nDup <- !duplicated( pb <- pbinom(k, n, pr) )
+>                   qb <- qbinom(pb[nDup], n, pr)
+>                   pn1 <- pb[nDup] < 1 - epsF * .Machine$double.eps
+>                   ok <- k[nDup][pn1] == qb[pn1]
+>                   if(details)
+>                       list(pb=pb, qb=qb, nDup=nDup, ok=ok, epsF=epsF)
+>                   else ok
+>               })
+>           )
+> }
+> 
+> Dpqb0    <- pqBinom(details=TRUE)
+> Dpqb.3e  <- pqBinom(3, details=TRUE)
+> 
+> saveRDS(list(M=M, k=k, Dpqb0=Dpqb0, Dpqb.3e=Dpqb.3e),
+>        file = "pqBinom_res.rds")
+> 
+> -------------------------------------------------------------------------
+> 
+> You may can also reply in public, posting the summary output
+> you'll get from
+> 
+> pqb0   <- pqBinom()
+> pqb.3e <- pqBinom(3)
+> table(unlist(pqb0))
+> table(unlist(pqb.3e))
+> 
+> In case the 2nd table would show all TRUE also on your platform,
+> *AND* if you also send the results of  sessionInfo()
+> {I've also asked you about in the last e-mail !}
+> we'd already know enough to adapt the test, but I'd be
+> interested to learn a bit more (via the above *.rds file).   
+> 
+> Thank you for helping to find more about the internal accuracy
+> achievement on a not-so-common (yet?) platform.
+> 
+> Best,
+> Martin
+> 
+> 
+>> ************
+>> /juno/opt/intel-2021.6.0/R/4.3.1/bin/R
+> 
+>> R version 4.3.1 (2023-06-16) -- "Beagle Scouts"
+>> Copyright (C) 2023 The R Foundation for Statistical Computing
+>> Platform: x86_64-pc-linux-gnu (64-bit)
+> 
+>> R is free software and comes with ABSOLUTELY NO WARRANTY.
+>> You are welcome to redistribute it under certain conditions.
+>> Type 'license()' or 'licence()' for distribution details.
+> 
+>> Natural language support but running in an English locale
+> 
+>> R is a collaborative project with many contributors.
+>> Type 'contributors()' for more information and
+>> 'citation()' on how to cite R or R packages in publications.
+> 
+>> Type 'demo()' for some demos, 'help()' for on-line help, or
+>> 'help.start()' for an HTML browser interface to help.
+>> Type 'q()' to quit R.
+> 
+>>> str(.Machine)
+>> List of 29
+>> $ double.eps               : num 2.22e-16
+>> $ double.neg.eps           : num 1.11e-16
+>> $ double.xmin              : num 2.23e-308
+>> $ double.xmax              : num 1.8e+308
+>> $ double.base              : int 2
+>> $ double.digits            : int 53
+>> $ double.rounding          : int 5
+>> $ double.guard             : int 0
+>> $ double.ulp.digits        : int -52
+>> $ double.neg.ulp.digits    : int -53
+>> $ double.exponent          : int 11
+>> $ double.min.exp           : int -1022
+>> $ double.max.exp           : int 1024
+>> $ integer.max              : int 2147483647
+>> $ sizeof.long              : int 8
+>> $ sizeof.longlong          : int 8
+>> $ sizeof.longdouble        : int 16
+>> $ sizeof.pointer           : int 8
+>> $ sizeof.time_t            : int 8
+>> $ longdouble.eps           : num 1.08e-19
+>> $ longdouble.neg.eps       : num 5.42e-20
+>> $ longdouble.digits        : int 64
+>> $ longdouble.rounding      : int 5
+>> $ longdouble.guard         : int 0
+>> $ longdouble.ulp.digits    : int -63
+>> $ longdouble.neg.ulp.digits: int -64
+>> $ longdouble.exponent      : int 15
+>> $ longdouble.min.exp       : int -16382
+>> $ longdouble.max.exp       : int 16384
+> 
+>> Thanks
+> 
+>>> On 21 Jun 2023, at 12:44, Martin Maechler <maechler at stat.math.ethz.ch> wrote:
+>>> 
+>>>>>>>> Giuseppe Cal? 
+>>>>>>>> on Wed, 21 Jun 2023 09:17:14 +0200 writes:
+>>> 
+>>>> Thanks Tomas,
+>>>> With my configure (I follower Admin manual for intel) and deleting  HAVE_MATHERR in config I?m able to perform, configure, make and make install, only make check has this issue:
+>>> 
+>>>> running code in 'array-subset.R' ... OK
+>>>> running code in 'reg-tests-1a.R' ... OK
+>>>> running code in 'reg-tests-1b.R' ... OK
+>>>> running code in 'reg-tests-1c.R' ... OK
+>>>> running code in 'reg-tests-1d.R' ... OK
+>>>> running code in 'reg-tests-1e.R' ... OK
+>>>> running code in 'reg-tests-2.R' ... OK
+>>>> comparing 'reg-tests-2.Rout' to './reg-tests-2.Rout.save' ... OK
+>>>> running code in 'reg-examples1.R' ... OK
+>>>> running code in 'reg-examples2.R' ... OK
+>>>> running code in 'reg-packages.R' ... OK
+>>>> running code in 'p-qbeta-strict-tst.R' ... OK
+>>>> running code in 'd-p-q-r-tst-2.R' ...make[3]: *** [Makefile.common:117: d-p-q-r-tst-2.Rout] Error 1
+>>>> make[3]: Leaving directory '/juno/opt/sources/R/R-4.3.1-intel21/tests'
+>>>> make[2]: *** [Makefile.common:320: test-Reg] Error 2
+>>>> make[2]: Leaving directory '/juno/opt/sources/R/R-4.3.1-intel21/tests'
+>>>> make[1]: *** [Makefile.common:190: test-all-basics] Error 1
+>>>> make[1]: Leaving directory '/juno/opt/sources/R/R-4.3.1-intel21/tests'
+>>>> make: *** [Makefile:307: check] Error 2
+>>> 
+>>>> Do you have some suggestion about this error?
+>>> 
+>>> Only if you tell us more about the resulting
+>>> 
+>>> d-p-q-r-tst-2.Rout.fail
+>>> ^^^^^   file
+>>> 
+>>> e.g. giving us the last 20 lines or so, e.g. from
+>>> tail -n 20 /juno/opt/sources/R/R-4.3.1-intel21/tests/d-p-q-r-tst-2.Rout.fail 
+>>> 
+>>> Also, in addition to the output of sessionInfo(),  the  output of
+>>> 
+>>> str(.Machine)
+>>> 
+>>> maybe interesting.  Once I'd see these, I might have to ask further questions
+>>> (possibly off-mailinglist), so it'd be good if you keep the
+>>> R "installation" in  '/juno/opt/sources/R/R-4.3.1-intel21/  for
+>>> minor "experiments".
+>>> 
+>>> Best regards,
+>>> Martin
+>>> 
+>>> Martin Maechler
+>>> ETH Zurich  and  R Core team
+>>> 
+>>> 
+>>>> Checking MKL on installing R it is:
+>>> 
+>>>> Matrix products: default
+>>>> BLAS/LAPACK: /juno/opt/intel/oneapi_2022.2.0/mkl/2022.1.0/lib/intel64/libmkl_intel_lp64.so.2;  LAPACK version 3.9.0
+>>> 
+>>>> And 
+>>> 
+>>>> ldd /juno/opt/intel-2021.6.0/R/4.3.1/lib64/R/lib/libRblas.so| grep mkl
+>>>> libmkl_intel_lp64.so.2 => /juno/opt/intel/oneapi_2022.2.0/mkl/2022.1.0/lib/intel64/libmkl_intel_lp64.so.2 (0x00007f01ba508000)
+>>>> libmkl_intel_thread.so.2 => /juno/opt/intel/oneapi_2022.2.0/mkl/2022.1.0/lib/intel64/libmkl_intel_thread.so.2 (0x00007f01b6d94000)
+>>>> libmkl_core.so.2 => /juno/opt/intel/oneapi_2022.2.0/mkl/2022.1.0/lib/intel64/libmkl_core.so.2 (0x00007f01b29be000)
+>>> 
+>>>> About you, is R using right mkl? (Oneapi mkl)
+>>> 
+>>>> Thanks,
+>>>> Giuseppe.
+>>> 
+>>>> ???????????????????????????????????????
+>>>> Giuseppe Cal?
+>>> 
+>>>> Fondazione CMCC
+>>>> Centro Euro-Mediterraneo sui Cambiamenti Climatici presso Complesso Ecotekne 
+>>>> Universit? del Salento - Strada Prov.le Lecce - Monteroni 73100 Lecce  IT
+>>>> http://www.cmcc.it
+>>>> https://goo.gl/maps/wtahPDbNVen
+>>> 
+>>>> mobile: (+39) 3208190020
+>>>> email: giuseppe.calo at cmcc.it
+>>> 
+>>>> Le informazioni contenute in questo messaggio di posta elettronica e negli allegati se presenti sono riservate e confidenziali: ne ? vietata la diffusione in qualsiasi modo o forma (GDPR 2016/679).
+>>>> Qualora lei non fosse il destinatario del messaggio, la invito a non diffonderlo e ad eliminarlo dandone gentilmente comunicazione al mittente.
+>>> 
+>>>> The information included in this e-mail and any attachments are confidential and may also be privileged (GDPR 2016/679).
+>>>> If you are not the correct recipient, you are kindly requested to notify the sender immediately, to cancel it and not disclose the contents to any other person.
+>>> 
+>>> 
+>>> 
+>>> 
+>>>>> On 21 Jun 2023, at 09:10, Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+>>>>> 
+>>>>> 
+>>>>> On 6/20/23 18:47, Giuseppe Cal? wrote:
+>>>>>> Hi all,
+>>>>>> I have the issue:
+>>>>>> 
+>>>>>> icc -std=c99 -std=gnu11 -I../../src/extra -I../../src/extra/xdr -I. -I../../src/include -I../../src/include  -I/usr/local/include -I../../src/nmath -DHAVE_CONFIG_H   -fopenmp -fpic  -g -O3 -wd188 -ip -mp  -c eval.c -o eval.o
+>>>>>> arithmetic.c(66): warning #274: declaration is not visible outside of function
+>>>>>> int matherr(struct exception *exc)
+>>>>>> ^
+>>>>>> 
+>>>>>> arithmetic.c(68): error: pointer to incomplete class type is not allowed
+>>>>>> switch (exc->type) {
+>>>>>> ^
+>>>>>> 
+>>>>>> arithmetic.c(69): error: identifier "DOMAIN" is undefined
+>>>>>> case DOMAIN:
+>>>>>> ^
+>>>>>> 
+>>>>>> arithmetic.c(70): error: identifier "SING" is undefined
+>>>>>> case SING:
+>>>>>> ^
+>>>>>> 
+>>>>>> arithmetic.c(73): error: identifier "OVERFLOW" is undefined
+>>>>>> case OVERFLOW:
+>>>>>> ^
+>>>>>> 
+>>>>>> arithmetic.c(76): error: identifier "UNDERFLOW" is undefined
+>>>>>> case UNDERFLOW:
+>>>>>> ^
+>>>>>> 
+>>>>>> arithmetic.c(77): error: pointer to incomplete class type is not allowed
+>    exc-> retval = 0.0;
+>>>>>> 
+>>>>>> icc -std=c99 -std=gnu11 -I../../src/extra -I../../src/extra/xdr -I. -I../../src/include -I../../src/include  -I/usr/local/include -I../../src/nmath -DHAVE_CONFIG_H   -fopenmp -fpic  -g -O3 -wd188 -ip -mp  -c flexiblas.c -o flexiblas.o
+>>>>>> icc: command line remark #10148: option '-mp' not supported
+>>>>>> compilation aborted for arithmetic.c (code 2)
+>>>>>> make[3]: *** [../../Makeconf:129: arithmetic.o] Error 2
+>>>>>> make[3]: *** Waiting for unfinished jobs....
+>>>>>> icc: command line remark #10148: option '-mp' not supported
+>>>>>> make[3]: Leaving directory '/opt/sources/R/R-4.3.1-intel21/src/main'
+>>>>>> make[2]: *** [Makefile:140: R] Error 2
+>>>>>> make[2]: Leaving directory '/opt/sources/R/R-4.3.1-intel21/src/main'
+>>>>>> make[1]: *** [Makefile:28: R] Error 1
+>>>>>> make[1]: Leaving directory '/opt/sources/R/R-4.3.1-intel21/src'
+>>>>>> make: *** [Makefile:62: R] Error 1
+>>>>>> 
+>>>>>> with oneapi-2022.1.0/compiler-rt/2022.1.0; oneapi-2022.1.0/mkl/2022.1.0 while building R-4.3.1 on redhat 8.4 glibc2.28-189
+>>>>>> 
+>>>>>> I followed a workaround proposed:
+>>>>>> https://community.intel.com/t5/Intel-C-Compiler/Error-when-compiling-R-from-source-code-ubuntu-18-04/m-p/1176401/thread-id/36575 <https://community.intel.com/t5/Intel-C-Compiler/Error-when-compiling-R-from-source-code-ubuntu-18-04/m-p/1176401/thread-id/36575>
+>>>>>> 
+>>>>>> Deactivate  HAVE_MATHERR macro in src/include/config.h
+>>>>> 
+>>>>> Hi Giuseppe,
+>>>>> 
+>>>>> thanks for the report. Undefining HAVE_MATHERR seems a valid work-around to me, based on reading the thread above and the sources.
+>>>>> 
+>>>>> We could improve this in R, if keeping this code, at least improve the configure check so that it also tests for the presence of the macros.
+>>>>> 
+>>>>>> Using this workaroud I get R with:
+>>>>>> 
+>>>>>> BLAS/LAPACK: /opt/intel/oneapi_2022.2.0/mkl/2022.1.0/lib/intel64/libmkl_intel_lp64.so.2;  LAPACK version 3.9.0
+>>>>>> 
+>>>>>> is correct?
+>>>>>> 
+>>>>>> Is these a way to avoid arithmetic issue?
+>>>>>> 
+>>>>>> My configure is:
+>>>>>> 
+>>>>>> module load intel-2021.6.0/2021.6.0 oneapi-2022.1.0/mkl
+>>>>>> MKL="-L${MKLROOT}/lib/intel64 -lmkl_gf_lp64 -lmkl_core -lmkl_gnu_thread -dl -fopenmp"
+>>>>>> export CC="icc -std=c99"
+>>>>>> export CFLAGS="-g -O3 -wd188 -ip -mp"
+>>>>>> export FC=ifort
+>>>>>> export FLAGS="-g -O3 -mp"
+>>>>>> export CXX=icpc
+>>>>>> export CXXFLAGS="-g -O3 -mp"
+>>>>>> SHLIB_CXXLD=icpc
+>>>>>> export MKL_INTERFACE_LAYER=GNU,LP64
+>>>>>> export MKL_THREADING_LAYER=GNU
+>>>>>> ./configure --prefix=/opt/intel-2021.6.0/R/4.3.1 --with-blas="$MKL" --with-lapack  --enable-memory-profiling --enable-BLAS-shlib --enable-R-shlib --enable-R-static-lib --with-pcre2
+>>>>> 
+>>>>> AFAIK, neither icc nor MKL is regularly tested with R/CRAN packages, so the risk of running into some issues is somewhat higher than for say GCC and the reference BLAS/LAPACK.
+>>>>> 
+>>>>> Some hints on using icc and MKL can be found in the R Admin manual, https://cran.r-project.org/doc/manuals/r-release/R-admin.html. Unless you have done that already, you might want to check your configuration against those, I didn't spot any obvious issue. If you find any other problem, please report, so that it could be fixed or the hints updated.
+>>>>> 
+>>>>> Thanks,
+>>>>> Tomas
+>>>>> 
+>>>>>> 
+>>>>>> Thanks a lot,
+>>>>>> Giuseppe.
+>>>>>> 
+>>>>>> ???????????????????????????????????????
+>>>>>> Giuseppe Cal?
+>>>>>> 
+>>>>>> Fondazione CMCC
+>>>>>> Centro Euro-Mediterraneo sui Cambiamenti Climatici presso Complesso Ecotekne
+>>>>>> Universit? del Salento - Strada Prov.le Lecce - Monteroni 73100 Lecce  IT
+>>>>>> http://www.cmcc.it <http://www.cmcc.it/>
+>>>>>> https://goo.gl/maps/wtahPDbNVen
+>>>>>> 
+>>>>>> mobile: (+39) 3208190020
+>>>>>> email: giuseppe.calo at cmcc.it
+>>>>>> 
+>>>>>> Le informazioni contenute in questo messaggio di posta elettronica e negli allegati se presenti sono riservate e confidenziali: ne ? vietata la diffusione in qualsiasi modo o forma (GDPR 2016/679).
+>>>>>> Qualora lei non fosse il destinatario del messaggio, la invito a non diffonderlo e ad eliminarlo dandone gentilmente comunicazione al mittente.
+>>>>>> 
+>>>>>> The information included in this e-mail and any attachments are confidential and may also be privileged (GDPR 2016/679).
+>>>>>> If you are not the correct recipient, you are kindly requested to notify the sender immediately, to cancel it and not disclose the contents to any other person.
+>>>>>> 
+>>>>>> 
+>>>>>> 
+>>>>>> 
+>>>>>> 
+>>>>>> [[alternative HTML version deleted]]
+>>>>>> 
+>>>>>> ______________________________________________
+>>>>>> R-devel at r-project.org mailing list
+>>>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>> 
+>>> 
+>>>> [[alternative HTML version deleted]]
+>>> 
+>>>> ______________________________________________
+>>>> R-devel at r-project.org mailing list
+>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> 
+>> [[alternative HTML version deleted]]
+> 
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Jun 22 16:23:05 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 22 Jun 2023 16:23:05 +0200
+Subject: [Rd] Installation of R-4.3.1 with intel 2022
+In-Reply-To: <417FA9FD-983A-44D8-9762-CDCE9F58C045@cmcc.it>
+References: <D3CA6786-F972-46D6-AC83-8A026BDA10B9@cmcc.it>
+ <a92fb92f-db4d-7c0e-5b88-696dc05c83f1@gmail.com>
+ <DDAE8FF5-9CDE-4535-AE1A-ECD11DDFF09E@cmcc.it>
+ <25746.54426.106445.189078@stat.math.ethz.ch>
+ <60BCDC7D-12B7-4797-8A6C-541D3148B900@cmcc.it>
+ <25748.16362.161061.135277@stat.math.ethz.ch>
+ <417FA9FD-983A-44D8-9762-CDCE9F58C045@cmcc.it>
+Message-ID: <25748.22857.554808.626982@stat.math.ethz.ch>
+
+>>>>> Giuseppe Cal? 
+>>>>>     on Thu, 22 Jun 2023 14:52:00 +0200 writes:
+
+ > Hello Martin, this is output
+
+
+    > R version 4.3.1 (2023-06-16) -- "Beagle Scouts"
+    > Copyright (C) 2023 The R Foundation for Statistical Computing
+    > Platform: x86_64-pc-linux-gnu (64-bit)
+
+[.............]
+
+    >> ## qbinom() tests:
+    >> M <- .Machine$integer.max
+    >> k <- 0:32
+    >> pqBinom <- function(epsF = 0, details=FALSE, pr = c(e_8=1e-8,e_9=1e-9, e10=1e-10)) {
+    > +    lapply(c(M.2 = (M+1)/2, M=M, `2M`=2*M, `10M`=10*M), # 'n'
+    > +           function(n)
+    > +               lapply(pr, function(pr) {
+    > +                   nDup <- !duplicated( pb <- pbinom(k, n, pr) )
+    > +                   qb <- qbinom(pb[nDup], n, pr)
+    > +                   pn1 <- pb[nDup] < 1 - epsF * .Machine$double.eps
+    > +                   ok <- k[nDup][pn1] == qb[pn1]
+    > +                   if(details)
+    > +                       list(pb=pb, qb=qb, nDup=nDup, ok=ok, epsF=epsF)
+    > +                   else ok
+    > +               })
+    > +           )
+    > + }
+    >> 
+    >> Dpqb0    <- pqBinom(details=TRUE)
+    >> Dpqb.3e  <- pqBinom(3, details=TRUE)
+    >> 
+    >> saveRDS(list(M=M, k=k, Dpqb0=Dpqb0, Dpqb.3e=Dpqb.3e),
+    > +        file = "pqBinom_res.rds")
+    >> pqb0   <- pqBinom()
+    >> pqb.3e <- pqBinom(3)
+    >> table(unlist(pqb0))
+    > FALSE  TRUE
+    > 2   292
+    >> table(unlist(pqb.3e))
+    > TRUE
+    > 288
+
+    >> sessionInfo()
+    > R version 4.3.1 (2023-06-16)
+    > Platform: x86_64-pc-linux-gnu (64-bit)
+    > Running under: Red Hat Enterprise Linux 8.4 (Ootpa)
+    > Matrix products: default
+    > BLAS/LAPACK: /juno/opt/intel/oneapi_2022.2.0/mkl/2022.1.0/lib/intel64/libmkl_intel_lp64.so.2;  LAPACK version 3.9.0
+    > locale:
+    > [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C
+    > [3] LC_TIME=en_US.UTF-8        LC_COLLATE=en_US.UTF-8
+    > [5] LC_MONETARY=en_US.UTF-8    LC_MESSAGES=en_US.UTF-8
+    > [7] LC_PAPER=en_US.UTF-8       LC_NAME=C
+    > [9] LC_ADDRESS=C               LC_TELEPHONE=C
+    > [11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C
+    > time zone: Europe/Rome
+    > tzcode source: system (glibc)
+    > attached base packages:
+    > [1] stats     graphics  grDevices utils     datasets  methods   base
+
+    > loaded via a namespace (and not attached):
+    > [1] compiler_4.3.1
+    >> quit()
+
+    > File attached
+    > Thanks,
+    > Giuseppe.
+
+Thank you, Giuseppe,
+
+so indeed using the same restriction has we had on 32-bit
+platforms seems sufficient here.
+
+Your .Machine() is 100% the same as mine (Linux Fedora 36; using
+GCC, R's BLAS and OS-provided Lapack), so that cannot help to
+detect that your R is set up differently than mainline versions
+of R.
+
+My guess would be that this difference is not because of the use
+if icc, but only because of the libmath-part (not the
+BLAS/Lapack part) of MKL ... but of course that's only a guess. 
+
+Would anyone know how to reliably detect from within R that R is
+linked against an MKL math library?
+.. if not generally, may be in the subset of cases where
+
+   .Platform$OS.type == "unix" &&
+    Sys.info()[["sysname"]] == "Linux"
+
+??
+
+
+Of course, we could fudge our checks and look for 'mkl' in
+
+    extSoftVersion()["BLAS"]
+
+and/or
+
+    La_library()
+
+but I said above that it's much more probable that the
+"libmath"-part of MKL is at stake here, not the BLAS or Lapack
+one.
+
+
+    > -------------------------------------------------------------------------
+    > Giuseppe Cal?
+    > Fondazione CMCC
+    > Centro Euro-Mediterraneo sui Cambiamenti Climatici presso Complesso Ecotekne
+    > Universit? del Salento - Strada Prov.le Lecce - Monteroni 73100 Lecce IT
+    > http://www.cmcc.it
+    > https://goo.gl/maps/wtahPDbNVen
+    > mobile: (+39) 3208190020
+    > email: giuseppe.calo at cmcc.it
+
+    > [.........................]
+    > [.........................]
+    > [.........................]
+
+    > x[DELETED ATTACHMENT external: pqBinom_res_GuisepC.rds, Untyped binary data]
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Jun 22 16:28:50 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 22 Jun 2023 16:28:50 +0200
+Subject: [Rd] New behavior when running script in package directory?
+In-Reply-To: <33820a5a-e8b6-0657-c7f6-42d6fac98fb5@gmail.com>
+References: <mailman.53550.3.1687341601.10926.r-devel@r-project.org>
+ <33820a5a-e8b6-0657-c7f6-42d6fac98fb5@gmail.com>
+Message-ID: <25748.23202.925138.971233@stat.math.ethz.ch>
+
+>>>>> Mikael Jagan 
+>>>>>     on Wed, 21 Jun 2023 12:41:02 -0400 writes:
+
+    > Surely this behaviour is just a case of ESS being "too clever", sourcing
+    > *.R files in special way when it detects that a file belongs to a package
+    > (loading dependencies automatically, etc.)?
+
+    > The function ss() is defined inside of .ess.source(), which is defined here:
+
+    > https://github.com/emacs-ess/ESS/blob/5c4ae91cefa5c56fd13b204a9a996825af836a67/etc/ESSR/R/.basic.R#L168
+
+    > If you think that there is a bug, then you could report it there ...
+
+    > Mikael
+
+Indeed.
+I have now replied to this CC'ing to  ESS-help at ... instead of R-devel at ...
+
+It's visible in the mailing list *archives* now:
+   https://stat.ethz.ch/pipermail/ess-help/2023-June/013203.html
+
+Martin
+
+
+[.................]
+
+
+From g|u@eppe@c@|o @end|ng |rom cmcc@|t  Thu Jun 22 16:30:03 2023
+From: g|u@eppe@c@|o @end|ng |rom cmcc@|t (=?utf-8?Q?Giuseppe_Cal=C3=B2?=)
+Date: Thu, 22 Jun 2023 16:30:03 +0200
+Subject: [Rd] Installation of R-4.3.1 with intel 2022
+In-Reply-To: <25748.22857.554808.626982@stat.math.ethz.ch>
+References: <D3CA6786-F972-46D6-AC83-8A026BDA10B9@cmcc.it>
+ <a92fb92f-db4d-7c0e-5b88-696dc05c83f1@gmail.com>
+ <DDAE8FF5-9CDE-4535-AE1A-ECD11DDFF09E@cmcc.it>
+ <25746.54426.106445.189078@stat.math.ethz.ch>
+ <60BCDC7D-12B7-4797-8A6C-541D3148B900@cmcc.it>
+ <25748.16362.161061.135277@stat.math.ethz.ch>
+ <417FA9FD-983A-44D8-9762-CDCE9F58C045@cmcc.it>
+ <25748.22857.554808.626982@stat.math.ethz.ch>
+Message-ID: <5013587B-3083-42AF-B366-E81B453346A2@cmcc.it>
+
+yes I think it is caused by the absence of matther in glibc. To compile R with icc I disabled matther (with gcc matherr is self disabled). Is it safe to keep it disabled matherr?
+
+???????????????????????????????????????
+Giuseppe Cal?
+
+Fondazione CMCC
+Centro Euro-Mediterraneo sui Cambiamenti Climatici presso Complesso Ecotekne 
+Universit? del Salento - Strada Prov.le Lecce - Monteroni 73100 Lecce  IT
+http://www.cmcc.it
+https://goo.gl/maps/wtahPDbNVen
+
+mobile: (+39) 3208190020
+email: giuseppe.calo at cmcc.it
+
+Le informazioni contenute in questo messaggio di posta elettronica e negli allegati se presenti sono riservate e confidenziali: ne ? vietata la diffusione in qualsiasi modo o forma (GDPR 2016/679).
+Qualora lei non fosse il destinatario del messaggio, la invito a non diffonderlo e ad eliminarlo dandone gentilmente comunicazione al mittente.
+
+The information included in this e-mail and any attachments are confidential and may also be privileged (GDPR 2016/679).
+If you are not the correct recipient, you are kindly requested to notify the sender immediately, to cancel it and not disclose the contents to any other person.
+
+
+
+
+> On 22 Jun 2023, at 16:23, Martin Maechler <maechler at stat.math.ethz.ch> wrote:
+> 
+> Thank you, Giuseppe,
+> 
+> so indeed using the same restriction has we had on 32-bit
+> platforms seems sufficient here.
+> 
+> Your .Machine() is 100% the same as mine (Linux Fedora 36; using
+> GCC, R's BLAS and OS-provided Lapack), so that cannot help to
+> detect that your R is set up differently than mainline versions
+> of R.
+> 
+> My guess would be that this difference is not because of the use
+> if icc, but only because of the libmath-part (not the
+> BLAS/Lapack part) of MKL ... but of course that's only a guess. 
+> 
+> Would anyone know how to reliably detect from within R that R is
+> linked against an MKL math library?
+> .. if not generally, may be in the subset of cases where
+> 
+>   .Platform$OS.type == "unix" &&
+>    Sys.info <http://sys.info/>()[["sysname"]] == "Linux"
+> 
+> ??
+> 
+> 
+> Of course, we could fudge our checks and look for 'mkl' in
+> 
+>    extSoftVersion()["BLAS"]
+> 
+> and/or
+> 
+>    La_library()
+> 
+> but I said above that it's much more probable that the
+> "libmath"-part of MKL is at stake here, not the BLAS or Lapack
+> one.
+
+
+	[[alternative HTML version deleted]]
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Jun 22 16:57:03 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 22 Jun 2023 16:57:03 +0200
+Subject: [Rd] Installation of R-4.3.1 with intel 2022
+In-Reply-To: <5013587B-3083-42AF-B366-E81B453346A2@cmcc.it>
+References: <D3CA6786-F972-46D6-AC83-8A026BDA10B9@cmcc.it>
+ <a92fb92f-db4d-7c0e-5b88-696dc05c83f1@gmail.com>
+ <DDAE8FF5-9CDE-4535-AE1A-ECD11DDFF09E@cmcc.it>
+ <25746.54426.106445.189078@stat.math.ethz.ch>
+ <60BCDC7D-12B7-4797-8A6C-541D3148B900@cmcc.it>
+ <25748.16362.161061.135277@stat.math.ethz.ch>
+ <417FA9FD-983A-44D8-9762-CDCE9F58C045@cmcc.it>
+ <25748.22857.554808.626982@stat.math.ethz.ch>
+ <5013587B-3083-42AF-B366-E81B453346A2@cmcc.it>
+Message-ID: <25748.24895.161886.120658@stat.math.ethz.ch>
+
+>>>>> Giuseppe Cal? 
+>>>>>     on Thu, 22 Jun 2023 16:30:03 +0200 writes:
+
+    > yes I think it is caused by the absence of matther in glibc. To compile R with icc I disabled matther (with gcc matherr is self disabled). Is it safe to keep it disabled matherr?
+
+Others, e.g., Tomas, is much more expert than me about such
+error signalling,
+but *no*, I do not think that a disabled  matherr  is a problem,
+notably as you mention gcc doing it anyway, and gcc does not
+show a problem AFAIK.
+
+Martin
+
+    > ???????????????????????????????????????
+    > Giuseppe Cal?
+
+
