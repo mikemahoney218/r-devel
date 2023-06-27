@@ -6885,3 +6885,646 @@ wrote:
 	[[alternative HTML version deleted]]
 
 
+From bbo|ker @end|ng |rom gm@||@com  Mon Jun 26 15:15:27 2023
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Mon, 26 Jun 2023 09:15:27 -0400
+Subject: [Rd] restoring LANGUAGE env variable within an R session
+Message-ID: <410c1cea-7331-8e5a-0ab4-3de49798c8db@mcmaster.ca>
+
+   I was playing around with the setting of the LANGUAGE variable and am 
+wondering whether I'm missing something obvious about resetting the 
+value to its original state once it's been set.  I seem to be able to 
+reset the language for warnings/errors once, but not to change it a 
+second time (or reset it) once it's been set ... ??
+
+## default (no LANGUAGE set, English locale)
+ > sqrt(-1)
+[1] NaN
+Warning message:
+In sqrt(-1) : NaNs produced
+## no complaints, doesn't change (as expected)
+ > Sys.setenv(LANGUAGE = "en")
+ > sqrt(-1)
+[1] NaN
+Warning message:
+In sqrt(-1) : NaNs produced
+
+## change to German
+ > Sys.setenv(LANGUAGE = "de")
+ > sqrt(-1)
+[1] NaN
+Warnmeldung:
+In sqrt(-1) : NaNs wurden erzeugt
+
+## try to change to Spanish - no luck
+## (this does work in a clean session)
+
+ > Sys.setenv(LANGUAGE = "es")
+ > sqrt(-1)
+[1] NaN
+Warnmeldung:
+In sqrt(-1) : NaNs wurden erzeugt
+
+## try resetting to blank
+ > Sys.setenv(LANGUAGE = "")
+ > sqrt(-1)
+[1] NaN
+Warnmeldung:
+In sqrt(-1) : NaNs wurden erzeugt
+
+## or back to English explicitly?
+ > Sys.setenv(LANGUAGE = "en")
+ > sqrt(-1)
+[1] NaN
+Warnmeldung:
+In sqrt(-1) : NaNs wurden erzeugt
+ >
+
+
+From edd @end|ng |rom deb|@n@org  Mon Jun 26 15:38:48 2023
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Mon, 26 Jun 2023 08:38:48 -0500
+Subject: [Rd] restoring LANGUAGE env variable within an R session
+In-Reply-To: <410c1cea-7331-8e5a-0ab4-3de49798c8db@mcmaster.ca>
+References: <410c1cea-7331-8e5a-0ab4-3de49798c8db@mcmaster.ca>
+Message-ID: <25753.38120.4839.627023@rob.eddelbuettel.com>
+
+
+Ben,
+
+POSIX level / glibc level variables are set at process start and AGAIK cannot
+really be altered after start.  They clearly work when set _before_ calling sqrt(-1):
+
+    $ LANGUAGE=es Rscript -e 'sqrt(-1)'
+    [1] NaN
+    Warning message:
+    In sqrt(-1) : Se han producido NaNs
+    $ LANGUAGE=de Rscript -e 'sqrt(-1)'
+    [1] NaN
+    Warnmeldung:
+    In sqrt(-1) : NaNs wurden erzeugt
+    $ 
+
+I think the `callr` package can help you with this use from with R by
+effectively spawning a new process for you. Or, lower-level, you can call
+`system()` or `system2()` yourself and take care of the setup.
+
+Cheers, Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From er|cjberger @end|ng |rom gm@||@com  Mon Jun 26 15:41:36 2023
+From: er|cjberger @end|ng |rom gm@||@com (Eric Berger)
+Date: Mon, 26 Jun 2023 16:41:36 +0300
+Subject: [Rd] restoring LANGUAGE env variable within an R session
+In-Reply-To: <25753.38120.4839.627023@rob.eddelbuettel.com>
+References: <410c1cea-7331-8e5a-0ab4-3de49798c8db@mcmaster.ca>
+ <25753.38120.4839.627023@rob.eddelbuettel.com>
+Message-ID: <CAGgJW76n=7NFr5233UHRoUL3wcDcOpr86ieACgg=eT7T8e1Hzg@mail.gmail.com>
+
+There is also some inconsistency.
+Even though sqrt(-1) returns the warning/error about NaNs in German
+after setting the language to Spanish, if you give the command
+> messages()
+it will respond in Spanish.
+
+
+
+On Mon, Jun 26, 2023 at 4:39?PM Dirk Eddelbuettel <edd at debian.org> wrote:
+>
+>
+> Ben,
+>
+> POSIX level / glibc level variables are set at process start and AGAIK cannot
+> really be altered after start.  They clearly work when set _before_ calling sqrt(-1):
+>
+>     $ LANGUAGE=es Rscript -e 'sqrt(-1)'
+>     [1] NaN
+>     Warning message:
+>     In sqrt(-1) : Se han producido NaNs
+>     $ LANGUAGE=de Rscript -e 'sqrt(-1)'
+>     [1] NaN
+>     Warnmeldung:
+>     In sqrt(-1) : NaNs wurden erzeugt
+>     $
+>
+> I think the `callr` package can help you with this use from with R by
+> effectively spawning a new process for you. Or, lower-level, you can call
+> `system()` or `system2()` yourself and take care of the setup.
+>
+> Cheers, Dirk
+>
+> --
+> dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From bbo|ker @end|ng |rom gm@||@com  Mon Jun 26 15:49:01 2023
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Mon, 26 Jun 2023 09:49:01 -0400
+Subject: [Rd] restoring LANGUAGE env variable within an R session
+In-Reply-To: <25753.38120.4839.627023@rob.eddelbuettel.com>
+References: <410c1cea-7331-8e5a-0ab4-3de49798c8db@mcmaster.ca>
+ <25753.38120.4839.627023@rob.eddelbuettel.com>
+Message-ID: <31cd6c0d-8607-d77f-f97d-44f6ff0ceb09@gmail.com>
+
+   That's reasonable, but I'm wondering why it works the *first* time 
+it's called in a session. Is this just undefined behaviour (so I 
+shouldn't be surprised whatever happens)?  Again,
+
+$ Rscript -e 'sqrt(-1); Sys.setenv(LANGUAGE="es"); sqrt(-1)'
+[1] NaN
+Warning message:
+In sqrt(-1) : NaNs produced
+[1] NaN
+Warning message:
+In sqrt(-1) : Se han producido NaNs
+
+   I should clarify that this really isn't that important for my 
+workflow, it just seemed like an odd loose end.
+
+Weirdly, I just discovered that Sys.setLanguage().  Don't know how it 
+differs, but there's a bindtextdomain(NULL) call  there which may be the 
+magic sauce ... ???
+
+  sqrt(-1)
+[1] NaN
+Warning message:
+In sqrt(-1) : NaNs produced
+ > Sys.setLanguage("de")
+ > sqrt(-1)
+[1] NaN
+Warnmeldung:
+In sqrt(-1) : NaNs wurden erzeugt
+ > Sys.setLanguage("en")
+ > sqrt(-1)
+[1] NaN
+Warning message:
+In sqrt(-1) : NaNs produced
+
+
+
+On 2023-06-26 9:38 a.m., Dirk Eddelbuettel wrote:
+> 
+> Ben,
+> 
+> POSIX level / glibc level variables are set at process start and AGAIK cannot
+> really be altered after start.  They clearly work when set _before_ calling sqrt(-1):
+> 
+>      $ LANGUAGE=es Rscript -e 'sqrt(-1)'
+>      [1] NaN
+>      Warning message:
+>      In sqrt(-1) : Se han producido NaNs
+>      $ LANGUAGE=de Rscript -e 'sqrt(-1)'
+>      [1] NaN
+>      Warnmeldung:
+>      In sqrt(-1) : NaNs wurden erzeugt
+>      $
+> 
+> I think the `callr` package can help you with this use from with R by
+> effectively spawning a new process for you. Or, lower-level, you can call
+> `system()` or `system2()` yourself and take care of the setup.
+> 
+> Cheers, Dirk
+> 
+
+-- 
+Dr. Benjamin Bolker
+Professor, Mathematics & Statistics and Biology, McMaster University
+Director, School of Computational Science and Engineering
+(Acting) Graduate chair, Mathematics & Statistics
+ > E-mail is sent at my convenience; I don't expect replies outside of 
+working hours.
+
+
+From @eb@meyer @end|ng |rom |@u@de  Mon Jun 26 16:02:07 2023
+From: @eb@meyer @end|ng |rom |@u@de (Sebastian Meyer)
+Date: Mon, 26 Jun 2023 16:02:07 +0200
+Subject: [Rd] restoring LANGUAGE env variable within an R session
+In-Reply-To: <410c1cea-7331-8e5a-0ab4-3de49798c8db@mcmaster.ca>
+References: <410c1cea-7331-8e5a-0ab4-3de49798c8db@mcmaster.ca>
+Message-ID: <49db97af-baa4-1730-7890-81017e8d4dbf@fau.de>
+
+Translated strings are cached.
+I'd recommend to use the
+
+     ? New partly experimental Sys.setLanguage() utility, solving the
+       main problem of PR#18055.
+
+introduced in R 4.2.0.
+
+Best,
+
+	Sebastian Meyer
+
+
+Am 26.06.23 um 15:15 schrieb Ben Bolker:
+>     I was playing around with the setting of the LANGUAGE variable and am
+> wondering whether I'm missing something obvious about resetting the
+> value to its original state once it's been set.  I seem to be able to
+> reset the language for warnings/errors once, but not to change it a
+> second time (or reset it) once it's been set ... ??
+> 
+> ## default (no LANGUAGE set, English locale)
+>   > sqrt(-1)
+> [1] NaN
+> Warning message:
+> In sqrt(-1) : NaNs produced
+> ## no complaints, doesn't change (as expected)
+>   > Sys.setenv(LANGUAGE = "en")
+>   > sqrt(-1)
+> [1] NaN
+> Warning message:
+> In sqrt(-1) : NaNs produced
+> 
+> ## change to German
+>   > Sys.setenv(LANGUAGE = "de")
+>   > sqrt(-1)
+> [1] NaN
+> Warnmeldung:
+> In sqrt(-1) : NaNs wurden erzeugt
+> 
+> ## try to change to Spanish - no luck
+> ## (this does work in a clean session)
+> 
+>   > Sys.setenv(LANGUAGE = "es")
+>   > sqrt(-1)
+> [1] NaN
+> Warnmeldung:
+> In sqrt(-1) : NaNs wurden erzeugt
+> 
+> ## try resetting to blank
+>   > Sys.setenv(LANGUAGE = "")
+>   > sqrt(-1)
+> [1] NaN
+> Warnmeldung:
+> In sqrt(-1) : NaNs wurden erzeugt
+> 
+> ## or back to English explicitly?
+>   > Sys.setenv(LANGUAGE = "en")
+>   > sqrt(-1)
+> [1] NaN
+> Warnmeldung:
+> In sqrt(-1) : NaNs wurden erzeugt
+>   >
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From bbo|ker @end|ng |rom gm@||@com  Mon Jun 26 16:27:46 2023
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Mon, 26 Jun 2023 10:27:46 -0400
+Subject: [Rd] restoring LANGUAGE env variable within an R session
+In-Reply-To: <49db97af-baa4-1730-7890-81017e8d4dbf@fau.de>
+References: <410c1cea-7331-8e5a-0ab4-3de49798c8db@mcmaster.ca>
+ <49db97af-baa4-1730-7890-81017e8d4dbf@fau.de>
+Message-ID: <dd0f5229-97c8-ac06-a5c2-877ed7c7d2bb@gmail.com>
+
+   Thanks, this is exactly PR#18055. Should have looked (but assumed I 
+was probably just overlooking something ...)
+
+On 2023-06-26 10:02 a.m., Sebastian Meyer wrote:
+> Translated strings are cached.
+> I'd recommend to use the
+> 
+>  ??? ? New partly experimental Sys.setLanguage() utility, solving the
+>  ????? main problem of PR#18055.
+> 
+> introduced in R 4.2.0.
+> 
+> Best,
+> 
+>  ????Sebastian Meyer
+> 
+> 
+> Am 26.06.23 um 15:15 schrieb Ben Bolker:
+>> ??? I was playing around with the setting of the LANGUAGE variable and am
+>> wondering whether I'm missing something obvious about resetting the
+>> value to its original state once it's been set.? I seem to be able to
+>> reset the language for warnings/errors once, but not to change it a
+>> second time (or reset it) once it's been set ... ??
+>>
+>> ## default (no LANGUAGE set, English locale)
+>> ? > sqrt(-1)
+>> [1] NaN
+>> Warning message:
+>> In sqrt(-1) : NaNs produced
+>> ## no complaints, doesn't change (as expected)
+>> ? > Sys.setenv(LANGUAGE = "en")
+>> ? > sqrt(-1)
+>> [1] NaN
+>> Warning message:
+>> In sqrt(-1) : NaNs produced
+>>
+>> ## change to German
+>> ? > Sys.setenv(LANGUAGE = "de")
+>> ? > sqrt(-1)
+>> [1] NaN
+>> Warnmeldung:
+>> In sqrt(-1) : NaNs wurden erzeugt
+>>
+>> ## try to change to Spanish - no luck
+>> ## (this does work in a clean session)
+>>
+>> ? > Sys.setenv(LANGUAGE = "es")
+>> ? > sqrt(-1)
+>> [1] NaN
+>> Warnmeldung:
+>> In sqrt(-1) : NaNs wurden erzeugt
+>>
+>> ## try resetting to blank
+>> ? > Sys.setenv(LANGUAGE = "")
+>> ? > sqrt(-1)
+>> [1] NaN
+>> Warnmeldung:
+>> In sqrt(-1) : NaNs wurden erzeugt
+>>
+>> ## or back to English explicitly?
+>> ? > Sys.setenv(LANGUAGE = "en")
+>> ? > sqrt(-1)
+>> [1] NaN
+>> Warnmeldung:
+>> In sqrt(-1) : NaNs wurden erzeugt
+>> ? >
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Dr. Benjamin Bolker
+Professor, Mathematics & Statistics and Biology, McMaster University
+Director, School of Computational Science and Engineering
+(Acting) Graduate chair, Mathematics & Statistics
+ > E-mail is sent at my convenience; I don't expect replies outside of 
+working hours.
+
+
+From d|pter|x@w@ng @end|ng |rom gm@||@com  Mon Jun 26 16:26:07 2023
+From: d|pter|x@w@ng @end|ng |rom gm@||@com (Dipterix Wang)
+Date: Mon, 26 Jun 2023 10:26:07 -0400
+Subject: [Rd] dir.exists returns FALSE on Symlink directory
+Message-ID: <024838A1-7265-4649-8A99-9C447F7296C5@gmail.com>
+
+I hope I'm not asking a stupid question... If I symlink a directory, is symlink considered as directory in R? If so, why `dir.exists` returns FALSE on directory?
+
+I understand symlink is essentially a file, but functionally a symlink to directory is no different to the directory itself, but a directory is also essentially a file.
+
+Is there any way that allow me to check if a symlink is linked to directory in base R, like `dir.exists(..., symlink_ok = TRUE)`?
+
+Thanks,
+Dipterix
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Mon Jun 26 17:07:29 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Mon, 26 Jun 2023 18:07:29 +0300
+Subject: [Rd] dir.exists returns FALSE on Symlink directory
+In-Reply-To: <024838A1-7265-4649-8A99-9C447F7296C5@gmail.com>
+References: <024838A1-7265-4649-8A99-9C447F7296C5@gmail.com>
+Message-ID: <20230626180729.753aea6a@parabola>
+
+? Mon, 26 Jun 2023 10:26:07 -0400
+Dipterix Wang <dipterix.wang at gmail.com> ?????:
+
+> If I symlink a directory, is symlink considered as directory in R?
+
+It seems to work, at least on GNU/Linux:
+
+# (on this system, /var/lock is a symbolic link pointing to /run/lock/)
+system('ls -l /var/lock')
+# lrwxrwxrwx 1 root root <...> /var/lock -> /run/lock
+dir.exists('/var/lock')
+# [1] TRUE
+
+> If so, why `dir.exists` returns FALSE on directory?
+
+Which operating system? Judging by your User-Agent, it must be some
+version of macOS. Can you provide the output of `ls -l` on the symbolic
+link?
+
+-- 
+Best regards,
+Ivan
+
+
+From @erv|ce @end|ng |rom @hd@w@on@com  Mon Jun 26 17:16:34 2023
+From: @erv|ce @end|ng |rom @hd@w@on@com (Stephen H. Dawson, DSL)
+Date: Mon, 26 Jun 2023 11:16:34 -0400
+Subject: [Rd] dir.exists returns FALSE on Symlink directory
+In-Reply-To: <20230626180729.753aea6a@parabola>
+References: <024838A1-7265-4649-8A99-9C447F7296C5@gmail.com>
+ <20230626180729.753aea6a@parabola>
+Message-ID: <d992c538-fdb5-cd54-ea65-0dc3a3c018c6@shdawson.com>
+
+It sounds like either R as a whole or the R session does not have 
+permission to view the directory.
+
+
+*Stephen Dawson, DSL*
+/Executive Strategy Consultant/
+Business & Technology
++1 (865) 804-3454
+http://www.shdawson.com
+
+
+On 6/26/23 11:07, Ivan Krylov wrote:
+> ? Mon, 26 Jun 2023 10:26:07 -0400
+> Dipterix Wang <dipterix.wang at gmail.com> ?????:
+>
+>> If I symlink a directory, is symlink considered as directory in R?
+> It seems to work, at least on GNU/Linux:
+>
+> # (on this system, /var/lock is a symbolic link pointing to /run/lock/)
+> system('ls -l /var/lock')
+> # lrwxrwxrwx 1 root root <...> /var/lock -> /run/lock
+> dir.exists('/var/lock')
+> # [1] TRUE
+>
+>> If so, why `dir.exists` returns FALSE on directory?
+> Which operating system? Judging by your User-Agent, it must be some
+> version of macOS. Can you provide the output of `ls -l` on the symbolic
+> link?
+>
+
+
+From @oko| @end|ng |rom |n@@-tou|ou@e@|r  Mon Jun 26 17:17:37 2023
+From: @oko| @end|ng |rom |n@@-tou|ou@e@|r (Serguei Sokol)
+Date: Mon, 26 Jun 2023 17:17:37 +0200
+Subject: [Rd] dir.exists returns FALSE on Symlink directory
+In-Reply-To: <024838A1-7265-4649-8A99-9C447F7296C5@gmail.com>
+References: <024838A1-7265-4649-8A99-9C447F7296C5@gmail.com>
+Message-ID: <802622a6-e8d0-d9aa-3951-c2508802ad94@insa-toulouse.fr>
+
+Le 26/06/2023 ? 16:26, Dipterix Wang a ?crit?:
+> I hope I'm not asking a stupid question...
+Many think that there is no such thing as "stupid question". However, 
+this one looks more appropriate for r-help list, does not it?
+
+>   If I symlink a directory, is symlink considered as directory in R? If so, why `dir.exists` returns FALSE on directory?
+>
+> I understand symlink is essentially a file, but functionally a symlink to directory is no different to the directory itself, but a directory is also essentially a file.
+>
+> Is there any way that allow me to check if a symlink is linked to directory in base R, like `dir.exists(..., symlink_ok = TRUE)`?
+What about :
+
+dir.exists(Sys.readlink("your_link"))
+
+?
+
+Best,
+Serguei.
+
+>
+> Thanks,
+> Dipterix
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+-- 
+Serguei Sokol
+Ingenieur de recherche INRAE
+
+Cellule Math?matiques
+TBI, INSA/INRAE UMR 792, INSA/CNRS UMR 5504
+135 Avenue de Rangueil
+31077 Toulouse Cedex 04
+
+tel: +33 5 61 55 98 49
+email: sokol at insa-toulouse.fr
+https://www.toulouse-biotechnology-institute.fr/en/plateformes-plateaux/cellule-mathematiques/
+
+
+From @oko| @end|ng |rom |n@@-tou|ou@e@|r  Mon Jun 26 17:30:15 2023
+From: @oko| @end|ng |rom |n@@-tou|ou@e@|r (Serguei Sokol)
+Date: Mon, 26 Jun 2023 17:30:15 +0200
+Subject: [Rd] dir.exists returns FALSE on Symlink directory
+In-Reply-To: <802622a6-e8d0-d9aa-3951-c2508802ad94@insa-toulouse.fr>
+References: <024838A1-7265-4649-8A99-9C447F7296C5@gmail.com>
+ <802622a6-e8d0-d9aa-3951-c2508802ad94@insa-toulouse.fr>
+Message-ID: <5bc4b348-2c99-92b7-89c0-500189d7c86e@insa-toulouse.fr>
+
+Le 26/06/2023 ? 17:17, Serguei Sokol a ?crit?:
+> Le 26/06/2023 ? 16:26, Dipterix Wang a ?crit?:
+>> I hope I'm not asking a stupid question...
+> Many think that there is no such thing as "stupid question". However, 
+> this one looks more appropriate for r-help list, does not it?
+>
+>> ? If I symlink a directory, is symlink considered as directory in R? 
+>> If so, why `dir.exists` returns FALSE on directory?
+>>
+>> I understand symlink is essentially a file, but functionally a 
+>> symlink to directory is no different to the directory itself, but a 
+>> directory is also essentially a file.
+>>
+>> Is there any way that allow me to check if a symlink is linked to 
+>> directory in base R, like `dir.exists(..., symlink_ok = TRUE)`?
+> What about :
+>
+> dir.exists(Sys.readlink("your_link"))
+Or even better:
+
+file_test("-d", "your_real_dir_or_simlink_to_dir")
+
+which returns TRUE for both a real dir and a simlink to a dir.
+
+Best,
+Serguei.
+
+>
+> ?
+>
+> Best,
+> Serguei.
+>
+>>
+>> Thanks,
+>> Dipterix
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+>
+
+
+-- 
+Serguei Sokol
+Ingenieur de recherche INRAE
+
+Cellule Math?matiques
+TBI, INSA/INRAE UMR 792, INSA/CNRS UMR 5504
+135 Avenue de Rangueil
+31077 Toulouse Cedex 04
+
+tel: +33 5 61 55 98 49
+email: sokol at insa-toulouse.fr
+https://www.toulouse-biotechnology-institute.fr/en/plateformes-plateaux/cellule-mathematiques/
+
+
+From d|pter|x@w@ng @end|ng |rom gm@||@com  Mon Jun 26 17:38:26 2023
+From: d|pter|x@w@ng @end|ng |rom gm@||@com (Dipterix Wang)
+Date: Mon, 26 Jun 2023 11:38:26 -0400
+Subject: [Rd] dir.exists returns FALSE on Symlink directory
+In-Reply-To: <802622a6-e8d0-d9aa-3951-c2508802ad94@insa-toulouse.fr>
+References: <024838A1-7265-4649-8A99-9C447F7296C5@gmail.com>
+ <802622a6-e8d0-d9aa-3951-c2508802ad94@insa-toulouse.fr>
+Message-ID: <F2C844ED-1518-4869-924B-39E83E626450@gmail.com>
+
+Thanks!
+
+I think Sys.readlink resolved my issue. Indeed I found a permission issue. I will post my questions to r-help next time.
+
+Best,
+Dipterix
+
+> On Jun 26, 2023, at 11:17 AM, Serguei Sokol <sokol at insa-toulouse.fr> wrote:
+> 
+> Le 26/06/2023 ? 16:26, Dipterix Wang a ?crit :
+>> I hope I'm not asking a stupid question...
+> Many think that there is no such thing as "stupid question". However, this one looks more appropriate for r-help list, does not it?
+> 
+>>  If I symlink a directory, is symlink considered as directory in R? If so, why `dir.exists` returns FALSE on directory?
+>> 
+>> I understand symlink is essentially a file, but functionally a symlink to directory is no different to the directory itself, but a directory is also essentially a file.
+>> 
+>> Is there any way that allow me to check if a symlink is linked to directory in base R, like `dir.exists(..., symlink_ok = TRUE)`?
+> What about :
+> 
+> dir.exists(Sys.readlink("your_link"))
+> 
+> ?
+> 
+> Best,
+> Serguei.
+> 
+>> 
+>> Thanks,
+>> Dipterix
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> 
+> -- 
+> Serguei Sokol
+> Ingenieur de recherche INRAE
+> 
+> Cellule Math?matiques
+> TBI, INSA/INRAE UMR 792, INSA/CNRS UMR 5504
+> 135 Avenue de Rangueil
+> 31077 Toulouse Cedex 04
+> 
+> tel: +33 5 61 55 98 49
+> email: sokol at insa-toulouse.fr
+> https://www.toulouse-biotechnology-institute.fr/en/plateformes-plateaux/cellule-mathematiques/
+> 
+
+
