@@ -7528,3 +7528,104 @@ Dipterix
 > 
 
 
+From cboett|g @end|ng |rom gm@||@com  Wed Jun 28 00:36:08 2023
+From: cboett|g @end|ng |rom gm@||@com (Carl Boettiger)
+Date: Tue, 27 Jun 2023 15:36:08 -0700
+Subject: [Rd] Correct use of tools::R_user_dir() in packages?
+Message-ID: <CAN_1p9wi7csSr43o0jNGx47ONLrCm6+j9AJUHviARe+vME+n7A@mail.gmail.com>
+
+tools::R_user_dir() provides configurable directories for R packages
+to write persistent information consistent with standard best
+practices relative to each supported operating systems for
+applications to store data, config, and cache information
+respectively.  These standard best practices include writing to
+directories in the users home filespace, which is also specifically
+against CRAN policy.
+
+These defaults can be overridden by setting the environmental
+variables R_USER_DATA_DIR , R_USER_CONFIG_DIR, R_USER_CACHE_DIR,
+respectively.
+
+If R developers should be using the locations provided by
+tools::R_user_dir() in packages, why does CRAN's check procedure not
+set these three environmental variables to CRAN compliant location by
+default (e.g. tempdir())?
+
+In order to comply with CRAN policy, a package developer can obviously
+set these environmental variables themselves within the call for every
+example, every unit test, and every vignette.  Is this the recommended
+approach or is there a better technique?
+
+Thanks for any clarification!
+
+Regards,
+
+Carl
+
+---
+Carl Boettiger
+http://carlboettiger.info/
+
+
+From edd @end|ng |rom deb|@n@org  Wed Jun 28 01:42:34 2023
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Tue, 27 Jun 2023 18:42:34 -0500
+Subject: [Rd] Correct use of tools::R_user_dir() in packages?
+In-Reply-To: <CAN_1p9wi7csSr43o0jNGx47ONLrCm6+j9AJUHviARe+vME+n7A@mail.gmail.com>
+References: <CAN_1p9wi7csSr43o0jNGx47ONLrCm6+j9AJUHviARe+vME+n7A@mail.gmail.com>
+Message-ID: <25755.29674.614059.886929@rob.eddelbuettel.com>
+
+
+On 27 June 2023 at 15:36, Carl Boettiger wrote:
+| tools::R_user_dir() provides configurable directories for R packages
+| to write persistent information consistent with standard best
+| practices relative to each supported operating systems for
+| applications to store data, config, and cache information
+| respectively.  These standard best practices include writing to
+| directories in the users home filespace, which is also specifically
+| against CRAN policy.
+| 
+| These defaults can be overridden by setting the environmental
+| variables R_USER_DATA_DIR , R_USER_CONFIG_DIR, R_USER_CACHE_DIR,
+| respectively.
+| 
+| If R developers should be using the locations provided by
+| tools::R_user_dir() in packages, why does CRAN's check procedure not
+| set these three environmental variables to CRAN compliant location by
+| default (e.g. tempdir())?
+| 
+| In order to comply with CRAN policy, a package developer can obviously
+| set these environmental variables themselves within the call for every
+| example, every unit test, and every vignette.  Is this the recommended
+| approach or is there a better technique?
+
+My use evolved to something like this (from in this case r2u, but similar in
+a few other packages)
+
+    .defaultConfigFile <- function() {
+        pkgdir <- tools::R_user_dir(packageName())      # ~/.local/share/R/ + package
+        if (dir.exists(pkgdir)) {
+            fname <- file.path(pkgdir, "config.dcf")
+            if (file.exists(fname)) {
+                return(fname)
+            }
+        }
+        return("")
+    }
+
+You can then create config reader and writers functions that have a file
+argument (set to the above) whicg you can override in tests with tempfile()
+allowing you to write and then read.
+
+Given the 'thou shalt not write to $HOME' rule, I often have parameter
+getters with default values which, if a config file is found (with the name
+per the helper above), also read it and use it to override the defaults.
+Works for me, and is lightweight via a 'using batteries included'
+zero-depends approach.
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
