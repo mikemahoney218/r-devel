@@ -7764,3 +7764,231 @@ On Wed, Jun 28, 2023 at 12:59?PM Simon Urbanek
 >
 
 
+From |uc@r @end|ng |rom |edor@project@org  Thu Jun 29 10:17:23 2023
+From: |uc@r @end|ng |rom |edor@project@org (=?UTF-8?Q?I=C3=B1aki_Ucar?=)
+Date: Thu, 29 Jun 2023 10:17:23 +0200
+Subject: [Rd] Correct use of tools::R_user_dir() in packages?
+In-Reply-To: <CAN_1p9wLvoUVQtBUGPEYdB6QWqQJpYO2v1ALHVN7HvMdeEV=og@mail.gmail.com>
+References: <CAN_1p9wi7csSr43o0jNGx47ONLrCm6+j9AJUHviARe+vME+n7A@mail.gmail.com>
+ <5BBFFD69-AF73-44BA-AF69-86DB24B6A9C1@R-project.org>
+ <CAN_1p9wLvoUVQtBUGPEYdB6QWqQJpYO2v1ALHVN7HvMdeEV=og@mail.gmail.com>
+Message-ID: <CALEXWq2aO-otN=eqebVFqc2cBOZ_ZO_a5ajxMJCrTz8JKHJVEg@mail.gmail.com>
+
+On Thu, 29 Jun 2023 at 01:34, Carl Boettiger <cboettig at gmail.com> wrote:
+>
+> Thanks Simon, I was very much hoping that would be the case!  It may
+> be that I just need to put the version requirement on 4.0 then.  I
+> will be sure to add this version restriction to my packages (which
+> technically I should be doing anyway since this function didn't exist
+> in early versions of `tools`.)
+
+In my experience, you *can* store stuff in those directories, but you
+are required to clean up after yourself in CRAN checks. In other
+words, if something is left behind when the check ends, CRAN won't be
+happy.
+
+I?aki
+
+>
+> Cheers,
+>
+> Carl
+>
+> ---
+> Carl Boettiger
+> http://carlboettiger.info/
+>
+> On Wed, Jun 28, 2023 at 12:59?PM Simon Urbanek
+> <simon.urbanek at r-project.org> wrote:
+> >
+> > Carl,
+> >
+> > I think your statement is false, the whole point of R_user_dir() is for packages to have a well-defined location that is allowed - from CRAN policy:
+> >
+> > "For R version 4.0 or later (hence a version dependency is required or only conditional use is possible), packages may store user-specific data, configuration and cache files in their respective user directories obtained from tools::R_user_dir(), provided that by default sizes are kept as small as possible and the contents are actively managed (including removing outdated material)."
+> >
+> > Cheers,
+> > Simon
+> >
+> >
+> > > On 28/06/2023, at 10:36 AM, Carl Boettiger <cboettig at gmail.com> wrote:
+> > >
+> > > tools::R_user_dir() provides configurable directories for R packages
+> > > to write persistent information consistent with standard best
+> > > practices relative to each supported operating systems for
+> > > applications to store data, config, and cache information
+> > > respectively.  These standard best practices include writing to
+> > > directories in the users home filespace, which is also specifically
+> > > against CRAN policy.
+> > >
+> > > These defaults can be overridden by setting the environmental
+> > > variables R_USER_DATA_DIR , R_USER_CONFIG_DIR, R_USER_CACHE_DIR,
+> > > respectively.
+> > >
+> > > If R developers should be using the locations provided by
+> > > tools::R_user_dir() in packages, why does CRAN's check procedure not
+> > > set these three environmental variables to CRAN compliant location by
+> > > default (e.g. tempdir())?
+> > >
+> > > In order to comply with CRAN policy, a package developer can obviously
+> > > set these environmental variables themselves within the call for every
+> > > example, every unit test, and every vignette.  Is this the recommended
+> > > approach or is there a better technique?
+> > >
+> > > Thanks for any clarification!
+> > >
+> > > Regards,
+> > >
+> > > Carl
+> > >
+> > > ---
+> > > Carl Boettiger
+> > > http://carlboettiger.info/
+> > >
+> > > ______________________________________________
+> > > R-devel at r-project.org mailing list
+> > > https://stat.ethz.ch/mailman/listinfo/r-devel
+> > >
+> >
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+
+-- 
+I?aki ?car
+
+
+From cboett|g @end|ng |rom gm@||@com  Thu Jun 29 17:56:28 2023
+From: cboett|g @end|ng |rom gm@||@com (Carl Boettiger)
+Date: Thu, 29 Jun 2023 08:56:28 -0700
+Subject: [Rd] Correct use of tools::R_user_dir() in packages?
+In-Reply-To: <CALEXWq2aO-otN=eqebVFqc2cBOZ_ZO_a5ajxMJCrTz8JKHJVEg@mail.gmail.com>
+References: <CAN_1p9wi7csSr43o0jNGx47ONLrCm6+j9AJUHviARe+vME+n7A@mail.gmail.com>
+ <5BBFFD69-AF73-44BA-AF69-86DB24B6A9C1@R-project.org>
+ <CAN_1p9wLvoUVQtBUGPEYdB6QWqQJpYO2v1ALHVN7HvMdeEV=og@mail.gmail.com>
+ <CALEXWq2aO-otN=eqebVFqc2cBOZ_ZO_a5ajxMJCrTz8JKHJVEg@mail.gmail.com>
+Message-ID: <CAN_1p9zKnop2L255YwXY-A0S8viNe4tTjtjLrpQ=NKTA6n8Jqg@mail.gmail.com>
+
+Thanks I?aki, that has been my experience as well.  But that is also
+not how I read the current policy that Simon said.  First, my
+understanding of the current policy is that in general, 'cleaning up'
+is not consistent with the policy of not writing to home, hence my
+suggestion of overriding the default locations by setting the env vars
+R_USER_DATA_DIR etc to tmpdir() in testing mode.  Of course this could
+be done globally on the CRAN testing machines, but I gather that is
+not the case.   Second, having re-read the policy, it does seem to say
+quite clearly that using R_user_dir() is an exception to the 'thou
+shalt never write to $HOME' rule (provided you restrict to version
+>=4.0).  In my experience of both my own packages and what I see among
+CRAN packages which tools::R_user_dir(), I would venture to say that
+this policy and how it relates to the $HOME rule for
+tests/examples/vignettes is maybe not as clear as it might be.
+Unfortunately this rule does not seem to be covered by explicit code
+in the `R CMD check` routine, so we cannot consult the source code to
+get a more definitive answer about questions like whether clean-up or
+use of temp files is or is not required by policy, though maybe this
+is mostly my own confusion.  The examples in this thread have
+definitely been helpful to me in understanding how others handle
+persistent data/config/cache mechanisms.
+
+Regards,
+
+Carl
+
+
+---
+Carl Boettiger
+http://carlboettiger.info/
+
+On Thu, Jun 29, 2023 at 1:17?AM I?aki Ucar <iucar at fedoraproject.org> wrote:
+>
+> On Thu, 29 Jun 2023 at 01:34, Carl Boettiger <cboettig at gmail.com> wrote:
+> >
+> > Thanks Simon, I was very much hoping that would be the case!  It may
+> > be that I just need to put the version requirement on 4.0 then.  I
+> > will be sure to add this version restriction to my packages (which
+> > technically I should be doing anyway since this function didn't exist
+> > in early versions of `tools`.)
+>
+> In my experience, you *can* store stuff in those directories, but you
+> are required to clean up after yourself in CRAN checks. In other
+> words, if something is left behind when the check ends, CRAN won't be
+> happy.
+>
+> I?aki
+>
+> >
+> > Cheers,
+> >
+> > Carl
+> >
+> > ---
+> > Carl Boettiger
+> > http://carlboettiger.info/
+> >
+> > On Wed, Jun 28, 2023 at 12:59?PM Simon Urbanek
+> > <simon.urbanek at r-project.org> wrote:
+> > >
+> > > Carl,
+> > >
+> > > I think your statement is false, the whole point of R_user_dir() is for packages to have a well-defined location that is allowed - from CRAN policy:
+> > >
+> > > "For R version 4.0 or later (hence a version dependency is required or only conditional use is possible), packages may store user-specific data, configuration and cache files in their respective user directories obtained from tools::R_user_dir(), provided that by default sizes are kept as small as possible and the contents are actively managed (including removing outdated material)."
+> > >
+> > > Cheers,
+> > > Simon
+> > >
+> > >
+> > > > On 28/06/2023, at 10:36 AM, Carl Boettiger <cboettig at gmail.com> wrote:
+> > > >
+> > > > tools::R_user_dir() provides configurable directories for R packages
+> > > > to write persistent information consistent with standard best
+> > > > practices relative to each supported operating systems for
+> > > > applications to store data, config, and cache information
+> > > > respectively.  These standard best practices include writing to
+> > > > directories in the users home filespace, which is also specifically
+> > > > against CRAN policy.
+> > > >
+> > > > These defaults can be overridden by setting the environmental
+> > > > variables R_USER_DATA_DIR , R_USER_CONFIG_DIR, R_USER_CACHE_DIR,
+> > > > respectively.
+> > > >
+> > > > If R developers should be using the locations provided by
+> > > > tools::R_user_dir() in packages, why does CRAN's check procedure not
+> > > > set these three environmental variables to CRAN compliant location by
+> > > > default (e.g. tempdir())?
+> > > >
+> > > > In order to comply with CRAN policy, a package developer can obviously
+> > > > set these environmental variables themselves within the call for every
+> > > > example, every unit test, and every vignette.  Is this the recommended
+> > > > approach or is there a better technique?
+> > > >
+> > > > Thanks for any clarification!
+> > > >
+> > > > Regards,
+> > > >
+> > > > Carl
+> > > >
+> > > > ---
+> > > > Carl Boettiger
+> > > > http://carlboettiger.info/
+> > > >
+> > > > ______________________________________________
+> > > > R-devel at r-project.org mailing list
+> > > > https://stat.ethz.ch/mailman/listinfo/r-devel
+> > > >
+> > >
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+>
+>
+> --
+> I?aki ?car
+
+
