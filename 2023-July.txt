@@ -1221,3 +1221,191 @@ See e.g., https://www.rdocumentation.org/packages/expm/versions/0.999-7/topics/e
     >> Thank you very much.
 
 
+From r|p|ey @end|ng |rom @t@t@@ox@@c@uk  Tue Jul 18 11:18:20 2023
+From: r|p|ey @end|ng |rom @t@t@@ox@@c@uk (Prof Brian Ripley)
+Date: Tue, 18 Jul 2023 10:18:20 +0100
+Subject: [Rd] Installation of R-4.3.1 with intel 2022
+In-Reply-To: <a92fb92f-db4d-7c0e-5b88-696dc05c83f1@gmail.com>
+References: <D3CA6786-F972-46D6-AC83-8A026BDA10B9@cmcc.it>
+ <a92fb92f-db4d-7c0e-5b88-696dc05c83f1@gmail.com>
+Message-ID: <98d06aba-4292-130c-145f-8e11d83c0a2e@stats.ox.ac.uk>
+
+Note that 'intel 2022' is a bit vague.  The current version is 2023.1.0, 
+and that has both the 'classic' (icc/icpc/ifort which it seems you used) 
+and new (icx/ixpx/ifx) compilers -- the former are said to be going to 
+be discontinued later this year.  R did not know about ifx so did not 
+build with the new set.
+
+The parts of the manual Tomas referred to were about the old compilers: 
+the manual has now been re-written in R-devel and R-patched to major on 
+the newer ones.  We have patched the code to work with both old and new 
+compilers, pending a more thorough investigation of matherr.
+
+In our experiments Intel Fortran only worked in conjunction with oneAPI 
+MKL -- see the manual.  It seems ifx is still under development, so it 
+should pay to use only the latest versions.
+
+This is the first report on Intel compilers since 2015, so they are 
+rather low priority for the R developers.
+
+
+On 21/06/2023 08:10, Tomas Kalibera wrote:
+> 
+> On 6/20/23 18:47, Giuseppe Cal? wrote:
+>> Hi all,
+>> I have the issue:
+>>
+>> icc -std=c99 -std=gnu11 -I../../src/extra -I../../src/extra/xdr -I. 
+>> -I../../src/include -I../../src/include? -I/usr/local/include 
+>> -I../../src/nmath -DHAVE_CONFIG_H?? -fopenmp -fpic? -g -O3 -wd188 -ip 
+>> -mp? -c eval.c -o eval.o
+>> arithmetic.c(66): warning #274: declaration is not visible outside of 
+>> function
+>> ?? int matherr(struct exception *exc)
+>> ????????????????????? ^
+>>
+>> arithmetic.c(68): error: pointer to incomplete class type is not allowed
+>> ?????? switch (exc->type) {
+>> ?????????????? ^
+>>
+>> arithmetic.c(69): error: identifier "DOMAIN" is undefined
+>> ?????? case DOMAIN:
+>> ??????????? ^
+>>
+>> arithmetic.c(70): error: identifier "SING" is undefined
+>> ?????? case SING:
+>> ??????????? ^
+>>
+>> arithmetic.c(73): error: identifier "OVERFLOW" is undefined
+>> ?????? case OVERFLOW:
+>> ??????????? ^
+>>
+>> arithmetic.c(76): error: identifier "UNDERFLOW" is undefined
+>> ?????? case UNDERFLOW:
+>> ??????????? ^
+>>
+>> arithmetic.c(77): error: pointer to incomplete class type is not allowed
+>> ?????? exc->retval = 0.0;
+>>
+>> icc -std=c99 -std=gnu11 -I../../src/extra -I../../src/extra/xdr -I. 
+>> -I../../src/include -I../../src/include? -I/usr/local/include 
+>> -I../../src/nmath -DHAVE_CONFIG_H?? -fopenmp -fpic? -g -O3 -wd188 -ip 
+>> -mp? -c flexiblas.c -o flexiblas.o
+>> icc: command line remark #10148: option '-mp' not supported
+>> compilation aborted for arithmetic.c (code 2)
+>> make[3]: *** [../../Makeconf:129: arithmetic.o] Error 2
+>> make[3]: *** Waiting for unfinished jobs....
+>> icc: command line remark #10148: option '-mp' not supported
+>> make[3]: Leaving directory '/opt/sources/R/R-4.3.1-intel21/src/main'
+>> make[2]: *** [Makefile:140: R] Error 2
+>> make[2]: Leaving directory '/opt/sources/R/R-4.3.1-intel21/src/main'
+>> make[1]: *** [Makefile:28: R] Error 1
+>> make[1]: Leaving directory '/opt/sources/R/R-4.3.1-intel21/src'
+>> make: *** [Makefile:62: R] Error 1
+>>
+>> with oneapi-2022.1.0/compiler-rt/2022.1.0; 
+>> oneapi-2022.1.0/mkl/2022.1.0 while building R-4.3.1 on redhat 8.4 
+>> glibc2.28-189
+>>
+>> I followed a workaround proposed:
+>> https://community.intel.com/t5/Intel-C-Compiler/Error-when-compiling-R-from-source-code-ubuntu-18-04/m-p/1176401/thread-id/36575 <https://community.intel.com/t5/Intel-C-Compiler/Error-when-compiling-R-from-source-code-ubuntu-18-04/m-p/1176401/thread-id/36575>
+>>
+>> Deactivate? HAVE_MATHERR macro in src/include/config.h
+> 
+> Hi Giuseppe,
+> 
+> thanks for the report. Undefining HAVE_MATHERR seems a valid work-around 
+> to me, based on reading the thread above and the sources.
+> 
+> We could improve this in R, if keeping this code, at least improve the 
+> configure check so that it also tests for the presence of the macros.
+> 
+>> Using this workaroud I get R with:
+>>
+>> BLAS/LAPACK: 
+>> /opt/intel/oneapi_2022.2.0/mkl/2022.1.0/lib/intel64/libmkl_intel_lp64.so.2;? LAPACK version 3.9.0
+>>
+>> is correct?
+>>
+>> Is these a way to avoid arithmetic issue?
+>>
+>> My configure is:
+>>
+>> module load intel-2021.6.0/2021.6.0 oneapi-2022.1.0/mkl
+>> MKL="-L${MKLROOT}/lib/intel64 -lmkl_gf_lp64 -lmkl_core 
+>> -lmkl_gnu_thread -dl -fopenmp"
+>> export CC="icc -std=c99"
+>> export CFLAGS="-g -O3 -wd188 -ip -mp"
+>> export FC=ifort
+>> export FLAGS="-g -O3 -mp"
+>> export CXX=icpc
+>> export CXXFLAGS="-g -O3 -mp"
+>> SHLIB_CXXLD=icpc
+>> export MKL_INTERFACE_LAYER=GNU,LP64
+>> export MKL_THREADING_LAYER=GNU
+>> ./configure --prefix=/opt/intel-2021.6.0/R/4.3.1 --with-blas="$MKL" 
+>> --with-lapack? --enable-memory-profiling --enable-BLAS-shlib 
+>> --enable-R-shlib --enable-R-static-lib --with-pcre2
+> 
+> AFAIK, neither icc nor MKL is regularly tested with R/CRAN packages, so 
+> the risk of running into some issues is somewhat higher than for say GCC 
+> and the reference BLAS/LAPACK.
+> 
+> Some hints on using icc and MKL can be found in the R Admin manual, 
+> https://cran.r-project.org/doc/manuals/r-release/R-admin.html. Unless 
+> you have done that already, you might want to check your configuration 
+> against those, I didn't spot any obvious issue. If you find any other 
+> problem, please report, so that it could be fixed or the hints updated.
+> 
+> Thanks,
+> Tomas
+> 
+>>
+>> Thanks a lot,
+>> Giuseppe.
+>>
+>> ???????????????????????????????????????
+>> Giuseppe Cal?
+>>
+>> Fondazione CMCC
+>> Centro Euro-Mediterraneo sui Cambiamenti Climatici presso Complesso 
+>> Ecotekne
+>> Universit? del Salento - Strada Prov.le Lecce - Monteroni 73100 Lecce? IT
+>> http://www.cmcc.it <http://www.cmcc.it/>
+>> https://goo.gl/maps/wtahPDbNVen
+>>
+>> mobile: (+39) 3208190020
+>> email: giuseppe.calo at cmcc.it
+>>
+>> Le informazioni contenute in questo messaggio di posta elettronica e 
+>> negli allegati se presenti sono riservate e confidenziali: ne ? 
+>> vietata la diffusione in qualsiasi modo o forma (GDPR 2016/679).
+>> Qualora lei non fosse il destinatario del messaggio, la invito a non 
+>> diffonderlo e ad eliminarlo dandone gentilmente comunicazione al 
+>> mittente.
+>>
+>> The information included in this e-mail and any attachments are 
+>> confidential and may also be privileged (GDPR 2016/679).
+>> If you are not the correct recipient, you are kindly requested to 
+>> notify the sender immediately, to cancel it and not disclose the 
+>> contents to any other person.
+>>
+>>
+>>
+>>
+>>
+>> ????[[alternative HTML version deleted]]
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Brian D. Ripley,                  ripley at stats.ox.ac.uk
+Emeritus Professor of Applied Statistics, University of Oxford
+
+
