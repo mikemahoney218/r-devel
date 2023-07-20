@@ -1409,3 +1409,124 @@ Brian D. Ripley,                  ripley at stats.ox.ac.uk
 Emeritus Professor of Applied Statistics, University of Oxford
 
 
+From j@g@nmn2 @end|ng |rom gm@||@com  Wed Jul 19 09:20:18 2023
+From: j@g@nmn2 @end|ng |rom gm@||@com (Mikael Jagan)
+Date: Wed, 19 Jul 2023 03:20:18 -0400
+Subject: [Rd] proposal for WRE: clarify that use of S4 classes implies use
+ of superclasses
+Message-ID: <818117af-0467-7c86-207d-3a01eda66896@gmail.com>
+
+If a package has
+
+     importClassesFrom(P, C)
+
+in its NAMESPACE, then should it _also_ have
+
+     importClassesFrom(P, <superclasses of C exported from P>)
+     importClassesFrom(Q, <superclasses of C exported from Q>)
+     ## and so on
+
+... ?  I think that WRE could be more clear on this point, and in any case
+I _think_ that the answer is yes.
+
+Notably, I think that this rule would resolve some of the problems
+with stale caches that I described in this thread from September:
+
+     https://stat.ethz.ch/pipermail/r-devel/2022-September/081971.html
+
+I've attached a script demonstrating my point.  It creates and installs a
+package named TestPackage with
+
+     importClassesFrom(Matrix, dgCMatrix, CsparseMatrix)
+
+in NAMESPACE and
+
+     setClass("whatever", contains = "dgCMatrix")
+
+in R/*.R.  After installing the package, I see:
+
+
+ > ns <- asNamespace("TestPackage")
+ > names(ns)
+  [1] ".__C__generalMatrix"  ".__C__Matrix"         ".__C__sparseMatrix"
+  [4] ".__C__compMatrix"     ".__C__whatever"       "zzz"
+  [7] ".packageName"         ".__C__dsparseMatrix"  ".__NAMESPACE__."
+[10] ".__C__dMatrix"        ".__S3MethodsTable__."
+ > sort(names(ns))
+  [1] ".__C__Matrix"         ".__C__compMatrix"     ".__C__dMatrix"
+  [4] ".__C__dsparseMatrix"  ".__C__generalMatrix"  ".__C__sparseMatrix"
+  [7] ".__C__whatever"       ".__NAMESPACE__."      ".__S3MethodsTable__."
+[10] ".packageName"         "zzz"
+ > sort(names(parent.env(ns)))
+[1] ".__C__CsparseMatrix" ".__C__dgCMatrix"     "setClass"
+
+
+i.e., the imported classes are cached in the parent of the namespace (the
+imports environment), and superclasses of dgCMatrix that are _not_ imported
+are cached in the namespace itself.  The caching of superclasses does _not_
+occur if I add all of the superclasses to the importClassesFrom directive
+in NAMESPACE _or_ if I delete the call to setClass in R/*.R.
+
+It is precisely these cached superclasses that are liable to become stale,
+because, if I understand correctly, the namespace is populated and serialized
+at _install_ time, whereas the imports environment is populated at _load_ time.
+
+Hence by clarifying in WRE that packages should import exported superclasses
+of classes that they extend, etc., we could stem some of the "staleness" on
+CRAN ...
+
+But maybe my analysis is mistaken, so I'll wait for comments from others ...
+
+Mikael
+-------------- next part --------------
+An embedded and charset-unspecified text was scrubbed...
+Name: cache.txt
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20230719/aa9f04f1/attachment.txt>
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Wed Jul 19 16:54:25 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Wed, 19 Jul 2023 17:54:25 +0300
+Subject: [Rd] _R_CHECK_DEPENDS_ONLY_ vs. packages in .Library [was: Check
+ package without suggests]
+In-Reply-To: <CAFDcVCR_931ZkBY4b+EFnEm0cE0Os5rfaK1xkmrD7v46u6Z8tw@mail.gmail.com>
+References: <CANAiAiVZ-xP_1BO8O5QZStcs506ZnVJyw1eYFuPr=ZSpcNOXOA@mail.gmail.com>
+ <CADH2hDmUtXXXcXYXmub1dbTST+NyH6tPVW=y907ZEdgY1NykRA@mail.gmail.com>
+ <CAFDcVCR_931ZkBY4b+EFnEm0cE0Os5rfaK1xkmrD7v46u6Z8tw@mail.gmail.com>
+Message-ID: <20230719175425.59e8cdc4@arachnoid>
+
+(Moving this one idea to R-devel)
+
+? Wed, 19 Jul 2023 09:21:46 +0200
+Henrik Bengtsson <henrik.bengtsson at gmail.com> ?????:
+
+> If you're on macOS, and have installed R the default way, it takes
+> more work to test on that platform. It works out of the box on Linux
+> and MS Windows.  See the '[R-SIG-Mac] CRAN installer for macOS -
+> directory permissions' thread started in April 2022
+> <https://stat.ethz.ch/pipermail/r-sig-mac/2022-April/014371.html>,
+> continued in May 2022
+> <https://stat.ethz.ch/pipermail/r-sig-mac/2022-May/thread.html>, and
+> June 2022
+> <https://stat.ethz.ch/pipermail/r-sig-mac/2022-June/014469.html>. It
+> was then renamed to 'System-wide site library [Was: CRAN installer
+> for macOS - directory permissions]' in June 2022
+> <https://stat.ethz.ch/pipermail/r-sig-mac/2022-June/014501.html>.
+
+Currently, a check with _R_CHECK_DEPENDS_ONLY_=TRUE assumes that
+.Library only has base and recommended packages. This assumption can be
+broken on macOS, and also on other operating systems when R is
+installed into a writeable directory or is running without installation
+(e.g. R-devel from an SVN checkout) and the user doesn't pre-create a
+separate library.
+
+What would be the downsides to implementing _R_CHECK_DEPENDS_ONLY_ the
+same way that _R_CHECK_NO_RECOMMENDED_ is already implemented? The
+latter works by creating fake packages (with a DESCRIPTION and an empty
+file called "dummy_for_check" but nothing else in them) in a temporary
+library that take precedence over the ones in .Library and fail loading.
+
+-- 
+Best regards,
+Ivan
+
+
