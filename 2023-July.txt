@@ -1530,3 +1530,148 @@ Best regards,
 Ivan
 
 
+From pd@|gd @end|ng |rom gm@||@com  Thu Jul 20 09:46:33 2023
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Thu, 20 Jul 2023 09:46:33 +0200
+Subject: [Rd] question about an R idiom: eval()ing a quoted block
+In-Reply-To: <a777a5e6-7363-35ed-3f30-ea526937cdff@gmail.com>
+References: <a777a5e6-7363-35ed-3f30-ea526937cdff@gmail.com>
+Message-ID: <8CA91101-F362-4104-B527-8FE1E808D0AF@gmail.com>
+
+In the case of power.t.test, there is a situation where you want to create 4 different functions with the same function body, in order to pass them to uniroot(). I think that at the time, it just seemed convenient to express that idea with a quote-eval (macro-like) construction, rather than figure out how to do it with functions. I suppose that it could have been done neatly enough along the lines of
+
+g <- function(x1, x2, x3, x4)
+{
+  f <- function(x1, x2, x3, x4) {...body...}
+  if (is.null(x1)
+     x1 <- uniroot(function(x1) {target - f(x1, x2, x3, x4)}, ....)$root
+  ....
+}
+
+This adds an extra layer of function call, but probably makes the byte compiler happier!
+
+You might also use the ... argument to uniroot() as in
+
+x1 <- uniroot(f, x2=x2, x3=x3, x4=x4, ..other args..)$root
+
+but that gets a bit clunky.
+
+-pd
+
+> On 12 Jul 2023, at 00:01 , Ben Bolker <bbolker at gmail.com> wrote:
+> 
+>  In a few places in the R source code, such as the $initialize element of `family` objects, and in the body of power.t.test() (possibly other power.* functions), sets of instructions that will need to be run later are encapsulated by saving them as an expression and later applying eval(), rather than as a function. This seems weird to me; the only reason I can think of for doing it this way is to avoid having to pass back multiple objects and assign them in the calling environment (since R doesn't have a particularly nice form of Python's tuple-unpacking idiom).
+> 
+>  Am I missing something?
+> 
+> cheers
+>   Ben
+> 
+> 
+> https://github.com/r-devel/r-svn/blob/eac72e66a4d2c2aba50867bd80643b978febf5a3/src/library/stats/R/power.R#L38-L52
+> 
+> https://github.com/r-devel/r-svn/blob/master/src/library/stats/R/family.R#L166-L171
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From @nto|ne@|@br| @end|ng |rom gm@||@com  Thu Jul 20 21:41:44 2023
+From: @nto|ne@|@br| @end|ng |rom gm@||@com (Antoine Fabri)
+Date: Thu, 20 Jul 2023 21:41:44 +0200
+Subject: [Rd] tools::parseLatex() crashes on "\\verb{}"
+Message-ID: <CAEKh8uj31==e2XAHPC+VfZgvhKADJz9hFav7RFz_11P+yin1bg@mail.gmail.com>
+
+Dear r-devel,
+
+I've tried tools::parseLatex() to parse some documentation files, it works
+generally well but it  it has some issues when "\\verb{}" is used.
+
+```
+tools::parseLatex("\\code{hello}")
+# \code{hello}
+tools::parseLatex("\\anything{hello}")
+# \anything{hello}
+tools::parseLatex("\\verb{hello}")
+# crashes the session
+```
+
+Thanks,
+
+Antoine
+
+	[[alternative HTML version deleted]]
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Thu Jul 20 22:48:44 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Thu, 20 Jul 2023 23:48:44 +0300
+Subject: [Rd] tools::parseLatex() crashes on "\\verb{}"
+In-Reply-To: <CAEKh8uj31==e2XAHPC+VfZgvhKADJz9hFav7RFz_11P+yin1bg@mail.gmail.com>
+References: <CAEKh8uj31==e2XAHPC+VfZgvhKADJz9hFav7RFz_11P+yin1bg@mail.gmail.com>
+Message-ID: <20230720234844.004b13c2@Tarkus>
+
+On Thu, 20 Jul 2023 21:41:44 +0200
+Antoine Fabri <antoine.fabri at gmail.com> wrote:
+
+> tools::parseLatex("\\verb{hello}")
+> # crashes the session
+
+Looking at the source [*], this seems to be happening because
+parseLatex expects the \verb macro to use the same character as the
+delimiter on both sides:
+
+tools::parseLatex('\\verb!hello!')
+# \verb!hello!
+
+What the loop doesn't have is a check for EOF, which leads TEXT_PUSH()
+to increase the temporary buffer exponentially until unsigned int
+nstext overflows and results in a 0-byte allocation, which is then
+overrun, corrupting the heap. Any other unterminated \verb!... would
+have caused the same crash.
+
+Here's a patch that prevents this particular crash:
+
+--- src/library/tools/src/gramLatex.y	(revision 84714)
++++ src/library/tools/src/gramLatex.y	(working copy)
+@@ -846,8 +846,8 @@
+     
+     TEXT_PUSH('\\'); TEXT_PUSH('v'); TEXT_PUSH('e'); TEXT_PUSH('r'); TEXT_PUSH('b');
+     TEXT_PUSH(c);
+-    while ((c = xxgetc()) != delim) TEXT_PUSH(c);
+-    TEXT_PUSH(c);
++    while (((c = xxgetc()) != delim) && c != R_EOF) TEXT_PUSH(c);
++    if (c != R_EOF) TEXT_PUSH(c);
+     
+     PRESERVE_SV(yylval = mkString2(stext, bp - stext));
+     if(stext != st0) free(stext);
+
+This seems to have been the only remaining while loop in gramLatex.y
+that didn't check for R_EOF.
+
+More correctness work is needed: mkMarkup() should avoid calling
+mkVerb(R_EOF) when running tools::parseLatex('\\verb'), since otherwise
+0xFF becomes a part of the resulting text. All declarations of unsigned
+int nstext should probably be replaced by size_t nstext... but then
+we'd have an annoying visit from the OOM killer instead of a much faster
+crash in case of a runaway TEXT_PUSH(), and nobody expects to parse 4
+GB of LaTeX source anyway. TEXT_PUSH() probably needs an integer
+overflow check and to free the temporary buffer before calling error().
+
+-- 
+Best regards,
+Ivan
+
+[*]
+https://github.com/r-devel/r-svn/blob/f145419cc4dae162719206a61a29082adff2043d/src/library/tools/src/gramLatex.y#L845-L850
+
+
