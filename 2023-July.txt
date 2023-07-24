@@ -2359,3 +2359,118 @@ Duncan Murdoch
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sun Jul 23 22:29:10 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sun, 23 Jul 2023 16:29:10 -0400
+Subject: [Rd] Bug in perl=TRUE regexp matching?
+Message-ID: <28f36f7d-084e-1a51-01c4-92b75c31fa45@gmail.com>
+
+The help page for `?gsub` says (in the context of performance 
+considerations):
+
+
+"... just one UTF-8 string will force all the matching to be done in 
+Unicode"
+
+
+However, this thread on SO:  https://stackoverflow.com/q/76749529 gives 
+some indication that this is not true for `perl = TRUE`.  Specifically:
+
+ > strings <- c("89 562", "John Smith", "??????? ????????????", 
+"Jean-Fran?ois Dupuis")
+ > Encoding(strings)
+[1] "unknown" "unknown" "UTF-8"   "UTF-8"
+ > regex <- "\\B\\w+| +"
+ > gsub(regex, "", strings)
+[1] "85"   "JS"   "??"   "J-FD"
+
+ > gsub(regex, "", strings, perl = TRUE)
+[1] "85"                  "JS"                  "???????????????????" 
+"J-F?oD"
+
+and the website https://regex101.com/r/QDFrOE/1 gives the first answer 
+when the regex option /u ("match with full Unicode) is specified, but 
+the second answer when it is not.
+
+Now I'm not at all sure that that website is authoritative, but this 
+looks like a flag may have been missed in the `perl = TRUE` case.
+
+Duncan Murdoch
+
+
+From brod|e@g@@|@m @end|ng |rom y@hoo@com  Mon Jul 24 03:01:39 2023
+From: brod|e@g@@|@m @end|ng |rom y@hoo@com (Brodie Gaslam)
+Date: Sun, 23 Jul 2023 21:01:39 -0400
+Subject: [Rd] Bug in perl=TRUE regexp matching?
+In-Reply-To: <28f36f7d-084e-1a51-01c4-92b75c31fa45@gmail.com>
+References: <28f36f7d-084e-1a51-01c4-92b75c31fa45@gmail.com>
+Message-ID: <c6eeaf6f-37bb-054e-4297-e776303092c0@yahoo.com>
+
+
+
+On 7/23/23 4:29 PM, Duncan Murdoch wrote:
+> The help page for `?gsub` says (in the context of performance 
+> considerations):
+> 
+> 
+> "... just one UTF-8 string will force all the matching to be done in 
+> Unicode"
+
+It's been a little while since I looked at the code but IIRC this just 
+means that strings are converted to UTF-8 before matching.  The problem 
+here seems to be more about the interpretation of the "\\w+" token by 
+PCRE.  I think this makes it a little clearer what's going on:
+
+     gsub("\\w", "a", "?", perl=TRUE)
+     [1] "?"
+
+So no match.  The PCRE docs 
+https://www.pcre.org/original/doc/html/pcrepattern.html (this might be 
+the old docs, but it works for our purposes here) mention we can turn on 
+unicode property matching with the "(*UCP)" token:
+
+      gsub("(*UCP)\\w", "a", "?", perl=TRUE)
+      [1] "a"
+
+So there are two layers at play here.  The first one is whether R 
+converts strings to UTF-8, which I think is what the documentation is 
+about.  The other is whether the PCRE engine is configured to recognize 
+Unicode properties, which at least in both of our configurations for 
+this specific case it appears like it is not.
+
+Best,
+
+B.
+
+
+> 
+> 
+> However, this thread on SO:? https://stackoverflow.com/q/76749529 gives 
+> some indication that this is not true for `perl = TRUE`.? Specifically:
+> 
+>  > strings <- c("89 562", "John Smith", "??????? ????????????", 
+> "Jean-Fran?ois Dupuis")
+>  > Encoding(strings)
+> [1] "unknown" "unknown" "UTF-8"?? "UTF-8"
+>  > regex <- "\\B\\w+| +"
+>  > gsub(regex, "", strings)
+> [1] "85"?? "JS"?? "??"?? "J-FD"
+> 
+>  > gsub(regex, "", strings, perl = TRUE)
+> [1] "85"????????????????? "JS"????????????????? "???????????????????" 
+> "J-F?oD"
+> 
+> and the website https://regex101.com/r/QDFrOE/1 gives the first answer 
+> when the regex option /u ("match with full Unicode) is specified, but 
+> the second answer when it is not.
+> 
+> Now I'm not at all sure that that website is authoritative, but this 
+> looks like a flag may have been missed in the `perl = TRUE` case.
+> 
+> Duncan Murdoch
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
