@@ -336,3 +336,168 @@ wrote:
 	[[alternative HTML version deleted]]
 
 
+From @@m|tuom|v@@r@ @end|ng |rom hotm@||@com  Thu Aug  3 22:21:33 2023
+From: @@m|tuom|v@@r@ @end|ng |rom hotm@||@com (Sami Tuomivaara)
+Date: Thu, 3 Aug 2023 20:21:33 +0000
+Subject: [Rd] feature request: optim() iteration of functions that return
+ multiple values
+Message-ID: <PAXP189MB1928AA39727C26A434F8D3FFD608A@PAXP189MB1928.EURP189.PROD.OUTLOOK.COM>
+
+Dear all,
+
+I have used optim a lot in contexts where it would useful to be able to iterate function myfun that, in addition to the primary objective to be minimized ('minimize.me'), could return other values such as alternative metrics of the minimization, informative intermediate values from the calculations, etc.
+
+myfun  <- function()
+{
+...
+return(list(minimize.me = minimize.me, R2 = R2, pval = pval, etc.))
+}
+
+During the iteration, optim could utilize just the first value from the myfun return list; all the other values calculated and returned by myfun could be ignored by optim.
+After convergence, the other return values of myfun could be finally extracted and appended into the optim return value (which is a list) as additional entry e.g.: $aux <- list(R2, pval, etc.), (without 'minimize.me' as it is already returned as $value).
+
+The usual ways for accessing optim return values, e.g., $par, $value, etc. are not affected.  Computational cost may not be prohibitive either.  Is this feasible to consider?
+
+
+	[[alternative HTML version deleted]]
+
+
+From e@ @end|ng |rom enr|co@chum@nn@net  Fri Aug  4 10:22:03 2023
+From: e@ @end|ng |rom enr|co@chum@nn@net (Enrico Schumann)
+Date: Fri, 04 Aug 2023 10:22:03 +0200
+Subject: [Rd] 
+ feature request: optim() iteration of functions that return
+ multiple values
+In-Reply-To: <PAXP189MB1928AA39727C26A434F8D3FFD608A@PAXP189MB1928.EURP189.PROD.OUTLOOK.COM>
+ (Sami Tuomivaara's message of "Thu, 3 Aug 2023 20:21:33 +0000")
+References: <PAXP189MB1928AA39727C26A434F8D3FFD608A@PAXP189MB1928.EURP189.PROD.OUTLOOK.COM>
+Message-ID: <87cz03nro4.fsf@enricoschumann.net>
+
+On Thu, 03 Aug 2023, Sami Tuomivaara writes:
+
+> Dear all,
+>
+> I have used optim a lot in contexts where it would
+> useful to be able to iterate function myfun that, in
+> addition to the primary objective to be minimized
+> ('minimize.me'), could return other values such as
+> alternative metrics of the minimization, informative
+> intermediate values from the calculations, etc.
+>
+> myfun  <- function()
+> {
+> ...
+> return(list(minimize.me = minimize.me, R2 = R2, pval = pval, etc.))
+> }
+>
+> During the iteration, optim could utilize just the first value from the myfun return list; all the other values calculated and returned by myfun could be ignored by optim.
+> After convergence, the other return values of myfun
+> could be finally extracted and appended into the optim
+> return value (which is a list) as additional entry
+> e.g.: $aux <- list(R2, pval, etc.), (without
+> 'minimize.me' as it is already returned as $value).
+>
+> The usual ways for accessing optim return values, e.g.,
+> $par, $value, etc. are not affected.  Computational
+> cost may not be prohibitive either.  Is this feasible
+> to consider?
+>
+
+If you only wish to store additional information, you could do
+so with an environment, without changing optim.  For instance,
+like so (using the first example from ?optim):
+
+    data <- new.env()
+    data$i <- 0
+    data$fun.value <- numeric(1000)
+    
+    fr <- function(x, data) {   ## Rosenbrock Banana function
+        x1 <- x[1]
+        x2 <- x[2]
+        ans <- 100 * (x2 - x1 * x1)^2 + (1 - x1)^2
+        data$i <- data$i + 1
+        data$fun.value[data$i] <- ans
+        ans
+    }
+    optim(c(-1.2,1), fr, data = data)
+    ## $par
+    ## [1] 1.000260 1.000506
+    ## 
+    ## $value
+    ## [1] 8.825241e-08
+    ## 
+    ## $counts
+    ## function gradient 
+    ##      195       NA 
+    ## 
+    ## ....
+
+    data$i
+    ## 195
+    
+    plot(data$fun.value[1:data$i])
+
+
+
+
+-- 
+Enrico Schumann
+Lucerne, Switzerland
+http://enricoschumann.net
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Fri Aug  4 11:03:41 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Fri, 4 Aug 2023 05:03:41 -0400
+Subject: [Rd] 
+ feature request: optim() iteration of functions that return
+ multiple values
+In-Reply-To: <PAXP189MB1928AA39727C26A434F8D3FFD608A@PAXP189MB1928.EURP189.PROD.OUTLOOK.COM>
+References: <PAXP189MB1928AA39727C26A434F8D3FFD608A@PAXP189MB1928.EURP189.PROD.OUTLOOK.COM>
+Message-ID: <76447425-d6e6-372d-6590-9c670e980905@gmail.com>
+
+Enrico gave you a workaround that stores the extra values in an environment.
+
+Another possible workaround is an optional argument to myfun() that asks 
+it to return more information, e.g.
+
+     fr <- function(x, data, extraInfo = FALSE) {   ## Rosenbrock Banana 
+function
+         x1 <- x[1]
+         x2 <- x[2]
+         ans <- 100 * (x2 - x1 * x1)^2 + (1 - x1)^2
+         if (extraInfo) {
+           list(ans=ans, extras = ...)
+         else
+           ans
+     }
+
+Then after optim() finishes, call fr() again with parameters as returned 
+by optim, and extraInfo = TRUE.
+
+Duncan Murdoch
+
+On 03/08/2023 4:21 p.m., Sami Tuomivaara wrote:
+> Dear all,
+> 
+> I have used optim a lot in contexts where it would useful to be able to iterate function myfun that, in addition to the primary objective to be minimized ('minimize.me'), could return other values such as alternative metrics of the minimization, informative intermediate values from the calculations, etc.
+> 
+> myfun  <- function()
+> {
+> ...
+> return(list(minimize.me = minimize.me, R2 = R2, pval = pval, etc.))
+> }
+> 
+> During the iteration, optim could utilize just the first value from the myfun return list; all the other values calculated and returned by myfun could be ignored by optim.
+> After convergence, the other return values of myfun could be finally extracted and appended into the optim return value (which is a list) as additional entry e.g.: $aux <- list(R2, pval, etc.), (without 'minimize.me' as it is already returned as $value).
+> 
+> The usual ways for accessing optim return values, e.g., $par, $value, etc. are not affected.  Computational cost may not be prohibitive either.  Is this feasible to consider?
+> 
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
