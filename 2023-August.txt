@@ -501,3 +501,725 @@ On 03/08/2023 4:21 p.m., Sami Tuomivaara wrote:
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From m@rt|n@becker @end|ng |rom mx@un|-@@@r|@nd@de  Sat Aug  5 10:13:24 2023
+From: m@rt|n@becker @end|ng |rom mx@un|-@@@r|@nd@de (Martin Becker)
+Date: Sat, 5 Aug 2023 10:13:24 +0200
+Subject: [Rd] 
+ feature request: optim() iteration of functions that return
+ multiple values
+In-Reply-To: <PAXP189MB1928AA39727C26A434F8D3FFD608A@PAXP189MB1928.EURP189.PROD.OUTLOOK.COM>
+References: <PAXP189MB1928AA39727C26A434F8D3FFD608A@PAXP189MB1928.EURP189.PROD.OUTLOOK.COM>
+Message-ID: <f0591cf8-a6b9-cc99-7afc-2d4957ab594b@mx.uni-saarland.de>
+
+For a solution that does not require any change to the original function 
+being optimized, the following one-liner could be used, which converts 
+existing functions to functions that return only the first element:
+
+returnFirst <- function(fun) function(...) do.call(fun,list(...))[[1]]
+
+Example:
+
+fr <- function(x) {   ## Rosenbrock Banana function
+   x1 <- x[1]
+   x2 <- x[2]
+   ans <- 100 * (x2 - x1 * x1)^2 + (1 - x1)^2
+   list(ans=ans, extra1 = 1:10, extra2 = letters)
+}
+
+fr2 <- returnFirst(fr)
+tmp <- optim(c(-1.2,1), fr2)
+fr(tmp$par)
+
+
+Am 03.08.23 um 22:21 schrieb Sami Tuomivaara:
+> Dear all,
+> 
+> I have used optim a lot in contexts where it would useful to be able to iterate function myfun that, in addition to the primary objective to be minimized ('minimize.me'), could return other values such as alternative metrics of the minimization, informative intermediate values from the calculations, etc.
+> 
+> myfun  <- function()
+> {
+> ...
+> return(list(minimize.me = minimize.me, R2 = R2, pval = pval, etc.))
+> }
+> 
+> During the iteration, optim could utilize just the first value from the myfun return list; all the other values calculated and returned by myfun could be ignored by optim.
+> After convergence, the other return values of myfun could be finally extracted and appended into the optim return value (which is a list) as additional entry e.g.: $aux <- list(R2, pval, etc.), (without 'minimize.me' as it is already returned as $value).
+> 
+> The usual ways for accessing optim return values, e.g., $par, $value, etc. are not affected.  Computational cost may not be prohibitive either.  Is this feasible to consider?
+> 
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Sat Aug  5 22:47:43 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Sat, 5 Aug 2023 23:47:43 +0300
+Subject: [Rd] random network disconnects
+In-Reply-To: <1cb2c074-ad70-6b47-aff0-957bb9a8a3e9@pburns.seanet.com>
+References: <1cb2c074-ad70-6b47-aff0-957bb9a8a3e9@pburns.seanet.com>
+Message-ID: <20230805234743.2621bfea@parabola>
+
+? Mon, 31 Jul 2023 16:43:17 +0100
+Patrick Burns <pburns at pburns.seanet.com> ?????:
+
+> At work we are getting lots of issues with 'permission denied' or 
+> 'network not found' and so forth when reading and writing between our 
+> machines and a file server.  This happens randomly so the following 
+> function solves the problem for 'cat' commands
+
+These sound like error codes returned from the operating system, which
+R has no choice but forward to the user. (Well, in this case the error
+turns out to be transient, but files are unfortunately fraught with
+peril with no easy solutions [*].)
+
+Even using system call tracing or setting a symbolic debugger breakpoint
+on an error return from cat() will only tell you the OS error code and
+the file on which the operation failed, both of which you already know.
+Getting to the root of the problem will likely involve drilling down
+into the details of the exact networked filesystem used, which R is
+supposed to know nothing about. Maybe you could ask on ServerFault or
+on #linux / #windows / #<applicable server OS> on Libera.Char?
+
+-- 
+Best regards,
+Ivan
+
+[*] https://danluu.com/deconstruct-files/
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Sat Aug  5 22:52:55 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Sat, 5 Aug 2023 23:52:55 +0300
+Subject: [Rd] HTML documentation check works best with Tidy >= 5.0.0
+Message-ID: <20230805235255.71a4cdb7@parabola>
+
+Hello R-devel,
+
+Old versions of HTML Tidy report false positive NOTEs for the HTML
+verison of the manual where Tidy encounters HTML5 features it is not
+ready for.
+
+Conveniently, both HTML5 support and release version numbers officially
+appeared in HTML Tidy version 5.0.0 [*]. For example, the last version
+of the "old Tidy" I could find fails on an R help page:
+
+ cvs -z3 -d:pserver:anonymous at tidy.cvs.sourceforge.net:/cvsroot/tidy \
+  co -P tidy
+ cd tidy
+ make -C build/gmake
+ bin/tidy -v
+ # HTML Tidy for Linux released on 25 March 2009
+ R-devel CMD Rdconv .../R-devel/src/library/stats/man/lm.Rd -t html | \
+  bin/tidy >/dev/null
+ # line 4 column 1 - Warning: <link> inserting "type" attribute
+ # line 12 column 1 - Warning: <script> proprietary attribute "onload"
+ # line 12 column 1 - Warning: <script> inserting "type" attribute
+ # line 17 column 1 - Warning: <table> lacks "summary" attribute
+ # line 44 column 1 - Warning: <table> lacks "summary" attribute
+ # line 200 column 1 - Warning: <table> lacks "summary" attribute
+ # <...>
+
+On the other hand, the oldest released version of the Tidy-HTML5 handles
+Rd-produced HTML correctly:
+
+ git clone https://github.com/htacg/tidy-html5
+ cd tidy-html5
+ git checkout 5.0.0
+ mkdir b5.0.0
+ cd b5.0.0
+ cmake ..
+ cmake --build .
+ ./tidy -v
+ # HTML Tidy for Linux version 5.0.0
+ R-devel CMD Rdconv .../R-devel/src/library/stats/man/lm.Rd -t html | \
+  ./tidy >/dev/null
+ # Info: Document content looks like HTML5
+ # No warnings or errors were found.
+ # <...>
+
+We can use this information to only use HTML Tidy versions that support
+the idioms used by Rd2HTML:
+
+--- check.R	(revision 84834)
++++ check.R	(working copy)
+@@ -5040,7 +5040,7 @@
+ 
+         t1 <- proc.time()
+         if(i1) { ## validate
+-            ## require HTML Tidy, and not macOS's ancient version.
++            ## require HTML5 Tidy, and not macOS's ancient version.
+             msg <- ""
+             Tidy <- Sys.getenv("R_TIDYCMD", "tidy")
+             OK <- nzchar(Sys.which(Tidy))
+@@ -5048,10 +5048,8 @@
+                 ver <- system2(Tidy, "--version", stdout = TRUE)
+                 OK <- startsWith(ver, "HTML Tidy")
+                 if(OK) {
+-                    OK <- !grepl('Apple Inc. build 2649', ver)
+-                    if(!OK) msg <- ": 'tidy' is Apple's too old build"
+-                    ## Maybe we should also check version,
+-                    ## but e.g. Ubuntu 16.04 does not show one.
++                    OK <- grepl('version 5.\\d+\\.\\d+', ver)
++                    if(!OK) msg <- ": 'tidy' does not appear to be version 5"
+                 } else msg <- ": 'tidy' is not HTML Tidy"
+             } else msg <- ": no command 'tidy' found"
+             if(OK) {
+
+(This is just one way to solve the problem. Instead, we could discard
+versions that say "released on <date>", or try to parse the version
+specification and only discard it if (a) we can't parse it or (b) it's
+below 5.0.0.)
+
+With the patch applied, I get:
+
+ PATH=.../tidy/bin:"$PATH" _R_CHECK_RD_VALIDATE_RD2HTML_=TRUE \
+  R-devel CMD check $package.tar.gz
+ # * checking HTML version of manual ... NOTE
+ # Skipping checking HTML validation: 'tidy' does not appear to be 
+ # version 5
+
+ PATH=.../tidy-html5/b5.0.0/:"$PATH" _R_CHECK_RD_VALIDATE_RD2HTML_=TRUE \
+  R-devel CMD check $package.tar.gz
+ # * checking HTML version of manual ... OK
+
+-- 
+Best regards,
+Ivan
+
+[*] There are commits in the tidy-html5 repo containing versions marked
+4.x.x, but they aren't tagged and weren't considered an official
+release, as far as I know.
+
+
+From otoomet @end|ng |rom gm@||@com  Sun Aug  6 08:49:38 2023
+From: otoomet @end|ng |rom gm@||@com (Ott Toomet)
+Date: Sat, 5 Aug 2023 23:49:38 -0700
+Subject: [Rd] hist(..., log="y")
+Message-ID: <CAMMJQ0b-AwgT-3U-4TQYwLA7+NPzj8E0Y2Q=xXk6KWOgCJqUjg@mail.gmail.com>
+
+Sorry if this topic has been discussed earlier.
+
+Currently, hist(..., log="y") fails with
+
+> hist(rexp(1000, 1), log="y")
+Warning messages:
+1: In plot.window(xlim, ylim, "", ...) :
+  nonfinite axis=2 limits [GScale(-inf,2.59218,..); log=TRUE] -- corrected
+now
+2: In title(main = main, sub = sub, xlab = xlab, ylab = ylab, ...) :
+  "log" is not a graphical parameter
+3: In axis(1, ...) : "log" is not a graphical parameter
+4: In axis(2, at = yt, ...) : "log" is not a graphical parameter
+
+The same applies for log="x"
+
+> hist(rexp(1000, 1), log="x")
+Warning messages:
+1: In plot.window(xlim, ylim, "", ...) :
+  nonfinite axis=1 limits [GScale(-inf,0.954243,..); log=TRUE] -- corrected
+now
+2: In title(main = main, sub = sub, xlab = xlab, ylab = ylab, ...) :
+  "log" is not a graphical parameter
+3: In axis(1, ...) : "log" is not a graphical parameter
+4: In axis(2, at = yt, ...) : "log" is not a graphical parameter
+
+This applies for the current svn version of R, and also a few recent
+published versions.  This is unfortunate for two reasons:
+
+* the error message is not quite correct--"log" is a graphical parameter,
+but "hist" does not support it.
+* for various kinds of data it is worthwhile to make histograms in log
+scale.  "hist" is a very nice and convenient function and support for log
+scale would be handy here.
+
+I also played a little with the code, and it seems to be very easy to
+implement.  I am happy to make a  patch if the team thinks it is worth
+pursuing.
+
+Cheers,
+Ott
+
+	[[alternative HTML version deleted]]
+
+
+From otoomet @end|ng |rom gm@||@com  Sun Aug  6 08:55:34 2023
+From: otoomet @end|ng |rom gm@||@com (Ott Toomet)
+Date: Sat, 5 Aug 2023 23:55:34 -0700
+Subject: [Rd] 
+ feature request: optim() iteration of functions that return
+ multiple values
+In-Reply-To: <f0591cf8-a6b9-cc99-7afc-2d4957ab594b@mx.uni-saarland.de>
+References: <PAXP189MB1928AA39727C26A434F8D3FFD608A@PAXP189MB1928.EURP189.PROD.OUTLOOK.COM>
+ <f0591cf8-a6b9-cc99-7afc-2d4957ab594b@mx.uni-saarland.de>
+Message-ID: <CAMMJQ0ZatzN9-JNM6RT+PFUXVQ2XXq87pOuByj6HMqWUgherUg@mail.gmail.com>
+
+I have done this using attributes:
+
+fr <- function(x) {   ## Rosenbrock Banana function
+   x1 <- x[1]
+   x2 <- x[2]
+   ans <- 100 * (x2 - x1 * x1)^2 + (1 - x1)^2
+   attr(ans, "extra1") <- 1:10
+   attr(ans, "extra2") <- letters
+   ans
+}
+
+Not sure if this works in your case though.
+
+Cheers,
+Ott
+
+On Sat, Aug 5, 2023 at 1:13?AM Martin Becker <
+martin.becker at mx.uni-saarland.de> wrote:
+
+> For a solution that does not require any change to the original function
+> being optimized, the following one-liner could be used, which converts
+> existing functions to functions that return only the first element:
+>
+> returnFirst <- function(fun) function(...) do.call(fun,list(...))[[1]]
+>
+> Example:
+>
+> fr <- function(x) {   ## Rosenbrock Banana function
+>    x1 <- x[1]
+>    x2 <- x[2]
+>    ans <- 100 * (x2 - x1 * x1)^2 + (1 - x1)^2
+>    list(ans=ans, extra1 = 1:10, extra2 = letters)
+> }
+>
+> fr2 <- returnFirst(fr)
+> tmp <- optim(c(-1.2,1), fr2)
+> fr(tmp$par)
+>
+>
+> Am 03.08.23 um 22:21 schrieb Sami Tuomivaara:
+> > Dear all,
+> >
+> > I have used optim a lot in contexts where it would useful to be able to
+> iterate function myfun that, in addition to the primary objective to be
+> minimized ('minimize.me'), could return other values such as alternative
+> metrics of the minimization, informative intermediate values from the
+> calculations, etc.
+> >
+> > myfun  <- function()
+> > {
+> > ...
+> > return(list(minimize.me = minimize.me, R2 = R2, pval = pval, etc.))
+> > }
+> >
+> > During the iteration, optim could utilize just the first value from the
+> myfun return list; all the other values calculated and returned by myfun
+> could be ignored by optim.
+> > After convergence, the other return values of myfun could be finally
+> extracted and appended into the optim return value (which is a list) as
+> additional entry e.g.: $aux <- list(R2, pval, etc.), (without 'minimize.me'
+> as it is already returned as $value).
+> >
+> > The usual ways for accessing optim return values, e.g., $par, $value,
+> etc. are not affected.  Computational cost may not be prohibitive either.
+> Is this feasible to consider?
+> >
+> >
+> >       [[alternative HTML version deleted]]
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Sun Aug  6 15:42:22 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Sun, 6 Aug 2023 16:42:22 +0300
+Subject: [Rd] HTML documentation check works best with Tidy >= 5.0.0
+In-Reply-To: <25807.29537.855552.467716@hornik.net>
+References: <20230805235255.71a4cdb7@parabola>
+ <25807.29537.855552.467716@hornik.net>
+Message-ID: <20230806164222.3d143113@parabola>
+
+? Sun, 6 Aug 2023 12:18:09 +0200
+Kurt Hornik <Kurt.Hornik at wu.ac.at> ?????:
+
+> IIrc all Linux versions advertize themselves as something like
+> 
+>   HTML Tidy for Linux version 5.8.0
+> 
+> What about windows and macOS?
+
+I've checked the "modern" Windows binaries of HTML Tidy, and they say
+so too. Cannot check the macOS version easily.
+
+I think that any released version older than 5.0.0 (before the
+development moved from https://tidy.sf.net/ to
+https://www.html-tidy.org/ in 2015) will only identify itself by the
+release date. Judging by an R-SIG-Mac thread I've found, "Apple Inc.
+build 2649" that may be bundled with some macOS versions must be of the
+SourceForge vintage too, before they started using version numbers.
+
+There are commits in the "modern" Tidy source tree using 4.x.x version
+numbers, but I don't think they were considered to be formally
+released. For example, Debian went from the SourceForge CVS snapshots
+straight to 5.2.0 in 2016 without packaging the 4.x.x versions.
+
+-- 
+Best regards,
+Ivan
+
+
+From dw|n@em|u@ @end|ng |rom comc@@t@net  Sun Aug  6 18:00:51 2023
+From: dw|n@em|u@ @end|ng |rom comc@@t@net (David Winsemius)
+Date: Sun, 6 Aug 2023 09:00:51 -0700
+Subject: [Rd] hist(..., log="y")
+In-Reply-To: <CAMMJQ0b-AwgT-3U-4TQYwLA7+NPzj8E0Y2Q=xXk6KWOgCJqUjg@mail.gmail.com>
+References: <CAMMJQ0b-AwgT-3U-4TQYwLA7+NPzj8E0Y2Q=xXk6KWOgCJqUjg@mail.gmail.com>
+Message-ID: <A9103991-8E99-4B88-B595-8AAFEF94EE71@comcast.net>
+
+hist() is designed so that the total area sums to 1. You should build you desired behavior using a barchart. 
+
+? 
+David
+
+
+Sent from my iPhone
+
+> On Aug 5, 2023, at 11:50 PM, Ott Toomet <otoomet at gmail.com> wrote:
+> 
+> ?Sorry if this topic has been discussed earlier.
+> 
+> Currently, hist(..., log="y") fails with
+> 
+>> hist(rexp(1000, 1), log="y")
+> Warning messages:
+> 1: In plot.window(xlim, ylim, "", ...) :
+>  nonfinite axis=2 limits [GScale(-inf,2.59218,..); log=TRUE] -- corrected
+> now
+> 2: In title(main = main, sub = sub, xlab = xlab, ylab = ylab, ...) :
+>  "log" is not a graphical parameter
+> 3: In axis(1, ...) : "log" is not a graphical parameter
+> 4: In axis(2, at = yt, ...) : "log" is not a graphical parameter
+> 
+> The same applies for log="x"
+> 
+>> hist(rexp(1000, 1), log="x")
+> Warning messages:
+> 1: In plot.window(xlim, ylim, "", ...) :
+>  nonfinite axis=1 limits [GScale(-inf,0.954243,..); log=TRUE] -- corrected
+> now
+> 2: In title(main = main, sub = sub, xlab = xlab, ylab = ylab, ...) :
+>  "log" is not a graphical parameter
+> 3: In axis(1, ...) : "log" is not a graphical parameter
+> 4: In axis(2, at = yt, ...) : "log" is not a graphical parameter
+> 
+> This applies for the current svn version of R, and also a few recent
+> published versions.  This is unfortunate for two reasons:
+> 
+> * the error message is not quite correct--"log" is a graphical parameter,
+> but "hist" does not support it.
+> * for various kinds of data it is worthwhile to make histograms in log
+> scale.  "hist" is a very nice and convenient function and support for log
+> scale would be handy here.
+> 
+> I also played a little with the code, and it seems to be very easy to
+> implement.  I am happy to make a  patch if the team thinks it is worth
+> pursuing.
+> 
+> Cheers,
+> Ott
+> 
+>    [[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From dw|n@em|u@ @end|ng |rom comc@@t@net  Sun Aug  6 18:33:00 2023
+From: dw|n@em|u@ @end|ng |rom comc@@t@net (David Winsemius)
+Date: Sun, 6 Aug 2023 09:33:00 -0700
+Subject: [Rd] hist(..., log="y")
+In-Reply-To: <A9103991-8E99-4B88-B595-8AAFEF94EE71@comcast.net>
+References: <A9103991-8E99-4B88-B595-8AAFEF94EE71@comcast.net>
+Message-ID: <E48C208C-3F31-41A4-8C05-9CAB2287CD94@comcast.net>
+
+I guess my memory was off slightly. Densities are only plotted with freq=TRUE. Still there the ever present conundrum that 0 counts cannot be sensibly represented. 
+
+Why not:
+hist( log(x), ?) #? In situations where it might make sense. 
+
+
+Sent from my iPhone
+
+> On Aug 6, 2023, at 9:01 AM, David Winsemius <dwinsemius at comcast.net> wrote:
+> 
+> ?hist() is designed so that the total area sums to 1. You should build you desired behavior using a barchart. 
+> 
+> ? 
+> David
+> 
+> 
+> Sent from my iPhone
+> 
+>> On Aug 5, 2023, at 11:50 PM, Ott Toomet <otoomet at gmail.com> wrote:
+>> 
+>> ?Sorry if this topic has been discussed earlier.
+>> 
+>> Currently, hist(..., log="y") fails with
+>> 
+>>> hist(rexp(1000, 1), log="y")
+>> Warning messages:
+>> 1: In plot.window(xlim, ylim, "", ...) :
+>> nonfinite axis=2 limits [GScale(-inf,2.59218,..); log=TRUE] -- corrected
+>> now
+>> 2: In title(main = main, sub = sub, xlab = xlab, ylab = ylab, ...) :
+>> "log" is not a graphical parameter
+>> 3: In axis(1, ...) : "log" is not a graphical parameter
+>> 4: In axis(2, at = yt, ...) : "log" is not a graphical parameter
+>> 
+>> The same applies for log="x"
+>> 
+>>> hist(rexp(1000, 1), log="x")
+>> Warning messages:
+>> 1: In plot.window(xlim, ylim, "", ...) :
+>> nonfinite axis=1 limits [GScale(-inf,0.954243,..); log=TRUE] -- corrected
+>> now
+>> 2: In title(main = main, sub = sub, xlab = xlab, ylab = ylab, ...) :
+>> "log" is not a graphical parameter
+>> 3: In axis(1, ...) : "log" is not a graphical parameter
+>> 4: In axis(2, at = yt, ...) : "log" is not a graphical parameter
+>> 
+>> This applies for the current svn version of R, and also a few recent
+>> published versions.  This is unfortunate for two reasons:
+>> 
+>> * the error message is not quite correct--"log" is a graphical parameter,
+>> but "hist" does not support it.
+>> * for various kinds of data it is worthwhile to make histograms in log
+>> scale.  "hist" is a very nice and convenient function and support for log
+>> scale would be handy here.
+>> 
+>> I also played a little with the code, and it seems to be very easy to
+>> implement.  I am happy to make a  patch if the team thinks it is worth
+>> pursuing.
+>> 
+>> Cheers,
+>> Ott
+>> 
+>>   [[alternative HTML version deleted]]
+>> 
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From edd @end|ng |rom deb|@n@org  Sun Aug  6 23:05:03 2023
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Sun, 6 Aug 2023 16:05:03 -0500
+Subject: [Rd] A demonstrated shortcoming of the R package management system
+Message-ID: <25808.2815.112074.192190@rob.eddelbuettel.com>
+
+
+CRAN, by relying on the powerful package management system that is part of R,
+provides an unparalleled framework for extending R with nearly 20k packages.
+
+We recently encountered an issue that highlights a missing element in the
+otherwise outstanding package management system. So we would like to start a
+discussion about enhancing its feature set. As shown below, a mechanism to
+force reinstallation of packages may be needed.
+
+A demo is included below, it is reproducible in a container. We find the
+easiest/fastest reproduction is by saving the code snippet below in the
+current directory as eg 'matrixIssue.R' and have it run in a container as
+
+   docker run --rm -ti -v `pwd`:/mnt rocker/r2u Rscript /mnt/matrixIssue.R
+  
+This runs in under two minutes, first installing the older Matrix, next
+installs SeuratObject, and then by removing the older Matrix making the
+(already installed) current Matrix version the default. This simulates a
+package update for Matrix. Which, as the final snippet demonstrates, silently
+breaks SeuratObject as the cached S4 method Csparse_validate is now missing.
+So when SeuratObject was installed under Matrix 1.5.1, it becomes unuseable
+under Matrix 1.6.0.
+
+What this shows is that a call to update.packages() will silently corrupt an
+existing installation.  We understand that this was known and addressed at
+CRAN by rebuilding all binary packages (for macOS and Windows).
+
+But it leaves both users relying on source installation as well as
+distributors of source packages in a dire situation. It hurt me three times:
+my default R installation was affected with unit tests (involving
+SeuratObject) silently failing. It similarly broke our CI setup at work.  And
+it created a fairly bad headache for the Debian packaging I am involved with
+(and I surmise it affects other distro similarly).
+
+It would be good to have a mechanism where a package, when being upgraded,
+could flag that 'more actions are required' by the system (administrator).
+We think this example demonstrates that we need such a mechanism to avoid
+(silently !!) breaking existing installations, possibly by forcing
+reinstallation of other packages.  R knows the package dependency graph and
+could trigger this, possibly after an 'opt-in' variable the user / admin
+sets.
+
+One possibility may be to add a new (versioned) field 'Breaks:'. Matrix could
+then have added 'Breaks: SeuratObject (<= 4.1.3)' preventing an installation
+of Matrix 1.6.0 when SeuratObject 4.1.3 (or earlier) is present, but
+permitting an update to Matrix 1.6.0 alongside a new version, say, 4.1.4 of
+SeuratObject which could itself have a versioned Depends: Matrix (>= 1.6.0).
+
+Regards,  Dirk
+
+
+## Code example follows. Recommended to run the rocker/r2u container.
+## Could also run 'apt update -qq; apt upgrade -y' but not required
+## Thanks to my colleague Paul Hoffman for the core of this example
+
+## now have Matrix 1.6.0 because r2u and CRAN remain current but we can install an older Matrix
+remotes::install_version('Matrix', '1.5.1')
+
+## we can confirm that we have Matrix 1.5.1
+packageVersion("Matrix")
+
+## we now install SeuratObject from source and to speed things up we first install the binary
+install.packages("SeuratObject")   # in this container via bspm/r2u as binary
+## and then force a source installation (turning bspm off) _while Matrix is at 1.5.1_
+if (requireNamespace("bspm", quietly=TRUE) bspm::disable()
+Sys.setenv(PKG_CXXFLAGS='-Wno-ignored-attributes') 	# Eigen compilation noise silencer
+install.packages('SeuratObject')
+
+## we now remove the Matrix package version 1.5.1 we installed into /usr/local leaving 1.6.0
+remove.packages("Matrix")
+packageVersion("Matrix")
+
+## and we now run a bit of SeuratObject code that is now broken as Csparse_validate is gone
+suppressMessages(library(SeuratObject))
+data('pbmc_small')
+graph <- pbmc_small[['RNA_snn']]
+class(graph)
+getClass('Graph')
+show(graph) # this fails
+
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From bbo|ker @end|ng |rom gm@||@com  Mon Aug  7 01:00:40 2023
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Sun, 6 Aug 2023 19:00:40 -0400
+Subject: [Rd] 
+ A demonstrated shortcoming of the R package management system
+In-Reply-To: <25808.2815.112074.192190@rob.eddelbuettel.com>
+References: <25808.2815.112074.192190@rob.eddelbuettel.com>
+Message-ID: <3d169f58-fc77-dbfa-88cf-ab4b44388aa1@gmail.com>
+
+   I would support this suggestion.  There is a similar binary 
+dependency chain from Matrix ? TMB ? glmmTMB; we have implemented 
+various checks to make users aware that they need to reinstall from 
+source, and to some extent we've tried to push out synchronous updates 
+(i.e., push an update of TMB to CRAN every time Matrix changes, and an 
+update of glmmTMB after that), but centralized machinery for this would 
+certainly be nice.
+
+   FWIW some of the machinery is here: 
+https://github.com/glmmTMB/glmmTMB/blob/d9ee7b043281341429381faa19b5e53cb5a378c3/glmmTMB/R/utils.R#L209-L295 
+-- it relies on a Makefile rule that caches the current installed 
+version of TMB: 
+https://github.com/glmmTMB/glmmTMB/blob/d9ee7b043281341429381faa19b5e53cb5a378c3/glmmTMB/R/utils.R#L209-L295
+
+
+   cheers
+    Ben Bolker
+
+
+On 2023-08-06 5:05 p.m., Dirk Eddelbuettel wrote:
+> 
+> CRAN, by relying on the powerful package management system that is part of R,
+> provides an unparalleled framework for extending R with nearly 20k packages.
+> 
+> We recently encountered an issue that highlights a missing element in the
+> otherwise outstanding package management system. So we would like to start a
+> discussion about enhancing its feature set. As shown below, a mechanism to
+> force reinstallation of packages may be needed.
+> 
+> A demo is included below, it is reproducible in a container. We find the
+> easiest/fastest reproduction is by saving the code snippet below in the
+> current directory as eg 'matrixIssue.R' and have it run in a container as
+> 
+>     docker run --rm -ti -v `pwd`:/mnt rocker/r2u Rscript /mnt/matrixIssue.R
+>    
+> This runs in under two minutes, first installing the older Matrix, next
+> installs SeuratObject, and then by removing the older Matrix making the
+> (already installed) current Matrix version the default. This simulates a
+> package update for Matrix. Which, as the final snippet demonstrates, silently
+> breaks SeuratObject as the cached S4 method Csparse_validate is now missing.
+> So when SeuratObject was installed under Matrix 1.5.1, it becomes unuseable
+> under Matrix 1.6.0.
+> 
+> What this shows is that a call to update.packages() will silently corrupt an
+> existing installation.  We understand that this was known and addressed at
+> CRAN by rebuilding all binary packages (for macOS and Windows).
+> 
+> But it leaves both users relying on source installation as well as
+> distributors of source packages in a dire situation. It hurt me three times:
+> my default R installation was affected with unit tests (involving
+> SeuratObject) silently failing. It similarly broke our CI setup at work.  And
+> it created a fairly bad headache for the Debian packaging I am involved with
+> (and I surmise it affects other distro similarly).
+> 
+> It would be good to have a mechanism where a package, when being upgraded,
+> could flag that 'more actions are required' by the system (administrator).
+> We think this example demonstrates that we need such a mechanism to avoid
+> (silently !!) breaking existing installations, possibly by forcing
+> reinstallation of other packages.  R knows the package dependency graph and
+> could trigger this, possibly after an 'opt-in' variable the user / admin
+> sets.
+> 
+> One possibility may be to add a new (versioned) field 'Breaks:'. Matrix could
+> then have added 'Breaks: SeuratObject (<= 4.1.3)' preventing an installation
+> of Matrix 1.6.0 when SeuratObject 4.1.3 (or earlier) is present, but
+> permitting an update to Matrix 1.6.0 alongside a new version, say, 4.1.4 of
+> SeuratObject which could itself have a versioned Depends: Matrix (>= 1.6.0).
+> 
+> Regards,  Dirk
+> 
+> 
+> ## Code example follows. Recommended to run the rocker/r2u container.
+> ## Could also run 'apt update -qq; apt upgrade -y' but not required
+> ## Thanks to my colleague Paul Hoffman for the core of this example
+> 
+> ## now have Matrix 1.6.0 because r2u and CRAN remain current but we can install an older Matrix
+> remotes::install_version('Matrix', '1.5.1')
+> 
+> ## we can confirm that we have Matrix 1.5.1
+> packageVersion("Matrix")
+> 
+> ## we now install SeuratObject from source and to speed things up we first install the binary
+> install.packages("SeuratObject")   # in this container via bspm/r2u as binary
+> ## and then force a source installation (turning bspm off) _while Matrix is at 1.5.1_
+> if (requireNamespace("bspm", quietly=TRUE) bspm::disable()
+> Sys.setenv(PKG_CXXFLAGS='-Wno-ignored-attributes') 	# Eigen compilation noise silencer
+> install.packages('SeuratObject')
+> 
+> ## we now remove the Matrix package version 1.5.1 we installed into /usr/local leaving 1.6.0
+> remove.packages("Matrix")
+> packageVersion("Matrix")
+> 
+> ## and we now run a bit of SeuratObject code that is now broken as Csparse_validate is gone
+> suppressMessages(library(SeuratObject))
+> data('pbmc_small')
+> graph <- pbmc_small[['RNA_snn']]
+> class(graph)
+> getClass('Graph')
+> show(graph) # this fails
+> 
+>
+
+
