@@ -1223,3 +1223,1576 @@ On 2023-08-06 5:05 p.m., Dirk Eddelbuettel wrote:
 >
 
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Mon Aug  7 10:54:22 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Mon, 7 Aug 2023 10:54:22 +0200
+Subject: [Rd] hist(..., log="y")
+In-Reply-To: <CAMMJQ0b-AwgT-3U-4TQYwLA7+NPzj8E0Y2Q=xXk6KWOgCJqUjg@mail.gmail.com>
+References: <CAMMJQ0b-AwgT-3U-4TQYwLA7+NPzj8E0Y2Q=xXk6KWOgCJqUjg@mail.gmail.com>
+Message-ID: <25808.45374.920991.936594@stat.math.ethz.ch>
+
+>>>>> Ott Toomet 
+>>>>>     on Sat, 5 Aug 2023 23:49:38 -0700 writes:
+
+    > Sorry if this topic has been discussed earlier.
+
+    > Currently, hist(..., log="y") fails with
+
+    >> hist(rexp(1000, 1), log="y")
+    > Warning messages: 1: In plot.window(xlim, ylim, "", ...) :
+    > nonfinite axis=2 limits [GScale(-inf,2.59218,..);
+    > log=TRUE] -- corrected now 2: In title(main = main, sub =
+    > sub, xlab = xlab, ylab = ylab, ...) : "log" is not a
+    > graphical parameter 3: In axis(1, ...) : "log" is not a
+    > graphical parameter 4: In axis(2, at = yt, ...) : "log" is
+    > not a graphical parameter
+
+    > The same applies for log="x"
+
+[...........]
+
+    > This applies for the current svn version of R, and also a
+    > few recent published versions.  This is unfortunate for
+    > two reasons:
+
+    > * the error message is not quite correct--"log" is a
+    > graphical parameter, but "hist" does not support it.
+
+No, not if you use R's (or S's before that) definition:
+
+   graphical parameters := {the possible argument of par()}
+
+log is *not* among these.
+
+
+    > * for various kinds of data it is worthwhile to make
+    > histograms in log scale.  "hist" is a very nice and
+    > convenient function and support for log scale would be
+    > handy here.
+
+Yes, possibly (see below).
+Note that the above are not errors, but warnings,
+and there *is* some support, e.g.,
+
+    > set.seed(1); range(x <- rlnorm(1111))
+    [1]  0.04938796 45.16293285
+    > hx <- hist(x, log="x", xlim=c(0.049, 47))
+    Warning messages:
+    1: In title(main = main, sub = sub, xlab = xlab, ylab = ylab, ...) :
+      "log" is not a graphical parameter
+    2: In axis(1, ...) : "log" is not a graphical parameter
+    3: In axis(2, at = yt, ...) : "log" is not a graphical parameter
+
+    > str(hx)
+    List of 6
+     $ breaks  : num [1:11] 0 5 10 15 20 25 30 35 40 45 ...
+     $ counts  : int [1:10] 1041 58 10 0 1 0 0 0 0 1
+     $ density : num [1:10] 0.1874 0.01044 0.0018 0 0.00018 ...
+     $ mids    : num [1:10] 2.5 7.5 12.5 17.5 22.5 27.5 32.5 37.5 42.5 47.5
+     $ xname   : chr "x"
+     $ equidist: logi TRUE
+     - attr(*, "class")= chr "histogram"
+
+where we see that it *does* plot  ... but crucially not the very first bin,
+because log(0) == -Inf,  with over 90% (viz. 1041) counts.
+
+    > I also played a little with the code, and it seems to be
+    > very easy to implement.  I am happy to make a patch if the
+    > team thinks it is worth pursuing.
+
+    > Cheers, Ott
+
+Yeah.. and that's is the important question.
+
+Most statisticians know that a histogram is a pretty bad
+density estimator (notably if the natural density has an
+infinite support) compared to simple kernel density estimates,
+e.g. those by density().
+Hence, I'd argue that if you expect enough sophistication from
+your "viewer"s to understand a log-scale histogram, I'd say you
+should use a density with log="x" and or "y"  and I I have
+successfully done so several times: It *does* work
+{particularly nicely if you use my sfsmisc::eaxis() for the log axis/es}.
+
+But you (and others) may have more good arguments why hist()
+should work with log="x" and/or log="y"...
+
+Also if your patch relatively small, its usefulness may 
+outweigh the added complexity (and its long-term maintenance !).
+
+Martin
+
+
+From n||@@kehre|n @end|ng |rom gm@||@com  Mon Aug  7 08:48:23 2023
+From: n||@@kehre|n @end|ng |rom gm@||@com (Nils Kehrein)
+Date: Mon, 7 Aug 2023 08:48:23 +0200
+Subject: [Rd] Detecting physical CPUs in detectCores() on Linux platforms
+Message-ID: <CAObhMffcPOLHN_ko1VQEu-taHjCiuc5kPCA9ybS1O9r_UOn1GQ@mail.gmail.com>
+
+Dear all,
+
+I recently noticed that `detectCores()` ignores the `logical=FALSE`
+argument on Linux platforms. This means that the function will always
+return the number of logical CPUs, i.e. it will count the number of threads
+that theoretically can run in parallel due to e.g. hyper-threading.
+Unfortunately, this can result in issues in high-performance computing use
+cases where hyper-threading might degrade performance instead of improving
+it.
+
+Currently, src/library/parallel/R/detectCores.R uses the following R/shell
+code fragment to identify the number of logical CPUs:
+linux = 'grep "^processor" /proc/cpuinfo 2>/dev/null | wc -l'
+
+As far as I understand, one could derive the number of online physical CPUs
+by parsing the contents of /sys/devices/system/cpu/* but that seems rather
+cumbersome. Instead, could we amend the R code with the following line?
+linux = if(logical) 'grep "^processor" /proc/cpuinfo 2>/dev/null | wc -l'
+else 'lscpu -b --parse="CORE" | tail -n +5 | sort -u | wc -l'
+
+This solution uses `lscpu` from `sys-utils`. The -b switch makes sure that
+only online CPUs/cores are listed and due to the --parse="CORE", the output
+will contain only a single column with logical core ids. It seems to do the
+job in my view, but there might be edge cases for exotic CPU topologies
+that I am not aware of.
+
+Thank you, Nils
+
+	[[alternative HTML version deleted]]
+
+
+From edd @end|ng |rom deb|@n@org  Mon Aug  7 14:12:34 2023
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Mon, 7 Aug 2023 07:12:34 -0500
+Subject: [Rd] 
+ Detecting physical CPUs in detectCores() on Linux platforms
+In-Reply-To: <CAObhMffcPOLHN_ko1VQEu-taHjCiuc5kPCA9ybS1O9r_UOn1GQ@mail.gmail.com>
+References: <CAObhMffcPOLHN_ko1VQEu-taHjCiuc5kPCA9ybS1O9r_UOn1GQ@mail.gmail.com>
+Message-ID: <25808.57266.337153.29417@rob.eddelbuettel.com>
+
+
+On 7 August 2023 at 08:48, Nils Kehrein wrote:
+| I recently noticed that `detectCores()` ignores the `logical=FALSE`
+| argument on Linux platforms. This means that the function will always
+| return the number of logical CPUs, i.e. it will count the number of threads
+| that theoretically can run in parallel due to e.g. hyper-threading.
+| Unfortunately, this can result in issues in high-performance computing use
+| cases where hyper-threading might degrade performance instead of improving
+| it.
+| 
+| Currently, src/library/parallel/R/detectCores.R uses the following R/shell
+| code fragment to identify the number of logical CPUs:
+| linux = 'grep "^processor" /proc/cpuinfo 2>/dev/null | wc -l'
+| 
+| As far as I understand, one could derive the number of online physical CPUs
+| by parsing the contents of /sys/devices/system/cpu/* but that seems rather
+| cumbersome. Instead, could we amend the R code with the following line?
+| linux = if(logical) 'grep "^processor" /proc/cpuinfo 2>/dev/null | wc -l'
+| else 'lscpu -b --parse="CORE" | tail -n +5 | sort -u | wc -l'
+
+That's good but you also need to at protect this from `lscpu` being in the
+path.  Maybe `if (logical && nzchar(Sys.which("lscpu")))` ?
+
+Dirk
+
+| This solution uses `lscpu` from `sys-utils`. The -b switch makes sure that
+| only online CPUs/cores are listed and due to the --parse="CORE", the output
+| will contain only a single column with logical core ids. It seems to do the
+| job in my view, but there might be edge cases for exotic CPU topologies
+| that I am not aware of.
+| 
+| Thank you, Nils
+| 
+| 	[[alternative HTML version deleted]]
+| 
+| ______________________________________________
+| R-devel at r-project.org mailing list
+| https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Mon Aug  7 15:15:51 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Mon, 7 Aug 2023 16:15:51 +0300
+Subject: [Rd] 
+ A demonstrated shortcoming of the R package management system
+In-Reply-To: <25808.2815.112074.192190@rob.eddelbuettel.com>
+References: <25808.2815.112074.192190@rob.eddelbuettel.com>
+Message-ID: <20230807161551.5e87e2e9@parabola>
+
+? Sun, 6 Aug 2023 16:05:03 -0500
+Dirk Eddelbuettel <edd at debian.org> ?????:
+
+> One possibility may be to add a new (versioned) field 'Breaks:'.
+> Matrix could then have added 'Breaks: SeuratObject (<= 4.1.3)'
+> preventing an installation of Matrix 1.6.0 when SeuratObject 4.1.3
+> (or earlier) is present, but permitting an update to Matrix 1.6.0
+> alongside a new version, say, 4.1.4 of SeuratObject which could
+> itself have a versioned Depends: Matrix (>= 1.6.0).
+
+I wouldn't entirely agree that Matrix 1.6.0 breaks SeuratObject 4.1.3,
+given that it's still possible to install first Matrix 1.6.0 and then
+SeuratObject 4.1.3. The breakage definitely exists, but not on the
+source package level.
+
+It may also not be easy for the package developer to notice breaking a
+binary package while performing reverse dependency checks, in time to
+add such a notice to their package. The recommended way to do that is
+tools::check_packages_in_dir(), which works on source packages.
+
+Would it help to reframe the problem in terms of binary packages
+acquiring dependency constraints that are more strict than those of the
+corresponding source packages? If a package that imports S4 classes
+from another package and thus ends up caching their definitions, R
+could compute a hash of the classes being imported, store it together
+with the installed package and complain noisily if the hash doesn't
+match later at load time. This could be used to detect such problems
+automatically (but could also result in false positives!).
+
+This is not the only way a binary package could accidentally depend on
+internals of another binary package. I remember reading about (but
+cannot find it now!) some packages "importing" a function from ggplot2
+(I think) by assigning it into their namespace:
+
+ foo <- ggplot2::useful_function
+
+This worked for quite a while, but later broke because
+ggplot2::useful_function called an internal function which ceased to
+exist in a new version of ggplot2. This is arguably a bug and probably
+even harder to track, but are there any other ways to catch a "binary
+dependency" for a package?
+
+-- 
+Best regards,
+Ivan
+
+
+From d@co036 @end|ng |rom uo@@@uck|@nd@@c@nz  Mon Aug  7 13:09:21 2023
+From: d@co036 @end|ng |rom uo@@@uck|@nd@@c@nz (David Scott)
+Date: Mon, 7 Aug 2023 23:09:21 +1200
+Subject: [Rd] hist(..., log="y")
+In-Reply-To: <25808.45374.920991.936594@stat.math.ethz.ch>
+References: <CAMMJQ0b-AwgT-3U-4TQYwLA7+NPzj8E0Y2Q=xXk6KWOgCJqUjg@mail.gmail.com>
+ <25808.45374.920991.936594@stat.math.ethz.ch>
+Message-ID: <dea06b31-f220-f99b-d684-ab4a7e7f6825@uoa.auckland.ac.nz>
+
+Log histograms are of particular interest when dealing with heavy tailed 
+data/distributions.
+
+It is not just a matter of using a log scale on the y axis though 
+because the base line of the histogram is at zero and the log of zero is 
+minus infinity.
+
+I have implemented a version of a log histogram in the function logHist, 
+in my package DistributionUtils, which may be of interest if anyone 
+seriously wishes to add functionality to the base hist function.
+
+David Scott
+
+On 7/08/2023 8:54 pm, Martin Maechler wrote:
+> >>>>> Ott Toomet
+> >>>>> on Sat, 5 Aug 2023 23:49:38 -0700 writes:
+>
+> > Sorry if this topic has been discussed earlier.
+>
+> > Currently, hist(..., log="y") fails with
+>
+> >> hist(rexp(1000, 1), log="y")
+> > Warning messages: 1: In plot.window(xlim, ylim, "", ...) :
+> > nonfinite axis=2 limits [GScale(-inf,2.59218,..);
+> > log=TRUE] -- corrected now 2: In title(main = main, sub =
+> > sub, xlab = xlab, ylab = ylab, ...) : "log" is not a
+> > graphical parameter 3: In axis(1, ...) : "log" is not a
+> > graphical parameter 4: In axis(2, at = yt, ...) : "log" is
+> > not a graphical parameter
+>
+> > The same applies for log="x"
+>
+> [...........]
+>
+> > This applies for the current svn version of R, and also a
+> > few recent published versions. This is unfortunate for
+> > two reasons:
+>
+> > * the error message is not quite correct--"log" is a
+> > graphical parameter, but "hist" does not support it.
+>
+> No, not if you use R's (or S's before that) definition:
+>
+> graphical parameters := {the possible argument of par()}
+>
+> log is *not* among these.
+>
+>
+> > * for various kinds of data it is worthwhile to make
+> > histograms in log scale. "hist" is a very nice and
+> > convenient function and support for log scale would be
+> > handy here.
+>
+> Yes, possibly (see below).
+> Note that the above are not errors, but warnings,
+> and there *is* some support, e.g.,
+>
+> > set.seed(1); range(x <- rlnorm(1111))
+> [1] 0.04938796 45.16293285
+> > hx <- hist(x, log="x", xlim=c(0.049, 47))
+> Warning messages:
+> 1: In title(main = main, sub = sub, xlab = xlab, ylab = ylab, ...) :
+> "log" is not a graphical parameter
+> 2: In axis(1, ...) : "log" is not a graphical parameter
+> 3: In axis(2, at = yt, ...) : "log" is not a graphical parameter
+>
+> > str(hx)
+> List of 6
+> $ breaks : num [1:11] 0 5 10 15 20 25 30 35 40 45 ...
+> $ counts : int [1:10] 1041 58 10 0 1 0 0 0 0 1
+> $ density : num [1:10] 0.1874 0.01044 0.0018 0 0.00018 ...
+> $ mids : num [1:10] 2.5 7.5 12.5 17.5 22.5 27.5 32.5 37.5 42.5 47.5
+> $ xname : chr "x"
+> $ equidist: logi TRUE
+> - attr(*, "class")= chr "histogram"
+>
+> where we see that it *does* plot ... but crucially not the very first bin,
+> because log(0) == -Inf, with over 90% (viz. 1041) counts.
+>
+> > I also played a little with the code, and it seems to be
+> > very easy to implement. I am happy to make a patch if the
+> > team thinks it is worth pursuing.
+>
+> > Cheers, Ott
+>
+> Yeah.. and that's is the important question.
+>
+> Most statisticians know that a histogram is a pretty bad
+> density estimator (notably if the natural density has an
+> infinite support) compared to simple kernel density estimates,
+> e.g. those by density().
+> Hence, I'd argue that if you expect enough sophistication from
+> your "viewer"s to understand a log-scale histogram, I'd say you
+> should use a density with log="x" and or "y" and I I have
+> successfully done so several times: It *does* work
+> {particularly nicely if you use my sfsmisc::eaxis() for the log axis/es}.
+>
+> But you (and others) may have more good arguments why hist()
+> should work with log="x" and/or log="y"...
+>
+> Also if your patch relatively small, its usefulness may
+> outweigh the added complexity (and its long-term maintenance !).
+>
+> Martin
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel 
+> <https://stat.ethz.ch/mailman/listinfo/r-devel>
+
+-- 
+_________________________________________________________________
+David Scott
+Department of Statistics
+The University of Auckland, PB 92019
+Auckland 1142,    NEW ZEALAND
+Email:d.scott at auckland.ac.nz
+
+
+	[[alternative HTML version deleted]]
+
+
+From ju||@n@hn|opek @end|ng |rom un|-jen@@de  Mon Aug  7 14:47:46 2023
+From: ju||@n@hn|opek @end|ng |rom un|-jen@@de (Julian Hniopek)
+Date: Mon, 07 Aug 2023 14:47:46 +0200
+Subject: [Rd] 
+ Detecting physical CPUs in detectCores() on Linux platforms
+In-Reply-To: <25808.57266.337153.29417@rob.eddelbuettel.com>
+References: <CAObhMffcPOLHN_ko1VQEu-taHjCiuc5kPCA9ybS1O9r_UOn1GQ@mail.gmail.com>
+ <25808.57266.337153.29417@rob.eddelbuettel.com>
+Message-ID: <20c86758cf57baa0c045aa39d99bc950a8cb8b31.camel@uni-jena.de>
+
+On Mon, 2023-08-07 at 07:12 -0500, Dirk Eddelbuettel wrote:
+> 
+> On 7 August 2023 at 08:48, Nils Kehrein wrote:
+> > I recently noticed that `detectCores()` ignores the `logical=FALSE`
+> > argument on Linux platforms. This means that the function will
+> > always
+> > return the number of logical CPUs, i.e. it will count the number of
+> > threads
+> > that theoretically can run in parallel due to e.g. hyper-threading.
+> > Unfortunately, this can result in issues in high-performance
+> > computing use
+> > cases where hyper-threading might degrade performance instead of
+> > improving
+> > it.
+> > 
+> > Currently, src/library/parallel/R/detectCores.R uses the following
+> > R/shell
+> > code fragment to identify the number of logical CPUs:
+> > linux = 'grep "^processor" /proc/cpuinfo 2>/dev/null | wc -l'
+> > 
+> > As far as I understand, one could derive the number of online
+> > physical CPUs
+> > by parsing the contents of /sys/devices/system/cpu/* but that seems
+> > rather
+> > cumbersome. Instead, could we amend the R code with the following
+> > line?
+> > linux = if(logical) 'grep "^processor" /proc/cpuinfo 2>/dev/null |
+> > wc -l'
+> > else 'lscpu -b --parse="CORE" | tail -n +5 | sort -u | wc -l'
+> 
+> That's good but you also need to at protect this from `lscpu` being
+> in the
+> path.? Maybe `if (logical && nzchar(Sys.which("lscpu")))` ?
+> 
+> Dirk
+> 
+Alternatively, using only on POSIX utils which should be in the path of
+all Linux Systems and /proc/cpuinfo:
+
+awk '/^physical id/{PHYS_ID=$NF; next} /^cpu cores/{print PHYS_ID"
+"$NF;}' /proc/cpuinfo 2>/dev/null | sort | uniq | awk '{sum+=$NF;} END
+{print sum}'.
+
+Parses /proc/cpuinfo for the number of physical cores and physical id
+in each CPU. Only returns unique combinations of physical id (i.e.
+Socket) and core numbers. Then sums up the number of cores for each
+physicalid to get the total amount of physical cores.
+
+Something I had lying around. Someone with better awk skills could
+probably do sorting and filtering in awk as well to save on pipes.
+Works on single and multisocket AMD/Intel from my experience.
+
+Julian
+> > 
+> > This solution uses `lscpu` from `sys-utils`. The -b switch makes
+> > sure that
+> > only online CPUs/cores are listed and due to the --parse="CORE",
+> > the output
+> > will contain only a single column with logical core ids. It seems
+> > to do the
+> > job in my view, but there might be edge cases for exotic CPU
+> > topologies
+> > that I am not aware of.
+> > 
+> > Thank you, Nils
+> > 
+> > ????????[[alternative HTML version deleted]]
+> > 
+> > ______________________________________________
+> > R-devel at r-project.org?mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
+From j@g@nmn2 @end|ng |rom gm@||@com  Mon Aug  7 15:25:50 2023
+From: j@g@nmn2 @end|ng |rom gm@||@com (Mikael Jagan)
+Date: Mon, 7 Aug 2023 09:25:50 -0400
+Subject: [Rd] R-devel Digest, Vol 246, Issue 6
+In-Reply-To: <mailman.53640.9.1691402401.10467.r-devel@r-project.org>
+References: <mailman.53640.9.1691402401.10467.r-devel@r-project.org>
+Message-ID: <97ace211-d761-8ecd-bee9-2f4682ead3f3@gmail.com>
+
+Two quite related and recent threads on R-devel:
+
+[1] proposal for WRE: clarify that use of S4 classes implies use of superclasses
+https://stat.ethz.ch/pipermail/r-devel/2023-July/082739.html
+[2] Should package version requirements assume installation from sources?
+https://stat.ethz.ch/pipermail/r-devel/2022-September/081971.html
+
+Notably, if SeuratObject 4.1.3, the current version, had
+
+     importClassesFrom(Matrix, dgCMatrix,
+                       ## and the exported superclasses:
+                       CsparseMatrix, Matrix, compMatrix, dMatrix,
+                       dsparseMatrix, generalMatrix, sparseMatrix)
+
+and not just
+
+     importClassesFrom(Matrix, dgCMatrix)
+
+then the silent breakage due to missing symbols would not have occurred.
+That is because _imported_ class definitions are retrieved at load time,
+not at install time.  SeuratObject 4.1.3 retrieves the CsparseMatrix
+definition at install time, so indeed it is liable to become stale with
+Matrix updates ...
+
+Not to derail Dirk's proposal for "Breaks", which could certainly have
+uses beyond this particular example where a "correct" NAMESPACE directive
+would solve the problems ...
+
+Mikael
+
+On 2023-08-07 6:00 am, r-devel-request at r-project.org wrote:
+> I would support this suggestion. There is a similar binary dependency chain from 
+> Matrix ? TMB ? glmmTMB; we have implemented various checks to make users aware 
+> that they need to reinstall from source, and to some extent we've tried to push 
+> out synchronous updates (i.e., push an update of TMB to CRAN every time Matrix 
+> changes, and an update of glmmTMB after that), but centralized machinery for 
+> this would certainly be nice. FWIW some of the machinery is here: 
+> https://github.com/glmmTMB/glmmTMB/blob/d9ee7b043281341429381faa19b5e53cb5a378c3/glmmTMB/R/utils.R#L209-L295 -- it relies on a Makefile rule that caches the current installed version of TMB: https://github.com/glmmTMB/glmmTMB/blob/d9ee7b043281341429381faa19b5e53cb5a378c3/glmmTMB/R/utils.R#L209-L295 cheers Ben Bolker On 2023-08-06 5:05 p.m., Dirk Eddelbuettel wrote:
+>> CRAN, by relying on the powerful package management system that is part of R,
+>> provides an unparalleled framework for extending R with nearly 20k packages.
+>>
+>> We recently encountered an issue that highlights a missing element in the
+>> otherwise outstanding package management system. So we would like to start a
+>> discussion about enhancing its feature set. As shown below, a mechanism to
+>> force reinstallation of packages may be needed.
+>>
+>> A demo is included below, it is reproducible in a container. We find the
+>> easiest/fastest reproduction is by saving the code snippet below in the
+>> current directory as eg 'matrixIssue.R' and have it run in a container as
+>>
+>>      docker run --rm -ti -v `pwd`:/mnt rocker/r2u Rscript /mnt/matrixIssue.R
+>>     
+>> This runs in under two minutes, first installing the older Matrix, next
+>> installs SeuratObject, and then by removing the older Matrix making the
+>> (already installed) current Matrix version the default. This simulates a
+>> package update for Matrix. Which, as the final snippet demonstrates, silently
+>> breaks SeuratObject as the cached S4 method Csparse_validate is now missing.
+>> So when SeuratObject was installed under Matrix 1.5.1, it becomes unuseable
+>> under Matrix 1.6.0.
+>>
+>> What this shows is that a call to update.packages() will silently corrupt an
+>> existing installation.  We understand that this was known and addressed at
+>> CRAN by rebuilding all binary packages (for macOS and Windows).
+>>
+>> But it leaves both users relying on source installation as well as
+>> distributors of source packages in a dire situation. It hurt me three times:
+>> my default R installation was affected with unit tests (involving
+>> SeuratObject) silently failing. It similarly broke our CI setup at work.  And
+>> it created a fairly bad headache for the Debian packaging I am involved with
+>> (and I surmise it affects other distro similarly).
+>>
+>> It would be good to have a mechanism where a package, when being upgraded,
+>> could flag that 'more actions are required' by the system (administrator).
+>> We think this example demonstrates that we need such a mechanism to avoid
+>> (silently !!) breaking existing installations, possibly by forcing
+>> reinstallation of other packages.  R knows the package dependency graph and
+>> could trigger this, possibly after an 'opt-in' variable the user / admin
+>> sets.
+>>
+>> One possibility may be to add a new (versioned) field 'Breaks:'. Matrix could
+>> then have added 'Breaks: SeuratObject (<= 4.1.3)' preventing an installation
+>> of Matrix 1.6.0 when SeuratObject 4.1.3 (or earlier) is present, but
+>> permitting an update to Matrix 1.6.0 alongside a new version, say, 4.1.4 of
+>> SeuratObject which could itself have a versioned Depends: Matrix (>= 1.6.0).
+>>
+>> Regards,  Dirk
+>>
+>>
+>> ## Code example follows. Recommended to run the rocker/r2u container.
+>> ## Could also run 'apt update -qq; apt upgrade -y' but not required
+>> ## Thanks to my colleague Paul Hoffman for the core of this example
+>>
+>> ## now have Matrix 1.6.0 because r2u and CRAN remain current but we can install an older Matrix
+>> remotes::install_version('Matrix', '1.5.1')
+>>
+>> ## we can confirm that we have Matrix 1.5.1
+>> packageVersion("Matrix")
+>>
+>> ## we now install SeuratObject from source and to speed things up we first install the binary
+>> install.packages("SeuratObject")   # in this container via bspm/r2u as binary
+>> ## and then force a source installation (turning bspm off) _while Matrix is at 1.5.1_
+>> if (requireNamespace("bspm", quietly=TRUE) bspm::disable()
+>> Sys.setenv(PKG_CXXFLAGS='-Wno-ignored-attributes') 	# Eigen compilation noise silencer
+>> install.packages('SeuratObject')
+>>
+>> ## we now remove the Matrix package version 1.5.1 we installed into /usr/local leaving 1.6.0
+>> remove.packages("Matrix")
+>> packageVersion("Matrix")
+>>
+>> ## and we now run a bit of SeuratObject code that is now broken as Csparse_validate is gone
+>> suppressMessages(library(SeuratObject))
+>> data('pbmc_small')
+>> graph <- pbmc_small[['RNA_snn']]
+>> class(graph)
+>> getClass('Graph')
+>> show(graph) # this fails
+>>
+>>
+
+
+From edd @end|ng |rom deb|@n@org  Mon Aug  7 15:50:10 2023
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Mon, 7 Aug 2023 08:50:10 -0500
+Subject: [Rd] 
+ A demonstrated shortcoming of the R package management system
+In-Reply-To: <20230807161551.5e87e2e9@parabola>
+References: <25808.2815.112074.192190@rob.eddelbuettel.com>
+ <20230807161551.5e87e2e9@parabola>
+Message-ID: <25808.63122.639199.691225@rob.eddelbuettel.com>
+
+
+Hi Ivan,
+
+I usually 'mentally applaud' when reading your replies on list but not here.
+
+On 7 August 2023 at 16:15, Ivan Krylov wrote:
+| SeuratObject 4.1.3. The breakage definitely exists, but not on the
+| source package level.
+
+You seem to overlook that a large part of the R Universe only works off
+source distributions and, as one cannot run source, builds binaries off them.
+
+The breakage is real.
+
+Also implying our packages in question would not reverse-dependency check is
+not helpful. Of course they do.
+
+[ And as an illustrative aside, part of the 'third problem I mentioned in my
+initial email concerning Debian is that eg (some) Debian maintainers insist
+on autopkgtests (a good idea in theory) and get terribly hung up when they
+manage to mismatch package relations (ie 'skew' from CRAN -- while that is in
+part self-imposed) some troubles are real and eg Matrix 1.6.0 only got to
+'testing' now after release manager intervention. (And no Mikael, that was
+not Seurat related but thanks for the tip in your email, already passed it
+on.)  Of course we have other issues too there with eg exotic non-CRAN
+platforms (now including i386) breaking. But that is outside of this thread.
+Thanks for bearing with me). ]
+
+Dirk
+
+| 
+| It may also not be easy for the package developer to notice breaking a
+| binary package while performing reverse dependency checks, in time to
+| add such a notice to their package. The recommended way to do that is
+| tools::check_packages_in_dir(), which works on source packages.
+| 
+| Would it help to reframe the problem in terms of binary packages
+| acquiring dependency constraints that are more strict than those of the
+| corresponding source packages? If a package that imports S4 classes
+| from another package and thus ends up caching their definitions, R
+| could compute a hash of the classes being imported, store it together
+| with the installed package and complain noisily if the hash doesn't
+| match later at load time. This could be used to detect such problems
+| automatically (but could also result in false positives!).
+| 
+| This is not the only way a binary package could accidentally depend on
+| internals of another binary package. I remember reading about (but
+| cannot find it now!) some packages "importing" a function from ggplot2
+| (I think) by assigning it into their namespace:
+| 
+|  foo <- ggplot2::useful_function
+| 
+| This worked for quite a while, but later broke because
+| ggplot2::useful_function called an internal function which ceased to
+| exist in a new version of ggplot2. This is arguably a bug and probably
+| even harder to track, but are there any other ways to catch a "binary
+| dependency" for a package?
+| 
+| -- 
+| Best regards,
+| Ivan
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From g@bembecker @end|ng |rom gm@||@com  Mon Aug  7 22:34:16 2023
+From: g@bembecker @end|ng |rom gm@||@com (Gabriel Becker)
+Date: Mon, 7 Aug 2023 13:34:16 -0700
+Subject: [Rd] Vectorize library() to improve handling of versioned deps
+ [sprint project proposal]
+Message-ID: <CAD4oTHHGoQ0geRoUoULpcxLnEEgnfU+ZCzubmFkUAA29Z1wGUQ@mail.gmail.com>
+
+Hi All,
+
+This is a proposal for a project which could be worked on during the R
+development Sprint at the end of this month; it was requested that we start
+a discussion here to see what R-core's thoughts on it were before we
+officially add it to the docket.
+
+
+AFAIK, R officially supports both versioned dependencies (almost
+exclusively of the >=version variety) and library paths with more than one
+directory. Further, I believe if at least de facto supports the same
+package being installed in different directories along the lib path. The
+most common of these, I'd bet, would be different versions of the same
+library being installed in a site library and in a user's personal library,
+though that's not the only way this can happen.
+
+The combination of these two features, however can give rise to
+packages which are all correctly installed and all loadable individually,
+but which must be loaded in a particular order when used together or the
+loading of some of them will fail.
+
+Consider the following dependency structure between packages
+
+pkgA: pkgB (>= 0.5.0)
+
+pkgC: pkgB (>= 0.6.0)
+
+Consider the following multi-libpath setup:
+
+~/pth1/: pkgA, pkg B [0.5.1]
+~/pth2/: pkg C, pkg B [0.6.5]
+
+And consider that we have the libpath c("~/pth1/", "~/pth2").
+
+If we do
+
+library(pkgA)
+
+Things will work great.
+
+Same if we do
+
+library(pkgC)
+
+BUT, if we do
+
+library(pkgA)
+library(pkgC)
+
+pkgC will not be able to be loaded, because an insufficient version of
+pkgB will
+already be loaded.
+
+I propose that library be modified to be able to take a character vector of
+package names, when it does, it performs the dependency calculations to
+determine how all packages in the vector can be loaded (in the order they
+appear). In the example above, this would mean that if we did
+
+library(c("pkgA", "pkgC"))
+
+It would determine that pkgB version 0.6.5 was needed (or alternatively,
+that version 0.5.1 was insufficient) and use that *when loading the
+dependencies of pkgA*.
+
+The proposal issue for the sprint itself is here:
+https://github.com/r-devel/r-project-sprint-2023/discussions/15
+
+Thoughts?
+
+~G
+
+	[[alternative HTML version deleted]]
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Tue Aug  8 01:21:27 2023
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Tue, 8 Aug 2023 11:21:27 +1200
+Subject: [Rd] 
+ Detecting physical CPUs in detectCores() on Linux platforms
+In-Reply-To: <20c86758cf57baa0c045aa39d99bc950a8cb8b31.camel@uni-jena.de>
+References: <CAObhMffcPOLHN_ko1VQEu-taHjCiuc5kPCA9ybS1O9r_UOn1GQ@mail.gmail.com>
+ <25808.57266.337153.29417@rob.eddelbuettel.com>
+ <20c86758cf57baa0c045aa39d99bc950a8cb8b31.camel@uni-jena.de>
+Message-ID: <CC836864-15F7-4D44-BED6-20CA02FCD8BA@R-project.org>
+
+First, detecting HT vs cores is not necessarily possible in general, Linux may assign core id to each HT depending on circumstances:
+
+$ grep 'cpu cores' /proc/cpuinfo | uniq
+cpu cores	: 32
+$ grep 'model name' /proc/cpuinfo | uniq
+model name	: Intel(R) Xeon(R) Gold 6142 CPU @ 2.60GHz
+
+and you can look up that Xenon 6142 has 16 cores.
+
+Second, instead of "awk"ward contortions it's easily done in R with something like
+
+d=read.dcf("/proc/cpuinfo")
+sum(as.integer(tapply(
+  d[,grep("cpu cores",colnames(d))],
+  d[,grep("physical id",colnames(d))], `[`, 1)))
+
+which avoids subprocesses, quoting hell and all such issues...
+
+Cheers,
+Simon
+
+
+> On 8/08/2023, at 12:47 AM, Julian Hniopek <julian.hniopek at uni-jena.de> wrote:
+> 
+> On Mon, 2023-08-07 at 07:12 -0500, Dirk Eddelbuettel wrote:
+>> 
+>> On 7 August 2023 at 08:48, Nils Kehrein wrote:
+>>> I recently noticed that `detectCores()` ignores the `logical=FALSE`
+>>> argument on Linux platforms. This means that the function will
+>>> always
+>>> return the number of logical CPUs, i.e. it will count the number of
+>>> threads
+>>> that theoretically can run in parallel due to e.g. hyper-threading.
+>>> Unfortunately, this can result in issues in high-performance
+>>> computing use
+>>> cases where hyper-threading might degrade performance instead of
+>>> improving
+>>> it.
+>>> 
+>>> Currently, src/library/parallel/R/detectCores.R uses the following
+>>> R/shell
+>>> code fragment to identify the number of logical CPUs:
+>>> linux = 'grep "^processor" /proc/cpuinfo 2>/dev/null | wc -l'
+>>> 
+>>> As far as I understand, one could derive the number of online
+>>> physical CPUs
+>>> by parsing the contents of /sys/devices/system/cpu/* but that seems
+>>> rather
+>>> cumbersome. Instead, could we amend the R code with the following
+>>> line?
+>>> linux = if(logical) 'grep "^processor" /proc/cpuinfo 2>/dev/null |
+>>> wc -l'
+>>> else 'lscpu -b --parse="CORE" | tail -n +5 | sort -u | wc -l'
+>> 
+>> That's good but you also need to at protect this from `lscpu` being
+>> in the
+>> path.  Maybe `if (logical && nzchar(Sys.which("lscpu")))` ?
+>> 
+>> Dirk
+>> 
+> Alternatively, using only on POSIX utils which should be in the path of
+> all Linux Systems and /proc/cpuinfo:
+> 
+> awk '/^physical id/{PHYS_ID=$NF; next} /^cpu cores/{print PHYS_ID"
+> "$NF;}' /proc/cpuinfo 2>/dev/null | sort | uniq | awk '{sum+=$NF;} END
+> {print sum}'.
+> 
+> Parses /proc/cpuinfo for the number of physical cores and physical id
+> in each CPU. Only returns unique combinations of physical id (i.e.
+> Socket) and core numbers. Then sums up the number of cores for each
+> physicalid to get the total amount of physical cores.
+> 
+> Something I had lying around. Someone with better awk skills could
+> probably do sorting and filtering in awk as well to save on pipes.
+> Works on single and multisocket AMD/Intel from my experience.
+> 
+> Julian
+>>> 
+>>> This solution uses `lscpu` from `sys-utils`. The -b switch makes
+>>> sure that
+>>> only online CPUs/cores are listed and due to the --parse="CORE",
+>>> the output
+>>> will contain only a single column with logical core ids. It seems
+>>> to do the
+>>> job in my view, but there might be edge cases for exotic CPU
+>>> topologies
+>>> that I am not aware of.
+>>> 
+>>> Thank you, Nils
+>>> 
+>>>         [[alternative HTML version deleted]]
+>>> 
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>> 
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
+From edd @end|ng |rom deb|@n@org  Tue Aug  8 02:07:37 2023
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Mon, 7 Aug 2023 19:07:37 -0500
+Subject: [Rd] 
+ Detecting physical CPUs in detectCores() on Linux platforms
+In-Reply-To: <CC836864-15F7-4D44-BED6-20CA02FCD8BA@R-project.org>
+References: <CAObhMffcPOLHN_ko1VQEu-taHjCiuc5kPCA9ybS1O9r_UOn1GQ@mail.gmail.com>
+ <25808.57266.337153.29417@rob.eddelbuettel.com>
+ <20c86758cf57baa0c045aa39d99bc950a8cb8b31.camel@uni-jena.de>
+ <CC836864-15F7-4D44-BED6-20CA02FCD8BA@R-project.org>
+Message-ID: <25809.34633.249825.74893@rob.eddelbuettel.com>
+
+
+On 8 August 2023 at 11:21, Simon Urbanek wrote:
+| First, detecting HT vs cores is not necessarily possible in general, Linux may assign core id to each HT depending on circumstances:
+| 
+| $ grep 'cpu cores' /proc/cpuinfo | uniq
+| cpu cores	: 32
+| $ grep 'model name' /proc/cpuinfo | uniq
+| model name	: Intel(R) Xeon(R) Gold 6142 CPU @ 2.60GHz
+| 
+| and you can look up that Xenon 6142 has 16 cores.
+| 
+| Second, instead of "awk"ward contortions it's easily done in R with something like
+| 
+| d=read.dcf("/proc/cpuinfo")
+| sum(as.integer(tapply(
+|   d[,grep("cpu cores",colnames(d))],
+|   d[,grep("physical id",colnames(d))], `[`, 1)))
+| 
+| which avoids subprocesses, quoting hell and all such issues...
+
+Love the use of read.dcf("/proc/cpuinfo") !!
+
+On my box a simpler
+
+  > d <- read.dcf("/proc/cpuinfo") 
+  > as.integer(unique(d[, grep("cpu cores",colnames(d))]))
+  [1] 6
+  > 
+
+does the right thing.
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Tue Aug  8 03:17:55 2023
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Tue, 8 Aug 2023 13:17:55 +1200
+Subject: [Rd] 
+ Detecting physical CPUs in detectCores() on Linux platforms
+In-Reply-To: <25809.34633.249825.74893@rob.eddelbuettel.com>
+References: <CAObhMffcPOLHN_ko1VQEu-taHjCiuc5kPCA9ybS1O9r_UOn1GQ@mail.gmail.com>
+ <25808.57266.337153.29417@rob.eddelbuettel.com>
+ <20c86758cf57baa0c045aa39d99bc950a8cb8b31.camel@uni-jena.de>
+ <CC836864-15F7-4D44-BED6-20CA02FCD8BA@R-project.org>
+ <25809.34633.249825.74893@rob.eddelbuettel.com>
+Message-ID: <0DCAA0B2-CE51-4518-B7A5-95B737D1281F@R-project.org>
+
+
+
+> On 8/08/2023, at 12:07 PM, Dirk Eddelbuettel <edd at debian.org> wrote:
+> 
+> 
+> On 8 August 2023 at 11:21, Simon Urbanek wrote:
+> | First, detecting HT vs cores is not necessarily possible in general, Linux may assign core id to each HT depending on circumstances:
+> | 
+> | $ grep 'cpu cores' /proc/cpuinfo | uniq
+> | cpu cores	: 32
+> | $ grep 'model name' /proc/cpuinfo | uniq
+> | model name	: Intel(R) Xeon(R) Gold 6142 CPU @ 2.60GHz
+> | 
+> | and you can look up that Xenon 6142 has 16 cores.
+> | 
+> | Second, instead of "awk"ward contortions it's easily done in R with something like
+> | 
+> | d=read.dcf("/proc/cpuinfo")
+> | sum(as.integer(tapply(
+> |   d[,grep("cpu cores",colnames(d))],
+> |   d[,grep("physical id",colnames(d))], `[`, 1)))
+> | 
+> | which avoids subprocesses, quoting hell and all such issues...
+> 
+> Love the use of read.dcf("/proc/cpuinfo") !!
+> 
+> On my box a simpler
+> 
+>> d <- read.dcf("/proc/cpuinfo") 
+>> as.integer(unique(d[, grep("cpu cores",colnames(d))]))
+>  [1] 6
+>> 
+> 
+
+I don't think that works on NUMA/SMP machines - you need to add all the cores for each CPU (that's why the above splits by physical id which is unique per cpu). On a dual-cpu machine:
+
+> as.integer(unique(d[, grep("cpu cores",colnames(d))]))
+[1] 32
+> sum(as.integer(tapply(
+ d[,grep("cpu cores",colnames(d))],
+ d[,grep("physical id",colnames(d))], `[`, 1)))
+[1] 64
+
+Also things get quite fun on VMs as they can cobble together quite a few virtual CPUs regardless of the underlying hardware.
+
+To be honest I think the motivation of this thread is dubious at best: it is a bad idea to use detectCore() blindly to specify parallelization and we explicitly say it's a bad idea - any sensible person will set it according to the demands, the hardware and the task. The number of cores is only partially relevant - e.g. if any I/O is involved you want to oversubscribe the CPU. If you have other users you want to only use a fraction etc. That doesn't mean that the we couldn't do a better job, but if you have to use detectCores() then you are already in trouble to start with.
+
+Cheers,
+Simon
+
+
+From edd @end|ng |rom deb|@n@org  Tue Aug  8 04:16:59 2023
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Mon, 7 Aug 2023 21:16:59 -0500
+Subject: [Rd] 
+ Detecting physical CPUs in detectCores() on Linux platforms
+In-Reply-To: <0DCAA0B2-CE51-4518-B7A5-95B737D1281F@R-project.org>
+References: <CAObhMffcPOLHN_ko1VQEu-taHjCiuc5kPCA9ybS1O9r_UOn1GQ@mail.gmail.com>
+ <25808.57266.337153.29417@rob.eddelbuettel.com>
+ <20c86758cf57baa0c045aa39d99bc950a8cb8b31.camel@uni-jena.de>
+ <CC836864-15F7-4D44-BED6-20CA02FCD8BA@R-project.org>
+ <25809.34633.249825.74893@rob.eddelbuettel.com>
+ <0DCAA0B2-CE51-4518-B7A5-95B737D1281F@R-project.org>
+Message-ID: <25809.42395.29355.809081@rob.eddelbuettel.com>
+
+
+On 8 August 2023 at 13:17, Simon Urbanek wrote:
+| To be honest I think the motivation of this thread is dubious at best: it is a bad idea to use detectCore() blindly to specify parallelization and we explicitly say it's a bad idea - any sensible person will set it according to the demands, the hardware and the task. The number of cores is only partially relevant - e.g. if any I/O is involved you want to oversubscribe the CPU. If you have other users you want to only use a fraction etc. That doesn't mean that the we couldn't do a better job, but if you have to use detectCores() then you are already in trouble to start with.
+
+As I often say, "life's a bitch and then you die".  Detecting hardware
+capabilties at run-time is no small task.
+
+When 1 1/2 decades ago I filled in maintaining slurm for Debian (and
+interfacing open-mpi) that latter project added an entire library for that
+scope (libhwloc).  For all I know it is still best practices.  So in that
+sense no point grepping / reading /proc/cpuinfo as that has clear limits.
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From @@m|tuom|v@@r@ @end|ng |rom hotm@||@com  Tue Aug  8 11:14:28 2023
+From: @@m|tuom|v@@r@ @end|ng |rom hotm@||@com (Sami Tuomivaara)
+Date: Tue, 8 Aug 2023 09:14:28 +0000
+Subject: [Rd] 
+ feature request: optim() iteration of functions that return
+ multiple values
+Message-ID: <PAXP189MB1928BA028ECC4184B07202AFD60DA@PAXP189MB1928.EURP189.PROD.OUTLOOK.COM>
+
+Thank you all very much for the suggestions, after testing, each of them would be a viable solution in certain contexts.  Code for benchmarking:
+
+# preliminaries
+install.packages("microbenchmark")
+library(microbenchmark)
+
+
+data <- new.env()
+data$ans2 <- 0
+data$ans3 <- 0
+data$i <- 0
+data$fun.value <- numeric(1000)
+
+# define functions
+
+rosenbrock_env <- function(x, data)
+{
+  x1 <- x[1]
+  x2 <- x[2]
+  ans <- 100 * (x2 - x1 * x1)^2 + (1 - x1)^2
+  ans2 <- ans^2
+  ans3 <- sqrt(abs(ans))
+  data$i <- data$i + 1
+  data$fun.value[data$i] <- ans
+  ans
+}
+
+
+rosenbrock_env2 <- function(x, data)
+{
+  x1 <- x[1]
+  x2 <- x[2]
+  ans <- 100 * (x2 - x1 * x1)^2 + (1 - x1)^2
+  ans2 <- ans^2
+  ans3 <- sqrt(abs(ans))
+  data$ans2 <- ans2
+  data$ans3 <- ans3
+  ans
+}
+
+rosenbrock_attr <- function(x)
+{
+  x1 <- x[1]
+  x2 <- x[2]
+  ans <- 100 * (x2 - x1 * x1)^2 + (1 - x1)^2
+  ans2 <- ans^2
+  ans3 <- sqrt(abs(ans))
+  attr(ans, "ans2") <- ans2
+  attr(ans, "ans3") <- ans3
+  ans
+}
+
+
+rosenbrock_extra <- function(x, extraInfo = FALSE)
+{
+  x1 <- x[1]
+  x2 <- x[2]
+  ans <- 100 * (x2 - x1 * x1)^2 + (1 - x1)^2
+  ans2 <- ans^2
+  ans3 <- sqrt(abs(ans))
+  if (extraInfo) list(ans = ans, ans2 = ans2, ans3 = ans3)
+  else ans
+}
+
+
+rosenbrock_all <- function(x)
+{
+  x1 <- x[1]
+  x2 <- x[2]
+  ans <- 100 * (x2 - x1 * x1)^2 + (1 - x1)^2
+  ans2 <- ans^2
+  ans3 <- sqrt(abs(ans))
+  list(ans = ans, ans2 = ans2, ans3 = ans3)
+}
+
+returnFirst <- function(fun) function(...) do.call(fun,list(...))[[1]]
+rosenbrock_all2 <- returnFirst(rosenbrock_all)
+
+
+# benchmark all functions
+set.seed <- 100
+
+microbenchmark(env = optim(c(-1,2), rosenbrock_env, data = data),
+               env2 = optim(c(-1,2), rosenbrock_env2, data = data),
+               attr = optim(c(-1,2), rosenbrock_attr),
+               extra = optim(c(-1,2), rosenbrock_extra, extraInfo = FALSE),
+               all2 = optim(c(-1,2), rosenbrock_all2),
+               times = 100)
+
+
+# correct parameters and return values?
+env <- optim(c(-1,2), rosenbrock_env, data = data)
+env2 <- optim(c(-1,2), rosenbrock_env2, data = data)
+attr <- optim(c(-1,2), rosenbrock_attr)
+extra <- optim(c(-1,2), rosenbrock_extra, extraInfo = FALSE)
+all2 <- optim(c(-1,2), rosenbrock_all2)
+
+# correct return values with optimized parameters?
+env. <- rosenbrock_env(env$par, data)
+env2. <- rosenbrock_env(env2$par, data)
+attr. <- rosenbrock_attr(attr$par)
+extra. <- rosenbrock_extra(extra$par, extraInfo = FALSE)
+all2. <- rosenbrock_all2(all2$par)
+
+# functions that return more than one value
+all. <- rosenbrock_all(all2$par)
+extra2. <- rosenbrock_extra(extra$par, extraInfo = TRUE)
+
+# environment values correct?
+data$ans2
+data$ans3
+data$i
+data$fun.value
+
+
+microbenchmarking results:
+
+Unit: microseconds
+  expr     min        lq      mean    median         uq       max neval
+   env 644.102 3919.6010 9598.3971 7950.0005 15582.8515 42210.900   100
+  env2 337.001  351.5510  479.2900  391.7505   460.3520  6900.800   100
+  attr 350.201  367.3010  502.0319  409.7510   483.6505  6772.800   100
+ extra 276.800  287.2010  402.4231  302.6510   371.5015  6457.201   100
+  all2 630.801  646.9015  785.9880  678.0010   808.9510  6411.102   100
+
+rosenbrock_env and _env2 functions differ in that _env accesses vectors in the defined environment by indexing, whereas _env2 doesn't (hope I interpreted this right?).  This appears to be expensive operation, but allows saving values during the steps of the optim iteration, rather than just at convergence.  Overall, _extra has consistently lowest median execution time!
+
+My earlier workaround was to write two separate functions, one of which returns extra values; all suggested approaches simplify that approach considerably.  I am also now more educated about attributes and environments that I did not know how to utilize before and that proved to be very useful concepts.  Again, thank you everyone for your input!
+
+
+	[[alternative HTML version deleted]]
+
+
+From pro|jcn@@h @end|ng |rom gm@||@com  Tue Aug  8 14:13:31 2023
+From: pro|jcn@@h @end|ng |rom gm@||@com (J C Nash)
+Date: Tue, 8 Aug 2023 08:13:31 -0400
+Subject: [Rd] 
+ feature request: optim() iteration of functions that return
+ multiple values
+In-Reply-To: <PAXP189MB1928BA028ECC4184B07202AFD60DA@PAXP189MB1928.EURP189.PROD.OUTLOOK.COM>
+References: <PAXP189MB1928BA028ECC4184B07202AFD60DA@PAXP189MB1928.EURP189.PROD.OUTLOOK.COM>
+Message-ID: <2af81e16-2f48-56d2-d619-51ab4a33e2e4@gmail.com>
+
+But why time methods that the author (me!) has been telling the community for
+years have updates? Especially as optimx::optimr() uses same syntax as optim()
+and gives access to a number of solvers, both production and didactic. This set
+of solvers is being improved or added to regularly, with a major renewal almost
+complete (for the adventurous, code on https://github.com/nashjc/optimx).
+
+Note also that the default Nelder-Mead is good for exploring function surface and
+is quite robust at getting quickly into the region of a minimum, but can be quite
+poor in "finishing" the process. Tools have different strengths and weaknesses.
+optim() was more or less state of the art a couple of decades ago, but there are
+other choices now.
+
+JN
+
+On 2023-08-08 05:14, Sami Tuomivaara wrote:
+> Thank you all very much for the suggestions, after testing, each of them would be a viable solution in certain contexts.  Code for benchmarking:
+> 
+> # preliminaries
+> install.packages("microbenchmark")
+> library(microbenchmark)
+> 
+> 
+> data <- new.env()
+> data$ans2 <- 0
+> data$ans3 <- 0
+> data$i <- 0
+> data$fun.value <- numeric(1000)
+> 
+> # define functions
+> 
+> rosenbrock_env <- function(x, data)
+> {
+>    x1 <- x[1]
+>    x2 <- x[2]
+>    ans <- 100 * (x2 - x1 * x1)^2 + (1 - x1)^2
+>    ans2 <- ans^2
+>    ans3 <- sqrt(abs(ans))
+>    data$i <- data$i + 1
+>    data$fun.value[data$i] <- ans
+>    ans
+> }
+> 
+> 
+> rosenbrock_env2 <- function(x, data)
+> {
+>    x1 <- x[1]
+>    x2 <- x[2]
+>    ans <- 100 * (x2 - x1 * x1)^2 + (1 - x1)^2
+>    ans2 <- ans^2
+>    ans3 <- sqrt(abs(ans))
+>    data$ans2 <- ans2
+>    data$ans3 <- ans3
+>    ans
+> }
+> 
+> rosenbrock_attr <- function(x)
+> {
+>    x1 <- x[1]
+>    x2 <- x[2]
+>    ans <- 100 * (x2 - x1 * x1)^2 + (1 - x1)^2
+>    ans2 <- ans^2
+>    ans3 <- sqrt(abs(ans))
+>    attr(ans, "ans2") <- ans2
+>    attr(ans, "ans3") <- ans3
+>    ans
+> }
+> 
+> 
+> rosenbrock_extra <- function(x, extraInfo = FALSE)
+> {
+>    x1 <- x[1]
+>    x2 <- x[2]
+>    ans <- 100 * (x2 - x1 * x1)^2 + (1 - x1)^2
+>    ans2 <- ans^2
+>    ans3 <- sqrt(abs(ans))
+>    if (extraInfo) list(ans = ans, ans2 = ans2, ans3 = ans3)
+>    else ans
+> }
+> 
+> 
+> rosenbrock_all <- function(x)
+> {
+>    x1 <- x[1]
+>    x2 <- x[2]
+>    ans <- 100 * (x2 - x1 * x1)^2 + (1 - x1)^2
+>    ans2 <- ans^2
+>    ans3 <- sqrt(abs(ans))
+>    list(ans = ans, ans2 = ans2, ans3 = ans3)
+> }
+> 
+> returnFirst <- function(fun) function(...) do.call(fun,list(...))[[1]]
+> rosenbrock_all2 <- returnFirst(rosenbrock_all)
+> 
+> 
+> # benchmark all functions
+> set.seed <- 100
+> 
+> microbenchmark(env = optim(c(-1,2), rosenbrock_env, data = data),
+>                 env2 = optim(c(-1,2), rosenbrock_env2, data = data),
+>                 attr = optim(c(-1,2), rosenbrock_attr),
+>                 extra = optim(c(-1,2), rosenbrock_extra, extraInfo = FALSE),
+>                 all2 = optim(c(-1,2), rosenbrock_all2),
+>                 times = 100)
+> 
+> 
+> # correct parameters and return values?
+> env <- optim(c(-1,2), rosenbrock_env, data = data)
+> env2 <- optim(c(-1,2), rosenbrock_env2, data = data)
+> attr <- optim(c(-1,2), rosenbrock_attr)
+> extra <- optim(c(-1,2), rosenbrock_extra, extraInfo = FALSE)
+> all2 <- optim(c(-1,2), rosenbrock_all2)
+> 
+> # correct return values with optimized parameters?
+> env. <- rosenbrock_env(env$par, data)
+> env2. <- rosenbrock_env(env2$par, data)
+> attr. <- rosenbrock_attr(attr$par)
+> extra. <- rosenbrock_extra(extra$par, extraInfo = FALSE)
+> all2. <- rosenbrock_all2(all2$par)
+> 
+> # functions that return more than one value
+> all. <- rosenbrock_all(all2$par)
+> extra2. <- rosenbrock_extra(extra$par, extraInfo = TRUE)
+> 
+> # environment values correct?
+> data$ans2
+> data$ans3
+> data$i
+> data$fun.value
+> 
+> 
+> microbenchmarking results:
+> 
+> Unit: microseconds
+>    expr     min        lq      mean    median         uq       max neval
+>     env 644.102 3919.6010 9598.3971 7950.0005 15582.8515 42210.900   100
+>    env2 337.001  351.5510  479.2900  391.7505   460.3520  6900.800   100
+>    attr 350.201  367.3010  502.0319  409.7510   483.6505  6772.800   100
+>   extra 276.800  287.2010  402.4231  302.6510   371.5015  6457.201   100
+>    all2 630.801  646.9015  785.9880  678.0010   808.9510  6411.102   100
+> 
+> rosenbrock_env and _env2 functions differ in that _env accesses vectors in the defined environment by indexing, whereas _env2 doesn't (hope I interpreted this right?).  This appears to be expensive operation, but allows saving values during the steps of the optim iteration, rather than just at convergence.  Overall, _extra has consistently lowest median execution time!
+> 
+> My earlier workaround was to write two separate functions, one of which returns extra values; all suggested approaches simplify that approach considerably.  I am also now more educated about attributes and environments that I did not know how to utilize before and that proved to be very useful concepts.  Again, thank you everyone for your input!
+> 
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From h@w|ckh@m @end|ng |rom gm@||@com  Tue Aug  8 15:34:19 2023
+From: h@w|ckh@m @end|ng |rom gm@||@com (Hadley Wickham)
+Date: Tue, 8 Aug 2023 08:34:19 -0500
+Subject: [Rd] 
+ A demonstrated shortcoming of the R package management system
+In-Reply-To: <25808.2815.112074.192190@rob.eddelbuettel.com>
+References: <25808.2815.112074.192190@rob.eddelbuettel.com>
+Message-ID: <CABdHhvG3P51+o6yDxORSNYOd-TWc9bF2WrpK=yA-4SoGeb8xdQ@mail.gmail.com>
+
+Hi Dirk,
+
+Do you think it's worth also/instead considering a fix to S4 to avoid
+this caching issue in future R versions?
+
+(This is top of my for me as we consider the design of S7, and I
+recently made a note to ensure we avoid similar problems there:
+https://github.com/RConsortium/OOP-WG/issues/317)
+
+Hadley
+
+On Sun, Aug 6, 2023 at 4:05?PM Dirk Eddelbuettel <edd at debian.org> wrote:
+>
+>
+> CRAN, by relying on the powerful package management system that is part of R,
+> provides an unparalleled framework for extending R with nearly 20k packages.
+>
+> We recently encountered an issue that highlights a missing element in the
+> otherwise outstanding package management system. So we would like to start a
+> discussion about enhancing its feature set. As shown below, a mechanism to
+> force reinstallation of packages may be needed.
+>
+> A demo is included below, it is reproducible in a container. We find the
+> easiest/fastest reproduction is by saving the code snippet below in the
+> current directory as eg 'matrixIssue.R' and have it run in a container as
+>
+>    docker run --rm -ti -v `pwd`:/mnt rocker/r2u Rscript /mnt/matrixIssue.R
+>
+> This runs in under two minutes, first installing the older Matrix, next
+> installs SeuratObject, and then by removing the older Matrix making the
+> (already installed) current Matrix version the default. This simulates a
+> package update for Matrix. Which, as the final snippet demonstrates, silently
+> breaks SeuratObject as the cached S4 method Csparse_validate is now missing.
+> So when SeuratObject was installed under Matrix 1.5.1, it becomes unuseable
+> under Matrix 1.6.0.
+>
+> What this shows is that a call to update.packages() will silently corrupt an
+> existing installation.  We understand that this was known and addressed at
+> CRAN by rebuilding all binary packages (for macOS and Windows).
+>
+> But it leaves both users relying on source installation as well as
+> distributors of source packages in a dire situation. It hurt me three times:
+> my default R installation was affected with unit tests (involving
+> SeuratObject) silently failing. It similarly broke our CI setup at work.  And
+> it created a fairly bad headache for the Debian packaging I am involved with
+> (and I surmise it affects other distro similarly).
+>
+> It would be good to have a mechanism where a package, when being upgraded,
+> could flag that 'more actions are required' by the system (administrator).
+> We think this example demonstrates that we need such a mechanism to avoid
+> (silently !!) breaking existing installations, possibly by forcing
+> reinstallation of other packages.  R knows the package dependency graph and
+> could trigger this, possibly after an 'opt-in' variable the user / admin
+> sets.
+>
+> One possibility may be to add a new (versioned) field 'Breaks:'. Matrix could
+> then have added 'Breaks: SeuratObject (<= 4.1.3)' preventing an installation
+> of Matrix 1.6.0 when SeuratObject 4.1.3 (or earlier) is present, but
+> permitting an update to Matrix 1.6.0 alongside a new version, say, 4.1.4 of
+> SeuratObject which could itself have a versioned Depends: Matrix (>= 1.6.0).
+>
+> Regards,  Dirk
+>
+>
+> ## Code example follows. Recommended to run the rocker/r2u container.
+> ## Could also run 'apt update -qq; apt upgrade -y' but not required
+> ## Thanks to my colleague Paul Hoffman for the core of this example
+>
+> ## now have Matrix 1.6.0 because r2u and CRAN remain current but we can install an older Matrix
+> remotes::install_version('Matrix', '1.5.1')
+>
+> ## we can confirm that we have Matrix 1.5.1
+> packageVersion("Matrix")
+>
+> ## we now install SeuratObject from source and to speed things up we first install the binary
+> install.packages("SeuratObject")   # in this container via bspm/r2u as binary
+> ## and then force a source installation (turning bspm off) _while Matrix is at 1.5.1_
+> if (requireNamespace("bspm", quietly=TRUE) bspm::disable()
+> Sys.setenv(PKG_CXXFLAGS='-Wno-ignored-attributes')      # Eigen compilation noise silencer
+> install.packages('SeuratObject')
+>
+> ## we now remove the Matrix package version 1.5.1 we installed into /usr/local leaving 1.6.0
+> remove.packages("Matrix")
+> packageVersion("Matrix")
+>
+> ## and we now run a bit of SeuratObject code that is now broken as Csparse_validate is gone
+> suppressMessages(library(SeuratObject))
+> data('pbmc_small')
+> graph <- pbmc_small[['RNA_snn']]
+> class(graph)
+> getClass('Graph')
+> show(graph) # this fails
+>
+>
+> --
+> dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+
+-- 
+http://hadley.nz
+
+
+From ||u|@@rev|||@ @end|ng |rom gm@||@com  Tue Aug  8 15:56:07 2023
+From: ||u|@@rev|||@ @end|ng |rom gm@||@com (=?UTF-8?Q?Llu=C3=ADs_Revilla?=)
+Date: Tue, 8 Aug 2023 15:56:07 +0200
+Subject: [Rd] Vectorize library() to improve handling of versioned deps
+ [sprint project proposal]
+In-Reply-To: <CAD4oTHHGoQ0geRoUoULpcxLnEEgnfU+ZCzubmFkUAA29Z1wGUQ@mail.gmail.com>
+References: <CAD4oTHHGoQ0geRoUoULpcxLnEEgnfU+ZCzubmFkUAA29Z1wGUQ@mail.gmail.com>
+Message-ID: <CAN+W6_sOTqP0sFEMOKppTTwnGdtNt+VwwQTA+PGq5ZSsSaCdQw@mail.gmail.com>
+
+Hi Gabriel,
+
+Nice idea! I have encountered this problem several times, while probably a
+better management of libraries could avoided the issue this is an elegant
+solution.
+
+How would this proposal handle arguments mask.ok, include.only and exclude?
+For example, in the (edge) case two packages export a function with the
+same name but we want to mask one of them (pkgA::fun, pkgC::fun).
+How would that work for instance in library(c("pkgA", "pkgC"), mask.ok = c(
+pkgC = "fun"))?
+Would the name of the character be useful to decide which one is ok to
+mask? (in the example I would expect the pkgC::fun be masked by pkgA::fun in
+the inverse order or loading).
+
+If this doesn't go ahead, perhaps a function could be implemented to check
+these situations in the .libPaths (in a package if not in base) ?
+
+Best,
+
+Llu?s
+
+On Mon, 7 Aug 2023 at 22:34, Gabriel Becker <gabembecker at gmail.com> wrote:
+
+> Hi All,
+>
+> This is a proposal for a project which could be worked on during the R
+> development Sprint at the end of this month; it was requested that we start
+> a discussion here to see what R-core's thoughts on it were before we
+> officially add it to the docket.
+>
+>
+> AFAIK, R officially supports both versioned dependencies (almost
+> exclusively of the >=version variety) and library paths with more than one
+> directory. Further, I believe if at least de facto supports the same
+> package being installed in different directories along the lib path. The
+> most common of these, I'd bet, would be different versions of the same
+> library being installed in a site library and in a user's personal library,
+> though that's not the only way this can happen.
+>
+> The combination of these two features, however can give rise to
+> packages which are all correctly installed and all loadable individually,
+> but which must be loaded in a particular order when used together or the
+> loading of some of them will fail.
+>
+> Consider the following dependency structure between packages
+>
+> pkgA: pkgB (>= 0.5.0)
+>
+> pkgC: pkgB (>= 0.6.0)
+>
+> Consider the following multi-libpath setup:
+>
+> ~/pth1/: pkgA, pkg B [0.5.1]
+> ~/pth2/: pkg C, pkg B [0.6.5]
+>
+> And consider that we have the libpath c("~/pth1/", "~/pth2").
+>
+> If we do
+>
+> library(pkgA)
+>
+> Things will work great.
+>
+> Same if we do
+>
+> library(pkgC)
+>
+> BUT, if we do
+>
+> library(pkgA)
+> library(pkgC)
+>
+> pkgC will not be able to be loaded, because an insufficient version of
+> pkgB will
+> already be loaded.
+>
+> I propose that library be modified to be able to take a character vector of
+> package names, when it does, it performs the dependency calculations to
+> determine how all packages in the vector can be loaded (in the order they
+> appear). In the example above, this would mean that if we did
+>
+> library(c("pkgA", "pkgC"))
+>
+> It would determine that pkgB version 0.6.5 was needed (or alternatively,
+> that version 0.5.1 was insufficient) and use that *when loading the
+> dependencies of pkgA*.
+>
+> The proposal issue for the sprint itself is here:
+> https://github.com/r-devel/r-project-sprint-2023/discussions/15
+>
+> Thoughts?
+>
+> ~G
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From edd @end|ng |rom deb|@n@org  Tue Aug  8 16:00:20 2023
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Tue, 8 Aug 2023 09:00:20 -0500
+Subject: [Rd] 
+ A demonstrated shortcoming of the R package management system
+In-Reply-To: <CABdHhvG3P51+o6yDxORSNYOd-TWc9bF2WrpK=yA-4SoGeb8xdQ@mail.gmail.com>
+References: <25808.2815.112074.192190@rob.eddelbuettel.com>
+ <CABdHhvG3P51+o6yDxORSNYOd-TWc9bF2WrpK=yA-4SoGeb8xdQ@mail.gmail.com>
+Message-ID: <25810.19060.700760.577968@rob.eddelbuettel.com>
+
+
+Hi Hadley,
+
+On 8 August 2023 at 08:34, Hadley Wickham wrote:
+| Do you think it's worth also/instead considering a fix to S4 to avoid
+| this caching issue in future R versions?
+
+That is somewhat orthogonal to my point of "'some uses' of the 20 year old S4
+system (which as we know is fairly widely used 'out there') break
+deployments" and the related "this is also a PITA for binary distributors".
+
+The existing body of code seems to need some help.
+
+| (This is top of my for me as we consider the design of S7, and I
+| recently made a note to ensure we avoid similar problems there:
+| https://github.com/RConsortium/OOP-WG/issues/317)
+
+I haven't followed the S7 repo closely but peek every couple of months. It
+seems sensible to avoid repeating shortcomings identfied elsewhere.
+
+Best,  Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
