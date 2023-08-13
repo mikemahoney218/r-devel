@@ -3266,3 +3266,642 @@ Gregory (Greg) L. Snow Ph.D.
 538280 at gmail.com
 
 
+From ch|r|com @end|ng |rom goog|e@com  Fri Aug 11 08:56:45 2023
+From: ch|r|com @end|ng |rom goog|e@com (Michael Chirico)
+Date: Thu, 10 Aug 2023 23:56:45 -0700
+Subject: [Rd] Improving user-friendliness of S4 dispatch failure when
+ mis-naming arguments?
+In-Reply-To: <CAD4oTHHud01FhAF0nXiHna6KcFgDwk6u=xUMrXQnWHpuFBbJTQ@mail.gmail.com>
+References: <CAD7Bkx8Y44Gy=sW+mMfyXqpg3gcGKojS9A0zbrHzF_qqJsvYAg@mail.gmail.com>
+ <CABdHhvHjJZmGCyb2okOGCOqBO+e2HA7taxqfGE-OPRgq_GCU0Q@mail.gmail.com>
+ <CAD7Bkx91D939Mun=iL+HSK+7mbUG+vaZtk83+p_61zYd=4buAw@mail.gmail.com>
+ <CAD4oTHHud01FhAF0nXiHna6KcFgDwk6u=xUMrXQnWHpuFBbJTQ@mail.gmail.com>
+Message-ID: <CAD7Bkx_P1KSyp2KEFvYTYQyog2LvF02TYJHDdXNqi__3+U057w@mail.gmail.com>
+
+Here's a trivial patch that offers some improvement:
+
+Index: src/library/methods/R/methodsTable.R
+===================================================================
+--- src/library/methods/R/methodsTable.R (revision 84931)
++++ src/library/methods/R/methodsTable.R (working copy)
+@@ -752,11 +752,12 @@
+   if(length(methods) == 1L)
+     return(methods[[1L]]) # the method
+   else if(length(methods) == 0L) {
+-    cnames <- paste0("\"", vapply(classes, as.character, ""), "\"",
++    cnames <- paste0(head(fdef at signature, length(classes)), "=\"",
+vapply(classes, as.character, ""), "\"",
+      collapse = ", ")
+     stop(gettextf("unable to find an inherited method for function %s
+for signature %s",
+                   sQuote(fdef at generic),
+                   sQuote(cnames)),
++         call. = FALSE,
+          domain = NA)
+   }
+   else
+
+Here's the upshot for the example on DBI:
+
+dbGetQuery(connection = conn, query = query)
+Error: unable to find an inherited method for function ?dbGetQuery?
+for signature ?conn="missing", statement="missing"?
+
+I don't have any confidence about edge cases / robustness of this
+patch for generic S4 use cases (make check-all seems fine), but I
+don't suppose a full patch would be dramatically different from the
+above.
+
+Mike C
+
+On Thu, Aug 10, 2023 at 12:39?PM Gabriel Becker <gabembecker at gmail.com> wrote:
+>
+> I just want to add my 2 cents that I think it would be very useful and beneficial to improve S4 to surface that information as well.
+>
+> More information about the way that the dispatch failed would be of great help in situations like the one Michael pointed out.
+>
+> ~G
+>
+> On Thu, Aug 10, 2023 at 9:59?AM Michael Chirico via R-devel <r-devel at r-project.org> wrote:
+>>
+>> I forwarded that along to the original reporter with positive feedback
+>> -- including the argument names is definitely a big help for cuing
+>> what exactly is missing.
+>>
+>> Would a patch to do something similar for S4 be useful?
+>>
+>> On Thu, Aug 10, 2023 at 6:46?AM Hadley Wickham <h.wickham at gmail.com> wrote:
+>> >
+>> > Hi Michael,
+>> >
+>> > I can't help with S4, but I can help to make sure this isn't a problem
+>> > with S7. What do you think of the current error message? Do you see
+>> > anything obvious we could do to improve?
+>> >
+>> > library(S7)
+>> >
+>> > dbGetQuery <- new_generic("dbGetQuery", c("conn", "statement"))
+>> > dbGetQuery(connection = NULL, query = NULL)
+>> > #> Error: Can't find method for generic `dbGetQuery(conn, statement)`:
+>> > #> - conn     : MISSING
+>> > #> - statement: MISSING
+>> >
+>> > Hadley
+>> >
+>> > On Wed, Aug 9, 2023 at 10:02?PM Michael Chirico via R-devel
+>> > <r-devel at r-project.org> wrote:
+>> > >
+>> > > I fielded a debugging request from a non-expert user today. At root
+>> > > was running the following:
+>> > >
+>> > > dbGetQuery(connection = conn, query = query)
+>> > >
+>> > > The problem is that they've named the arguments incorrectly -- it
+>> > > should have been [1]:
+>> > >
+>> > > dbGetQuery(conn = conn, statement = query)
+>> > >
+>> > > The problem is that the error message "looks" highly confusing to the
+>> > > untrained eye:
+>> > >
+>> > > Error in (function (classes, fdef, mtable)  :   unable to find an
+>> > > inherited method for function ?dbGetQuery? for signature ?"missing",
+>> > > "missing"?
+>> > >
+>> > > In retrospect, of course, this makes sense -- the mis-named arguments
+>> > > are getting picked up by '...', leaving the required arguments
+>> > > missing.
+>> > >
+>> > > But I was left wondering how we could help users right their own ship here.
+>> > >
+>> > > Would it help to mention the argument names? To include some code
+>> > > checking for weird combinations of missing arguments? Any other
+>> > > suggestions?
+>> > >
+>> > > Mike C
+>> > >
+>> > > [1] https://github.com/r-dbi/DBI/blob/97934c885749dd87a6beb10e8ccb6a5ebea3675e/R/dbGetQuery.R#L62-L64
+>> > >
+>> > > ______________________________________________
+>> > > R-devel at r-project.org mailing list
+>> > > https://stat.ethz.ch/mailman/listinfo/r-devel
+>> >
+>> >
+>> >
+>> > --
+>> > http://hadley.nz
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Fri Aug 11 11:26:10 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Fri, 11 Aug 2023 11:26:10 +0200
+Subject: [Rd] Improving user-friendliness of S4 dispatch failure when
+ mis-naming arguments?
+In-Reply-To: <CAD7Bkx_P1KSyp2KEFvYTYQyog2LvF02TYJHDdXNqi__3+U057w@mail.gmail.com>
+References: <CAD7Bkx8Y44Gy=sW+mMfyXqpg3gcGKojS9A0zbrHzF_qqJsvYAg@mail.gmail.com>
+ <CABdHhvHjJZmGCyb2okOGCOqBO+e2HA7taxqfGE-OPRgq_GCU0Q@mail.gmail.com>
+ <CAD7Bkx91D939Mun=iL+HSK+7mbUG+vaZtk83+p_61zYd=4buAw@mail.gmail.com>
+ <CAD4oTHHud01FhAF0nXiHna6KcFgDwk6u=xUMrXQnWHpuFBbJTQ@mail.gmail.com>
+ <CAD7Bkx_P1KSyp2KEFvYTYQyog2LvF02TYJHDdXNqi__3+U057w@mail.gmail.com>
+Message-ID: <25813.65202.931572.817831@stat.math.ethz.ch>
+
+>>>>> Michael Chirico via R-devel 
+>>>>>     on Thu, 10 Aug 2023 23:56:45 -0700 writes:
+
+> Here's a trivial patch that offers some improvement:
+
+    > Index: src/library/methods/R/methodsTable.R
+    > ===================================================================
+    > --- src/library/methods/R/methodsTable.R (revision 84931)
+    > +++ src/library/methods/R/methodsTable.R (working copy)
+    > @@ -752,11 +752,12 @@
+    > if(length(methods) == 1L)
+    > return(methods[[1L]]) # the method
+    > else if(length(methods) == 0L) {
+    > -    cnames <- paste0("\"", vapply(classes, as.character, ""), "\"",
+    > +    cnames <- paste0(head(fdef at signature, length(classes)), "=\"",
+    > vapply(classes, as.character, ""), "\"",
+    > collapse = ", ")
+    > stop(gettextf("unable to find an inherited method for function %s
+    > for signature %s",
+    > sQuote(fdef at generic),
+    > sQuote(cnames)),
+    > +         call. = FALSE,
+    > domain = NA)
+    > }
+    > else
+
+    > Here's the upshot for the example on DBI:
+
+    > dbGetQuery(connection = conn, query = query)
+    > Error: unable to find an inherited method for function ?dbGetQuery?
+    > for signature ?conn="missing", statement="missing"?
+
+    > I don't have any confidence about edge cases / robustness of this
+    > patch for generic S4 use cases (make check-all seems fine),
+
+Good you checked, but you are right that that's not all enough to be sure:
+
+Checking error *messages* is not something we do often {not
+the least because you'd need to consider message translations
+and hence ensure you only check in case of English ...}.
+
+    > but I don't suppose a full patch would be dramatically different from the
+    > above.
+
+I agree: The patch looks to make sense to me, too,
+while I'm not entirely sure about the extra   call. = FALSE
+ (which I of course understand you'd prefer for the above example)
+
+Now I'd like to find an example that only uses packages with priority
+ base | Recommended
+
+Martin
+
+--
+Martin Maechler
+ETH Zurich  and  R Core team
+
+
+    > Mike C
+
+    > On Thu, Aug 10, 2023 at 12:39?PM Gabriel Becker <gabembecker at gmail.com> wrote:
+    >> 
+    >> I just want to add my 2 cents that I think it would be very useful and beneficial to improve S4 to surface that information as well.
+    >> 
+    >> More information about the way that the dispatch failed would be of great help in situations like the one Michael pointed out.
+    >> 
+    >> ~G
+    >> 
+    >> On Thu, Aug 10, 2023 at 9:59?AM Michael Chirico via R-devel <r-devel at r-project.org> wrote:
+    >>> 
+    >>> I forwarded that along to the original reporter with positive feedback
+    >>> -- including the argument names is definitely a big help for cuing
+    >>> what exactly is missing.
+    >>> 
+    >>> Would a patch to do something similar for S4 be useful?
+    >>> 
+    >>> On Thu, Aug 10, 2023 at 6:46?AM Hadley Wickham <h.wickham at gmail.com> wrote:
+    >>> >
+    >>> > Hi Michael,
+    >>> >
+    >>> > I can't help with S4, but I can help to make sure this isn't a problem
+    >>> > with S7. What do you think of the current error message? Do you see
+    >>> > anything obvious we could do to improve?
+    >>> >
+    >>> > library(S7)
+    >>> >
+    >>> > dbGetQuery <- new_generic("dbGetQuery", c("conn", "statement"))
+    >>> > dbGetQuery(connection = NULL, query = NULL)
+    >>> > #> Error: Can't find method for generic `dbGetQuery(conn, statement)`:
+    >>> > #> - conn     : MISSING
+    >>> > #> - statement: MISSING
+    >>> >
+    >>> > Hadley
+    >>> >
+    >>> > On Wed, Aug 9, 2023 at 10:02?PM Michael Chirico via R-devel
+    >>> > <r-devel at r-project.org> wrote:
+    >>> > >
+    >>> > > I fielded a debugging request from a non-expert user today. At root
+    >>> > > was running the following:
+    >>> > >
+    >>> > > dbGetQuery(connection = conn, query = query)
+    >>> > >
+    >>> > > The problem is that they've named the arguments incorrectly -- it
+    >>> > > should have been [1]:
+    >>> > >
+    >>> > > dbGetQuery(conn = conn, statement = query)
+    >>> > >
+    >>> > > The problem is that the error message "looks" highly confusing to the
+    >>> > > untrained eye:
+    >>> > >
+    >>> > > Error in (function (classes, fdef, mtable)  :   unable to find an
+    >>> > > inherited method for function ?dbGetQuery? for signature ?"missing",
+    >>> > > "missing"?
+    >>> > >
+    >>> > > In retrospect, of course, this makes sense -- the mis-named arguments
+    >>> > > are getting picked up by '...', leaving the required arguments
+    >>> > > missing.
+    >>> > >
+    >>> > > But I was left wondering how we could help users right their own ship here.
+    >>> > >
+    >>> > > Would it help to mention the argument names? To include some code
+    >>> > > checking for weird combinations of missing arguments? Any other
+    >>> > > suggestions?
+    >>> > >
+    >>> > > Mike C
+    >>> > >
+    >>> > > [1] https://github.com/r-dbi/DBI/blob/97934c885749dd87a6beb10e8ccb6a5ebea3675e/R/dbGetQuery.R#L62-L64
+
+
+From yeyuegu@ng @end|ng |rom go|dw|nd@com  Fri Aug 11 05:41:35 2023
+From: yeyuegu@ng @end|ng |rom go|dw|nd@com (=?gb2312?B?0rbUwrni?=)
+Date: Fri, 11 Aug 2023 03:41:35 +0000
+Subject: [Rd] R-4.3 version list.files function could not work correctly in
+ chinese
+Message-ID: <16b91252fd33452f890fcce439921a63@goldwind.com>
+
+     ????
+          ????R-4.3???????????R??????list.files??????????????????????BUG????????????????????????????
+r4.3????dir????????????????? - COS??? | ?????? | ?????????????? (cosx.org)<https://d.cosx.org/d/424356-r43ban-ben-zhong-dirhan-shu-huo-qu-bu-liao-quan-bu-wen-jian/11>
+          ???????????????????????
+
+	[[alternative HTML version deleted]]
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Fri Aug 11 13:24:35 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Fri, 11 Aug 2023 14:24:35 +0300
+Subject: [Rd] 
+ R-4.3 version list.files function could not work correctly in
+ chinese
+In-Reply-To: <16b91252fd33452f890fcce439921a63@goldwind.com>
+References: <16b91252fd33452f890fcce439921a63@goldwind.com>
+Message-ID: <20230811142435.770c2037@parabola>
+
+Dear ???,
+
+Thank you for your message, but please follow the posting guide in your
+future messages: https://www.r-project.org/posting-guide.html
+https://www.r-project.org/bugs.html
+
+I understand from your link that list.files() ends up skipping some
+Chinese filenames in R-4.3.1 (but not R-4.2.2) on Windows, but would you
+(or perhaps Yihui Xie who I see is also participating in the discussion)
+mind translating the rest of your findings into English? Have you been
+able to narrow down the problem to certain character ranges, for
+example?
+
+-- 
+Best regards,
+Ivan
+
+
+From ch|r|com @end|ng |rom goog|e@com  Fri Aug 11 17:32:47 2023
+From: ch|r|com @end|ng |rom goog|e@com (Michael Chirico)
+Date: Fri, 11 Aug 2023 08:32:47 -0700
+Subject: [Rd] Improving user-friendliness of S4 dispatch failure when
+ mis-naming arguments?
+In-Reply-To: <25813.65202.931572.817831@stat.math.ethz.ch>
+References: <CAD7Bkx8Y44Gy=sW+mMfyXqpg3gcGKojS9A0zbrHzF_qqJsvYAg@mail.gmail.com>
+ <CABdHhvHjJZmGCyb2okOGCOqBO+e2HA7taxqfGE-OPRgq_GCU0Q@mail.gmail.com>
+ <CAD7Bkx91D939Mun=iL+HSK+7mbUG+vaZtk83+p_61zYd=4buAw@mail.gmail.com>
+ <CAD4oTHHud01FhAF0nXiHna6KcFgDwk6u=xUMrXQnWHpuFBbJTQ@mail.gmail.com>
+ <CAD7Bkx_P1KSyp2KEFvYTYQyog2LvF02TYJHDdXNqi__3+U057w@mail.gmail.com>
+ <25813.65202.931572.817831@stat.math.ethz.ch>
+Message-ID: <CAD7Bkx_y5c4MMz6AyhQH2_O59aj+UE+xnkK-ru255ZmKEL89vQ@mail.gmail.com>
+
+> I'm not entirely sure about the extra call. = FALSE
+
+My thinking is the signature of the internal .InheritForDispatch() is
+not likely to help anyone,
+in fact having the opposite effect for beginners unsure how to use that info.
+
+> Now I'd like to find an example that only uses packages with priority base | Recommended
+
+Sure, here are a few.
+
+library(Matrix)
+# searching for Matrix-owned generics
+matrix_generics <- getGenerics(where = asNamespace("Matrix"))
+matrix_generics at .Data[matrix_generics at package == "Matrix"]
+
+# simple signature, one argument 'x'
+symmpart()
+# Error: unable to find an inherited method for function ?symmpart?
+for signature ?x="missing"?
+
+# more complicated signature, especially including ...
+Cholesky(a = 1)
+# Error: unable to find an inherited method for function ?Cholesky?
+for signature ?A="missing"?
+Cholesky(a = 1, perm = TRUE)
+# Error: unable to find an inherited method for function ?Cholesky?
+for signature ?A="missing"?
+Cholesky(a = 1, perm = TRUE, IMult = 2)
+# Error: unable to find an inherited method for function ?Cholesky?
+for signature ?A="missing"?
+
+---
+
+'base' is a bit harder since stats4 just provides classes over stats
+functions, so the missigness error comes from non-S4 code.
+
+library(stats4)
+coef()
+# Error in coef.default() : argument "object" is missing, with no default
+
+Defining our own generic:
+
+setGeneric("BaseGeneric", \(a, ...) standardGeneric("BaseGeneric"))
+BaseGeneric()
+# Error: unable to find an inherited method for function ?BaseGeneric?
+for signature ?a="missing"?
+
+# getting multiple classes to show up requires setting the signature:
+setMethod("BaseGeneric", signature(x = "double", y = "double"), \(x,
+y, ...) x + y)
+BaseGeneric(X = 1, Y = 2)
+# Error: unable to find an inherited method for function ?BaseGeneric?
+for signature ?x="missing", y="missing"?
+
+
+On Fri, Aug 11, 2023 at 2:26?AM Martin Maechler
+<maechler at stat.math.ethz.ch> wrote:
+>
+> >>>>> Michael Chirico via R-devel
+> >>>>>     on Thu, 10 Aug 2023 23:56:45 -0700 writes:
+>
+> > Here's a trivial patch that offers some improvement:
+>
+>     > Index: src/library/methods/R/methodsTable.R
+>     > ===================================================================
+>     > --- src/library/methods/R/methodsTable.R (revision 84931)
+>     > +++ src/library/methods/R/methodsTable.R (working copy)
+>     > @@ -752,11 +752,12 @@
+>     > if(length(methods) == 1L)
+>     > return(methods[[1L]]) # the method
+>     > else if(length(methods) == 0L) {
+>     > -    cnames <- paste0("\"", vapply(classes, as.character, ""), "\"",
+>     > +    cnames <- paste0(head(fdef at signature, length(classes)), "=\"",
+>     > vapply(classes, as.character, ""), "\"",
+>     > collapse = ", ")
+>     > stop(gettextf("unable to find an inherited method for function %s
+>     > for signature %s",
+>     > sQuote(fdef at generic),
+>     > sQuote(cnames)),
+>     > +         call. = FALSE,
+>     > domain = NA)
+>     > }
+>     > else
+>
+>     > Here's the upshot for the example on DBI:
+>
+>     > dbGetQuery(connection = conn, query = query)
+>     > Error: unable to find an inherited method for function ?dbGetQuery?
+>     > for signature ?conn="missing", statement="missing"?
+>
+>     > I don't have any confidence about edge cases / robustness of this
+>     > patch for generic S4 use cases (make check-all seems fine),
+>
+> Good you checked, but you are right that that's not all enough to be sure:
+>
+> Checking error *messages* is not something we do often {not
+> the least because you'd need to consider message translations
+> and hence ensure you only check in case of English ...}.
+>
+>     > but I don't suppose a full patch would be dramatically different from the
+>     > above.
+>
+> I agree: The patch looks to make sense to me, too,
+> while I'm not entirely sure about the extra   call. = FALSE
+>  (which I of course understand you'd prefer for the above example)
+>
+> Now I'd like to find an example that only uses packages with priority
+>  base | Recommended
+>
+> Martin
+>
+> --
+> Martin Maechler
+> ETH Zurich  and  R Core team
+>
+>
+>     > Mike C
+>
+>     > On Thu, Aug 10, 2023 at 12:39?PM Gabriel Becker <gabembecker at gmail.com> wrote:
+>     >>
+>     >> I just want to add my 2 cents that I think it would be very useful and beneficial to improve S4 to surface that information as well.
+>     >>
+>     >> More information about the way that the dispatch failed would be of great help in situations like the one Michael pointed out.
+>     >>
+>     >> ~G
+>     >>
+>     >> On Thu, Aug 10, 2023 at 9:59?AM Michael Chirico via R-devel <r-devel at r-project.org> wrote:
+>     >>>
+>     >>> I forwarded that along to the original reporter with positive feedback
+>     >>> -- including the argument names is definitely a big help for cuing
+>     >>> what exactly is missing.
+>     >>>
+>     >>> Would a patch to do something similar for S4 be useful?
+>     >>>
+>     >>> On Thu, Aug 10, 2023 at 6:46?AM Hadley Wickham <h.wickham at gmail.com> wrote:
+>     >>> >
+>     >>> > Hi Michael,
+>     >>> >
+>     >>> > I can't help with S4, but I can help to make sure this isn't a problem
+>     >>> > with S7. What do you think of the current error message? Do you see
+>     >>> > anything obvious we could do to improve?
+>     >>> >
+>     >>> > library(S7)
+>     >>> >
+>     >>> > dbGetQuery <- new_generic("dbGetQuery", c("conn", "statement"))
+>     >>> > dbGetQuery(connection = NULL, query = NULL)
+>     >>> > #> Error: Can't find method for generic `dbGetQuery(conn, statement)`:
+>     >>> > #> - conn     : MISSING
+>     >>> > #> - statement: MISSING
+>     >>> >
+>     >>> > Hadley
+>     >>> >
+>     >>> > On Wed, Aug 9, 2023 at 10:02?PM Michael Chirico via R-devel
+>     >>> > <r-devel at r-project.org> wrote:
+>     >>> > >
+>     >>> > > I fielded a debugging request from a non-expert user today. At root
+>     >>> > > was running the following:
+>     >>> > >
+>     >>> > > dbGetQuery(connection = conn, query = query)
+>     >>> > >
+>     >>> > > The problem is that they've named the arguments incorrectly -- it
+>     >>> > > should have been [1]:
+>     >>> > >
+>     >>> > > dbGetQuery(conn = conn, statement = query)
+>     >>> > >
+>     >>> > > The problem is that the error message "looks" highly confusing to the
+>     >>> > > untrained eye:
+>     >>> > >
+>     >>> > > Error in (function (classes, fdef, mtable)  :   unable to find an
+>     >>> > > inherited method for function ?dbGetQuery? for signature ?"missing",
+>     >>> > > "missing"?
+>     >>> > >
+>     >>> > > In retrospect, of course, this makes sense -- the mis-named arguments
+>     >>> > > are getting picked up by '...', leaving the required arguments
+>     >>> > > missing.
+>     >>> > >
+>     >>> > > But I was left wondering how we could help users right their own ship here.
+>     >>> > >
+>     >>> > > Would it help to mention the argument names? To include some code
+>     >>> > > checking for weird combinations of missing arguments? Any other
+>     >>> > > suggestions?
+>     >>> > >
+>     >>> > > Mike C
+>     >>> > >
+>     >>> > > [1] https://github.com/r-dbi/DBI/blob/97934c885749dd87a6beb10e8ccb6a5ebea3675e/R/dbGetQuery.R#L62-L64
+
+
+From @ndy@teucher @end|ng |rom gm@||@com  Sat Aug 12 01:07:36 2023
+From: @ndy@teucher @end|ng |rom gm@||@com (Andy Teucher)
+Date: Fri, 11 Aug 2023 16:07:36 -0700
+Subject: [Rd] R 4.3: Change in behaviour of as.character.POSIXt for datetime
+ values with midnight time
+Message-ID: <FD698A33-CC16-4B95-8907-4C0052E58913@gmail.com>
+
+I understand that `as.character.POSIXt()` had an overhaul in R 4.3 (https://github.com/wch/r-source/commit/f6fd993f8a2f799a56dbecbd8238f155191fc31b), and I have come across a new behaviour and I wonder if it is unintended?
+
+When calling `as.character.POSIXt()` on a vector that contains elements where the time component is midnight (00:00:00), it drops the time component of that element in the resulting character vector. Previously the time component was retained: 
+
+In R 4.2.3:
+
+```
+R.version$version.string
+#> [1] "R version 4.2.3 (2023-03-15)"
+
+(t <- as.POSIXct(c("1975-01-01 00:00:00", "1975-01-01 15:27:00")))
+#> [1] "1975-01-01 00:00:00 PST" "1975-01-01 15:27:00 PST?
+
+(tc <- as.character(t))
+#> [1] "1975-01-01 00:00:00" "1975-01-01 15:27:00?
+```
+
+In R 4.3.1:
+
+```
+R.version$version.string
+#> [1] "R version 4.3.1 (2023-06-16)"
+
+(t <- as.POSIXct(c("1975-01-01 00:00:00", "1975-01-01 15:27:00")))
+#> [1] "1975-01-01 00:00:00 PST" "1975-01-01 15:27:00 PST?
+
+(tc <- as.character(t))
+#> [1] "1975-01-01" "1975-01-01 15:27:00?
+```
+
+This has consequences when round-tripping from POSIXt -> character -> POSIXt, since `as.POSIXct.character()` drops the time component from the entire vector if any element does not have a time component:
+
+In R 4.2.3:
+
+```
+R.version$version.string
+#> [1] "R version 4.2.3 (2023-03-15)"
+
+(t <- as.POSIXct(c("1975-01-01 00:00:00", "1975-01-01 15:27:00")))
+#> [1] "1975-01-01 00:00:00 PST" "1975-01-01 15:27:00 PST?
+
+(tc <- as.character(t))
+#> [1] "1975-01-01 00:00:00" "1975-01-01 15:27:00?
+
+as.POSIXct(tc)
+#> [1] "1975-01-01 00:00:00 PST" "1975-01-01 15:27:00 PST?
+```
+
+In R 4.3.1:
+
+```
+R.version$version.string
+#> [1] "R version 4.3.1 (2023-06-16)?
+
+(t <- as.POSIXct(c("1975-01-01 00:00:00", "1975-01-01 15:27:00")))
+#> [1] "1975-01-01 00:00:00 PST" "1975-01-01 15:27:00 PST?
+
+(tc <- as.character(t))
+#> [1] "1975-01-01" "1975-01-01 15:27:00?
+
+as.POSIXct(tc)
+#> [1] "1975-01-01 PST" "1975-01-01 PST?
+```
+
+`format.POSIXt()` retains its old behaviour in R 4.3:
+
+```
+R.version$version.string
+#> [1] "R version 4.2.3 (2023-03-15)"
+
+(t <- as.POSIXct(c("1975-01-01 00:00:00", "1975-01-01 15:27:00")))
+#> [1] "1975-01-01 00:00:00 PST" "1975-01-01 15:27:00 PST?
+
+(tf <- format(t))
+#> [1] "1975-01-01 00:00:00" "1975-01-01 15:27:00?
+
+as.POSIXct(tf)
+#> [1] "1975-01-01 00:00:00 PST" "1975-01-01 15:27:00 PST?
+```
+
+```
+R.version$version.string
+#> [1] "R version 4.3.1 (2023-06-16)"
+
+(t <- as.POSIXct(c("1975-01-01 00:00:00", "1975-01-01 15:27:00")))
+#> [1] "1975-01-01 00:00:00 PST" "1975-01-01 15:27:00 PST?
+
+(tf <- format(t))
+#> [1] "1975-01-01 00:00:00" "1975-01-01 15:27:00?
+
+as.POSIXct(tf)
+#> [1] "1975-01-01 00:00:00 PST" "1975-01-01 15:27:00 PST?
+```
+
+And finally, the behaviour of `as.POSIXct.character()` has not changed (it previously did, and still does, drop the time component from all elements when any element has no time):
+
+```R.version$version.string
+#> [1] "R version 4.2.3 (2023-03-15)"
+
+as.POSIXct(c("1975-01-01", "1975-01-01 15:27:00"))
+#> [1] "1975-01-01 PST" "1975-01-01 PST?
+```
+
+```R.version$version.string
+#> [1] "R version 4.3.1 (2023-06-16)"
+
+as.POSIXct(c("1975-01-01", "1975-01-01 15:27:00"))
+#> [1] "1975-01-01 PST" "1975-01-01 PST?
+```
+
+I don?t know if this is a bug/regression in `as.character.POSIXt()`, or intended behaviour. If it is intended, I think it would benefit from some more comprehensive documentation.
+
+Thanks very much,
+Andy Teucher
+
+
