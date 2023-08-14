@@ -3905,3 +3905,150 @@ Thanks very much,
 Andy Teucher
 
 
+From x|e @end|ng |rom y|hu|@n@me  Sat Aug 12 06:40:22 2023
+From: x|e @end|ng |rom y|hu|@n@me (Yihui Xie)
+Date: Fri, 11 Aug 2023 23:40:22 -0500
+Subject: [Rd] 
+ R-4.3 version list.files function could not work correctly in
+ chinese
+In-Reply-To: <20230811142435.770c2037@parabola>
+References: <16b91252fd33452f890fcce439921a63@goldwind.com>
+ <20230811142435.770c2037@parabola>
+Message-ID: <CANROs4ePK4YW_YoEg4erpTQYKPNKGOoQvBJv6ZW8OtHSvCOOMA@mail.gmail.com>
+
+Yes, I participated in the discussion. Basically dir() failed to list all
+files since R 4.3.0 when filenames start with Chinese characters. I don't
+have a Windows machine to test it, but this might be a minimal reproducible
+example:
+
+file.create("????.R")
+dir()
+
+The OP said dir() would return "????.R" in R.4.2.2 but not in R 4.3.0. In
+the same discussion another person mentioned that the problem could also be
+related to the file encoding, i.e., if the file content is encoded in
+UTF-8, it could be recognized by dir(), but not in ANSI.
+
+Regards,
+Yihui
+--
+https://yihui.org
+
+
+On Fri, Aug 11, 2023 at 6:25?AM Ivan Krylov <krylov.r00t at gmail.com> wrote:
+
+> Dear ???,
+>
+> Thank you for your message, but please follow the posting guide in your
+> future messages: https://www.r-project.org/posting-guide.html
+> https://www.r-project.org/bugs.html
+>
+> I understand from your link that list.files() ends up skipping some
+> Chinese filenames in R-4.3.1 (but not R-4.2.2) on Windows, but would you
+> (or perhaps Yihui Xie who I see is also participating in the discussion)
+> mind translating the rest of your findings into English? Have you been
+> able to narrow down the problem to certain character ranges, for
+> example?
+>
+> --
+> Best regards,
+> Ivan
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Sat Aug 12 17:33:15 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Sat, 12 Aug 2023 18:33:15 +0300
+Subject: [Rd] 
+ R-4.3 version list.files function could not work correctly in
+ chinese
+In-Reply-To: <CANROs4ePK4YW_YoEg4erpTQYKPNKGOoQvBJv6ZW8OtHSvCOOMA@mail.gmail.com>
+References: <16b91252fd33452f890fcce439921a63@goldwind.com>
+ <20230811142435.770c2037@parabola>
+ <CANROs4ePK4YW_YoEg4erpTQYKPNKGOoQvBJv6ZW8OtHSvCOOMA@mail.gmail.com>
+Message-ID: <20230812183315.4214987e@parabola>
+
+Dear Yihui,
+
+Thanks a lot for your help!
+
+Unfortunately, I was not able to reproduce this. I've tried creating
+files with Chinese characters in their names and populating them
+with valid UTF-8 and valid non-UTF-8 text, but R seems to be able to
+list them all in my case.
+
+I'm running a US English evaluation ISO image of a slightly newer build
+of Windows 10, and I also compiled R-4.3.1 from source, anticipating
+having to single-step through the list.files() implementation:
+
+sessionInfo()
+# R version 4.3.1 (2023-06-16 ucrt)
+# Platform: x86_64-w64-mingw32/x64 (64-bit)
+# Running under: Windows 10 x64 (build 19045)
+# 
+# Matrix products: default
+# 
+# 
+# locale:
+# [1] LC_COLLATE=English_United States.utf8  LC_CTYPE=English_United
+# States.utf8
+# [3] LC_MONETARY=English_United States.utf8 LC_NUMERIC=C
+# [5] LC_TIME=English_United States.utf8
+# 
+# time zone: America/Los_Angeles
+# tzcode source: internal
+# 
+# attached base packages:
+# [1] stats     graphics  grDevices utils     datasets  methods   base
+#
+# loaded via a namespace (and not attached):
+# [1] compiler_4.3.1
+dir("????")
+# [1] "????-non-utf8-?????.txt" "????-utf-8.txt"         
+system('cmd /c dir /s *.txt')
+#  Volume in drive C has no label.
+#  Volume Serial Number is A85A-AA74
+# 
+#  Directory of C:\R\R-4.3.1\bin\x64\????
+# 
+# 08/12/2023  07:57 AM                22 ????-non-utf8-?????.txt
+# 08/12/2023  07:56 AM                18 ????-utf-8.txt
+#                2 File(s)             40 bytes
+# 
+#      Total Files Listed:
+#                2 File(s)             40 bytes
+#                0 Dir(s)  29,538,418,688 bytes free
+# [1] 0
+
+(The OEM codepage cannot represent the characters I used in the file
+names, but all the files are present in both lists.)
+
+In order to find out what's wrong, it will be needed to download the R
+source code and compile it [*], install gdb using pacman (part of
+Rtools), then set a breakpoint on the list_files function from
+src/main/platform.c and step through it [**], paying attention to the
+R_readdir calls. Do the missing file names not even come out from
+FindNextFile()? Are they somehow skipped around the time of regex match?
+
+(I could help with the details of this, maybe off-list, if there's
+interest.)
+
+Unless Tomas Kalibera is able to deduce the root cause from the
+observed symptoms, someone who can reproduce the problem will have to
+investigate further.
+
+-- 
+Best regards,
+Ivan
+
+[*] https://cran.r-project.org/bin/windows/base/howto-R-devel.html
+
+[**] https://beej.us/guide/bggdb/
+
+
