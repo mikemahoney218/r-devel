@@ -5314,3 +5314,795 @@ Tomas
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From ch|r|com @end|ng |rom goog|e@com  Tue Aug 15 07:38:51 2023
+From: ch|r|com @end|ng |rom goog|e@com (Michael Chirico)
+Date: Mon, 14 Aug 2023 22:38:51 -0700
+Subject: [Rd] Unclear provenance of message from S4
+Message-ID: <CAD7Bkx_K4K34th3qXuXCLU7WhEfLt7wcOFrtdQBWNxpxbg-fBQ@mail.gmail.com>
+
+MRE to produce the message is the following:
+
+setClass("Foo")
+setOldClass("Bar")
+setAs("Bar", "Foo", \(x) x)
+# NOTE: arguments in definition for coerce changed from (x) to (from)
+
+In an interactive setting, that may be fine, but I first encountered
+this message in the install log of a package for which I am not the
+author (nor do I have any context on the package, really).
+
+As such it took me much longer than it otherwise would have to pick up
+on the connection between 'coerce' and 'setAs' (as searching the
+sources for 'coerce' yielded nothing). That the faulty argument is the
+ubiquitous 'x' is also a major impediment.
+
+It would be much better to surface the relationship to 'setAs' in this message.
+
+I believe that logic has to live in setAs itself as the delegated
+substituteFunctionArgs loses the proper context (unless we dare to
+resort to sys.calls()).
+
+Sharing here first per usual as I am not very familiar with S4, in
+case this all is much clearer to someone with a sharper eye for S4.
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue Aug 15 08:38:11 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 15 Aug 2023 08:38:11 +0200
+Subject: [Rd] 
+ R-4.3 version list.files function could not work correctly in
+ chinese
+In-Reply-To: <20230813141636.3fcdae02@parabola>
+References: <16b91252fd33452f890fcce439921a63@goldwind.com>
+ <20230813141636.3fcdae02@parabola>
+Message-ID: <411a06e4-e7f5-e5c7-01e4-54efd0ecc189@gmail.com>
+
+
+On 8/13/23 13:16, Ivan Krylov wrote:
+> Found it! Looks like a buffer length problem. This isn't limited to
+> Chinese, just more likely to happen when a character takes three bytes
+> to represent in UTF-8. (Any filename containing characters which take
+> more than one byte to represent in UTF-8 may fail.)
+>
+> If a directory contains a file with a sufficiently long name,
+> FindNextFile() fails with ERROR_MORE_DATA (0xEA, 234), making
+> R_readdir() return NULL, stopping list_files() prematurely:
+>
+> # everything seems to work fine...
+>
+> list.files("????")
+> # [1] "????-non-utf8-?????
+> ????????????????????????????????????????????????????.txt"
+> # [2] "????-non-utf8-?????.txt"
+> # [3] "????-utf-8.txt"
+>
+> # now create a file with an even longer name
+>
+> list.files("????")
+> # [1] "????-non-utf8-?????
+> ????????????????????????????????????????????????????.txt"
+>
+> # the files are still there, but not visible to list.files():
+Thanks, Ivan, could you please turn this into a complete minimal 
+reproducible example, ideally with only ASCII characters (if enough to 
+trigger)? Or any reproducible example would do. I would have a look 
+later today.
+>
+> system("cmd /c dir /s *.txt")
+> #  Volume in drive C has no label.
+> #  Volume Serial Number is A85A-AA74
+> #
+> #  Directory of C:\R\R-4.3.1\bin\x64\????
+> #
+> # 08/12/2023  07:57 AM                22 ????-non-utf8-?????
+> ????????????????????????????????????????????????????.txt
+> # 08/12/2023 07:57 AM                22 ????-non-utf8-?????
+> ????????????????????????????????????????????????????????????????????????????????????????????????????????.txt
+> # 08/12/2023  07:57 AM                22 ????-non-utf8-?????.txt
+> # 08/12/2023  07:56 AM                18 ????-utf-8.txt
+> # 4 File(s)             84 bytes
+> #
+> #       Total Files Listed:
+> #                4 File(s)             84 bytes
+> #                0 Dir(s)  29,281,538,048 bytes free
+> # [1] 0
+>
+> Increasing the path length limits [*] doesn't help, since it's the
+> filename length limit that we're bumping against. While both
+> WIN32_FIND_DATAA and WIN32_FIND_DATAW contain fixed-size buffers, a
+> valid filename may take more than MAX_PATH bytes to represent in UTF-8
+> while still being under the limit of MAX_PATH wide characters. This may
+> mean having to rewrite list_files in terms of R_wopendir()/R_wreaddir()
+> for Windows. As a workaround, we may use the short filename (which
+> sometimes may not exist, alas) when FindNextFile() fails with
+> ERROR_MORE_DATA.
+
+I admit I didn't get your analysis. However, I've rewritten this code 
+for R 4.3 to support long paths (when enabled in the system), more in 
+https://blog.r-project.org/2023/03/07/path-length-limit-on-windows/index.html. 
+As this was reported to be regression in 4.3, it is entirely possible 
+this change came with a regression (though a bit surprising we didn't 
+catch it earlier by testing), so it would be a great help if I could 
+have the example and debug it.
+
+Thanks,
+Tomas
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Tue Aug 15 09:04:50 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Tue, 15 Aug 2023 10:04:50 +0300
+Subject: [Rd] 
+ R-4.3 version list.files function could not work correctly in
+ chinese
+In-Reply-To: <411a06e4-e7f5-e5c7-01e4-54efd0ecc189@gmail.com>
+References: <16b91252fd33452f890fcce439921a63@goldwind.com>
+ <20230813141636.3fcdae02@parabola>
+ <411a06e4-e7f5-e5c7-01e4-54efd0ecc189@gmail.com>
+Message-ID: <20230815100450.4ec326dd@parabola>
+
+? Tue, 15 Aug 2023 08:38:11 +0200
+Tomas Kalibera <tomas.kalibera at gmail.com> ?????:
+
+> As this was reported to be regression in 4.3, it is entirely possible 
+> this change came with a regression (though a bit surprising we didn't 
+> catch it earlier by testing), so it would be a great help if I could 
+> have the example and debug it.
+
+Sorry, let me try to be more clear.
+
+The Windows filename length limit is 255(?) wide characters. The
+WIN32_FIND_DATAA structure contains a 260-byte buffer for the filename
+to be returned by FindFirstFileA()/FindNextFileA(). If a wide character
+takes more than one byte to be represented in UTF-8, it may overflow
+the 260 byte limit in the WIN32_FIND_DATAA structure despite being
+below the 260 wide character limit. When such an overflow happens,
+FindNextFile() returns FALSE with GetLastError() == ERROR_MORE_DATA,
+which results in R_readdir() returning NULL and makes list_files() stop
+before listing the rest of the directory.
+
+This is easier to make happen by accident with Chinese characters,
+because they take three UTF-8 bytes per character.
+
+Take the ? (\uf8) letter. It takes two bytes to represent in UTF-8.
+Create a file with a name consisting of this symbol repeated 140 times.
+When you run list.files() on the resulting directory on Windows with a
+UTF-8 locale, Windows tries to fit (0xc3 0xb8) times 140 into a
+260-byte buffer, which doesn't work. I'm afraid the only way to avoid
+such a failure is to rewrite R_readdir using the wide character API and
+convert the file names on the fly. (Just like mingw readdir() did in
+the past?)
+
+stopifnot(.Platform$OS.type == 'windows', l10n_info()$`UTF-8`)
+# any character for which nchar(enc2utf8(.), 'bytes') > 1 will do
+# any number >260/2 should do
+file.create(strrep('\uf8', 140))
+list.files()
+
+Does this work? I don't have access to a UTF-8 Windows machine right
+now.
+
+-- 
+Best regards,
+Ivan
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Tue Aug 15 09:58:52 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Tue, 15 Aug 2023 09:58:52 +0200
+Subject: [Rd] 
+ R 4.3: Change in behaviour of as.character.POSIXt for datetime
+ values with midnight time
+In-Reply-To: <4507E5E4-82F6-4B6E-B132-5ADBB997C9DB@hiddenelephants.co.uk>
+References: <25817.60219.239842.228093@stat.math.ethz.ch>
+ <4507E5E4-82F6-4B6E-B132-5ADBB997C9DB@hiddenelephants.co.uk>
+Message-ID: <25819.12348.884920.609033@stat.math.ethz.ch>
+
+>>>>> Tim Taylor 
+>>>>>     on Mon, 14 Aug 2023 12:26:51 +0100 writes:
+
+    > Martin,
+    > Thank you. Everything you have written is helpful and I admit I am likely guilty of using as.character() instead of format() in the past().
+
+    > Ignoring the above though, one thing I?m still unclear on is the special handling of zero (or rather non-zero time) seconds in the method. Is the motivation that as.character() outputs the minimum necessary information? It is clearly a very deliberate choice but the reasoning is still going a little over my head.
+
+    > Best
+    > Tim
+
+Hmm, I really don't understand what you don't understand.
+Here's some annotated R code exemplifying that indeed now,
+    as.character(x)[j] === as.character(x[j])
+but previously that was not fulfilled  {when  as.character() was
+the same as format() for POSIXct or POSIXlt}:
+
+##-----------------------------------------------------------------------------
+x0 <- c("1975-01-01 00:00:00", "1975-01-01 15:27:00")
+t0 <- as.POSIXct(x0)
+str(t0) #  POSIXct[1:2], format: "1975-01-01 00:00:00" "1975-01-01 15:27:00"
+t0    #  "1975-01-01 00:00:00 CET" "1975-01-01 15:27:00 CET"
+t0[1] #  "1975-01-01 CET" <-- yes, *no* 00:00:00   in no version of R
+
+## In R <= 4.2.x  as.character() was using format() for POSIX{ct,lt} :
+as.character(t0)    # "1975-01-01 00:00:00" "1975-01-01 15:27:00" << for R <= 4.2.x
+as.character(t0)    # "1975-01-01"          "1975-01-01 15:27:00" << for R >= 4.3.0
+as.character(t0[1]) # "1975-01-01"  {in all versions of R}
+
+
+Note that indeed   as.character()  does drop redundant trailing 0s :
+
+  > as.character(c(0.5, 0.75, pi))
+  [1] "0.5"              "0.75"             "3.14159265358979"
+
+whereas format() does not (ensuring resulting strings of the same nchar(.)):
+
+  > format(      c(0.5, 0.75, pi))
+  [1] "0.500000" "0.750000" "3.141593"
+
+
+
+    >> On 14 Aug 2023, at 09:52, Martin Maechler <maechler at stat.math.ethz.ch> wrote:
+    >> 
+    >> ?
+    >>> 
+    >>>>>>> Andy Teucher 
+    >>>>>>> on Fri, 11 Aug 2023 16:07:36 -0700 writes:
+    >> 
+    >>> I understand that `as.character.POSIXt()` had an overhaul in R 4.3 (https://github.com/wch/r-source/commit/f6fd993f8a2f799a56dbecbd8238f155191fc31b), and I have come across a new behaviour and I wonder if it is unintended?
+    >> 
+    >> Well, as the NEWS entry says
+    >> (partly visible in the url above -- which only shows one part of
+    >> the several changes for R 4.3) :
+    >> 
+    >> ? as.character(<POSIXt>) now behaves more in line with the methods
+    >> for atomic vectors such as numbers, and is no longer influenced
+    >> by options().  Ditto for as.character(<Date>).  The
+    >> as.character() method gets arguments digits and OutDec with
+    >> defaults _not_ depending on options().  Use of as.character(*,
+    >> format = .) now warns.
+    >> 
+    >> It was "inconsistent" to have  as.character(.) basically use format(.) for
+    >> these datatime objects.
+    >> as.character(x) for basic R types such as numbers, strings, logicals,... 
+    >> fulfills the important property
+    >> 
+    >> as.character(x)[j] === as.character(x[j])
+    >> 
+    >> whereas that is very much different for format() where indeed,
+    >> the formatting  of  x[1]  may quite a bit depend on the other
+    >> x[j]'s values:
+    >> 
+    >>> as.character(c(1, pi, pi/2^20))
+    >> [1] "1"    "3.14159265358979"   "2.99605622633914e-06"
+    >> 
+    >>> format(c(1, pi, pi/2^20))
+    >> [1] "1.000000e+00" "3.141593e+00" "2.996056e-06"
+    >>> format(c(1, pi))
+    >> [1] "1.000000" "3.141593"
+    >>> format(c(1, 10))
+    >> [1] " 1" "10"
+    >>> 
+    >> 
+    >> 
+    >>> When calling `as.character.POSIXt()` on a vector that contains elements where the time component is midnight (00:00:00), it drops the time component of that element in the resulting character vector. Previously the time component was retained: 
+    >> 
+    >>> In R 4.2.3:
+    >> 
+    >>> ```
+    >>> R.version$version.string
+    >>> #> [1] "R version 4.2.3 (2023-03-15)"
+    >> 
+    >>> (t <- as.POSIXct(c("1975-01-01 00:00:00", "1975-01-01 15:27:00")))
+    >>> #> [1] "1975-01-01 00:00:00 PST" "1975-01-01 15:27:00 PST?
+    >> 
+    >>> (tc <- as.character(t))
+    >>> #> [1] "1975-01-01 00:00:00" "1975-01-01 15:27:00?
+    >>> ```
+    >> 
+    >>> In R 4.3.1:
+    >> 
+    >>> ```
+    >>> R.version$version.string
+    >>> #> [1] "R version 4.3.1 (2023-06-16)"
+    >> 
+    >>> (t <- as.POSIXct(c("1975-01-01 00:00:00", "1975-01-01 15:27:00")))
+    >>> #> [1] "1975-01-01 00:00:00 PST" "1975-01-01 15:27:00 PST?
+    >> 
+    >>> (tc <- as.character(t))
+    >>> #> [1] "1975-01-01" "1975-01-01 15:27:00?
+    >>> ```
+    >> 
+    >> You should have used format()  here  or at least should do so now.
+    >> 
+    >>> This has consequences when round-tripping from POSIXt ->
+    >>> character -> POSIXt,
+    >> 
+    >> Well, I'd argue that such a "round trip" is not a "good idea"
+    >> anyway, as there are quite a few platform (local timezone for
+    >> one) issues, and precision is lost, notably for POSIXlt which
+    >> may be more precise than you typically get, etc. 
+    >> 
+    >>> since `as.POSIXct.character()` drops the time component from the entire vector if any element does not have a time component:
+    >> 
+    >> Well, there *is* no as.POSIXct.character()  {but we understand what you mean}: 
+    >> If you look at the help page you'd see that there's  as.POSIXlt.character()
+    >> {which is called from as.POSIXct.default()}
+    >> with a 3rd argument 'format' and a 4th argument 'tryFormats'
+    >> {and a lot more information -- the whole topic is far from trivial}.
+    >> 
+    >> Now, indirectly you would want R to be "smart", i.e. the
+    >> as.POSIXlt.character() method "guess better" about what the
+    >> user wants. ...
+    >> ... and I agree that is not an unreasonable expectation, e.g.,
+    >> for your example of wanting 
+    >> 
+    >> c("1975-01-01", "1975-01-01 15:27:00")
+    >> 
+    >> to  "work".
+    >> 
+    >> as.POSIXlt.character() is well documented to be trying all of
+    >> the `tryFormats` in order, until it finds one that works for all
+    >> vector components (or fail / use NA if none works);
+    >> and here it's only a format which drops the time that works for
+    >> all (i.e. both, in the example).
+    >> 
+    >> { Even though its behavior is well documented,
+    >> one could even argue that by default you'd want a warning in
+    >> such a case where "so much" is lost.
+    >> I think however that introducing such a warning  may trip too
+    >> much current code relying .. also, the extra *checking* maybe
+    >> somewhat costly .. (?)  .... anyway that's an interesting side topic
+    >> }
+    >> 
+    >> Instead what you want here is for each string (element of the
+    >> character vector) to try the `tryFormats and using the best
+    >> available *individually*  {smart R users ==> "think lapply(.)"} :
+    >> Currently, this would be  "something like"  unlist(lapply(x, as.POSIXlt))
+    >> well, and then you need to jump a hoop additionally.
+    >> If you want POSIXct,  like this :
+    >> 
+    >> .POSIXct(unlist(lapply( * , as.POSIXct))))
+    >> 
+    >> For your example
+    >> 
+    >> ch <- c("1975-01-01", "1975-01-01 15:27:00")
+    >> 
+    >>> str(.POSIXct(unlist(lapply(ch, as.POSIXct))))
+    >> POSIXct[1:2], format: "1975-01-01 00:00:00" "1975-01-01 15:27:00"
+    >> 
+    >> ---
+    >> 
+    >> After all that, yes, I agree that we should consider making
+    >> this much easier. E.g.,  by adding an optional argument to
+    >> as.POSIXlt.character()   say, `each` with default FALSE such
+    >> that as.POSIXlt(*,  each=TRUE)
+    >> {and also as.POSIXct(*,  each=TRUE) } would follow the above
+    >> strategy.
+    >> 
+    >> ?
+    >> 
+    >> Martin
+    >> 
+    >> --
+    >> Martin Maechler
+    >> ETH Zurich   and   R Core tam
+    >> 
+    >> ______________________________________________
+    >> R-devel at r-project.org mailing list
+    >> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From t|m@t@y|or @end|ng |rom h|ddene|eph@nt@@co@uk  Tue Aug 15 12:00:24 2023
+From: t|m@t@y|or @end|ng |rom h|ddene|eph@nt@@co@uk (Tim Taylor)
+Date: Tue, 15 Aug 2023 11:00:24 +0100
+Subject: [Rd] 
+ R 4.3: Change in behaviour of as.character.POSIXt for datetime
+ values with midnight time
+In-Reply-To: <25819.12348.884920.609033@stat.math.ethz.ch>
+References: <25817.60219.239842.228093@stat.math.ethz.ch>
+ <4507E5E4-82F6-4B6E-B132-5ADBB997C9DB@hiddenelephants.co.uk>
+ <25819.12348.884920.609033@stat.math.ethz.ch>
+Message-ID: <b7821765-9d7e-a441-76af-50210d613714@hiddenelephants.co.uk>
+
+Many thanks Martin!
+
+I was completely overlooking the behaviour for a length 1 vector with 
+00:00:00. More coffee needed for me I think.
+
+Best
+
+Tim
+
+
+On 15/08/2023 08:58, Martin Maechler wrote:
+>>>>>> Tim Taylor
+>>>>>>      on Mon, 14 Aug 2023 12:26:51 +0100 writes:
+>      > Martin,
+>      > Thank you. Everything you have written is helpful and I admit I am likely guilty of using as.character() instead of format() in the past().
+>
+>      > Ignoring the above though, one thing I?m still unclear on is the special handling of zero (or rather non-zero time) seconds in the method. Is the motivation that as.character() outputs the minimum necessary information? It is clearly a very deliberate choice but the reasoning is still going a little over my head.
+>
+>      > Best
+>      > Tim
+>
+> Hmm, I really don't understand what you don't understand.
+> Here's some annotated R code exemplifying that indeed now,
+>      as.character(x)[j] === as.character(x[j])
+> but previously that was not fulfilled  {when  as.character() was
+> the same as format() for POSIXct or POSIXlt}:
+>
+> ##-----------------------------------------------------------------------------
+> x0 <- c("1975-01-01 00:00:00", "1975-01-01 15:27:00")
+> t0 <- as.POSIXct(x0)
+> str(t0) #  POSIXct[1:2], format: "1975-01-01 00:00:00" "1975-01-01 15:27:00"
+> t0    #  "1975-01-01 00:00:00 CET" "1975-01-01 15:27:00 CET"
+> t0[1] #  "1975-01-01 CET" <-- yes, *no* 00:00:00   in no version of R
+>
+> ## In R <= 4.2.x  as.character() was using format() for POSIX{ct,lt} :
+> as.character(t0)    # "1975-01-01 00:00:00" "1975-01-01 15:27:00" << for R <= 4.2.x
+> as.character(t0)    # "1975-01-01"          "1975-01-01 15:27:00" << for R >= 4.3.0
+> as.character(t0[1]) # "1975-01-01"  {in all versions of R}
+>
+>
+> Note that indeed   as.character()  does drop redundant trailing 0s :
+>
+>    > as.character(c(0.5, 0.75, pi))
+>    [1] "0.5"              "0.75"             "3.14159265358979"
+>
+> whereas format() does not (ensuring resulting strings of the same nchar(.)):
+>
+>    > format(      c(0.5, 0.75, pi))
+>    [1] "0.500000" "0.750000" "3.141593"
+>
+>
+>
+>      >> On 14 Aug 2023, at 09:52, Martin Maechler <maechler at stat.math.ethz.ch> wrote:
+>      >>
+>      >> ?
+>      >>>
+>      >>>>>>> Andy Teucher
+>      >>>>>>> on Fri, 11 Aug 2023 16:07:36 -0700 writes:
+>      >>
+>      >>> I understand that `as.character.POSIXt()` had an overhaul in R 4.3 (https://github.com/wch/r-source/commit/f6fd993f8a2f799a56dbecbd8238f155191fc31b), and I have come across a new behaviour and I wonder if it is unintended?
+>      >>
+>      >> Well, as the NEWS entry says
+>      >> (partly visible in the url above -- which only shows one part of
+>      >> the several changes for R 4.3) :
+>      >>
+>      >> ? as.character(<POSIXt>) now behaves more in line with the methods
+>      >> for atomic vectors such as numbers, and is no longer influenced
+>      >> by options().  Ditto for as.character(<Date>).  The
+>      >> as.character() method gets arguments digits and OutDec with
+>      >> defaults _not_ depending on options().  Use of as.character(*,
+>      >> format = .) now warns.
+>      >>
+>      >> It was "inconsistent" to have  as.character(.) basically use format(.) for
+>      >> these datatime objects.
+>      >> as.character(x) for basic R types such as numbers, strings, logicals,...
+>      >> fulfills the important property
+>      >>
+>      >> as.character(x)[j] === as.character(x[j])
+>      >>
+>      >> whereas that is very much different for format() where indeed,
+>      >> the formatting  of  x[1]  may quite a bit depend on the other
+>      >> x[j]'s values:
+>      >>
+>      >>> as.character(c(1, pi, pi/2^20))
+>      >> [1] "1"    "3.14159265358979"   "2.99605622633914e-06"
+>      >>
+>      >>> format(c(1, pi, pi/2^20))
+>      >> [1] "1.000000e+00" "3.141593e+00" "2.996056e-06"
+>      >>> format(c(1, pi))
+>      >> [1] "1.000000" "3.141593"
+>      >>> format(c(1, 10))
+>      >> [1] " 1" "10"
+>      >>>
+>      >>
+>      >>
+>      >>> When calling `as.character.POSIXt()` on a vector that contains elements where the time component is midnight (00:00:00), it drops the time component of that element in the resulting character vector. Previously the time component was retained:
+>      >>
+>      >>> In R 4.2.3:
+>      >>
+>      >>> ```
+>      >>> R.version$version.string
+>      >>> #> [1] "R version 4.2.3 (2023-03-15)"
+>      >>
+>      >>> (t <- as.POSIXct(c("1975-01-01 00:00:00", "1975-01-01 15:27:00")))
+>      >>> #> [1] "1975-01-01 00:00:00 PST" "1975-01-01 15:27:00 PST?
+>      >>
+>      >>> (tc <- as.character(t))
+>      >>> #> [1] "1975-01-01 00:00:00" "1975-01-01 15:27:00?
+>      >>> ```
+>      >>
+>      >>> In R 4.3.1:
+>      >>
+>      >>> ```
+>      >>> R.version$version.string
+>      >>> #> [1] "R version 4.3.1 (2023-06-16)"
+>      >>
+>      >>> (t <- as.POSIXct(c("1975-01-01 00:00:00", "1975-01-01 15:27:00")))
+>      >>> #> [1] "1975-01-01 00:00:00 PST" "1975-01-01 15:27:00 PST?
+>      >>
+>      >>> (tc <- as.character(t))
+>      >>> #> [1] "1975-01-01" "1975-01-01 15:27:00?
+>      >>> ```
+>      >>
+>      >> You should have used format()  here  or at least should do so now.
+>      >>
+>      >>> This has consequences when round-tripping from POSIXt ->
+>      >>> character -> POSIXt,
+>      >>
+>      >> Well, I'd argue that such a "round trip" is not a "good idea"
+>      >> anyway, as there are quite a few platform (local timezone for
+>      >> one) issues, and precision is lost, notably for POSIXlt which
+>      >> may be more precise than you typically get, etc.
+>      >>
+>      >>> since `as.POSIXct.character()` drops the time component from the entire vector if any element does not have a time component:
+>      >>
+>      >> Well, there *is* no as.POSIXct.character()  {but we understand what you mean}:
+>      >> If you look at the help page you'd see that there's  as.POSIXlt.character()
+>      >> {which is called from as.POSIXct.default()}
+>      >> with a 3rd argument 'format' and a 4th argument 'tryFormats'
+>      >> {and a lot more information -- the whole topic is far from trivial}.
+>      >>
+>      >> Now, indirectly you would want R to be "smart", i.e. the
+>      >> as.POSIXlt.character() method "guess better" about what the
+>      >> user wants. ...
+>      >> ... and I agree that is not an unreasonable expectation, e.g.,
+>      >> for your example of wanting
+>      >>
+>      >> c("1975-01-01", "1975-01-01 15:27:00")
+>      >>
+>      >> to  "work".
+>      >>
+>      >> as.POSIXlt.character() is well documented to be trying all of
+>      >> the `tryFormats` in order, until it finds one that works for all
+>      >> vector components (or fail / use NA if none works);
+>      >> and here it's only a format which drops the time that works for
+>      >> all (i.e. both, in the example).
+>      >>
+>      >> { Even though its behavior is well documented,
+>      >> one could even argue that by default you'd want a warning in
+>      >> such a case where "so much" is lost.
+>      >> I think however that introducing such a warning  may trip too
+>      >> much current code relying .. also, the extra *checking* maybe
+>      >> somewhat costly .. (?)  .... anyway that's an interesting side topic
+>      >> }
+>      >>
+>      >> Instead what you want here is for each string (element of the
+>      >> character vector) to try the `tryFormats and using the best
+>      >> available *individually*  {smart R users ==> "think lapply(.)"} :
+>      >> Currently, this would be  "something like"  unlist(lapply(x, as.POSIXlt))
+>      >> well, and then you need to jump a hoop additionally.
+>      >> If you want POSIXct,  like this :
+>      >>
+>      >> .POSIXct(unlist(lapply( * , as.POSIXct))))
+>      >>
+>      >> For your example
+>      >>
+>      >> ch <- c("1975-01-01", "1975-01-01 15:27:00")
+>      >>
+>      >>> str(.POSIXct(unlist(lapply(ch, as.POSIXct))))
+>      >> POSIXct[1:2], format: "1975-01-01 00:00:00" "1975-01-01 15:27:00"
+>      >>
+>      >> ---
+>      >>
+>      >> After all that, yes, I agree that we should consider making
+>      >> this much easier. E.g.,  by adding an optional argument to
+>      >> as.POSIXlt.character()   say, `each` with default FALSE such
+>      >> that as.POSIXlt(*,  each=TRUE)
+>      >> {and also as.POSIXct(*,  each=TRUE) } would follow the above
+>      >> strategy.
+>      >>
+>      >> ?
+>      >>
+>      >> Martin
+>      >>
+>      >> --
+>      >> Martin Maechler
+>      >> ETH Zurich   and   R Core tam
+>      >>
+>      >> ______________________________________________
+>      >> R-devel at r-project.org mailing list
+>      >> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From e||oc@mp|te||| @end|ng |rom gm@||@com  Mon Aug 14 22:42:42 2023
+From: e||oc@mp|te||| @end|ng |rom gm@||@com (Elio Campitelli)
+Date: Mon, 14 Aug 2023 17:42:42 -0300
+Subject: [Rd] Heads up about documentation-related reports
+Message-ID: <CAGCrKXeM_8AS4sB7tADrGme0PGygjYre9k==Ditkp8=JvK5=ig@mail.gmail.com>
+
+For the upcoming R Sprint I'm proposing a project to improve documentation
+<https://contributor.r-project.org/r-project-sprint-2023/projects/documentation/>.
+Part of the project will include several small related reports; for
+instance, trying to improve examples of many functions (here's a list of
+some of the possible reports
+<https://contributor.r-project.org/r-project-sprint-2023/projects/documentation/#bugs-to-report>
+).
+
+Would it be better to send one single big report or many small reports?
+
+Cheers,
+Elio
+
+	[[alternative HTML version deleted]]
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue Aug 15 16:00:25 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 15 Aug 2023 16:00:25 +0200
+Subject: [Rd] 
+ R-4.3 version list.files function could not work correctly in
+ chinese
+In-Reply-To: <20230815100450.4ec326dd@parabola>
+References: <16b91252fd33452f890fcce439921a63@goldwind.com>
+ <20230813141636.3fcdae02@parabola>
+ <411a06e4-e7f5-e5c7-01e4-54efd0ecc189@gmail.com>
+ <20230815100450.4ec326dd@parabola>
+Message-ID: <ac8e8cf1-96cb-21c9-3578-0e3277823dee@gmail.com>
+
+
+On 8/15/23 09:04, Ivan Krylov wrote:
+> ? Tue, 15 Aug 2023 08:38:11 +0200
+> Tomas Kalibera <tomas.kalibera at gmail.com> ?????:
+>
+>> As this was reported to be regression in 4.3, it is entirely possible
+>> this change came with a regression (though a bit surprising we didn't
+>> catch it earlier by testing), so it would be a great help if I could
+>> have the example and debug it.
+> Sorry, let me try to be more clear.
+>
+> The Windows filename length limit is 255(?) wide characters. The
+> WIN32_FIND_DATAA structure contains a 260-byte buffer for the filename
+> to be returned by FindFirstFileA()/FindNextFileA(). If a wide character
+> takes more than one byte to be represented in UTF-8, it may overflow
+> the 260 byte limit in the WIN32_FIND_DATAA structure despite being
+> below the 260 wide character limit. When such an overflow happens,
+> FindNextFile() returns FALSE with GetLastError() == ERROR_MORE_DATA,
+> which results in R_readdir() returning NULL and makes list_files() stop
+> before listing the rest of the directory.
+>
+> This is easier to make happen by accident with Chinese characters,
+> because they take three UTF-8 bytes per character.
+>
+> Take the ? (\uf8) letter. It takes two bytes to represent in UTF-8.
+> Create a file with a name consisting of this symbol repeated 140 times.
+> When you run list.files() on the resulting directory on Windows with a
+> UTF-8 locale, Windows tries to fit (0xc3 0xb8) times 140 into a
+> 260-byte buffer, which doesn't work. I'm afraid the only way to avoid
+> such a failure is to rewrite R_readdir using the wide character API and
+> convert the file names on the fly. (Just like mingw readdir() did in
+> the past?)
+>
+> stopifnot(.Platform$OS.type == 'windows', l10n_info()$`UTF-8`)
+> # any character for which nchar(enc2utf8(.), 'bytes') > 1 will do
+> # any number >260/2 should do
+> file.create(strrep('\uf8', 140))
+> list.files()
+>
+> Does this work? I don't have access to a UTF-8 Windows machine right
+> now.
+
+Thanks, yes, I can reproduce the problem. Some Windows functions impose 
+260 wide characters limit, but other 260 bytes limit, so one can create 
+a file with a name too long to be found by FindNextFileA.
+
+In R 4.2, we used readdir() from mingw-w64, which itself used findnext, 
+which however had the same problem, it used a buffer of size 260 bytes 
+and from the code of mingw-w64 and the Windows documentation, it should 
+have behaved the same, it should have stopped the search on such a long 
+file name. However, in my use case, R 4.2.3 crashed inside findnext due 
+to stack overrun, R 4.1.3 worked, but clearly it would require a 
+different use case to overrun this buffer as it didn't use UTF-8. This 
+suggests that findnext didn't have a check for this and hence caused 
+memory corruption, which can lead to a crash or work by coincidence. 
+Which could have been the case for the user reporting this as a 
+regression compared to R 4.2. But it is not a regression, the problem 
+existed for long.
+
+So, yes, we'd probably have to use wide variants of FindNext/FindFirst. 
+I'll fix.
+
+Thanks for debugging this,
+Tomas
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue Aug 15 16:14:16 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 15 Aug 2023 16:14:16 +0200
+Subject: [Rd] 
+ =?utf-8?b?562U5aSNOiBSLTQuMyB2ZXJzaW9uIGxpc3QuZmlsZXMgZnVu?=
+ =?utf-8?q?ction_could_not_work_correctly_in_chinese?=
+In-Reply-To: <18ce35a793c2400b917e8d25bdbe96ef@goldwind.com>
+References: <16b91252fd33452f890fcce439921a63@goldwind.com>
+ <TYAP286MB026897095C1DCE796D8884BDD116A@TYAP286MB0268.JPNP286.PROD.OUTLOOK.COM>
+ <18ce35a793c2400b917e8d25bdbe96ef@goldwind.com>
+Message-ID: <82dcd910-d6a5-a859-b70d-43389cc60e58@gmail.com>
+
+Dear ???,
+
+as discussed on this thread, Ivan Krylov found a bug in R, which could 
+be causing the problem you have run into. To confirm this is the cause, 
+could you please check outside R (say in explorer) if you have any file 
+with a very long name in the directory? And if so, does moving that file 
+away make the problem disappear? Files with up to 80 characters couldn't 
+trigger this bug.
+
+A workaround for this bug is not to use file names with more than 80 
+(possibly all Chinese) characters.
+
+The content of a file (or whether the content is in UTF-8 or not) cannot 
+be influencing this problem directly, neither list.files() nor Windows 
+looks into the files when listing them.
+
+The bug Ivan found is not a regression: older versions of R may crash 
+when you have such long file names. So there would be no point staying 
+with an older version to overcome this problem: the only reliable 
+work-around I can think of is use reasonably short file names.
+
+Best
+Tomas
+
+On 8/14/23 03:45, ??? wrote:
+> Rterm.exe  test result?
+>
+>> a  =  readline()
+> D:\Project_Delivery\
+>>
+>>   list.files(a,recursive = T)
+> [1] "2022(1).xlsx"
+> [2] "conf_custom_wf_wt_map_202308091545.csv"
+> [3] ".R"
+> [4] ".xlsx"
+> [5] "_.xlsx"
+> [6] ".xlsx"
+> [7] " (3).xlsx"
+> [8] "20230222113605379(1).xlsx"
+> [9] "_2022_20230811.docx"
+>
+> All  the file names which contains the Chinese  can not be printed.
+> The result of RGUI and RStudio are the same:
+>
+>
+>> a  =  readline()
+> D:\Project_Delivery\??
+>>
+>>   list.files(a,recursive = T)
+> [1] "2022????????????????(1).xlsx" "conf_custom_wf_wt_map_202308091545.csv"
+>
+>
+> ???: yu gong [mailto:yugong at outlook.com]
+> ????: 2023?8?13? 17:36
+> ???: ??? <yeyueguang at goldwind.com>; r-devel at r-project.org
+> ??: Re: R-4.3 version list.files function could not work correctly in chinese
+>
+> Could you test it on RGui and Rterm first, see it work or not. then try RStudio?
+>
+> ________________________________
+> From: R-devel <r-devel-bounces at r-project.org<mailto:r-devel-bounces at r-project.org>> on behalf of ??? <yeyueguang at goldwind.com<mailto:yeyueguang at goldwind.com>>
+> Sent: Friday, August 11, 2023 11:41
+> To: r-devel at r-project.org<mailto:r-devel at r-project.org> <r-devel at r-project.org<mailto:r-devel at r-project.org>>
+> Subject: [Rd] R-4.3 version list.files function could not work correctly in chinese
+>
+>       ????
+>            ????R-4.3???????????R??????list.files??????????????????????BUG????????????????????????????
+> r4.3????dir????????????????? - COS??? | ?????? | ?????????????? (cosx.org)<https://d.cosx.org/d/424356-r43ban-ben-zhong-dirhan-shu-huo-qu-bu-liao-quan-bu-wen-jian/11><ttps://d.cosx.org/d/424356-r43ban-ben-zhong-dirhan-shu-huo-qu-bu-liao-quan-bu-wen-jian/11%3e>
+>            ???????????????????????
+>
+>          [[alternative HTML version deleted]]
+> ??????????????
+> ?????????????????????????????????????????????????????????????????
+> ?????????????????? ITSecurity at goldwind.com?
+>
+> ???????????????
+> Email system security tips?
+> The use of emails to collect personal information, account passwords, bank card information, help, subsidies, money transfers, etc. is "phishing email" or "virus email", no response is required, and please delete it immediately.
+> If you encounter email security issues, please contact ITSecurity at goldwind.com.<mailto:TSecurity at goldwind.com.>
+>
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
