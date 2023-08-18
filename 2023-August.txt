@@ -6106,3 +6106,1739 @@ On 8/14/23 03:45, ??? wrote:
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Wed Aug 16 09:42:09 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Wed, 16 Aug 2023 09:42:09 +0200
+Subject: [Rd] 
+ R-4.3 version list.files function could not work correctly in
+ chinese
+In-Reply-To: <ac8e8cf1-96cb-21c9-3578-0e3277823dee@gmail.com>
+References: <16b91252fd33452f890fcce439921a63@goldwind.com>
+ <20230813141636.3fcdae02@parabola>
+ <411a06e4-e7f5-e5c7-01e4-54efd0ecc189@gmail.com>
+ <20230815100450.4ec326dd@parabola>
+ <ac8e8cf1-96cb-21c9-3578-0e3277823dee@gmail.com>
+Message-ID: <bb647f1f-b42c-31df-eda1-bbbd9058ddc4@gmail.com>
+
+
+On 8/15/23 16:00, Tomas Kalibera wrote:
+>
+> On 8/15/23 09:04, Ivan Krylov wrote:
+>> ? Tue, 15 Aug 2023 08:38:11 +0200
+>> Tomas Kalibera <tomas.kalibera at gmail.com> ?????:
+>>
+>>> As this was reported to be regression in 4.3, it is entirely possible
+>>> this change came with a regression (though a bit surprising we didn't
+>>> catch it earlier by testing), so it would be a great help if I could
+>>> have the example and debug it.
+>> Sorry, let me try to be more clear.
+>>
+>> The Windows filename length limit is 255(?) wide characters. The
+>> WIN32_FIND_DATAA structure contains a 260-byte buffer for the filename
+>> to be returned by FindFirstFileA()/FindNextFileA(). If a wide character
+>> takes more than one byte to be represented in UTF-8, it may overflow
+>> the 260 byte limit in the WIN32_FIND_DATAA structure despite being
+>> below the 260 wide character limit. When such an overflow happens,
+>> FindNextFile() returns FALSE with GetLastError() == ERROR_MORE_DATA,
+>> which results in R_readdir() returning NULL and makes list_files() stop
+>> before listing the rest of the directory.
+>>
+>> This is easier to make happen by accident with Chinese characters,
+>> because they take three UTF-8 bytes per character.
+>>
+>> Take the ? (\uf8) letter. It takes two bytes to represent in UTF-8.
+>> Create a file with a name consisting of this symbol repeated 140 times.
+>> When you run list.files() on the resulting directory on Windows with a
+>> UTF-8 locale, Windows tries to fit (0xc3 0xb8) times 140 into a
+>> 260-byte buffer, which doesn't work. I'm afraid the only way to avoid
+>> such a failure is to rewrite R_readdir using the wide character API and
+>> convert the file names on the fly. (Just like mingw readdir() did in
+>> the past?)
+>>
+>> stopifnot(.Platform$OS.type == 'windows', l10n_info()$`UTF-8`)
+>> # any character for which nchar(enc2utf8(.), 'bytes') > 1 will do
+>> # any number >260/2 should do
+>> file.create(strrep('\uf8', 140))
+>> list.files()
+>>
+>> Does this work? I don't have access to a UTF-8 Windows machine right
+>> now.
+>
+> Thanks, yes, I can reproduce the problem. Some Windows functions 
+> impose 260 wide characters limit, but other 260 bytes limit, so one 
+> can create a file with a name too long to be found by FindNextFileA.
+>
+> In R 4.2, we used readdir() from mingw-w64, which itself used 
+> findnext, which however had the same problem, it used a buffer of size 
+> 260 bytes and from the code of mingw-w64 and the Windows 
+> documentation, it should have behaved the same, it should have stopped 
+> the search on such a long file name. However, in my use case, R 4.2.3 
+> crashed inside findnext due to stack overrun, R 4.1.3 worked, but 
+> clearly it would require a different use case to overrun this buffer 
+> as it didn't use UTF-8. This suggests that findnext didn't have a 
+> check for this and hence caused memory corruption, which can lead to a 
+> crash or work by coincidence. Which could have been the case for the 
+> user reporting this as a regression compared to R 4.2. But it is not a 
+> regression, the problem existed for long.
+>
+> So, yes, we'd probably have to use wide variants of 
+> FindNext/FindFirst. I'll fix.
+
+Fixed in R-devel (84960). Please let me know if you see any problem with 
+the fix.
+
+Thanks,
+Tomas
+
+>
+> Thanks for debugging this,
+> Tomas
+>
+>
+>
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Wed Aug 16 10:29:18 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Wed, 16 Aug 2023 10:29:18 +0200
+Subject: [Rd] Heads up about documentation-related reports
+In-Reply-To: <CAGCrKXeM_8AS4sB7tADrGme0PGygjYre9k==Ditkp8=JvK5=ig@mail.gmail.com>
+References: <CAGCrKXeM_8AS4sB7tADrGme0PGygjYre9k==Ditkp8=JvK5=ig@mail.gmail.com>
+Message-ID: <25820.35038.304901.152641@stat.math.ethz.ch>
+
+>>>>> Elio Campitelli 
+>>>>>     on Mon, 14 Aug 2023 17:42:42 -0300 writes:
+
+    > For the upcoming R Sprint I'm proposing a project to improve documentation
+    > <https://contributor.r-project.org/r-project-sprint-2023/projects/documentation/>.
+
+That's good, thank you.
+
+However, do concentrate on the existing bugzilla issues
+   https://contributor.r-project.org/r-project-sprint-2023/projects/documentation/#list-of-bugs
+
+(and can you *PLEASE* (change the CSS or ?? to) make the table
+ of relevant bugzilla entries wider so it becomes readable ?!) 
+
+    > Part of the project will include several small related reports; for
+    > instance, trying to improve examples of many functions (here's a list of
+    > some of the possible reports
+    > <https://contributor.r-project.org/r-project-sprint-2023/projects/documentation/#bugs-to-report>
+    > ).
+
+    > Would it be better to send one single big report or many small reports?
+
+    > Cheers,
+    > Elio
+
+{Do you mean bugzilla bug reports? 
+ In that case, maybe rather  *none* [see also below]:
+ If you do not like an example that is definitely not a bug in R!
+ ---> https://www.r-project.org/bugs.html  "What is a bug"
+
+ Also:  Every bugzilla report (and comment) creates an e-mail to
+        all of R core.  Yes, we can sort / pre-filter /
+        .. e-mails, but still
+}
+
+Well, as co-author of many of R's help page examples, I must say
+that "improving" an example needs to have a well defined notion
+of "bad - better - good" etc.
+In my opinion much of that is a matter of taste rather than objectivity.
+
+As an R core member I'd not like you to propose changing
+examples I or others had chosen to be "funny" , "cute",
+"special", or "thought provoking" ... just because other people
+think that such examples should be as simple (and boring) as possible.
+
+I hope the helpers at the upcoming R Sprint will concentrate on improving R
+by following what R core member Luke Tierney and Tomas Kalibera
+wrote in their two R blogs:
+ ==> https://blog.r-project.org/
+   and look for the 2 blog entries with  "Reviewing Bug Reports"
+   in their title.
+
+
+I'm sorry if the above does not sound encouraging..
+I hope it still does encourage to rather concentrate on helping
+to make R better by reviewing bugs, fixing bugs, exploring
+problems, etc. 
+
+With regards,
+Martin
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Wed Aug 16 10:40:13 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Wed, 16 Aug 2023 10:40:13 +0200
+Subject: [Rd] Concerns with SVD -- and the Matrix Exponential
+In-Reply-To: <CACSKKmkgrDyDYBLWVPXpxfmeR0vCMBxrieqsoZe9XGBHu7DKbQ@mail.gmail.com>
+References: <CACSKKm=DcN2zy+0QmmU39gSStX2YU4K-MEJaOWcoK6XANswc5Q@mail.gmail.com>
+ <c21e618c-bbbb-42b9-2adb-56df0fb32673@gmail.com>
+ <25780.65318.292886.397047@stat.math.ethz.ch>
+ <CACSKKmnn7HPcaQ3Dr1OZx1_Sy32wrkV0BW=dUjuazFeT577hMA@mail.gmail.com>
+ <BL0PR04MB4706B46C78D72321F088CB0CD90AA@BL0PR04MB4706.namprd04.prod.outlook.com>
+ <CACSKKmkgrDyDYBLWVPXpxfmeR0vCMBxrieqsoZe9XGBHu7DKbQ@mail.gmail.com>
+Message-ID: <25820.35693.528444.555157@stat.math.ethz.ch>
+
+>>>>> Durga Prasad G me14d059 
+>>>>>     on Wed, 16 Aug 2023 13:36:10 +0530 writes:
+
+    > Dear Martin, I am getting different responses from different officials of
+    > R-Software, 
+
+well, well, ..
+Here on R-devel, we got two messages in addition to mine,
+none by any "official" (even though John C Nash probably gets
+the title of most senior professor still active on the R mailing list),
+but both to the point,
+notably Aidan Lakshman below showing you how you were unaware of
+several things about the SVD, and confusing
+positive semi definite matrices with arbitrary symmetric matrices.
+
+    > but those statements are contradicting with the statements
+    > discussed in your email. 
+
+I don't think so.  I think we all agreed (John Nash, me, Aidan Lakshman),
+even though focussing on different aspects of your partly
+incorrect claims.
+
+Martin Maechler
+
+
+
+    > Kindly go through the previous files and emails,
+    > and respond. I personally think, together we can fix the issue which is
+    > observed in SVD.
+
+    > Thanks and regards
+    > Durga Prasad
+
+    > On Tue, Aug 1, 2023 at 4:51?PM Lakshman, Aidan H <AHL27 at pitt.edu> wrote:
+
+    >> Hi Durga,
+    >> 
+    >> There?s an error in your calculations here. You mention that for the SVD
+    >> of a symmetric matrix, we must have U=V, but this is not a correct
+    >> statement. The unitary matrices are only equivalent if the matrix A is
+    >> positive semidefinite.
+    >> 
+    >> In your example, you provide the matrix {{1,4},{4,1}}, which has
+    >> eigenvalues 5 and -3. This is not positive semidefinite, and thus there's
+    >> no requirement that the unitary matrices be equivalent.
+    >> 
+    >> If you verify your example with something like wolfram alpha, you?ll find
+    >> that R?s solution is correct.
+    >> 
+    >> -Aidan
+    >> 
+    >> -----------------------
+    >> 
+    >> Aidan Lakshman (he/him) <https://www.ahl27.com/>
+    >> 
+    >> Doctoral Fellow, Wright Lab <https://www.wrightlabscience.com/>
+    >> 
+    >> University of Pittsburgh School of Medicine
+    >> 
+    >> Department of Biomedical Informatics
+    >> 
+    >> ahl27 at pitt.edu
+    >> 
+    >> (724) 612-9940
+    >> 
+    >> 
+    >> 
+    >> ------------------------------
+    >> *From:* R-devel <r-devel-bounces at r-project.org> on behalf of Durga Prasad
+    >> G me14d059 <me14d059 at smail.iitm.ac.in>
+    >> *Sent:* Tuesday, August 1, 2023 4:18:20 AM
+    >> *To:* Martin Maechler <maechler at stat.math.ethz.ch>; r-devel at r-project.org
+    >> <r-devel at r-project.org>; profjcnash at gmail.com <profjcnash at gmail.com>
+    >> *Subject:* Re: [Rd] Concerns with SVD -- and the Matrix Exponential
+    >> 
+    >> Hi Martin, Thank you for your reply. The response and the links provided by
+    >> you helped to learn more. But I am not able to obtain the simple even
+    >> powers of a matrix: one simple case is the square of a matrix. The square
+    >> of the matrix using direct matrix multiplication operations and svd (A = U
+    >> D V') are different. Kindly check the attached file for the complete
+    >> explanation. I want to know which technique was used in building the svd in
+    >> R-Software. I want to discuss about svd if you schedule a meeting.
+    >> 
+    >> Thanks and Regards
+    >> Durga Prasad
+    >> 
+    >> 
+    >> On Mon, Jul 17, 2023 at 2:13?PM Martin Maechler <
+    >> maechler at stat.math.ethz.ch>
+    >> wrote:
+    >> 
+    >> > >>>>> J C Nash
+    >> > >>>>>     on Sun, 16 Jul 2023 13:30:57 -0400 writes:
+    >> >
+    >> >     > Better check your definitions of SVD -- there are several
+    >> >     > forms, but all I am aware of (and I wrote a couple of the
+    >> >     > codes in the early 1970s for the SVD) have positive
+    >> >     > singular values.
+    >> >
+    >> >     > JN
+    >> >
+    >> > Indeed.
+    >> >
+    >> > More generally, the decomposition     A = U D V'
+    >> > (with diagonal D and orthogonal U,V)
+    >> > is not at all unique.
+    >> >
+    >> > There are not only many possible different choices of the sign
+    >> > of the diagonal entries, but also the *ordering* of the singular values
+    >> > is non unique.
+    >> > That's why R and 'Lapack', the world-standard for
+    >> >   computer/numerical linear algebra, and others I think,
+    >> > make the decomposition unique by requiring
+    >> > non-negative entries in D and have them *sorted* decreasingly.
+    >> >
+    >> > The latter is what the help page   help(svd)  always said
+    >> > (and you should have studied that before raising such concerns).
+    >> >
+    >> > -----------------------------------------------------------------
+    >> >
+    >> > To your second point (in the document), the matrix exponential:
+    >> > It is less known, but still has been known among experts for
+    >> > many years (and I think even among students of a class on
+    >> > numerical linear algebra), that there are quite a
+    >> > few mathematically equivalent ways to compute the matrix exponential,
+    >> > *BUT* that most of these may be numerically disastrous, for several
+    >> > different reasons depending on the case.
+    >> >
+    >> > This has been known for close to 50 years now:
+    >> >
+    >> >  Cleve Moler and Charles Van Loan  (1978)
+    >> >  Nineteen Dubious Ways to Compute the Exponential of a Matrix
+    >> >  SIAM Review Vol. 20(4)
+    >> >
+    >> https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fdoi.org%2F10.1137%2F1020098&data=05%7C01%7Cahl27%40pitt.edu%7C8575b77db32345ca544b08db927ceae0%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638264837816871329%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=Y4mlFL%2FggLKd7FoIoY62esiFGUwukRG0YmELsJj7nd0%3D&reserved=0
+    >> <https://doi.org/10.1137/1020098>
+    >> >
+    >> > Where as that publication had been important and much cited at
+    >> > the time, the same authors (known world experts in the field)
+    >> > wrote a review of that review 25 years later which I think (and
+    >> > hope) is even more widely cited  (in R's man/*.Rd syntax) :
+    >> >
+    >> >   Cleve Moler and Charles Van Loan (2003)
+    >> >   Nineteen dubious ways to compute the exponential of a matrix,
+    >> >   twenty-five years later. \emph{SIAM Review} \bold{45}, 1, 3--49.
+    >> >   \doi{10.1137/S00361445024180}
+    >> > i.e.
+    >> https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fdoi.org%2F10.1137%2FS00361445024180&data=05%7C01%7Cahl27%40pitt.edu%7C8575b77db32345ca544b08db927ceae0%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638264837817183809%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=5%2FlssUGC6q7SUy0PY7gZCqWi0%2BXbNwZD0FaAgIcOWdY%3D&reserved=0
+    >> <https://doi.org/10.1137/S00361445024180>
+    >> >
+    >> > It is BTW also cited on the Wikipedia page on the matrix
+    >> > exponential:
+    >> >
+    >> >
+    >> > ==> For this reason, Professor Douglas Bates, the initial
+    >> > creator of R's Matrix package (which comes with R) has added the
+    >> > Matrix exponential very early to the package:
+    >> > ------------------------------------------------------------------------
+    >> > r461 | bates | 2005-01-29
+    >> >
+    >> > Add expm function
+    >> > ------------------------------------------------------------------------
+    >> >
+    >> > Later, I've fixed an "infamous" bug :
+    >> > ------------------------------------------------------------------------
+    >> > r2127 | maechler | 2008-03-07
+    >> >
+    >> > fix the infamous expm() bug also in "Matrix" (duh!)
+    >> > ------------------------------------------------------------------------
+    >> >
+    >> > Then, Vincent Goulet and Christophe Dutang wanted to provide more
+    >> > versions of expm() and we collaborated, also providing expm()
+    >> > for complex matrices and created the CRAN package {expm}
+    >> >   -->
+    >> https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fcran.r-project.org%2Fpackage%3Dexpm&data=05%7C01%7Cahl27%40pitt.edu%7C8575b77db32345ca544b08db927ceae0%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638264837817183809%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=LlAzmeRZd5tNqAgTuYTTSsSakWEj85%2B%2F%2FP%2FM0DnZNLk%3D&reserved=0
+    >> <https://cran.r-project.org/package=expm>
+    >> > which already provided half a dozen different expm algorithms.
+    >> >
+    >> > But research and algorithms did not stop there.  In 2008, Higham
+    >> > and collaborators even improved on the best known algorithms
+    >> > and I had the chance to co-supervise a smart Master's student
+    >> > Michael Stadelmann to implement Higham's algorithm and we even
+    >> > allowed to tweak it {with optional arguments} as that was seen
+    >> > to be beneficial sometimes.
+    >> >
+    >> > See e.g.,
+    >> >
+    >> https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fwww.rdocumentation.org%2Fpackages%2Fexpm%2Fversions%2F0.999-7%2Ftopics%2Fexpm&data=05%7C01%7Cahl27%40pitt.edu%7C8575b77db32345ca544b08db927ceae0%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638264837817340048%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=ZrT%2FYvklccqLCORBMf6nGop5o3n7O2thkknG1UAS2Gc%3D&reserved=0
+    >> <https://www.rdocumentation.org/packages/expm/versions/0.999-7/topics/expm>
+    >> >
+    >> >
+    >> >     > On 2023-07-16 02:01, Durga Prasad G me14d059 wrote:
+    >> >     >> Respected Development Team,
+    >> >     >>
+    >> >     >> This is Durga Prasad reaching out to you regarding an
+    >> >     >> issue/concern related to Singular Value Decomposition SVD
+    >> >     >> in R software package. I am attaching a detailed
+    >> >     >> attachment with this letter which depicts real issues
+    >> >     >> with SVD in R.
+    >> >     >>
+    >> >     >> To reach the concern the expressions for the exponential
+    >> >     >> of a matrix using SVD and projection tensors are obtained
+    >> >     >> from series expansion. However, numerical inconsistency
+    >> >     >> is observed between the exponential of matrix obtained
+    >> >     >> using the function(svd()) used in R software.
+    >> >     >>
+    >> >     >> However, it is observed that most of the researchers
+    >> >     >> fraternity is engaged in utilising R software for their
+    >> >     >> research purposes and to the extent of my understanding
+    >> >     >> such an error in SVD in R software might raise the
+    >> >     >> concern about authenticity of the simulation results
+    >> >     >> produced and published by researchers across the globe.
+    >> >     >>
+    >> >     >> Further, I am very sure that the R software development
+    >> >     >> team is well versed with the happening and they have any
+    >> >     >> specific and resilient reasons for doing so. I would
+    >> >     >> request you kindly, to guide me through the concern.
+    >> >     >>
+    >> >     >> Thank you very much.
+    >> >
+    >> 
+
+    > [[alternative HTML version deleted]]
+
+
+From me14d059 @end|ng |rom @m@||@||tm@@c@|n  Wed Aug 16 10:06:10 2023
+From: me14d059 @end|ng |rom @m@||@||tm@@c@|n (Durga Prasad G me14d059)
+Date: Wed, 16 Aug 2023 13:36:10 +0530
+Subject: [Rd] Concerns with SVD -- and the Matrix Exponential
+In-Reply-To: <BL0PR04MB4706B46C78D72321F088CB0CD90AA@BL0PR04MB4706.namprd04.prod.outlook.com>
+References: <CACSKKm=DcN2zy+0QmmU39gSStX2YU4K-MEJaOWcoK6XANswc5Q@mail.gmail.com>
+ <c21e618c-bbbb-42b9-2adb-56df0fb32673@gmail.com>
+ <25780.65318.292886.397047@stat.math.ethz.ch>
+ <CACSKKmnn7HPcaQ3Dr1OZx1_Sy32wrkV0BW=dUjuazFeT577hMA@mail.gmail.com>
+ <BL0PR04MB4706B46C78D72321F088CB0CD90AA@BL0PR04MB4706.namprd04.prod.outlook.com>
+Message-ID: <CACSKKmkgrDyDYBLWVPXpxfmeR0vCMBxrieqsoZe9XGBHu7DKbQ@mail.gmail.com>
+
+Dear Martin, I am getting different responses from different officials of
+R-Software, but those statements are contradicting with the statements
+discussed in your email. Kindly go through the previous files and emails,
+and respond. I personally think, together we can fix the issue which is
+observed in SVD.
+
+Thanks and regards
+Durga Prasad
+
+On Tue, Aug 1, 2023 at 4:51?PM Lakshman, Aidan H <AHL27 at pitt.edu> wrote:
+
+> Hi Durga,
+>
+> There?s an error in your calculations here. You mention that for the SVD
+> of a symmetric matrix, we must have U=V, but this is not a correct
+> statement. The unitary matrices are only equivalent if the matrix A is
+> positive semidefinite.
+>
+> In your example, you provide the matrix {{1,4},{4,1}}, which has
+> eigenvalues 5 and -3. This is not positive semidefinite, and thus there's
+> no requirement that the unitary matrices be equivalent.
+>
+> If you verify your example with something like wolfram alpha, you?ll find
+> that R?s solution is correct.
+>
+> -Aidan
+>
+> -----------------------
+>
+> Aidan Lakshman (he/him) <https://www.ahl27.com/>
+>
+> Doctoral Fellow, Wright Lab <https://www.wrightlabscience.com/>
+>
+> University of Pittsburgh School of Medicine
+>
+> Department of Biomedical Informatics
+>
+> ahl27 at pitt.edu
+>
+> (724) 612-9940
+>
+>
+>
+> ------------------------------
+> *From:* R-devel <r-devel-bounces at r-project.org> on behalf of Durga Prasad
+> G me14d059 <me14d059 at smail.iitm.ac.in>
+> *Sent:* Tuesday, August 1, 2023 4:18:20 AM
+> *To:* Martin Maechler <maechler at stat.math.ethz.ch>; r-devel at r-project.org
+> <r-devel at r-project.org>; profjcnash at gmail.com <profjcnash at gmail.com>
+> *Subject:* Re: [Rd] Concerns with SVD -- and the Matrix Exponential
+>
+> Hi Martin, Thank you for your reply. The response and the links provided by
+> you helped to learn more. But I am not able to obtain the simple even
+> powers of a matrix: one simple case is the square of a matrix. The square
+> of the matrix using direct matrix multiplication operations and svd (A = U
+> D V') are different. Kindly check the attached file for the complete
+> explanation. I want to know which technique was used in building the svd in
+> R-Software. I want to discuss about svd if you schedule a meeting.
+>
+> Thanks and Regards
+> Durga Prasad
+>
+>
+> On Mon, Jul 17, 2023 at 2:13?PM Martin Maechler <
+> maechler at stat.math.ethz.ch>
+> wrote:
+>
+> > >>>>> J C Nash
+> > >>>>>     on Sun, 16 Jul 2023 13:30:57 -0400 writes:
+> >
+> >     > Better check your definitions of SVD -- there are several
+> >     > forms, but all I am aware of (and I wrote a couple of the
+> >     > codes in the early 1970s for the SVD) have positive
+> >     > singular values.
+> >
+> >     > JN
+> >
+> > Indeed.
+> >
+> > More generally, the decomposition     A = U D V'
+> > (with diagonal D and orthogonal U,V)
+> > is not at all unique.
+> >
+> > There are not only many possible different choices of the sign
+> > of the diagonal entries, but also the *ordering* of the singular values
+> > is non unique.
+> > That's why R and 'Lapack', the world-standard for
+> >   computer/numerical linear algebra, and others I think,
+> > make the decomposition unique by requiring
+> > non-negative entries in D and have them *sorted* decreasingly.
+> >
+> > The latter is what the help page   help(svd)  always said
+> > (and you should have studied that before raising such concerns).
+> >
+> > -----------------------------------------------------------------
+> >
+> > To your second point (in the document), the matrix exponential:
+> > It is less known, but still has been known among experts for
+> > many years (and I think even among students of a class on
+> > numerical linear algebra), that there are quite a
+> > few mathematically equivalent ways to compute the matrix exponential,
+> > *BUT* that most of these may be numerically disastrous, for several
+> > different reasons depending on the case.
+> >
+> > This has been known for close to 50 years now:
+> >
+> >  Cleve Moler and Charles Van Loan  (1978)
+> >  Nineteen Dubious Ways to Compute the Exponential of a Matrix
+> >  SIAM Review Vol. 20(4)
+> >
+> https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fdoi.org%2F10.1137%2F1020098&data=05%7C01%7Cahl27%40pitt.edu%7C8575b77db32345ca544b08db927ceae0%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638264837816871329%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=Y4mlFL%2FggLKd7FoIoY62esiFGUwukRG0YmELsJj7nd0%3D&reserved=0
+> <https://doi.org/10.1137/1020098>
+> >
+> > Where as that publication had been important and much cited at
+> > the time, the same authors (known world experts in the field)
+> > wrote a review of that review 25 years later which I think (and
+> > hope) is even more widely cited  (in R's man/*.Rd syntax) :
+> >
+> >   Cleve Moler and Charles Van Loan (2003)
+> >   Nineteen dubious ways to compute the exponential of a matrix,
+> >   twenty-five years later. \emph{SIAM Review} \bold{45}, 1, 3--49.
+> >   \doi{10.1137/S00361445024180}
+> > i.e.
+> https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fdoi.org%2F10.1137%2FS00361445024180&data=05%7C01%7Cahl27%40pitt.edu%7C8575b77db32345ca544b08db927ceae0%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638264837817183809%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=5%2FlssUGC6q7SUy0PY7gZCqWi0%2BXbNwZD0FaAgIcOWdY%3D&reserved=0
+> <https://doi.org/10.1137/S00361445024180>
+> >
+> > It is BTW also cited on the Wikipedia page on the matrix
+> > exponential:
+> >
+> >
+> > ==> For this reason, Professor Douglas Bates, the initial
+> > creator of R's Matrix package (which comes with R) has added the
+> > Matrix exponential very early to the package:
+> > ------------------------------------------------------------------------
+> > r461 | bates | 2005-01-29
+> >
+> > Add expm function
+> > ------------------------------------------------------------------------
+> >
+> > Later, I've fixed an "infamous" bug :
+> > ------------------------------------------------------------------------
+> > r2127 | maechler | 2008-03-07
+> >
+> > fix the infamous expm() bug also in "Matrix" (duh!)
+> > ------------------------------------------------------------------------
+> >
+> > Then, Vincent Goulet and Christophe Dutang wanted to provide more
+> > versions of expm() and we collaborated, also providing expm()
+> > for complex matrices and created the CRAN package {expm}
+> >   -->
+> https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fcran.r-project.org%2Fpackage%3Dexpm&data=05%7C01%7Cahl27%40pitt.edu%7C8575b77db32345ca544b08db927ceae0%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638264837817183809%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=LlAzmeRZd5tNqAgTuYTTSsSakWEj85%2B%2F%2FP%2FM0DnZNLk%3D&reserved=0
+> <https://cran.r-project.org/package=expm>
+> > which already provided half a dozen different expm algorithms.
+> >
+> > But research and algorithms did not stop there.  In 2008, Higham
+> > and collaborators even improved on the best known algorithms
+> > and I had the chance to co-supervise a smart Master's student
+> > Michael Stadelmann to implement Higham's algorithm and we even
+> > allowed to tweak it {with optional arguments} as that was seen
+> > to be beneficial sometimes.
+> >
+> > See e.g.,
+> >
+> https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fwww.rdocumentation.org%2Fpackages%2Fexpm%2Fversions%2F0.999-7%2Ftopics%2Fexpm&data=05%7C01%7Cahl27%40pitt.edu%7C8575b77db32345ca544b08db927ceae0%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638264837817340048%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=ZrT%2FYvklccqLCORBMf6nGop5o3n7O2thkknG1UAS2Gc%3D&reserved=0
+> <https://www.rdocumentation.org/packages/expm/versions/0.999-7/topics/expm>
+> >
+> >
+> >     > On 2023-07-16 02:01, Durga Prasad G me14d059 wrote:
+> >     >> Respected Development Team,
+> >     >>
+> >     >> This is Durga Prasad reaching out to you regarding an
+> >     >> issue/concern related to Singular Value Decomposition SVD
+> >     >> in R software package. I am attaching a detailed
+> >     >> attachment with this letter which depicts real issues
+> >     >> with SVD in R.
+> >     >>
+> >     >> To reach the concern the expressions for the exponential
+> >     >> of a matrix using SVD and projection tensors are obtained
+> >     >> from series expansion. However, numerical inconsistency
+> >     >> is observed between the exponential of matrix obtained
+> >     >> using the function(svd()) used in R software.
+> >     >>
+> >     >> However, it is observed that most of the researchers
+> >     >> fraternity is engaged in utilising R software for their
+> >     >> research purposes and to the extent of my understanding
+> >     >> such an error in SVD in R software might raise the
+> >     >> concern about authenticity of the simulation results
+> >     >> produced and published by researchers across the globe.
+> >     >>
+> >     >> Further, I am very sure that the R software development
+> >     >> team is well versed with the happening and they have any
+> >     >> specific and resilient reasons for doing so. I would
+> >     >> request you kindly, to guide me through the concern.
+> >     >>
+> >     >> Thank you very much.
+> >
+>
+
+	[[alternative HTML version deleted]]
+
+
+From yugong @end|ng |rom out|ook@com  Wed Aug 16 13:11:39 2023
+From: yugong @end|ng |rom out|ook@com (yu gong)
+Date: Wed, 16 Aug 2023 11:11:39 +0000
+Subject: [Rd] 
+ R-4.3 version list.files function could not work correctly in
+ chinese
+In-Reply-To: <bb647f1f-b42c-31df-eda1-bbbd9058ddc4@gmail.com>
+References: <16b91252fd33452f890fcce439921a63@goldwind.com>
+ <20230813141636.3fcdae02@parabola>
+ <411a06e4-e7f5-e5c7-01e4-54efd0ecc189@gmail.com>
+ <20230815100450.4ec326dd@parabola>
+ <ac8e8cf1-96cb-21c9-3578-0e3277823dee@gmail.com>
+ <bb647f1f-b42c-31df-eda1-bbbd9058ddc4@gmail.com>
+Message-ID: <TYAP286MB026896F57C56495B4675967BD115A@TYAP286MB0268.JPNP286.PROD.OUTLOOK.COM>
+
+a little more information for this issue.
+Search in MS website today , found doc about "Maximum Path Length Limitation", Maximum Path Length Limitation - Win32 apps | Microsoft Learn<https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation?tabs=registry> .
+According the doc, need to do two things to avoid this issue on window 10  and latter:
+1 edit registry or group policy  set    HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem] "LongPathsEnabled"=dword:00000001
+
+2 app manifest (R already done it)
+
+Regards,
+yu
+
+________________________________
+From: R-devel <r-devel-bounces at r-project.org> on behalf of Tomas Kalibera <tomas.kalibera at gmail.com>
+Sent: Wednesday, August 16, 2023 15:42
+To: Ivan Krylov <krylov.r00t at gmail.com>
+Cc: r-devel at r-project.org <r-devel at r-project.org>
+Subject: Re: [Rd] R-4.3 version list.files function could not work correctly in chinese
+
+
+On 8/15/23 16:00, Tomas Kalibera wrote:
+>
+> On 8/15/23 09:04, Ivan Krylov wrote:
+>> ?? Tue, 15 Aug 2023 08:38:11 +0200
+>> Tomas Kalibera <tomas.kalibera at gmail.com> ??????:
+>>
+>>> As this was reported to be regression in 4.3, it is entirely possible
+>>> this change came with a regression (though a bit surprising we didn't
+>>> catch it earlier by testing), so it would be a great help if I could
+>>> have the example and debug it.
+>> Sorry, let me try to be more clear.
+>>
+>> The Windows filename length limit is 255(?) wide characters. The
+>> WIN32_FIND_DATAA structure contains a 260-byte buffer for the filename
+>> to be returned by FindFirstFileA()/FindNextFileA(). If a wide character
+>> takes more than one byte to be represented in UTF-8, it may overflow
+>> the 260 byte limit in the WIN32_FIND_DATAA structure despite being
+>> below the 260 wide character limit. When such an overflow happens,
+>> FindNextFile() returns FALSE with GetLastError() == ERROR_MORE_DATA,
+>> which results in R_readdir() returning NULL and makes list_files() stop
+>> before listing the rest of the directory.
+>>
+>> This is easier to make happen by accident with Chinese characters,
+>> because they take three UTF-8 bytes per character.
+>>
+>> Take the ?? (\uf8) letter. It takes two bytes to represent in UTF-8.
+>> Create a file with a name consisting of this symbol repeated 140 times.
+>> When you run list.files() on the resulting directory on Windows with a
+>> UTF-8 locale, Windows tries to fit (0xc3 0xb8) times 140 into a
+>> 260-byte buffer, which doesn't work. I'm afraid the only way to avoid
+>> such a failure is to rewrite R_readdir using the wide character API and
+>> convert the file names on the fly. (Just like mingw readdir() did in
+>> the past?)
+>>
+>> stopifnot(.Platform$OS.type == 'windows', l10n_info()$`UTF-8`)
+>> # any character for which nchar(enc2utf8(.), 'bytes') > 1 will do
+>> # any number >260/2 should do
+>> file.create(strrep('\uf8', 140))
+>> list.files()
+>>
+>> Does this work? I don't have access to a UTF-8 Windows machine right
+>> now.
+>
+> Thanks, yes, I can reproduce the problem. Some Windows functions
+> impose 260 wide characters limit, but other 260 bytes limit, so one
+> can create a file with a name too long to be found by FindNextFileA.
+>
+> In R 4.2, we used readdir() from mingw-w64, which itself used
+> findnext, which however had the same problem, it used a buffer of size
+> 260 bytes and from the code of mingw-w64 and the Windows
+> documentation, it should have behaved the same, it should have stopped
+> the search on such a long file name. However, in my use case, R 4.2.3
+> crashed inside findnext due to stack overrun, R 4.1.3 worked, but
+> clearly it would require a different use case to overrun this buffer
+> as it didn't use UTF-8. This suggests that findnext didn't have a
+> check for this and hence caused memory corruption, which can lead to a
+> crash or work by coincidence. Which could have been the case for the
+> user reporting this as a regression compared to R 4.2. But it is not a
+> regression, the problem existed for long.
+>
+> So, yes, we'd probably have to use wide variants of
+> FindNext/FindFirst. I'll fix.
+
+Fixed in R-devel (84960). Please let me know if you see any problem with
+the fix.
+
+Thanks,
+Tomas
+
+>
+> Thanks for debugging this,
+> Tomas
+>
+>
+>
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+	[[alternative HTML version deleted]]
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Wed Aug 16 13:22:56 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Wed, 16 Aug 2023 14:22:56 +0300
+Subject: [Rd] 
+ R-4.3 version list.files function could not work correctly in
+ chinese
+In-Reply-To: <bb647f1f-b42c-31df-eda1-bbbd9058ddc4@gmail.com>
+References: <16b91252fd33452f890fcce439921a63@goldwind.com>
+ <20230813141636.3fcdae02@parabola>
+ <411a06e4-e7f5-e5c7-01e4-54efd0ecc189@gmail.com>
+ <20230815100450.4ec326dd@parabola>
+ <ac8e8cf1-96cb-21c9-3578-0e3277823dee@gmail.com>
+ <bb647f1f-b42c-31df-eda1-bbbd9058ddc4@gmail.com>
+Message-ID: <20230816142256.233b7513@Tarkus>
+
+On Wed, 16 Aug 2023 09:42:09 +0200
+Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+
+> Fixed in R-devel (84960). Please let me know if you see any problem
+> with the fix.
+
+Thank you for implementing the fix! I gave ??? the link to the
+GitHub Action build of the r84960 installer.
+
+I'm worried that ??? was seeing FindNextFileA fail for a different
+reason (all the examples given at the Capital of Statistics forum
+seemed to use less than 256/4 = 64 characters per file name...), but
+maybe this won't reappear with the switch to FindNextFileW. If this
+keeps happening, it might be worth producing a warning when
+FindNextFileW() fails with an unexpected GetLastError() value.
+
+fs::dir_fs() uses NtQueryDirectoryFile() and WideCharToMultiByte()
+instead of FindNextFileW() and wcstombs(), but maybe this shouldn't
+matter. In particular, both list.files() and fs::dir_fs() would fail
+given a file name that cannot be represented in UTF-8 (invalid UTF-16
+surrogate pairs?)
+
+-- 
+Best regards,
+Ivan
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Wed Aug 16 14:59:15 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Wed, 16 Aug 2023 14:59:15 +0200
+Subject: [Rd] 
+ R-4.3 version list.files function could not work correctly in
+ chinese
+In-Reply-To: <TYAP286MB026896F57C56495B4675967BD115A@TYAP286MB0268.JPNP286.PROD.OUTLOOK.COM>
+References: <16b91252fd33452f890fcce439921a63@goldwind.com>
+ <20230813141636.3fcdae02@parabola>
+ <411a06e4-e7f5-e5c7-01e4-54efd0ecc189@gmail.com>
+ <20230815100450.4ec326dd@parabola>
+ <ac8e8cf1-96cb-21c9-3578-0e3277823dee@gmail.com>
+ <bb647f1f-b42c-31df-eda1-bbbd9058ddc4@gmail.com>
+ <TYAP286MB026896F57C56495B4675967BD115A@TYAP286MB0268.JPNP286.PROD.OUTLOOK.COM>
+Message-ID: <1d482250-6161-22c4-b4ba-92f55fc24d8d@gmail.com>
+
+
+On 8/16/23 13:11, yu gong wrote:
+> a little more information for this issue.
+> Search in MS website today , found doc about "Maximum Path Length 
+> Limitation", Maximum Path Length Limitation - Win32 apps | Microsoft 
+> Learn 
+> <https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation?tabs=registry>?.
+> According the doc, need to do two things to avoid this issue on window 
+> 10? and latter:
+> 1 edit registry or group policy ?set 
+> HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\FileSystem] 
+> "LongPathsEnabled"=dword:00000001
+>
+> 2 app manifest (R already done it)
+
+These settings are for long paths (meaning a full path containing of 
+multiple elements separated by backslashes), more about that is also in 
+[1].
+
+
+But the problem that Ivan reported (which is not clear whether it is the 
+same problem as the one reported originally on this thread), is about 
+the limit for a single file/directory name - that is, for a single 
+element of a path. Having the long paths enabled in the registry 
+wouldn't help with this.
+
+
+These two limits are not directly related, except the obvious: by 
+choosing rather long names for individual files, one usually soon runs 
+out of the limit for the full path.
+
+
+Best
+
+Tomas
+
+
+[1] - 
+https://blog.r-project.org/2023/03/07/path-length-limit-on-windows/index.html
+
+>
+> Regards,
+> yu
+>
+> ------------------------------------------------------------------------
+> *From:* R-devel <r-devel-bounces at r-project.org> on behalf of Tomas 
+> Kalibera <tomas.kalibera at gmail.com>
+> *Sent:* Wednesday, August 16, 2023 15:42
+> *To:* Ivan Krylov <krylov.r00t at gmail.com>
+> *Cc:* r-devel at r-project.org <r-devel at r-project.org>
+> *Subject:* Re: [Rd] R-4.3 version list.files function could not work 
+> correctly in chinese
+>
+> On 8/15/23 16:00, Tomas Kalibera wrote:
+> >
+> > On 8/15/23 09:04, Ivan Krylov wrote:
+> >> ? Tue, 15 Aug 2023 08:38:11 +0200
+> >> Tomas Kalibera <tomas.kalibera at gmail.com> ?????:
+> >>
+> >>> As this was reported to be regression in 4.3, it is entirely possible
+> >>> this change came with a regression (though a bit surprising we didn't
+> >>> catch it earlier by testing), so it would be a great help if I could
+> >>> have the example and debug it.
+> >> Sorry, let me try to be more clear.
+> >>
+> >> The Windows filename length limit is 255(?) wide characters. The
+> >> WIN32_FIND_DATAA structure contains a 260-byte buffer for the filename
+> >> to be returned by FindFirstFileA()/FindNextFileA(). If a wide character
+> >> takes more than one byte to be represented in UTF-8, it may overflow
+> >> the 260 byte limit in the WIN32_FIND_DATAA structure despite being
+> >> below the 260 wide character limit. When such an overflow happens,
+> >> FindNextFile() returns FALSE with GetLastError() == ERROR_MORE_DATA,
+> >> which results in R_readdir() returning NULL and makes list_files() stop
+> >> before listing the rest of the directory.
+> >>
+> >> This is easier to make happen by accident with Chinese characters,
+> >> because they take three UTF-8 bytes per character.
+> >>
+> >> Take the ? (\uf8) letter. It takes two bytes to represent in UTF-8.
+> >> Create a file with a name consisting of this symbol repeated 140 times.
+> >> When you run list.files() on the resulting directory on Windows with a
+> >> UTF-8 locale, Windows tries to fit (0xc3 0xb8) times 140 into a
+> >> 260-byte buffer, which doesn't work. I'm afraid the only way to avoid
+> >> such a failure is to rewrite R_readdir using the wide character API and
+> >> convert the file names on the fly. (Just like mingw readdir() did in
+> >> the past?)
+> >>
+> >> stopifnot(.Platform$OS.type == 'windows', l10n_info()$`UTF-8`)
+> >> # any character for which nchar(enc2utf8(.), 'bytes') > 1 will do
+> >> # any number >260/2 should do
+> >> file.create(strrep('\uf8', 140))
+> >> list.files()
+> >>
+> >> Does this work? I don't have access to a UTF-8 Windows machine right
+> >> now.
+> >
+> > Thanks, yes, I can reproduce the problem. Some Windows functions
+> > impose 260 wide characters limit, but other 260 bytes limit, so one
+> > can create a file with a name too long to be found by FindNextFileA.
+> >
+> > In R 4.2, we used readdir() from mingw-w64, which itself used
+> > findnext, which however had the same problem, it used a buffer of size
+> > 260 bytes and from the code of mingw-w64 and the Windows
+> > documentation, it should have behaved the same, it should have stopped
+> > the search on such a long file name. However, in my use case, R 4.2.3
+> > crashed inside findnext due to stack overrun, R 4.1.3 worked, but
+> > clearly it would require a different use case to overrun this buffer
+> > as it didn't use UTF-8. This suggests that findnext didn't have a
+> > check for this and hence caused memory corruption, which can lead to a
+> > crash or work by coincidence. Which could have been the case for the
+> > user reporting this as a regression compared to R 4.2. But it is not a
+> > regression, the problem existed for long.
+> >
+> > So, yes, we'd probably have to use wide variants of
+> > FindNext/FindFirst. I'll fix.
+>
+> Fixed in R-devel (84960). Please let me know if you see any problem with
+> the fix.
+>
+> Thanks,
+> Tomas
+>
+> >
+> > Thanks for debugging this,
+> > Tomas
+> >
+> >
+> >
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel 
+> <https://stat.ethz.ch/mailman/listinfo/r-devel>
+	[[alternative HTML version deleted]]
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Wed Aug 16 16:00:13 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Wed, 16 Aug 2023 16:00:13 +0200
+Subject: [Rd] 
+ R-4.3 version list.files function could not work correctly in
+ chinese
+In-Reply-To: <20230816142256.233b7513@Tarkus>
+References: <16b91252fd33452f890fcce439921a63@goldwind.com>
+ <20230813141636.3fcdae02@parabola>
+ <411a06e4-e7f5-e5c7-01e4-54efd0ecc189@gmail.com>
+ <20230815100450.4ec326dd@parabola>
+ <ac8e8cf1-96cb-21c9-3578-0e3277823dee@gmail.com>
+ <bb647f1f-b42c-31df-eda1-bbbd9058ddc4@gmail.com>
+ <20230816142256.233b7513@Tarkus>
+Message-ID: <21e91609-85b2-103b-8e23-12eadff62784@gmail.com>
+
+
+On 8/16/23 13:22, Ivan Krylov wrote:
+> On Wed, 16 Aug 2023 09:42:09 +0200
+> Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+>
+>> Fixed in R-devel (84960). Please let me know if you see any problem
+>> with the fix.
+> Thank you for implementing the fix! I gave ??? the link to the
+> GitHub Action build of the r84960 installer.
+Thanks and thanks for looking at the change.
+>
+> I'm worried that ??? was seeing FindNextFileA fail for a different
+> reason (all the examples given at the Capital of Statistics forum
+> seemed to use less than 256/4 = 64 characters per file name...), but
+> maybe this won't reappear with the switch to FindNextFileW. If this
+> keeps happening, it might be worth producing a warning when
+> FindNextFileW() fails with an unexpected GetLastError() value.
+
+I've added a warning to R-devel when list.files() on Windows stops 
+listing a directory due to an error.
+
+There is probably not more we can do unless there is a revised bug 
+report of the original problem.
+
+> fs::dir_fs() uses NtQueryDirectoryFile() and WideCharToMultiByte()
+> instead of FindNextFileW() and wcstombs(), but maybe this shouldn't
+> matter. In particular, both list.files() and fs::dir_fs() would fail
+> given a file name that cannot be represented in UTF-8 (invalid UTF-16
+> surrogate pairs?)
+
+Right, R only support file names that are valid strings, this assumption 
+is present at many places in the code, so it is fine/consistent to be 
+here as well. The choice of opendir/readdir in R was probably motivated 
+by minimization of platform-specific code.
+
+Best
+Tomas
+
+
+From AHL27 @end|ng |rom p|tt@edu  Wed Aug 16 16:58:06 2023
+From: AHL27 @end|ng |rom p|tt@edu (Lakshman, Aidan H)
+Date: Wed, 16 Aug 2023 14:58:06 +0000
+Subject: [Rd] Concerns with SVD -- and the Matrix Exponential
+In-Reply-To: <25820.35693.528444.555157@stat.math.ethz.ch>
+References: <CACSKKm=DcN2zy+0QmmU39gSStX2YU4K-MEJaOWcoK6XANswc5Q@mail.gmail.com>
+ <c21e618c-bbbb-42b9-2adb-56df0fb32673@gmail.com>
+ <25780.65318.292886.397047@stat.math.ethz.ch>
+ <CACSKKmnn7HPcaQ3Dr1OZx1_Sy32wrkV0BW=dUjuazFeT577hMA@mail.gmail.com>
+ <BL0PR04MB4706B46C78D72321F088CB0CD90AA@BL0PR04MB4706.namprd04.prod.outlook.com>
+ <CACSKKmkgrDyDYBLWVPXpxfmeR0vCMBxrieqsoZe9XGBHu7DKbQ@mail.gmail.com>
+ <25820.35693.528444.555157@stat.math.ethz.ch>
+Message-ID: <BL0PR04MB47063488A1EDA387AEEFBB09D915A@BL0PR04MB4706.namprd04.prod.outlook.com>
+
+Hi Durga,
+
+Just to add to previous comments--if you?re interested in the implementation of SVD in R, I?d recommend looking at the source code and/or sending general questions to the community slack, which may provide faster responses and help with double checking your work. Most of the perceived concerns you mention are related to the underlying LAPACK code--if you can verify that the code in LAPACK and/or R is incorrect, feel free to email r-devel with examples or discuss it on the slack.
+
+The R implementation of SVD is available here, which essentially just wraps LAPACK code:
+https://github.com/r-devel/r-svn/blob/b6394a83c0c12b12b6b1aceb05db0fd66227fd30/src/modules/lapack/Lapack.c#L111
+
+The R method that invokes the C code is called here:
+https://github.com/r-devel/r-svn/blob/b6394a83c0c12b12b6b1aceb05db0fd66227fd30/src/library/base/R/LAPACK.R#L19
+
+The related LAPACK code is located here:
+https://netlib.org/lapack/explore-html/d1/d7e/group__double_g_esing_gad8e0f1c83a78d3d4858eaaa88a1c5ab1.html
+
+You can join the R-Contributors slack here:
+https://contributor.r-project.org/slack
+
+-Aidan
+
+-----------------------
+Aidan Lakshman (he/him)<https://www.ahl27.com/>
+Doctoral Fellow, Wright Lab<https://www.wrightlabscience.com/>
+University of Pittsburgh School of Medicine
+Department of Biomedical Informatics
+ahl27 at pitt.edu
+(724) 612-9940
+
+
+From: Martin Maechler <maechler at stat.math.ethz.ch>
+Date: Wednesday, August 16, 2023 at 04:40
+To: Durga Prasad G me14d059 <me14d059 at smail.iitm.ac.in>
+Cc: Lakshman, Aidan H <AHL27 at pitt.edu>, Martin Maechler <maechler at stat.math.ethz.ch>, r-devel at r-project.org <r-devel at r-project.org>, profjcnash at gmail.com <profjcnash at gmail.com>
+Subject: Re: [Rd] Concerns with SVD -- and the Matrix Exponential
+>>>>> Durga Prasad G me14d059
+>>>>>     on Wed, 16 Aug 2023 13:36:10 +0530 writes:
+
+    > Dear Martin, I am getting different responses from different officials of
+    > R-Software,
+
+well, well, ..
+Here on R-devel, we got two messages in addition to mine,
+none by any "official" (even though John C Nash probably gets
+the title of most senior professor still active on the R mailing list),
+but both to the point,
+notably Aidan Lakshman below showing you how you were unaware of
+several things about the SVD, and confusing
+positive semi definite matrices with arbitrary symmetric matrices.
+
+    > but those statements are contradicting with the statements
+    > discussed in your email.
+
+I don't think so.  I think we all agreed (John Nash, me, Aidan Lakshman),
+even though focussing on different aspects of your partly
+incorrect claims.
+
+Martin Maechler
+
+
+
+    > Kindly go through the previous files and emails,
+    > and respond. I personally think, together we can fix the issue which is
+    > observed in SVD.
+
+    > Thanks and regards
+    > Durga Prasad
+
+    > On Tue, Aug 1, 2023 at 4:51?PM Lakshman, Aidan H <AHL27 at pitt.edu> wrote:
+
+    >> Hi Durga,
+    >>
+    >> There?s an error in your calculations here. You mention that for the SVD
+    >> of a symmetric matrix, we must have U=V, but this is not a correct
+    >> statement. The unitary matrices are only equivalent if the matrix A is
+    >> positive semidefinite.
+    >>
+    >> In your example, you provide the matrix {{1,4},{4,1}}, which has
+    >> eigenvalues 5 and -3. This is not positive semidefinite, and thus there's
+    >> no requirement that the unitary matrices be equivalent.
+    >>
+    >> If you verify your example with something like wolfram alpha, you?ll find
+    >> that R?s solution is correct.
+    >>
+    >> -Aidan
+    >>
+    >> -----------------------
+    >>
+    >> Aidan Lakshman (he/him) <https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fwww.ahl27.com%2F&data=05%7C01%7CAHL27%40pitt.edu%7C62ae1d193a224c3b1c3008db9e3469bb%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638277720201574436%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=gLTYfoHNU2p5JBF7ZHrUT%2BcFnZ%2BSJ6uqveFW3r6Sj84%3D&reserved=0<https://www.ahl27.com/>>
+    >>
+    >> Doctoral Fellow, Wright Lab <https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fwww.wrightlabscience.com%2F&data=05%7C01%7CAHL27%40pitt.edu%7C62ae1d193a224c3b1c3008db9e3469bb%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638277720201574436%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=Wh7TaNdaRD%2B7euDlskDbzj7SBhPBt2y%2BFHcXkcYBM9M%3D&reserved=0<https://www.wrightlabscience.com/>>
+    >>
+    >> University of Pittsburgh School of Medicine
+    >>
+    >> Department of Biomedical Informatics
+    >>
+    >> ahl27 at pitt.edu
+    >>
+    >> (724) 612-9940
+    >>
+    >>
+    >>
+    >> ------------------------------
+    >> *From:* R-devel <r-devel-bounces at r-project.org> on behalf of Durga Prasad
+    >> G me14d059 <me14d059 at smail.iitm.ac.in>
+    >> *Sent:* Tuesday, August 1, 2023 4:18:20 AM
+    >> *To:* Martin Maechler <maechler at stat.math.ethz.ch>; r-devel at r-project.org
+    >> <r-devel at r-project.org>; profjcnash at gmail.com <profjcnash at gmail.com>
+    >> *Subject:* Re: [Rd] Concerns with SVD -- and the Matrix Exponential
+    >>
+    >> Hi Martin, Thank you for your reply. The response and the links provided by
+    >> you helped to learn more. But I am not able to obtain the simple even
+    >> powers of a matrix: one simple case is the square of a matrix. The square
+    >> of the matrix using direct matrix multiplication operations and svd (A = U
+    >> D V') are different. Kindly check the attached file for the complete
+    >> explanation. I want to know which technique was used in building the svd in
+    >> R-Software. I want to discuss about svd if you schedule a meeting.
+    >>
+    >> Thanks and Regards
+    >> Durga Prasad
+    >>
+    >>
+    >> On Mon, Jul 17, 2023 at 2:13?PM Martin Maechler <
+    >> maechler at stat.math.ethz.ch>
+    >> wrote:
+    >>
+    >> > >>>>> J C Nash
+    >> > >>>>>     on Sun, 16 Jul 2023 13:30:57 -0400 writes:
+    >> >
+    >> >     > Better check your definitions of SVD -- there are several
+    >> >     > forms, but all I am aware of (and I wrote a couple of the
+    >> >     > codes in the early 1970s for the SVD) have positive
+    >> >     > singular values.
+    >> >
+    >> >     > JN
+    >> >
+    >> > Indeed.
+    >> >
+    >> > More generally, the decomposition     A = U D V'
+    >> > (with diagonal D and orthogonal U,V)
+    >> > is not at all unique.
+    >> >
+    >> > There are not only many possible different choices of the sign
+    >> > of the diagonal entries, but also the *ordering* of the singular values
+    >> > is non unique.
+    >> > That's why R and 'Lapack', the world-standard for
+    >> >   computer/numerical linear algebra, and others I think,
+    >> > make the decomposition unique by requiring
+    >> > non-negative entries in D and have them *sorted* decreasingly.
+    >> >
+    >> > The latter is what the help page   help(svd)  always said
+    >> > (and you should have studied that before raising such concerns).
+    >> >
+    >> > -----------------------------------------------------------------
+    >> >
+    >> > To your second point (in the document), the matrix exponential:
+    >> > It is less known, but still has been known among experts for
+    >> > many years (and I think even among students of a class on
+    >> > numerical linear algebra), that there are quite a
+    >> > few mathematically equivalent ways to compute the matrix exponential,
+    >> > *BUT* that most of these may be numerically disastrous, for several
+    >> > different reasons depending on the case.
+    >> >
+    >> > This has been known for close to 50 years now:
+    >> >
+    >> >  Cleve Moler and Charles Van Loan  (1978)
+    >> >  Nineteen Dubious Ways to Compute the Exponential of a Matrix
+    >> >  SIAM Review Vol. 20(4)
+    >> >
+    >> https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fdoi.org%2F10.1137%2F1020098&data=05%7C01%7CAHL27%40pitt.edu%7C62ae1d193a224c3b1c3008db9e3469bb%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638277720201574436%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=3vBQqyS75GMEt2X4WV%2F23fGq7REHxhmqqqY8sOggIFI%3D&reserved=0<https://doi.org/10.1137/1020098>
+    >> <https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fdoi.org%2F10.1137%2F1020098&data=05%7C01%7CAHL27%40pitt.edu%7C62ae1d193a224c3b1c3008db9e3469bb%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638277720201574436%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=3vBQqyS75GMEt2X4WV%2F23fGq7REHxhmqqqY8sOggIFI%3D&reserved=0<https://doi.org/10.1137/1020098>>
+    >> >
+    >> > Where as that publication had been important and much cited at
+    >> > the time, the same authors (known world experts in the field)
+    >> > wrote a review of that review 25 years later which I think (and
+    >> > hope) is even more widely cited  (in R's man/*.Rd syntax) :
+    >> >
+    >> >   Cleve Moler and Charles Van Loan (2003)
+    >> >   Nineteen dubious ways to compute the exponential of a matrix,
+    >> >   twenty-five years later. \emph{SIAM Review} \bold{45}, 1, 3--49.
+    >> >   \doi{10.1137/S00361445024180}
+    >> > i.e.
+    >> https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fdoi.org%2F10.1137%2FS00361445024180&data=05%7C01%7CAHL27%40pitt.edu%7C62ae1d193a224c3b1c3008db9e3469bb%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638277720201574436%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=kD65qRRS10Bc2gSSUT4brhZKKjGZj%2BLZavUW3EiRsBQ%3D&reserved=0<https://doi.org/10.1137/S00361445024180>
+    >> <https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fdoi.org%2F10.1137%2FS00361445024180&data=05%7C01%7CAHL27%40pitt.edu%7C62ae1d193a224c3b1c3008db9e3469bb%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638277720201574436%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=kD65qRRS10Bc2gSSUT4brhZKKjGZj%2BLZavUW3EiRsBQ%3D&reserved=0<https://doi.org/10.1137/S00361445024180>>
+    >> >
+    >> > It is BTW also cited on the Wikipedia page on the matrix
+    >> > exponential:
+    >> >
+    >> >
+    >> > ==> For this reason, Professor Douglas Bates, the initial
+    >> > creator of R's Matrix package (which comes with R) has added the
+    >> > Matrix exponential very early to the package:
+    >> > ------------------------------------------------------------------------
+    >> > r461 | bates | 2005-01-29
+    >> >
+    >> > Add expm function
+    >> > ------------------------------------------------------------------------
+    >> >
+    >> > Later, I've fixed an "infamous" bug :
+    >> > ------------------------------------------------------------------------
+    >> > r2127 | maechler | 2008-03-07
+    >> >
+    >> > fix the infamous expm() bug also in "Matrix" (duh!)
+    >> > ------------------------------------------------------------------------
+    >> >
+    >> > Then, Vincent Goulet and Christophe Dutang wanted to provide more
+    >> > versions of expm() and we collaborated, also providing expm()
+    >> > for complex matrices and created the CRAN package {expm}
+    >> >   -->
+    >> https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fcran.r-project.org%2Fpackage%3Dexpm&data=05%7C01%7CAHL27%40pitt.edu%7C62ae1d193a224c3b1c3008db9e3469bb%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638277720201574436%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=ei3Hik2by2r9%2FGv8KN4YPrDVvKjFaYY2zti2LQl0Yqw%3D&reserved=0<https://cran.r-project.org/package=expm>
+    >> <https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fcran.r-project.org%2Fpackage%3Dexpm&data=05%7C01%7CAHL27%40pitt.edu%7C62ae1d193a224c3b1c3008db9e3469bb%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638277720201574436%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=ei3Hik2by2r9%2FGv8KN4YPrDVvKjFaYY2zti2LQl0Yqw%3D&reserved=0<https://cran.r-project.org/package=expm>>
+    >> > which already provided half a dozen different expm algorithms.
+    >> >
+    >> > But research and algorithms did not stop there.  In 2008, Higham
+    >> > and collaborators even improved on the best known algorithms
+    >> > and I had the chance to co-supervise a smart Master's student
+    >> > Michael Stadelmann to implement Higham's algorithm and we even
+    >> > allowed to tweak it {with optional arguments} as that was seen
+    >> > to be beneficial sometimes.
+    >> >
+    >> > See e.g.,
+    >> >
+    >> https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fwww.rdocumentation.org%2Fpackages%2Fexpm%2Fversions%2F0.999-7%2Ftopics%2Fexpm&data=05%7C01%7CAHL27%40pitt.edu%7C62ae1d193a224c3b1c3008db9e3469bb%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638277720201574436%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=SmFv%2F0PRDsIqZSWTduO89tAFwuFa8IfjdwLWMSl68vM%3D&reserved=0<https://www.rdocumentation.org/packages/expm/versions/0.999-7/topics/expm>
+    >> <https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fwww.rdocumentation.org%2Fpackages%2Fexpm%2Fversions%2F0.999-7%2Ftopics%2Fexpm&data=05%7C01%7CAHL27%40pitt.edu%7C62ae1d193a224c3b1c3008db9e3469bb%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638277720201574436%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=SmFv%2F0PRDsIqZSWTduO89tAFwuFa8IfjdwLWMSl68vM%3D&reserved=0<https://www.rdocumentation.org/packages/expm/versions/0.999-7/topics/expm>>
+    >> >
+    >> >
+    >> >     > On 2023-07-16 02:01, Durga Prasad G me14d059 wrote:
+    >> >     >> Respected Development Team,
+    >> >     >>
+    >> >     >> This is Durga Prasad reaching out to you regarding an
+    >> >     >> issue/concern related to Singular Value Decomposition SVD
+    >> >     >> in R software package. I am attaching a detailed
+    >> >     >> attachment with this letter which depicts real issues
+    >> >     >> with SVD in R.
+    >> >     >>
+    >> >     >> To reach the concern the expressions for the exponential
+    >> >     >> of a matrix using SVD and projection tensors are obtained
+    >> >     >> from series expansion. However, numerical inconsistency
+    >> >     >> is observed between the exponential of matrix obtained
+    >> >     >> using the function(svd()) used in R software.
+    >> >     >>
+    >> >     >> However, it is observed that most of the researchers
+    >> >     >> fraternity is engaged in utilising R software for their
+    >> >     >> research purposes and to the extent of my understanding
+    >> >     >> such an error in SVD in R software might raise the
+    >> >     >> concern about authenticity of the simulation results
+    >> >     >> produced and published by researchers across the globe.
+    >> >     >>
+    >> >     >> Further, I am very sure that the R software development
+    >> >     >> team is well versed with the happening and they have any
+    >> >     >> specific and resilient reasons for doing so. I would
+    >> >     >> request you kindly, to guide me through the concern.
+    >> >     >>
+    >> >     >> Thank you very much.
+    >> >
+    >>
+
+    > [[alternative HTML version deleted]]
+
+	[[alternative HTML version deleted]]
+
+
+From w||||@mwdun|@p @end|ng |rom gm@||@com  Wed Aug 16 18:23:40 2023
+From: w||||@mwdun|@p @end|ng |rom gm@||@com (Bill Dunlap)
+Date: Wed, 16 Aug 2023 09:23:40 -0700
+Subject: [Rd] Concerns with SVD -- and the Matrix Exponential
+In-Reply-To: <CACSKKmkgrDyDYBLWVPXpxfmeR0vCMBxrieqsoZe9XGBHu7DKbQ@mail.gmail.com>
+References: <CACSKKm=DcN2zy+0QmmU39gSStX2YU4K-MEJaOWcoK6XANswc5Q@mail.gmail.com>
+ <c21e618c-bbbb-42b9-2adb-56df0fb32673@gmail.com>
+ <25780.65318.292886.397047@stat.math.ethz.ch>
+ <CACSKKmnn7HPcaQ3Dr1OZx1_Sy32wrkV0BW=dUjuazFeT577hMA@mail.gmail.com>
+ <BL0PR04MB4706B46C78D72321F088CB0CD90AA@BL0PR04MB4706.namprd04.prod.outlook.com>
+ <CACSKKmkgrDyDYBLWVPXpxfmeR0vCMBxrieqsoZe9XGBHu7DKbQ@mail.gmail.com>
+Message-ID: <CAHqSRuTU4C9xFTqPP1m5VFB7tFH7HckVg-OdNH+rVj5fud9ShQ@mail.gmail.com>
+
+You wrote:
+         Using singular value decomposition, any second-order tensor is
+given as
+          A = U?Vt
+          where U and V are the orthogonal tensors, and ? is the diagonal
+matrix (Eigenvalue matrix).
+
+          For a symmetric matrix, the orthogonal tensors are the same,
+i.e., U=V.
+
+Can you state your definition of the SVD and prove (or outline a proof of)
+that last statement?
+
+-Bill
+
+On Wed, Aug 16, 2023 at 3:47?AM Durga Prasad G me14d059 <
+me14d059 at smail.iitm.ac.in> wrote:
+
+> Dear Martin, I am getting different responses from different officials of
+> R-Software, but those statements are contradicting with the statements
+> discussed in your email. Kindly go through the previous files and emails,
+> and respond. I personally think, together we can fix the issue which is
+> observed in SVD.
+>
+> Thanks and regards
+> Durga Prasad
+>
+> On Tue, Aug 1, 2023 at 4:51?PM Lakshman, Aidan H <AHL27 at pitt.edu> wrote:
+>
+> > Hi Durga,
+> >
+> > There?s an error in your calculations here. You mention that for the SVD
+> > of a symmetric matrix, we must have U=V, but this is not a correct
+> > statement. The unitary matrices are only equivalent if the matrix A is
+> > positive semidefinite.
+> >
+> > In your example, you provide the matrix {{1,4},{4,1}}, which has
+> > eigenvalues 5 and -3. This is not positive semidefinite, and thus there's
+> > no requirement that the unitary matrices be equivalent.
+> >
+> > If you verify your example with something like wolfram alpha, you?ll find
+> > that R?s solution is correct.
+> >
+> > -Aidan
+> >
+> > -----------------------
+> >
+> > Aidan Lakshman (he/him) <https://www.ahl27.com/>
+> >
+> > Doctoral Fellow, Wright Lab <https://www.wrightlabscience.com/>
+> >
+> > University of Pittsburgh School of Medicine
+> >
+> > Department of Biomedical Informatics
+> >
+> > ahl27 at pitt.edu
+> >
+> > (724) 612-9940
+> >
+> >
+> >
+> > ------------------------------
+> > *From:* R-devel <r-devel-bounces at r-project.org> on behalf of Durga
+> Prasad
+> > G me14d059 <me14d059 at smail.iitm.ac.in>
+> > *Sent:* Tuesday, August 1, 2023 4:18:20 AM
+> > *To:* Martin Maechler <maechler at stat.math.ethz.ch>;
+> r-devel at r-project.org
+> > <r-devel at r-project.org>; profjcnash at gmail.com <profjcnash at gmail.com>
+> > *Subject:* Re: [Rd] Concerns with SVD -- and the Matrix Exponential
+> >
+> > Hi Martin, Thank you for your reply. The response and the links provided
+> by
+> > you helped to learn more. But I am not able to obtain the simple even
+> > powers of a matrix: one simple case is the square of a matrix. The square
+> > of the matrix using direct matrix multiplication operations and svd (A =
+> U
+> > D V') are different. Kindly check the attached file for the complete
+> > explanation. I want to know which technique was used in building the svd
+> in
+> > R-Software. I want to discuss about svd if you schedule a meeting.
+> >
+> > Thanks and Regards
+> > Durga Prasad
+> >
+> >
+> > On Mon, Jul 17, 2023 at 2:13?PM Martin Maechler <
+> > maechler at stat.math.ethz.ch>
+> > wrote:
+> >
+> > > >>>>> J C Nash
+> > > >>>>>     on Sun, 16 Jul 2023 13:30:57 -0400 writes:
+> > >
+> > >     > Better check your definitions of SVD -- there are several
+> > >     > forms, but all I am aware of (and I wrote a couple of the
+> > >     > codes in the early 1970s for the SVD) have positive
+> > >     > singular values.
+> > >
+> > >     > JN
+> > >
+> > > Indeed.
+> > >
+> > > More generally, the decomposition     A = U D V'
+> > > (with diagonal D and orthogonal U,V)
+> > > is not at all unique.
+> > >
+> > > There are not only many possible different choices of the sign
+> > > of the diagonal entries, but also the *ordering* of the singular values
+> > > is non unique.
+> > > That's why R and 'Lapack', the world-standard for
+> > >   computer/numerical linear algebra, and others I think,
+> > > make the decomposition unique by requiring
+> > > non-negative entries in D and have them *sorted* decreasingly.
+> > >
+> > > The latter is what the help page   help(svd)  always said
+> > > (and you should have studied that before raising such concerns).
+> > >
+> > > -----------------------------------------------------------------
+> > >
+> > > To your second point (in the document), the matrix exponential:
+> > > It is less known, but still has been known among experts for
+> > > many years (and I think even among students of a class on
+> > > numerical linear algebra), that there are quite a
+> > > few mathematically equivalent ways to compute the matrix exponential,
+> > > *BUT* that most of these may be numerically disastrous, for several
+> > > different reasons depending on the case.
+> > >
+> > > This has been known for close to 50 years now:
+> > >
+> > >  Cleve Moler and Charles Van Loan  (1978)
+> > >  Nineteen Dubious Ways to Compute the Exponential of a Matrix
+> > >  SIAM Review Vol. 20(4)
+> > >
+> >
+> https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fdoi.org%2F10.1137%2F1020098&data=05%7C01%7Cahl27%40pitt.edu%7C8575b77db32345ca544b08db927ceae0%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638264837816871329%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=Y4mlFL%2FggLKd7FoIoY62esiFGUwukRG0YmELsJj7nd0%3D&reserved=0
+> > <https://doi.org/10.1137/1020098>
+> > >
+> > > Where as that publication had been important and much cited at
+> > > the time, the same authors (known world experts in the field)
+> > > wrote a review of that review 25 years later which I think (and
+> > > hope) is even more widely cited  (in R's man/*.Rd syntax) :
+> > >
+> > >   Cleve Moler and Charles Van Loan (2003)
+> > >   Nineteen dubious ways to compute the exponential of a matrix,
+> > >   twenty-five years later. \emph{SIAM Review} \bold{45}, 1, 3--49.
+> > >   \doi{10.1137/S00361445024180}
+> > > i.e.
+> >
+> https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fdoi.org%2F10.1137%2FS00361445024180&data=05%7C01%7Cahl27%40pitt.edu%7C8575b77db32345ca544b08db927ceae0%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638264837817183809%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=5%2FlssUGC6q7SUy0PY7gZCqWi0%2BXbNwZD0FaAgIcOWdY%3D&reserved=0
+> > <https://doi.org/10.1137/S00361445024180>
+> > >
+> > > It is BTW also cited on the Wikipedia page on the matrix
+> > > exponential:
+> > >
+> > >
+> > > ==> For this reason, Professor Douglas Bates, the initial
+> > > creator of R's Matrix package (which comes with R) has added the
+> > > Matrix exponential very early to the package:
+> > >
+> ------------------------------------------------------------------------
+> > > r461 | bates | 2005-01-29
+> > >
+> > > Add expm function
+> > >
+> ------------------------------------------------------------------------
+> > >
+> > > Later, I've fixed an "infamous" bug :
+> > >
+> ------------------------------------------------------------------------
+> > > r2127 | maechler | 2008-03-07
+> > >
+> > > fix the infamous expm() bug also in "Matrix" (duh!)
+> > >
+> ------------------------------------------------------------------------
+> > >
+> > > Then, Vincent Goulet and Christophe Dutang wanted to provide more
+> > > versions of expm() and we collaborated, also providing expm()
+> > > for complex matrices and created the CRAN package {expm}
+> > >   -->
+> >
+> https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fcran.r-project.org%2Fpackage%3Dexpm&data=05%7C01%7Cahl27%40pitt.edu%7C8575b77db32345ca544b08db927ceae0%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638264837817183809%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=LlAzmeRZd5tNqAgTuYTTSsSakWEj85%2B%2F%2FP%2FM0DnZNLk%3D&reserved=0
+> > <https://cran.r-project.org/package=expm>
+> > > which already provided half a dozen different expm algorithms.
+> > >
+> > > But research and algorithms did not stop there.  In 2008, Higham
+> > > and collaborators even improved on the best known algorithms
+> > > and I had the chance to co-supervise a smart Master's student
+> > > Michael Stadelmann to implement Higham's algorithm and we even
+> > > allowed to tweak it {with optional arguments} as that was seen
+> > > to be beneficial sometimes.
+> > >
+> > > See e.g.,
+> > >
+> >
+> https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fwww.rdocumentation.org%2Fpackages%2Fexpm%2Fversions%2F0.999-7%2Ftopics%2Fexpm&data=05%7C01%7Cahl27%40pitt.edu%7C8575b77db32345ca544b08db927ceae0%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638264837817340048%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=ZrT%2FYvklccqLCORBMf6nGop5o3n7O2thkknG1UAS2Gc%3D&reserved=0
+> > <
+> https://www.rdocumentation.org/packages/expm/versions/0.999-7/topics/expm>
+> > >
+> > >
+> > >     > On 2023-07-16 02:01, Durga Prasad G me14d059 wrote:
+> > >     >> Respected Development Team,
+> > >     >>
+> > >     >> This is Durga Prasad reaching out to you regarding an
+> > >     >> issue/concern related to Singular Value Decomposition SVD
+> > >     >> in R software package. I am attaching a detailed
+> > >     >> attachment with this letter which depicts real issues
+> > >     >> with SVD in R.
+> > >     >>
+> > >     >> To reach the concern the expressions for the exponential
+> > >     >> of a matrix using SVD and projection tensors are obtained
+> > >     >> from series expansion. However, numerical inconsistency
+> > >     >> is observed between the exponential of matrix obtained
+> > >     >> using the function(svd()) used in R software.
+> > >     >>
+> > >     >> However, it is observed that most of the researchers
+> > >     >> fraternity is engaged in utilising R software for their
+> > >     >> research purposes and to the extent of my understanding
+> > >     >> such an error in SVD in R software might raise the
+> > >     >> concern about authenticity of the simulation results
+> > >     >> produced and published by researchers across the globe.
+> > >     >>
+> > >     >> Further, I am very sure that the R software development
+> > >     >> team is well versed with the happening and they have any
+> > >     >> specific and resilient reasons for doing so. I would
+> > >     >> request you kindly, to guide me through the concern.
+> > >     >>
+> > >     >> Thank you very much.
+> > >
+> >
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Wed Aug 16 21:56:13 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Wed, 16 Aug 2023 15:56:13 -0400
+Subject: [Rd] Concerns with SVD -- and the Matrix Exponential
+In-Reply-To: <CACSKKmkgrDyDYBLWVPXpxfmeR0vCMBxrieqsoZe9XGBHu7DKbQ@mail.gmail.com>
+References: <CACSKKm=DcN2zy+0QmmU39gSStX2YU4K-MEJaOWcoK6XANswc5Q@mail.gmail.com>
+ <c21e618c-bbbb-42b9-2adb-56df0fb32673@gmail.com>
+ <25780.65318.292886.397047@stat.math.ethz.ch>
+ <CACSKKmnn7HPcaQ3Dr1OZx1_Sy32wrkV0BW=dUjuazFeT577hMA@mail.gmail.com>
+ <BL0PR04MB4706B46C78D72321F088CB0CD90AA@BL0PR04MB4706.namprd04.prod.outlook.com>
+ <CACSKKmkgrDyDYBLWVPXpxfmeR0vCMBxrieqsoZe9XGBHu7DKbQ@mail.gmail.com>
+Message-ID: <c9e7606a-a09c-ae45-f380-7932578333dc@gmail.com>
+
+Dear Durga, I think you have a basic misunderstanding of this mailing 
+list.  The responses you have received are from users and volunteer 
+developers.  There are no "officials of R-Software".  R is an open 
+source project containing contributions from hundreds (maybe thousands) 
+of people.
+
+It's only natural that there will be some contradictions in the 
+responses from those people.  It's up to you to read the responses and 
+find the parts of them that are useful to you.  It's rude of you to ask 
+one particular respondent to do that work for you.
+
+Duncan Murdoch
+
+On 16/08/2023 4:06 a.m., Durga Prasad G me14d059 wrote:
+> Dear Martin, I am getting different responses from different officials of
+> R-Software, but those statements are contradicting with the statements
+> discussed in your email. Kindly go through the previous files and emails,
+> and respond. I personally think, together we can fix the issue which is
+> observed in SVD.
+> 
+> Thanks and regards
+> Durga Prasad
+> 
+> On Tue, Aug 1, 2023 at 4:51?PM Lakshman, Aidan H <AHL27 at pitt.edu> wrote:
+> 
+>> Hi Durga,
+>>
+>> There?s an error in your calculations here. You mention that for the SVD
+>> of a symmetric matrix, we must have U=V, but this is not a correct
+>> statement. The unitary matrices are only equivalent if the matrix A is
+>> positive semidefinite.
+>>
+>> In your example, you provide the matrix {{1,4},{4,1}}, which has
+>> eigenvalues 5 and -3. This is not positive semidefinite, and thus there's
+>> no requirement that the unitary matrices be equivalent.
+>>
+>> If you verify your example with something like wolfram alpha, you?ll find
+>> that R?s solution is correct.
+>>
+>> -Aidan
+>>
+>> -----------------------
+>>
+>> Aidan Lakshman (he/him) <https://www.ahl27.com/>
+>>
+>> Doctoral Fellow, Wright Lab <https://www.wrightlabscience.com/>
+>>
+>> University of Pittsburgh School of Medicine
+>>
+>> Department of Biomedical Informatics
+>>
+>> ahl27 at pitt.edu
+>>
+>> (724) 612-9940
+>>
+>>
+>>
+>> ------------------------------
+>> *From:* R-devel <r-devel-bounces at r-project.org> on behalf of Durga Prasad
+>> G me14d059 <me14d059 at smail.iitm.ac.in>
+>> *Sent:* Tuesday, August 1, 2023 4:18:20 AM
+>> *To:* Martin Maechler <maechler at stat.math.ethz.ch>; r-devel at r-project.org
+>> <r-devel at r-project.org>; profjcnash at gmail.com <profjcnash at gmail.com>
+>> *Subject:* Re: [Rd] Concerns with SVD -- and the Matrix Exponential
+>>
+>> Hi Martin, Thank you for your reply. The response and the links provided by
+>> you helped to learn more. But I am not able to obtain the simple even
+>> powers of a matrix: one simple case is the square of a matrix. The square
+>> of the matrix using direct matrix multiplication operations and svd (A = U
+>> D V') are different. Kindly check the attached file for the complete
+>> explanation. I want to know which technique was used in building the svd in
+>> R-Software. I want to discuss about svd if you schedule a meeting.
+>>
+>> Thanks and Regards
+>> Durga Prasad
+>>
+>>
+>> On Mon, Jul 17, 2023 at 2:13?PM Martin Maechler <
+>> maechler at stat.math.ethz.ch>
+>> wrote:
+>>
+>>>>>>>> J C Nash
+>>>>>>>>      on Sun, 16 Jul 2023 13:30:57 -0400 writes:
+>>>
+>>>      > Better check your definitions of SVD -- there are several
+>>>      > forms, but all I am aware of (and I wrote a couple of the
+>>>      > codes in the early 1970s for the SVD) have positive
+>>>      > singular values.
+>>>
+>>>      > JN
+>>>
+>>> Indeed.
+>>>
+>>> More generally, the decomposition     A = U D V'
+>>> (with diagonal D and orthogonal U,V)
+>>> is not at all unique.
+>>>
+>>> There are not only many possible different choices of the sign
+>>> of the diagonal entries, but also the *ordering* of the singular values
+>>> is non unique.
+>>> That's why R and 'Lapack', the world-standard for
+>>>    computer/numerical linear algebra, and others I think,
+>>> make the decomposition unique by requiring
+>>> non-negative entries in D and have them *sorted* decreasingly.
+>>>
+>>> The latter is what the help page   help(svd)  always said
+>>> (and you should have studied that before raising such concerns).
+>>>
+>>> -----------------------------------------------------------------
+>>>
+>>> To your second point (in the document), the matrix exponential:
+>>> It is less known, but still has been known among experts for
+>>> many years (and I think even among students of a class on
+>>> numerical linear algebra), that there are quite a
+>>> few mathematically equivalent ways to compute the matrix exponential,
+>>> *BUT* that most of these may be numerically disastrous, for several
+>>> different reasons depending on the case.
+>>>
+>>> This has been known for close to 50 years now:
+>>>
+>>>   Cleve Moler and Charles Van Loan  (1978)
+>>>   Nineteen Dubious Ways to Compute the Exponential of a Matrix
+>>>   SIAM Review Vol. 20(4)
+>>>
+>> https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fdoi.org%2F10.1137%2F1020098&data=05%7C01%7Cahl27%40pitt.edu%7C8575b77db32345ca544b08db927ceae0%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638264837816871329%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=Y4mlFL%2FggLKd7FoIoY62esiFGUwukRG0YmELsJj7nd0%3D&reserved=0
+>> <https://doi.org/10.1137/1020098>
+>>>
+>>> Where as that publication had been important and much cited at
+>>> the time, the same authors (known world experts in the field)
+>>> wrote a review of that review 25 years later which I think (and
+>>> hope) is even more widely cited  (in R's man/*.Rd syntax) :
+>>>
+>>>    Cleve Moler and Charles Van Loan (2003)
+>>>    Nineteen dubious ways to compute the exponential of a matrix,
+>>>    twenty-five years later. \emph{SIAM Review} \bold{45}, 1, 3--49.
+>>>    \doi{10.1137/S00361445024180}
+>>> i.e.
+>> https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fdoi.org%2F10.1137%2FS00361445024180&data=05%7C01%7Cahl27%40pitt.edu%7C8575b77db32345ca544b08db927ceae0%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638264837817183809%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=5%2FlssUGC6q7SUy0PY7gZCqWi0%2BXbNwZD0FaAgIcOWdY%3D&reserved=0
+>> <https://doi.org/10.1137/S00361445024180>
+>>>
+>>> It is BTW also cited on the Wikipedia page on the matrix
+>>> exponential:
+>>>
+>>>
+>>> ==> For this reason, Professor Douglas Bates, the initial
+>>> creator of R's Matrix package (which comes with R) has added the
+>>> Matrix exponential very early to the package:
+>>> ------------------------------------------------------------------------
+>>> r461 | bates | 2005-01-29
+>>>
+>>> Add expm function
+>>> ------------------------------------------------------------------------
+>>>
+>>> Later, I've fixed an "infamous" bug :
+>>> ------------------------------------------------------------------------
+>>> r2127 | maechler | 2008-03-07
+>>>
+>>> fix the infamous expm() bug also in "Matrix" (duh!)
+>>> ------------------------------------------------------------------------
+>>>
+>>> Then, Vincent Goulet and Christophe Dutang wanted to provide more
+>>> versions of expm() and we collaborated, also providing expm()
+>>> for complex matrices and created the CRAN package {expm}
+>>>    -->
+>> https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fcran.r-project.org%2Fpackage%3Dexpm&data=05%7C01%7Cahl27%40pitt.edu%7C8575b77db32345ca544b08db927ceae0%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638264837817183809%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=LlAzmeRZd5tNqAgTuYTTSsSakWEj85%2B%2F%2FP%2FM0DnZNLk%3D&reserved=0
+>> <https://cran.r-project.org/package=expm>
+>>> which already provided half a dozen different expm algorithms.
+>>>
+>>> But research and algorithms did not stop there.  In 2008, Higham
+>>> and collaborators even improved on the best known algorithms
+>>> and I had the chance to co-supervise a smart Master's student
+>>> Michael Stadelmann to implement Higham's algorithm and we even
+>>> allowed to tweak it {with optional arguments} as that was seen
+>>> to be beneficial sometimes.
+>>>
+>>> See e.g.,
+>>>
+>> https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fwww.rdocumentation.org%2Fpackages%2Fexpm%2Fversions%2F0.999-7%2Ftopics%2Fexpm&data=05%7C01%7Cahl27%40pitt.edu%7C8575b77db32345ca544b08db927ceae0%7C9ef9f489e0a04eeb87cc3a526112fd0d%7C1%7C0%7C638264837817340048%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C3000%7C%7C%7C&sdata=ZrT%2FYvklccqLCORBMf6nGop5o3n7O2thkknG1UAS2Gc%3D&reserved=0
+>> <https://www.rdocumentation.org/packages/expm/versions/0.999-7/topics/expm>
+>>>
+>>>
+>>>      > On 2023-07-16 02:01, Durga Prasad G me14d059 wrote:
+>>>      >> Respected Development Team,
+>>>      >>
+>>>      >> This is Durga Prasad reaching out to you regarding an
+>>>      >> issue/concern related to Singular Value Decomposition SVD
+>>>      >> in R software package. I am attaching a detailed
+>>>      >> attachment with this letter which depicts real issues
+>>>      >> with SVD in R.
+>>>      >>
+>>>      >> To reach the concern the expressions for the exponential
+>>>      >> of a matrix using SVD and projection tensors are obtained
+>>>      >> from series expansion. However, numerical inconsistency
+>>>      >> is observed between the exponential of matrix obtained
+>>>      >> using the function(svd()) used in R software.
+>>>      >>
+>>>      >> However, it is observed that most of the researchers
+>>>      >> fraternity is engaged in utilising R software for their
+>>>      >> research purposes and to the extent of my understanding
+>>>      >> such an error in SVD in R software might raise the
+>>>      >> concern about authenticity of the simulation results
+>>>      >> produced and published by researchers across the globe.
+>>>      >>
+>>>      >> Further, I am very sure that the R software development
+>>>      >> team is well versed with the happening and they have any
+>>>      >> specific and resilient reasons for doing so. I would
+>>>      >> request you kindly, to guide me through the concern.
+>>>      >>
+>>>      >> Thank you very much.
+>>>
+>>
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
