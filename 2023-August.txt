@@ -7922,3 +7922,313 @@ On Aug 16 2023, at 5:29 am, Martin Maechler <maechler at stat.math.ethz.ch> wrot
 	[[alternative HTML version deleted]]
 
 
+From konr@d@rudo|ph @end|ng |rom gm@||@com  Sun Aug 27 16:59:35 2023
+From: konr@d@rudo|ph @end|ng |rom gm@||@com (Konrad Rudolph)
+Date: Sun, 27 Aug 2023 16:59:35 +0200
+Subject: [Rd] Calling a replacement function in a custom environment
+Message-ID: <CAM2gKPYmHX-tPe9YK77_txPets0mPHZOVay36DtFrK5TFTsuLw@mail.gmail.com>
+
+Hello all,
+
+I am wondering whether it?s at all possible to call a replacement function
+in a custom environment. From my experiments this appears not to be the
+case, and I am wondering whether that restriction is intentional.
+
+To wit, the following works:
+
+x = 1
+base::is.na(x) = TRUE
+
+However, the following fails:
+
+x = 1
+b = baseenv()
+b$is.na(x) = TRUE
+
+The error message is "invalid function in complex assignment". Grepping the
+R code for this error message reveals that this behaviour seems to be
+hard-coded in function `applydefine` in src/main/eval.c: the function
+explicitly checks for `::` and :::` and permits those assignments, but has
+no equivalent treatment for `$`.
+
+Am I overlooking something to make this work? And if not ? unless there?s a
+concrete reason against it, could it be considered to add support for this
+syntax, i.e. for calling a replacement function by `$`-subsetting the
+defining environment, as shown above?
+
+Cheers,
+Konrad
+
+-- 
+Konrad Rudolph // @klmr
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sun Aug 27 18:02:39 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sun, 27 Aug 2023 12:02:39 -0400
+Subject: [Rd] Calling a replacement function in a custom environment
+In-Reply-To: <CAM2gKPYmHX-tPe9YK77_txPets0mPHZOVay36DtFrK5TFTsuLw@mail.gmail.com>
+References: <CAM2gKPYmHX-tPe9YK77_txPets0mPHZOVay36DtFrK5TFTsuLw@mail.gmail.com>
+Message-ID: <13ced537-9389-c7b1-83e7-ca891bb9e700@gmail.com>
+
+I think there isn't a way to make this work other than calling `is.na<-` 
+explicitly:
+
+   x <- b$`is.na<-`(x, TRUE)
+
+It seems like a reasonable suggestion to make
+
+   b$is.na(x) <- TRUE
+
+work as long as b is an environment.
+
+If you wanted it to work when b was a list, it would be more problematic 
+because of partial name matching.  E.g. suppose b was a list containing 
+functions partial(), partial<-(), and part<-(), and I call
+
+   b$part(x) <- 1
+
+what would be called?
+
+Duncan Murdoch
+
+On 27/08/2023 10:59 a.m., Konrad Rudolph wrote:
+> Hello all,
+> 
+> I am wondering whether it?s at all possible to call a replacement function
+> in a custom environment. From my experiments this appears not to be the
+> case, and I am wondering whether that restriction is intentional.
+> 
+> To wit, the following works:
+> 
+> x = 1
+> base::is.na(x) = TRUE
+> 
+> However, the following fails:
+> 
+> x = 1
+> b = baseenv()
+> b$is.na(x) = TRUE
+> 
+> The error message is "invalid function in complex assignment". Grepping the
+> R code for this error message reveals that this behaviour seems to be
+> hard-coded in function `applydefine` in src/main/eval.c: the function
+> explicitly checks for `::` and :::` and permits those assignments, but has
+> no equivalent treatment for `$`.
+> 
+> Am I overlooking something to make this work? And if not ? unless there?s a
+> concrete reason against it, could it be considered to add support for this
+> syntax, i.e. for calling a replacement function by `$`-subsetting the
+> defining environment, as shown above?
+> 
+> Cheers,
+> Konrad
+>
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Sun Aug 27 19:05:48 2023
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Sun, 27 Aug 2023 12:05:48 -0500 (CDT)
+Subject: [Rd] [External] Re: Calling a replacement function in a custom
+ environment
+In-Reply-To: <13ced537-9389-c7b1-83e7-ca891bb9e700@gmail.com>
+References: <CAM2gKPYmHX-tPe9YK77_txPets0mPHZOVay36DtFrK5TFTsuLw@mail.gmail.com>
+ <13ced537-9389-c7b1-83e7-ca891bb9e700@gmail.com>
+Message-ID: <1997ca6e-d8e9-e473-5b0a-b16a75307958@uiowa.edu>
+
+On Sun, 27 Aug 2023, Duncan Murdoch wrote:
+
+> I think there isn't a way to make this work other than calling `is.na<-` 
+> explicitly:
+>
+>  x <- b$`is.na<-`(x, TRUE)
+>
+
+Replacement functions are not intended to be called directly. Calling
+a replacement function directly may produce an error, or may just do
+the wrong thing in terms of mutation.
+
+> It seems like a reasonable suggestion to make
+>
+>  b$is.na(x) <- TRUE
+>
+> work as long as b is an environment.
+>
+
+I do not think it is a reasonable suggestion. The reasons a::b and
+a:::b were made to work is that many users read these as a single
+symbol, not a call to a binary operator. So supporting this helped to
+reduce confusion.
+
+Allowing $<- to "work" on environments was probably a mistake since
+environments behave differently with respect to
+duplication. Disallowing it entirely may be too disruptive at this
+point, but disallowing it in complex assignment expressions may be
+necessary to prevent mutations that should not happen. (There are open
+bug reports that boil down to this.)
+
+In any case, complicating the complex assignment code, which is
+already barely maintainable, would be a very bad idea.
+
+Best,
+
+luke
+
+> If you wanted it to work when b was a list, it would be more problematic 
+> because of partial name matching.  E.g. suppose b was a list containing 
+> functions partial(), partial<-(), and part<-(), and I call
+>
+>  b$part(x) <- 1
+>
+> what would be called?
+>
+> Duncan Murdoch
+>
+> On 27/08/2023 10:59 a.m., Konrad Rudolph wrote:
+>> Hello all,
+>> 
+>> I am wondering whether it?s at all possible to call a replacement function
+>> in a custom environment. From my experiments this appears not to be the
+>> case, and I am wondering whether that restriction is intentional.
+>> 
+>> To wit, the following works:
+>> 
+>> x = 1
+>> base::is.na(x) = TRUE
+>> 
+>> However, the following fails:
+>> 
+>> x = 1
+>> b = baseenv()
+>> b$is.na(x) = TRUE
+>> 
+>> The error message is "invalid function in complex assignment". Grepping the
+>> R code for this error message reveals that this behaviour seems to be
+>> hard-coded in function `applydefine` in src/main/eval.c: the function
+>> explicitly checks for `::` and :::` and permits those assignments, but has
+>> no equivalent treatment for `$`.
+>> 
+>> Am I overlooking something to make this work? And if not ? unless there?s a
+>> concrete reason against it, could it be considered to add support for this
+>> syntax, i.e. for calling a replacement function by `$`-subsetting the
+>> defining environment, as shown above?
+>> 
+>> Cheers,
+>> Konrad
+>> 
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+
+From m@rchywk@ @end|ng |rom hotm@||@com  Sun Aug 27 23:49:46 2023
+From: m@rchywk@ @end|ng |rom hotm@||@com (Mike Marchywka)
+Date: Sun, 27 Aug 2023 21:49:46 +0000
+Subject: [Rd] R packages to send plottable data to external apps
+Message-ID: <BL3PR11MB6338324A0CEDD90C3DDD013CBEE1A@BL3PR11MB6338.namprd11.prod.outlook.com>
+
+I was curious what R packages, or indeed any other applications, exist
+to plot streamed data from arbitrary data generators. It need not
+be publication quality plotting but it should be easy to use  like
+an oscilloscope.  I was working on something called datascope that I 
+am using for 1D finite difference monitoring and recently interfaced it
+to freefem. I also created an R package. If there is any interest in something
+like this I guess I could put it up somewhere when it is more usable
+or if you can suggest some similar popular packages that would be good
+too. Is there something I could drop-in to the attached code and get
+something like the attached output that could also be switched to other
+data sources?  This right now works via linux fifo and somewhat by UDP.
+It can queue data and stop making it if no one seems to be  consuming
+it depending on the channel.
+
+Thanks. 
+
+?Mike Marchywka?
+44 Crosscreek Trail
+Jasper GA 30143
+was 306 Charles Cox Drive? Canton, GA 30115
+470-758-0799
+404-788-1216?
+
+
+
+From |uc@r @end|ng |rom |edor@project@org  Mon Aug 28 01:12:47 2023
+From: |uc@r @end|ng |rom |edor@project@org (=?UTF-8?Q?I=C3=B1aki_Ucar?=)
+Date: Mon, 28 Aug 2023 01:12:47 +0200
+Subject: [Rd] R packages to send plottable data to external apps
+In-Reply-To: <BL3PR11MB6338324A0CEDD90C3DDD013CBEE1A@BL3PR11MB6338.namprd11.prod.outlook.com>
+References: <BL3PR11MB6338324A0CEDD90C3DDD013CBEE1A@BL3PR11MB6338.namprd11.prod.outlook.com>
+Message-ID: <CALEXWq15oiL58nitHfNvKH00Chr07DeoMpiFpyXdqwbcxV_rZg@mail.gmail.com>
+
+I think r-package-devel is a better place for this. CC'ing there.
+
+On Sun, 27 Aug 2023 at 23:50, Mike Marchywka <marchywka at hotmail.com> wrote:
+>
+> I was curious what R packages, or indeed any other applications, exist
+> to plot streamed data from arbitrary data generators. It need not
+> be publication quality plotting but it should be easy to use  like
+> an oscilloscope.
+
+The last time I checked, there wasn't any R package suitable for
+plotting high-throughput streaming data.
+
+There's a nice command-line utility called trend [1] that I
+extensively used in the past as an oscilloscope to visualize the
+output from a DAQ card. I don't see any new development there, but it
+does exactly what it promises; it's easy to use, quite configurable
+and very fast. Old but gold.
+
+I also explored VisPy, which is much more ambitious, but at that time
+the API had a limitation that didn't allow me to achieve what I
+required, and I haven't looked at it ever since, but the project seems
+in good shape.
+
+[1] https://www.thregr.org/wavexx/software/trend/
+[2] https://vispy.org/
+
+Hope it helps,
+I?aki
+
+> I was working on something called datascope that I
+> am using for 1D finite difference monitoring and recently interfaced it
+> to freefem. I also created an R package. If there is any interest in something
+> like this I guess I could put it up somewhere when it is more usable
+> or if you can suggest some similar popular packages that would be good
+> too. Is there something I could drop-in to the attached code and get
+> something like the attached output that could also be switched to other
+> data sources?  This right now works via linux fifo and somewhat by UDP.
+> It can queue data and stop making it if no one seems to be  consuming
+> it depending on the channel.
+>
+> Thanks.
+>
+>  Mike Marchywka
+> 44 Crosscreek Trail
+> Jasper GA 30143
+> was 306 Charles Cox Drive  Canton, GA 30115
+> 470-758-0799
+> 404-788-1216
+>
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+
+-- 
+I?aki ?car
+
+
