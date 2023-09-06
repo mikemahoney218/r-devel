@@ -86,3 +86,49 @@ Best regards,
 Ivan
 
 
+From murdoch@dunc@n @end|ng |rom gm@||@com  Mon Sep  4 12:01:50 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Mon, 4 Sep 2023 06:01:50 -0400
+Subject: [Rd] Bug in PCRE interface code
+Message-ID: <c0079cbe-0ec0-4e8a-09d1-b6d3a0bce9cd@gmail.com>
+
+This Stackoverflow question https://stackoverflow.com/q/77036362 turned 
+up a bug in the R PCRE interface.
+
+The example (currently in an edit to the original question) tried to use 
+named capture with more than 127 named groups.  Here's the code:
+
+append_unique_id <- function(x) {
+   for (i in seq_along(x)) {
+     x[i] <- paste0("<", paste(sample(letters, 10), collapse = ""), ">", 
+x[i])
+   }
+   x
+}
+
+list_regexes <- sample(letters, 128, TRUE) # <<<<<<<<<<< change this to
+                                            #             127 and it works
+regex2 <- append_unique_id(list_regexes)
+regex2 <- paste0("(?", regex2, ")")
+regex2 <- paste(regex2, collapse = "|")
+
+out <- gregexpr(regex2, "Cyprus", perl = TRUE, ignore.case = TRUE)
+#> Error in gregexpr(regex2, "Cyprus", perl = TRUE, ignore.case = TRUE): 
+attempt to set index -129/128 in SET_STRING_ELT
+
+I think the bug is in R, here: 
+https://github.com/wch/r-source/blob/57d15d68235dd9bcfaa51fce83aaa71163a020e1/src/main/grep.c#L3079
+
+This is the line
+
+	    int capture_num = (entry[0]<<8) + entry[1] - 1;
+
+where entry is declared as a pointer to a char.  What this is doing is 
+extracting a 16 bit number from the first two bytes of a character 
+string holding the name of the capture group.  Since char is a signed 
+type, the conversion of bytes to integer gets messed up and the value 
+comes out wrong.
+
+Duncan Murdoch
+
+
