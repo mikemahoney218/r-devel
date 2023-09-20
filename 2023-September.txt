@@ -584,3 +584,178 @@ I?aki
 I?aki ?car
 
 
+From kry|ov@r00t @end|ng |rom gm@||@com  Mon Sep 18 23:33:56 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Tue, 19 Sep 2023 00:33:56 +0300
+Subject: [Rd] On PRINTNAME() encoding, EncodeChar(),
+ and being painted into a corner
+Message-ID: <20230919003356.13a97d6e@Tarkus>
+
+Hello R-devel,
+
+I have originally learned about this from the following GitHub issue:
+<https://github.com/r-devel/r-project-sprint-2023/issues/65>. In short,
+in various places of the R source code, symbol names are accessed using
+translateChar(), EncodeChar(), and CHAR(), and it might help to unify
+their use.
+
+Currently, R is very careful to only create symbols with names in the
+native encoding. I have verified this by tracing the ways a symbol can
+be created (allocSExp) or have a name assigned (SET_PRINTNAME) using
+static analysis (Coccinelle). While it's possible to create a symbol
+with a name in an encoding different from the native encoding using
+SET_PRINTNAME(symbol, mkCharCE(...)), neither R nor CRAN packages
+invoke code like this for an arbitrary encoding; symbols are always
+created using either install() or installTrChar(). (install("invalid
+byte sequence") is, of course, still possible, but is a different
+problem.)
+
+This means that translateChar(PRINTNAME(...)) is currently unnecessary,
+but it may be worth adding a check (opt-in, applicable only during R
+CMD check, to avoid a performance hit?) to SET_PRINTNAME() to ensure
+that only native-encoding (or ASCII) symbol names are used. I could also
+suggest a patch for Writing R Extensions or R Internals to document this
+assumption.
+
+The following translateChar() doesn't hurt (it returns CHAR(x) right
+away without allocating any memory), but it stands out against most
+uses of CHAR(PRINTNAME(.)) and EncodeChar(PRINTNAME(.)):
+
+--- src/main/subscript.c	(revision 85160)
++++ src/main/subscript.c	(working copy)
+@@ -186,7 +186,7 @@
+ 	    PROTECT(names);
+ 	    for (i = 0; i < nx; i++)
+ 		if (streql(translateChar(STRING_ELT(names, i)),
+-			   translateChar(PRINTNAME(s)))) {
++			   CHAR(PRINTNAME(s)))) {
+ 		    indx = i;
+ 		    break;
+ 		}
+
+The following translateChar() can be safely replaced with EncodeChar(),
+correctly printing funnily-named functions in tracemem() reports:
+
+--- src/main/debug.c	(revision 85160)
++++ src/main/debug.c	(working copy)
+@@ -203,7 +203,7 @@
+ 	    && TYPEOF(cptr->call) == LANGSXP) {
+ 	    SEXP fun = CAR(cptr->call);
+ 	    Rprintf("%s ",
+-		    TYPEOF(fun) == SYMSXP ? translateChar(PRINTNAME(fun)) :
++		    TYPEOF(fun) == SYMSXP ? EncodeChar(PRINTNAME(fun)) : "<Anonymous>");
+ 	}
+     }
+
+tracemem(a <- 1:10)
+`\r\v\t\n` <- function(x) x[1] <- 0
+`\r\v\t\n`(a)
+# Now correctly prints:
+# tracemem[0x55fd11e61e00 -> 0x55fd1081d2a8]: \r\v\t\n
+# tracemem[0x55fd1081d2a8 -> 0x55fd113277e8]: \r\v\t\n
+
+What about EncodeChar(PRINTNAME(.))? This is the intended way to report
+symbols in error messages. Without EncodeChar(),
+.Internal(`\r\v\t\n`()) actually prints the newlines to standard output
+as part of the error message instead of escaping them. Unfortunately,
+EncodeChar() uses a statically-allocated buffer for its return value,
+*and* the comments say that it's unsafe to use together with
+errorcall(): errorcall_cpy() must be used instead. I think that's
+because EncodeChar() may be called while deparsing the call,
+overwriting the statically-allocated buffer before the format arguments
+(which also contain the return value of EncodeChar()) are processed. In
+particular, this means that EncodeChar() is unsafe to use with any kind
+of warnings. The following Coccinelle script locates uses of
+CHAR(PRINTNAME(.)) inside errors and warnings:
+
+@@
+expression x;
+expression list arg1, arg2;
+identifier fun =~ "(Rf_)?(error|warning)(call)?(_cpy)?";
+@@
+ fun(
+  arg1,
+* CHAR(PRINTNAME(x)),
+  arg2
+ )
+
+Some of these, which already use errorcall(), are trivial to fix by
+replacing CHAR() with EncodeChar() and upgrading errorcall() to
+errorcall_cpy():
+
+--- src/main/names.c
++++ src/main/names.c
+@@ -1367,7 +1367,7 @@ attribute_hidden SEXP do_internal(SEXP c
+ 	errorcall(call, _("invalid .Internal() argument"));
+     if (INTERNAL(fun) == R_NilValue)
+-	errorcall(call, _("there is no .Internal function '%s'"),
++	errorcall_cpy(call, _("there is no .Internal function '%s'"),
+-		  CHAR(PRINTNAME(fun)));
++		  EncodeChar(PRINTNAME(fun)));
+ 
+ #ifdef CHECK_INTERNALS
+     if(R_Is_Running > 1 && getenv("_R_CHECK_INTERNALS2_")) {
+
+--- src/main/eval.c
++++ src/main/eval.c
+@@ -1161,7 +1161,7 @@ SEXP eval(SEXP e, SEXP rho)
+ 	    const char *n = CHAR(PRINTNAME(e));
+-	    if(*n) errorcall(getLexicalCall(rho),
++	    if(*n) errorcall_cpy(getLexicalCall(rho),
+ 			     _("argument \"%s\" is missing, with no default"),
+-			     CHAR(PRINTNAME(e)));
++			     EncodeChar(PRINTNAME(e)));
+ 	    else errorcall(getLexicalCall(rho),
+ 			   _("argument is missing, with no default"));
+ 	}
+
+--- src/main/match.c
++++ src/main/match.c
+@@ -229,7 +229,7 @@ attribute_hidden SEXP matchArgs_NR(SEXP
+ 		      if (fargused[arg_i] == 2)
+-			  errorcall(call,
++			  errorcall_cpy(call,
+ 	                      _("formal argument \"%s\" matched by multiple actual arguments"),
+-	                      CHAR(PRINTNAME(TAG(f))));
++	                      EncodeChar(PRINTNAME(TAG(f))));
+ 		      if (ARGUSED(b) == 2)
+ 			  errorcall(call,
+ 	                      _("argument %d matches multiple formal arguments"),
+@@ -272,12 +271,12 @@ attribute_hidden SEXP matchArgs_NR(SEXP
+ 			if (fargused[arg_i] == 1)
+-			    errorcall(call,
++			    errorcall_cpy(call,
+ 				_("formal argument \"%s\" matched by multiple actual arguments"),
+-				CHAR(PRINTNAME(TAG(f))));
++				EncodeChar(PRINTNAME(TAG(f))));
+ 			if (R_warn_partial_match_args) {
+ 			    warningcall(call,
+ 					_("partial argument match of '%s' to '%s'"), CHAR(PRINTNAME(TAG(b))),
+ 					CHAR(PRINTNAME(TAG(f))) );
+ 			}
+ 			SETCAR(a, CAR(b));
+ 			if (CAR(b) != R_MissingArg) SET_MISSING(a, 0);
+
+The changes become more complicated with a plain error() (have to
+figure out the current call and provide it to errorcall_cpy), still
+more complicated with warnings (there's currently no warningcall_cpy(),
+though one can be implemented) and even more complicated when multiple
+symbols are used in the same warning or error, like in the last
+warningcall() above (EncodeChar() can only be called once at a time).
+
+The only solution to the latter problem is an EncodeChar() variant that
+allocates its memory dynamically. Would R_alloc() be acceptable in this
+context? With errors, the allocation stack would be quickly reset
+(except when withCallingHandlers() is in effect?), but with warnings,
+the code would have to restore it manually every time. Is it even worth
+the effort to try to handle the (pretty rare) non-syntactic symbol names
+while constructing error messages? Other languages (like Lua or SQLite)
+provide a special printf specifier (typically %q) to create
+quoted/escaped string representations, but we're not yet at the point
+of providing a C-level printf implementation.
+
+-- 
+Best regards,
+Ivan
+
+
