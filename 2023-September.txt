@@ -759,3 +759,300 @@ Best regards,
 Ivan
 
 
+From murdoch@dunc@n @end|ng |rom gm@||@com  Tue Sep 19 16:44:07 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 19 Sep 2023 10:44:07 -0400
+Subject: [Rd] Strange behaviour of do.call()
+Message-ID: <a20d1359-7097-42a9-903e-2b505bdb3343@gmail.com>
+
+The knitr::kable() function does some internal setup, including 
+determining the target format, and then calls an internal function using
+
+   do.call(paste("kable", format, sep = "_"), list(x = x,
+         caption = caption, escape = escape, ...))
+
+I was interested in setting the `vlign` argument to knitr:::kable_latex, 
+using this code:
+
+   knitr::kable(head(mtcars), format="latex", align = "c", vlign="")
+
+If I debug knitr::kable, I can see that `vlign = ""` is part of 
+list(...).  However, if I debug knitr:::kable_latex, I get weird results:
+
+   > debug(knitr:::kable_latex)
+   > knitr::kable(head(mtcars), format="latex", align = "c", vlign="")
+   debugging in: kable_latex(x = c("Mazda RX4", "Mazda RX4 Wag", "Datsun 
+710",
+   "Hornet 4 Drive", "Hornet Sportabout", "Valiant", "21.0", "21.0",
+   "22.8", "21.4", "18.7", "18.1", "6", "6", "4", "6", "8", "6",
+   "160", "160", "108", "258", "360", "225", "110", "110", "93",
+   "110", "175", "105", "3.90", "3.90", "3.85", "3.08", "3.15",
+   "2.76", "2.620", "2.875", "2.320", "3.215", "3.440", "3.460",
+   "16.46", "17.02", "18.61", "19.44", "17.02", "20.22", "0", "0",
+   "1", "1", "0", "1", "1", "1", "1", "0", "0", "0", "4", "4", "4",
+   "3", "3", "3", "4", "4", "1", "1", "2", "1"), caption = NULL,
+       escape = TRUE, vlign = "")
+debug: {
+
+   [rest of function display omitted]
+
+I see here that vlign = "" is being shown as an argument.  However, when 
+I print vlign, sometimes I get "object not found", and somethings I get
+
+   Browse[2]> vline
+   debug: [1] "|"
+
+(which is what the default value would be).  In the latter case, I also see
+
+   Browse[2]> list(...)
+   $vlign
+   [1] ""
+
+i.e. vlign remains part of the ... list, it wasn't bound to the argument 
+named vlign.
+
+I can't spot anything particularly strange in the way knitr is handling 
+this; can anyone else?  My sessionInfo() is below.
+
+Duncan Murdoch
+
+ > sessionInfo()
+R version 4.3.1 (2023-06-16)
+Platform: x86_64-apple-darwin20 (64-bit)
+Running under: macOS Monterey 12.6.9
+
+Matrix products: default
+BLAS: 
+/Library/Frameworks/R.framework/Versions/4.3-x86_64/Resources/lib/libRblas.0.dylib 
+
+LAPACK: 
+/Library/Frameworks/R.framework/Versions/4.3-x86_64/Resources/lib/libRlapack.dylib; 
+  LAPACK version 3.11.0
+
+locale:
+[1] en_CA.UTF-8/en_CA.UTF-8/en_CA.UTF-8/C/en_CA.UTF-8/en_CA.UTF-8
+
+time zone: America/Toronto
+tzcode source: internal
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base
+
+loaded via a namespace (and not attached):
+[1] compiler_4.3.1 tools_4.3.1    knitr_1.44     xfun_0.40
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Tue Sep 19 16:57:59 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 19 Sep 2023 10:57:59 -0400
+Subject: [Rd] Strange behaviour of do.call()
+In-Reply-To: <a20d1359-7097-42a9-903e-2b505bdb3343@gmail.com>
+References: <a20d1359-7097-42a9-903e-2b505bdb3343@gmail.com>
+Message-ID: <9b386333-6b31-4e7d-8a15-678ed1c8bef6@gmail.com>
+
+Sorry, it's a silly thinko.  I misspelled the vline argument.  Thanks 
+Ivan for the gentle nudge!
+
+Duncan Murdoch
+
+On 19/09/2023 10:44 a.m., Duncan Murdoch wrote:
+> The knitr::kable() function does some internal setup, including
+> determining the target format, and then calls an internal function using
+> 
+>     do.call(paste("kable", format, sep = "_"), list(x = x,
+>           caption = caption, escape = escape, ...))
+> 
+> I was interested in setting the `vlign` argument to knitr:::kable_latex,
+> using this code:
+> 
+>     knitr::kable(head(mtcars), format="latex", align = "c", vlign="")
+> 
+> If I debug knitr::kable, I can see that `vlign = ""` is part of
+> list(...).  However, if I debug knitr:::kable_latex, I get weird results:
+> 
+>     > debug(knitr:::kable_latex)
+>     > knitr::kable(head(mtcars), format="latex", align = "c", vlign="")
+>     debugging in: kable_latex(x = c("Mazda RX4", "Mazda RX4 Wag", "Datsun
+> 710",
+>     "Hornet 4 Drive", "Hornet Sportabout", "Valiant", "21.0", "21.0",
+>     "22.8", "21.4", "18.7", "18.1", "6", "6", "4", "6", "8", "6",
+>     "160", "160", "108", "258", "360", "225", "110", "110", "93",
+>     "110", "175", "105", "3.90", "3.90", "3.85", "3.08", "3.15",
+>     "2.76", "2.620", "2.875", "2.320", "3.215", "3.440", "3.460",
+>     "16.46", "17.02", "18.61", "19.44", "17.02", "20.22", "0", "0",
+>     "1", "1", "0", "1", "1", "1", "1", "0", "0", "0", "4", "4", "4",
+>     "3", "3", "3", "4", "4", "1", "1", "2", "1"), caption = NULL,
+>         escape = TRUE, vlign = "")
+> debug: {
+> 
+>     [rest of function display omitted]
+> 
+> I see here that vlign = "" is being shown as an argument.  However, when
+> I print vlign, sometimes I get "object not found", and somethings I get
+> 
+>     Browse[2]> vline
+>     debug: [1] "|"
+> 
+> (which is what the default value would be).  In the latter case, I also see
+> 
+>     Browse[2]> list(...)
+>     $vlign
+>     [1] ""
+> 
+> i.e. vlign remains part of the ... list, it wasn't bound to the argument
+> named vlign.
+> 
+> I can't spot anything particularly strange in the way knitr is handling
+> this; can anyone else?  My sessionInfo() is below.
+> 
+> Duncan Murdoch
+> 
+>   > sessionInfo()
+> R version 4.3.1 (2023-06-16)
+> Platform: x86_64-apple-darwin20 (64-bit)
+> Running under: macOS Monterey 12.6.9
+> 
+> Matrix products: default
+> BLAS:
+> /Library/Frameworks/R.framework/Versions/4.3-x86_64/Resources/lib/libRblas.0.dylib
+> 
+> LAPACK:
+> /Library/Frameworks/R.framework/Versions/4.3-x86_64/Resources/lib/libRlapack.dylib;
+>    LAPACK version 3.11.0
+> 
+> locale:
+> [1] en_CA.UTF-8/en_CA.UTF-8/en_CA.UTF-8/C/en_CA.UTF-8/en_CA.UTF-8
+> 
+> time zone: America/Toronto
+> tzcode source: internal
+> 
+> attached base packages:
+> [1] stats     graphics  grDevices utils     datasets  methods   base
+> 
+> loaded via a namespace (and not attached):
+> [1] compiler_4.3.1 tools_4.3.1    knitr_1.44     xfun_0.40
+
+
+From @oko| @end|ng |rom |n@@-tou|ou@e@|r  Tue Sep 19 17:05:57 2023
+From: @oko| @end|ng |rom |n@@-tou|ou@e@|r (Serguei Sokol)
+Date: Tue, 19 Sep 2023 17:05:57 +0200
+Subject: [Rd] Strange behaviour of do.call()
+In-Reply-To: <a20d1359-7097-42a9-903e-2b505bdb3343@gmail.com>
+References: <a20d1359-7097-42a9-903e-2b505bdb3343@gmail.com>
+Message-ID: <6c558a4d-d398-28ef-94ed-ab4ee4a639ef@insa-toulouse.fr>
+
+Le 19/09/2023 ? 16:44, Duncan Murdoch a ?crit?:
+> The knitr::kable() function does some internal setup, including 
+> determining the target format, and then calls an internal function using
+>
+> ? do.call(paste("kable", format, sep = "_"), list(x = x,
+> ??????? caption = caption, escape = escape, ...))
+>
+> I was interested in setting the `vlign` argument to 
+> knitr:::kable_latex, using this code:
+>
+> ? knitr::kable(head(mtcars), format="latex", align = "c", vlign="")
+>
+> If I debug knitr::kable, I can see that `vlign = ""` is part of 
+> list(...).? However, if I debug knitr:::kable_latex, I get weird results:
+>
+> ? > debug(knitr:::kable_latex)
+> ? > knitr::kable(head(mtcars), format="latex", align = "c", vlign="")
+If I do this in my R v4.3.1 on linux, I get:
+
+ > debug(knitr:::kable_latex)
+ > knitr::kable(head(mtcars), format="latex", align = "c", vlign="")
+Error in kable_latex(x = c("Mazda RX4", "Mazda RX4 Wag", "Datsun 710",? :
+ ? unused argument (vlign = "")
+
+By looking at args(knitr:::kable_latex), I see 2 similar arguments 
+'valign' and 'vline' but no 'vlign'.
+Can it be just a typo in your code?
+
+
+> debugging in: kable_latex(x = c("Mazda RX4", "Mazda RX4 Wag", "Datsun 
+> 710",
+> ? "Hornet 4 Drive", "Hornet Sportabout", "Valiant", "21.0", "21.0",
+> ? "22.8", "21.4", "18.7", "18.1", "6", "6", "4", "6", "8", "6",
+> ? "160", "160", "108", "258", "360", "225", "110", "110", "93",
+> ? "110", "175", "105", "3.90", "3.90", "3.85", "3.08", "3.15",
+> ? "2.76", "2.620", "2.875", "2.320", "3.215", "3.440", "3.460",
+> ? "16.46", "17.02", "18.61", "19.44", "17.02", "20.22", "0", "0",
+> ? "1", "1", "0", "1", "1", "1", "1", "0", "0", "0", "4", "4", "4",
+> ? "3", "3", "3", "4", "4", "1", "1", "2", "1"), caption = NULL,
+> ????? escape = TRUE, vlign = "")
+> debug: {
+>
+> ? [rest of function display omitted]
+>
+> I see here that vlign = "" is being shown as an argument. However, 
+> when I print vlign, sometimes I get "object not found", and somethings 
+> I get
+>
+> ? Browse[2]> vline
+> ? debug: [1] "|"
+Here again, 'vline' is used on purpose instead of 'vlign'?
+
+Best,
+Serguei.
+
+>
+> (which is what the default value would be).? In the latter case, I 
+> also see
+>
+> ? Browse[2]> list(...)
+> ? $vlign
+> ? [1] ""
+>
+> i.e. vlign remains part of the ... list, it wasn't bound to the 
+> argument named vlign.
+>
+> I can't spot anything particularly strange in the way knitr is 
+> handling this; can anyone else?? My sessionInfo() is below.
+>
+> Duncan Murdoch
+>
+> > sessionInfo()
+> R version 4.3.1 (2023-06-16)
+> Platform: x86_64-apple-darwin20 (64-bit)
+> Running under: macOS Monterey 12.6.9
+>
+> Matrix products: default
+> BLAS: 
+> /Library/Frameworks/R.framework/Versions/4.3-x86_64/Resources/lib/libRblas.0.dylib 
+>
+> LAPACK: 
+> /Library/Frameworks/R.framework/Versions/4.3-x86_64/Resources/lib/libRlapack.dylib; 
+> ?LAPACK version 3.11.0
+>
+> locale:
+> [1] en_CA.UTF-8/en_CA.UTF-8/en_CA.UTF-8/C/en_CA.UTF-8/en_CA.UTF-8
+>
+> time zone: America/Toronto
+> tzcode source: internal
+>
+> attached base packages:
+> [1] stats???? graphics? grDevices utils???? datasets? methods base
+>
+> loaded via a namespace (and not attached):
+> [1] compiler_4.3.1 tools_4.3.1??? knitr_1.44???? xfun_0.40
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+-- 
+Serguei Sokol
+Ingenieur de recherche INRAE
+
+Cellule Math?matiques
+TBI, INSA/INRAE UMR 792, INSA/CNRS UMR 5504
+135 Avenue de Rangueil
+31077 Toulouse Cedex 04
+
+tel: +33 5 61 55 98 49
+email: sokol at insa-toulouse.fr
+https://www.toulouse-biotechnology-institute.fr/en/plateformes-plateaux/cellule-mathematiques/
+
+
