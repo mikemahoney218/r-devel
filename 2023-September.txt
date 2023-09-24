@@ -1385,3 +1385,1469 @@ should be weighed before it becomes part of R-release ...
 Mikael
 
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Fri Sep 22 12:38:57 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Fri, 22 Sep 2023 12:38:57 +0200
+Subject: [Rd] Recent changes to as.complex(NA_real_)
+In-Reply-To: <1cf40db9-ea70-483a-a547-270da6926935@gmail.com>
+References: <1cf40db9-ea70-483a-a547-270da6926935@gmail.com>
+Message-ID: <25869.28353.595831.807741@stat.math.ethz.ch>
+
+>>>>> Mikael Jagan 
+>>>>>     on Thu, 21 Sep 2023 00:47:39 -0400 writes:
+
+    > Revisiting this thread from April:
+
+    >      https://stat.ethz.ch/pipermail/r-devel/2023-April/082545.html
+
+    > where the decision (not yet backported) was made for
+    > as.complex(NA_real_) to give NA_complex_ instead of
+    > complex(r=NA_real_, i=0), to be consistent with
+    > help("as.complex") and as.complex(NA) and as.complex(NA_integer_).
+
+    > Was any consideration given to the alternative?  
+    > That is, to changing as.complex(NA) and as.complex(NA_integer_) to
+    > give complex(r=NA_real_, i=0), consistent with
+    > as.complex(NA_real_), then amending help("as.complex")
+    > accordingly?
+
+Hmm, as, from R-core, mostly I was involved, I admit to say "no",
+to my knowledge the (above) alternative wasn't considered.
+
+  > The principle that
+  > Im(as.complex(<real=(double|integer|logical)>)) should be zero
+  > is quite fundamental, in my view, hence the "new" behaviour 
+  > seems to really violate the principle of least surprise ...
+
+of course "least surprise"  is somewhat subjective.  Still,
+I clearly agree that the above would be one desirable property.
+
+I think that any solution will lead to *some* surprise for some
+cases, I think primarily because there are *many* different
+values z  for which  is.na(z)  is true,  and in any case
+NA_complex_  is only of the many.
+
+I also agree with Mikael that we should reconsider the issue
+that was raised by Davis Vaughan here ("on R-devel") last April.
+
+    > Another (but maybe weaker) argument is that
+    > double->complex coercions happen more often than
+    > logical->complex and integer->complex ones.  Changing the
+    > behaviour of the more frequently performed coercion is
+    > more likely to affect code "out there".
+
+    > Yet another argument is that one expects
+
+    >      identical(as.complex(NA_real_), NA_real_ + (0+0i))
+
+    > to be TRUE, i.e., that coercing from double to complex is
+    > equivalent to adding a complex zero.  The new behaviour
+    > makes the above FALSE, since NA_real_ + (0+0i) gives
+    > complex(r=NA_real_, i=0).
+
+No!  --- To my own surprise (!) --- in current R-devel the above is TRUE, 
+and
+      NA_real_ + (0+0i)  , the same as
+      NA_real_ + 0i      , really gives  complex(r=NA, i=NA) :
+
+Using showC() from ?complex
+
+  showC <- function(z) noquote(sprintf("(R = %g, I = %g)", Re(z), Im(z)))
+
+we see (in R-devel) quite consistently
+
+> showC(NA_real_ + 0i)
+[1] (R = NA, I = NA)
+> showC(NA       + 0i)  # NA is 'logical'
+[1] (R = NA, I = NA)
+> 
+
+where as in R 4.3.1 and "R-patched" -- *in*consistently
+
+> showC(NA_real_ + 0i)
+[1] (R = NA, I = 0)
+> showC(NA + 0i)
+[1] (R = NA, I = NA)
+> 
+
+.... and honestly, I do not see *where* (and when) we changed
+the underlying code (in arithmetic.c !?)  in R-devel to *also*
+produce  NA_complex_  in such complex *arithmetic*
+
+
+    > Having said that, one might also (but more naively) expect
+
+    >     identical(as.complex(as.double(NA_complex_)), NA_complex_)
+
+    > to be TRUE.  
+
+as in current R-devel
+
+    > Under my proposal it continues to be FALSE.
+
+as in "R-release"
+
+    > Well, I'd prefer if it gave FALSE with a warning
+    > "imaginary parts discarded in coercion", but it seems that
+    > as.double(complex(r=a, i=b)) never warns when either of
+    > 'a' and 'b' is NA_real_ or NaN, even where "information"
+    > {nonzero 'b'} is clearly lost ...
+
+The question of *warning* here is related indeed, but I think
+we should try to look at it only *secondary* to your first
+proposal.
+
+    > Whatever decision is made about as.complex(NA_real_),
+    > maybe these points should be weighed before it becomes part of
+    > R-release ...
+
+    > Mikael
+
+Indeed.
+
+Can we please get other opinions / ideas here?
+
+Thank you in advance for your thoughts!
+Martin
+
+--- 
+
+PS: 
+
+ Our *print()*ing  of complex NA's ("NA" here meaning NA or NaN)
+ is also unsatisfactory, e.g. in the case where all entries of a
+ vector are NA in the sense of is.na(.), but their
+ Re() and Im() are not all NA:
+ 
+  showC <- function(z) noquote(sprintf("(R = %g, I = %g)", Re(z), Im(z)))
+  z <- complex(, c(11, NA, NA), c(NA, 99, NA))
+  z
+  showC(z)
+
+gives
+
+  > z
+  [1] NA NA NA
+  > showC(z)
+  [1] (R = 11, I = NA) (R = NA, I = 99) (R = NA, I = NA)
+
+but that (printing of complex) *is* another issue,
+in which we have the re-opened bugzilla PR#16752
+    ==>   https://bugs.r-project.org/show_bug.cgi?id=16752
+
+on which we also worked during the R Sprint in Warwick three
+weeks ago, and where I want to commit changes in any case {but
+think we should change even a bit more than we got to during the
+Sprint}.
+
+
+From j@g@nmn2 @end|ng |rom gm@||@com  Fri Sep 22 14:14:36 2023
+From: j@g@nmn2 @end|ng |rom gm@||@com (Mikael Jagan)
+Date: Fri, 22 Sep 2023 08:14:36 -0400
+Subject: [Rd] Recent changes to as.complex(NA_real_)
+In-Reply-To: <25869.28353.595831.807741@stat.math.ethz.ch>
+References: <1cf40db9-ea70-483a-a547-270da6926935@gmail.com>
+ <25869.28353.595831.807741@stat.math.ethz.ch>
+Message-ID: <1aba0839-6412-4fb9-99ff-30118851cf72@gmail.com>
+
+
+
+On 2023-09-22 6:38 am, Martin Maechler wrote:
+>>>>>> Mikael Jagan
+>>>>>>      on Thu, 21 Sep 2023 00:47:39 -0400 writes:
+> 
+>      > Revisiting this thread from April:
+> 
+>      >      https://stat.ethz.ch/pipermail/r-devel/2023-April/082545.html
+> 
+>      > where the decision (not yet backported) was made for
+>      > as.complex(NA_real_) to give NA_complex_ instead of
+>      > complex(r=NA_real_, i=0), to be consistent with
+>      > help("as.complex") and as.complex(NA) and as.complex(NA_integer_).
+> 
+>      > Was any consideration given to the alternative?
+>      > That is, to changing as.complex(NA) and as.complex(NA_integer_) to
+>      > give complex(r=NA_real_, i=0), consistent with
+>      > as.complex(NA_real_), then amending help("as.complex")
+>      > accordingly?
+> 
+> Hmm, as, from R-core, mostly I was involved, I admit to say "no",
+> to my knowledge the (above) alternative wasn't considered.
+> 
+>    > The principle that
+>    > Im(as.complex(<real=(double|integer|logical)>)) should be zero
+>    > is quite fundamental, in my view, hence the "new" behaviour
+>    > seems to really violate the principle of least surprise ...
+> 
+> of course "least surprise"  is somewhat subjective.  Still,
+> I clearly agree that the above would be one desirable property.
+> 
+> I think that any solution will lead to *some* surprise for some
+> cases, I think primarily because there are *many* different
+> values z  for which  is.na(z)  is true,  and in any case
+> NA_complex_  is only of the many.
+> 
+> I also agree with Mikael that we should reconsider the issue
+> that was raised by Davis Vaughan here ("on R-devel") last April.
+> 
+>      > Another (but maybe weaker) argument is that
+>      > double->complex coercions happen more often than
+>      > logical->complex and integer->complex ones.  Changing the
+>      > behaviour of the more frequently performed coercion is
+>      > more likely to affect code "out there".
+> 
+>      > Yet another argument is that one expects
+> 
+>      >      identical(as.complex(NA_real_), NA_real_ + (0+0i))
+> 
+>      > to be TRUE, i.e., that coercing from double to complex is
+>      > equivalent to adding a complex zero.  The new behaviour
+>      > makes the above FALSE, since NA_real_ + (0+0i) gives
+>      > complex(r=NA_real_, i=0).
+> 
+> No!  --- To my own surprise (!) --- in current R-devel the above is TRUE,
+> and
+>        NA_real_ + (0+0i)  , the same as
+>        NA_real_ + 0i      , really gives  complex(r=NA, i=NA) :
+> 
+
+Thank you for the correction - indeed, as.complex(NA_real_) and
+NA_real_ + (0+0i) are identical in both R-patched and R-devel,
+both giving complex(r=NA_real_, i=0) in R-patched and both giving
+NA_complex_ in R-devel.  I was hallucating, it seems ...
+
+> Using showC() from ?complex
+> 
+>    showC <- function(z) noquote(sprintf("(R = %g, I = %g)", Re(z), Im(z)))
+> 
+> we see (in R-devel) quite consistently
+> 
+>> showC(NA_real_ + 0i)
+> [1] (R = NA, I = NA)
+>> showC(NA       + 0i)  # NA is 'logical'
+> [1] (R = NA, I = NA)
+>>
+> 
+> where as in R 4.3.1 and "R-patched" -- *in*consistently
+> 
+>> showC(NA_real_ + 0i)
+> [1] (R = NA, I = 0)
+>> showC(NA + 0i)
+> [1] (R = NA, I = NA)
+>>
+> 
+> .... and honestly, I do not see *where* (and when) we changed
+> the underlying code (in arithmetic.c !?)  in R-devel to *also*
+> produce  NA_complex_  in such complex *arithmetic*
+> 
+
+R_binary() in arithmetic.c has always coerced REALSXP->CPLXSXP when
+encountering one of each.  Surely then the changes in coerce.c are the
+cause and this arithmetic behaviour is just a (bad, IMO) side effect?
+
+> 
+>      > Having said that, one might also (but more naively) expect
+> 
+>      >     identical(as.complex(as.double(NA_complex_)), NA_complex_)
+> 
+>      > to be TRUE.
+> 
+> as in current R-devel
+> 
+>      > Under my proposal it continues to be FALSE.
+> 
+> as in "R-release"
+> 
+>      > Well, I'd prefer if it gave FALSE with a warning
+>      > "imaginary parts discarded in coercion", but it seems that
+>      > as.double(complex(r=a, i=b)) never warns when either of
+>      > 'a' and 'b' is NA_real_ or NaN, even where "information"
+>      > {nonzero 'b'} is clearly lost ...
+> 
+> The question of *warning* here is related indeed, but I think
+> we should try to look at it only *secondary* to your first
+> proposal.
+> 
+>      > Whatever decision is made about as.complex(NA_real_),
+>      > maybe these points should be weighed before it becomes part of
+>      > R-release ...
+> 
+>      > Mikael
+> 
+> Indeed.
+> 
+> Can we please get other opinions / ideas here?
+> 
+
+Thank you, Martin, for "reopening".
+
+Mikael
+
+> Thank you in advance for your thoughts!
+> Martin
+> 
+> ---
+> 
+> PS:
+> 
+>   Our *print()*ing  of complex NA's ("NA" here meaning NA or NaN)
+>   is also unsatisfactory, e.g. in the case where all entries of a
+>   vector are NA in the sense of is.na(.), but their
+>   Re() and Im() are not all NA:
+>   
+>    showC <- function(z) noquote(sprintf("(R = %g, I = %g)", Re(z), Im(z)))
+>    z <- complex(, c(11, NA, NA), c(NA, 99, NA))
+>    z
+>    showC(z)
+> 
+> gives
+> 
+>    > z
+>    [1] NA NA NA
+>    > showC(z)
+>    [1] (R = 11, I = NA) (R = NA, I = 99) (R = NA, I = NA)
+> 
+> but that (printing of complex) *is* another issue,
+> in which we have the re-opened bugzilla PR#16752
+>      ==>   https://bugs.r-project.org/show_bug.cgi?id=16752
+> 
+> on which we also worked during the R Sprint in Warwick three
+> weeks ago, and where I want to commit changes in any case {but
+> think we should change even a bit more than we got to during the
+> Sprint}.
+>
+
+
+From hp@ge@@on@g|thub @end|ng |rom gm@||@com  Fri Sep 22 20:41:57 2023
+From: hp@ge@@on@g|thub @end|ng |rom gm@||@com (=?UTF-8?B?SGVydsOpIFBhZ8Oocw==?=)
+Date: Fri, 22 Sep 2023 11:41:57 -0700
+Subject: [Rd] Recent changes to as.complex(NA_real_)
+In-Reply-To: <25869.28353.595831.807741@stat.math.ethz.ch>
+References: <1cf40db9-ea70-483a-a547-270da6926935@gmail.com>
+ <25869.28353.595831.807741@stat.math.ethz.ch>
+Message-ID: <4abe101e-55be-8800-31ee-e0414c89740e@gmail.com>
+
+We could also question the value of having an infinite number of NA 
+representations in the complex space. For example all these complex 
+values are displayed the same way (as NA), are considered NAs by 
+is.na(), but are not identical or semantically equivalent (from an Re() 
+or Im() point of view):
+
+ ??? NA_real_ + 0i
+
+ ??? complex(r=NA_real_, i=Inf)
+
+ ??? complex(r=2, i=NA_real_)
+
+ ??? complex(r=NaN, i=NA_real_)
+
+In other words, using a single representation for complex NA (i.e. 
+complex(r=NA_real_, i=NA_real_)) would avoid a lot of unnecessary 
+complications and surprises.
+
+Once you do that, whether as.complex(NA_real_) should return 
+complex(r=NA_real_, i=0) or complex(r=NA_real_, i=NA_real_) becomes a 
+moot point.
+
+Best,
+
+H.
+
+On 9/22/23 03:38, Martin Maechler wrote:
+>>>>>> Mikael Jagan
+>>>>>>      on Thu, 21 Sep 2023 00:47:39 -0400 writes:
+>      > Revisiting this thread from April:
+>
+>      >https://stat.ethz.ch/pipermail/r-devel/2023-April/082545.html
+>
+>      > where the decision (not yet backported) was made for
+>      > as.complex(NA_real_) to give NA_complex_ instead of
+>      > complex(r=NA_real_, i=0), to be consistent with
+>      > help("as.complex") and as.complex(NA) and as.complex(NA_integer_).
+>
+>      > Was any consideration given to the alternative?
+>      > That is, to changing as.complex(NA) and as.complex(NA_integer_) to
+>      > give complex(r=NA_real_, i=0), consistent with
+>      > as.complex(NA_real_), then amending help("as.complex")
+>      > accordingly?
+>
+> Hmm, as, from R-core, mostly I was involved, I admit to say "no",
+> to my knowledge the (above) alternative wasn't considered.
+>
+>    > The principle that
+>    > Im(as.complex(<real=(double|integer|logical)>)) should be zero
+>    > is quite fundamental, in my view, hence the "new" behaviour
+>    > seems to really violate the principle of least surprise ...
+>
+> of course "least surprise"  is somewhat subjective.  Still,
+> I clearly agree that the above would be one desirable property.
+>
+> I think that any solution will lead to *some* surprise for some
+> cases, I think primarily because there are *many* different
+> values z  for which  is.na(z)  is true,  and in any case
+> NA_complex_  is only of the many.
+>
+> I also agree with Mikael that we should reconsider the issue
+> that was raised by Davis Vaughan here ("on R-devel") last April.
+>
+>      > Another (but maybe weaker) argument is that
+>      > double->complex coercions happen more often than
+>      > logical->complex and integer->complex ones.  Changing the
+>      > behaviour of the more frequently performed coercion is
+>      > more likely to affect code "out there".
+>
+>      > Yet another argument is that one expects
+>
+>      >      identical(as.complex(NA_real_), NA_real_ + (0+0i))
+>
+>      > to be TRUE, i.e., that coercing from double to complex is
+>      > equivalent to adding a complex zero.  The new behaviour
+>      > makes the above FALSE, since NA_real_ + (0+0i) gives
+>      > complex(r=NA_real_, i=0).
+>
+> No!  --- To my own surprise (!) --- in current R-devel the above is TRUE,
+> and
+>        NA_real_ + (0+0i)  , the same as
+>        NA_real_ + 0i      , really gives  complex(r=NA, i=NA) :
+>
+> Using showC() from ?complex
+>
+>    showC <- function(z) noquote(sprintf("(R = %g, I = %g)", Re(z), Im(z)))
+>
+> we see (in R-devel) quite consistently
+>
+>> showC(NA_real_ + 0i)
+> [1] (R = NA, I = NA)
+>> showC(NA       + 0i)  # NA is 'logical'
+> [1] (R = NA, I = NA)
+> where as in R 4.3.1 and "R-patched" -- *in*consistently
+>
+>> showC(NA_real_ + 0i)
+> [1] (R = NA, I = 0)
+>> showC(NA + 0i)
+> [1] (R = NA, I = NA)
+> .... and honestly, I do not see *where* (and when) we changed
+> the underlying code (in arithmetic.c !?)  in R-devel to *also*
+> produce  NA_complex_  in such complex *arithmetic*
+>
+>
+>      > Having said that, one might also (but more naively) expect
+>
+>      >     identical(as.complex(as.double(NA_complex_)), NA_complex_)
+>
+>      > to be TRUE.
+>
+> as in current R-devel
+>
+>      > Under my proposal it continues to be FALSE.
+>
+> as in "R-release"
+>
+>      > Well, I'd prefer if it gave FALSE with a warning
+>      > "imaginary parts discarded in coercion", but it seems that
+>      > as.double(complex(r=a, i=b)) never warns when either of
+>      > 'a' and 'b' is NA_real_ or NaN, even where "information"
+>      > {nonzero 'b'} is clearly lost ...
+>
+> The question of *warning* here is related indeed, but I think
+> we should try to look at it only *secondary* to your first
+> proposal.
+>
+>      > Whatever decision is made about as.complex(NA_real_),
+>      > maybe these points should be weighed before it becomes part of
+>      > R-release ...
+>
+>      > Mikael
+>
+> Indeed.
+>
+> Can we please get other opinions / ideas here?
+>
+> Thank you in advance for your thoughts!
+> Martin
+>
+> ---
+>
+> PS:
+>
+>   Our *print()*ing  of complex NA's ("NA" here meaning NA or NaN)
+>   is also unsatisfactory, e.g. in the case where all entries of a
+>   vector are NA in the sense of is.na(.), but their
+>   Re() and Im() are not all NA:
+>   
+>    showC <- function(z) noquote(sprintf("(R = %g, I = %g)", Re(z), Im(z)))
+>    z <- complex(, c(11, NA, NA), c(NA, 99, NA))
+>    z
+>    showC(z)
+>
+> gives
+>
+>    > z
+>    [1] NA NA NA
+>    > showC(z)
+>    [1] (R = 11, I = NA) (R = NA, I = 99) (R = NA, I = NA)
+>
+> but that (printing of complex) *is* another issue,
+> in which we have the re-opened bugzilla PR#16752
+>      ==>https://bugs.r-project.org/show_bug.cgi?id=16752
+>
+> on which we also worked during the R Sprint in Warwick three
+> weeks ago, and where I want to commit changes in any case {but
+> think we should change even a bit more than we got to during the
+> Sprint}.
+>
+> ______________________________________________
+> R-devel at r-project.org  mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Herv? Pag?s
+
+Bioconductor Core Team
+hpages.on.github at gmail.com
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Fri Sep 22 22:43:43 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Fri, 22 Sep 2023 16:43:43 -0400
+Subject: [Rd] Recent changes to as.complex(NA_real_)
+In-Reply-To: <4abe101e-55be-8800-31ee-e0414c89740e@gmail.com>
+References: <1cf40db9-ea70-483a-a547-270da6926935@gmail.com>
+ <25869.28353.595831.807741@stat.math.ethz.ch>
+ <4abe101e-55be-8800-31ee-e0414c89740e@gmail.com>
+Message-ID: <57f77592-26ad-43dd-8e36-f9989c915308@gmail.com>
+
+Since the result of is.na(x) is the same on each of those, I don't see a 
+problem.  As long as that is consistent, I don't see a problem.  You 
+shouldn't be using any other test for NA-ness.  You should never be 
+expecting identical() to treat different types as the same (e.g. 
+identical(NA, NA_real_) is FALSE, as it should be).  If you are using a 
+different test, that's user error.
+
+Duncan Murdoch
+
+On 22/09/2023 2:41 p.m., Herv? Pag?s wrote:
+> We could also question the value of having an infinite number of NA
+> representations in the complex space. For example all these complex
+> values are displayed the same way (as NA), are considered NAs by
+> is.na(), but are not identical or semantically equivalent (from an Re()
+> or Im() point of view):
+> 
+>   ??? NA_real_ + 0i
+> 
+>   ??? complex(r=NA_real_, i=Inf)
+> 
+>   ??? complex(r=2, i=NA_real_)
+> 
+>   ??? complex(r=NaN, i=NA_real_)
+> 
+> In other words, using a single representation for complex NA (i.e.
+> complex(r=NA_real_, i=NA_real_)) would avoid a lot of unnecessary
+> complications and surprises.
+> 
+> Once you do that, whether as.complex(NA_real_) should return
+> complex(r=NA_real_, i=0) or complex(r=NA_real_, i=NA_real_) becomes a
+> moot point.
+> 
+> Best,
+> 
+> H.
+> 
+> On 9/22/23 03:38, Martin Maechler wrote:
+>>>>>>> Mikael Jagan
+>>>>>>>       on Thu, 21 Sep 2023 00:47:39 -0400 writes:
+>>       > Revisiting this thread from April:
+>>
+>>       >https://stat.ethz.ch/pipermail/r-devel/2023-April/082545.html
+>>
+>>       > where the decision (not yet backported) was made for
+>>       > as.complex(NA_real_) to give NA_complex_ instead of
+>>       > complex(r=NA_real_, i=0), to be consistent with
+>>       > help("as.complex") and as.complex(NA) and as.complex(NA_integer_).
+>>
+>>       > Was any consideration given to the alternative?
+>>       > That is, to changing as.complex(NA) and as.complex(NA_integer_) to
+>>       > give complex(r=NA_real_, i=0), consistent with
+>>       > as.complex(NA_real_), then amending help("as.complex")
+>>       > accordingly?
+>>
+>> Hmm, as, from R-core, mostly I was involved, I admit to say "no",
+>> to my knowledge the (above) alternative wasn't considered.
+>>
+>>     > The principle that
+>>     > Im(as.complex(<real=(double|integer|logical)>)) should be zero
+>>     > is quite fundamental, in my view, hence the "new" behaviour
+>>     > seems to really violate the principle of least surprise ...
+>>
+>> of course "least surprise"  is somewhat subjective.  Still,
+>> I clearly agree that the above would be one desirable property.
+>>
+>> I think that any solution will lead to *some* surprise for some
+>> cases, I think primarily because there are *many* different
+>> values z  for which  is.na(z)  is true,  and in any case
+>> NA_complex_  is only of the many.
+>>
+>> I also agree with Mikael that we should reconsider the issue
+>> that was raised by Davis Vaughan here ("on R-devel") last April.
+>>
+>>       > Another (but maybe weaker) argument is that
+>>       > double->complex coercions happen more often than
+>>       > logical->complex and integer->complex ones.  Changing the
+>>       > behaviour of the more frequently performed coercion is
+>>       > more likely to affect code "out there".
+>>
+>>       > Yet another argument is that one expects
+>>
+>>       >      identical(as.complex(NA_real_), NA_real_ + (0+0i))
+>>
+>>       > to be TRUE, i.e., that coercing from double to complex is
+>>       > equivalent to adding a complex zero.  The new behaviour
+>>       > makes the above FALSE, since NA_real_ + (0+0i) gives
+>>       > complex(r=NA_real_, i=0).
+>>
+>> No!  --- To my own surprise (!) --- in current R-devel the above is TRUE,
+>> and
+>>         NA_real_ + (0+0i)  , the same as
+>>         NA_real_ + 0i      , really gives  complex(r=NA, i=NA) :
+>>
+>> Using showC() from ?complex
+>>
+>>     showC <- function(z) noquote(sprintf("(R = %g, I = %g)", Re(z), Im(z)))
+>>
+>> we see (in R-devel) quite consistently
+>>
+>>> showC(NA_real_ + 0i)
+>> [1] (R = NA, I = NA)
+>>> showC(NA       + 0i)  # NA is 'logical'
+>> [1] (R = NA, I = NA)
+>> where as in R 4.3.1 and "R-patched" -- *in*consistently
+>>
+>>> showC(NA_real_ + 0i)
+>> [1] (R = NA, I = 0)
+>>> showC(NA + 0i)
+>> [1] (R = NA, I = NA)
+>> .... and honestly, I do not see *where* (and when) we changed
+>> the underlying code (in arithmetic.c !?)  in R-devel to *also*
+>> produce  NA_complex_  in such complex *arithmetic*
+>>
+>>
+>>       > Having said that, one might also (but more naively) expect
+>>
+>>       >     identical(as.complex(as.double(NA_complex_)), NA_complex_)
+>>
+>>       > to be TRUE.
+>>
+>> as in current R-devel
+>>
+>>       > Under my proposal it continues to be FALSE.
+>>
+>> as in "R-release"
+>>
+>>       > Well, I'd prefer if it gave FALSE with a warning
+>>       > "imaginary parts discarded in coercion", but it seems that
+>>       > as.double(complex(r=a, i=b)) never warns when either of
+>>       > 'a' and 'b' is NA_real_ or NaN, even where "information"
+>>       > {nonzero 'b'} is clearly lost ...
+>>
+>> The question of *warning* here is related indeed, but I think
+>> we should try to look at it only *secondary* to your first
+>> proposal.
+>>
+>>       > Whatever decision is made about as.complex(NA_real_),
+>>       > maybe these points should be weighed before it becomes part of
+>>       > R-release ...
+>>
+>>       > Mikael
+>>
+>> Indeed.
+>>
+>> Can we please get other opinions / ideas here?
+>>
+>> Thank you in advance for your thoughts!
+>> Martin
+>>
+>> ---
+>>
+>> PS:
+>>
+>>    Our *print()*ing  of complex NA's ("NA" here meaning NA or NaN)
+>>    is also unsatisfactory, e.g. in the case where all entries of a
+>>    vector are NA in the sense of is.na(.), but their
+>>    Re() and Im() are not all NA:
+>>    
+>>     showC <- function(z) noquote(sprintf("(R = %g, I = %g)", Re(z), Im(z)))
+>>     z <- complex(, c(11, NA, NA), c(NA, 99, NA))
+>>     z
+>>     showC(z)
+>>
+>> gives
+>>
+>>     > z
+>>     [1] NA NA NA
+>>     > showC(z)
+>>     [1] (R = 11, I = NA) (R = NA, I = 99) (R = NA, I = NA)
+>>
+>> but that (printing of complex) *is* another issue,
+>> in which we have the re-opened bugzilla PR#16752
+>>       ==>https://bugs.r-project.org/show_bug.cgi?id=16752
+>>
+>> on which we also worked during the R Sprint in Warwick three
+>> weeks ago, and where I want to commit changes in any case {but
+>> think we should change even a bit more than we got to during the
+>> Sprint}.
+>>
+>> ______________________________________________
+>> R-devel at r-project.org  mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Fri Sep 22 23:14:58 2023
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Fri, 22 Sep 2023 16:14:58 -0500 (CDT)
+Subject: [Rd] [External]  On PRINTNAME() encoding, EncodeChar(),
+ and being painted into a corner
+In-Reply-To: <20230919003356.13a97d6e@Tarkus>
+References: <20230919003356.13a97d6e@Tarkus>
+Message-ID: <f357e53a-304e-c61f-8edb-759fda4c052@uiowa.edu>
+
+Thanks for looking into this!
+
+On Mon, 18 Sep 2023, Ivan Krylov wrote:
+
+> Hello R-devel,
+>
+> I have originally learned about this from the following GitHub issue:
+> <https://github.com/r-devel/r-project-sprint-2023/issues/65>. In short,
+> in various places of the R source code, symbol names are accessed using
+> translateChar(), EncodeChar(), and CHAR(), and it might help to unify
+> their use.
+>
+> Currently, R is very careful to only create symbols with names in the
+> native encoding. I have verified this by tracing the ways a symbol can
+> be created (allocSExp) or have a name assigned (SET_PRINTNAME) using
+> static analysis (Coccinelle). While it's possible to create a symbol
+> with a name in an encoding different from the native encoding using
+> SET_PRINTNAME(symbol, mkCharCE(...)), neither R nor CRAN packages
+> invoke code like this for an arbitrary encoding; symbols are always
+> created using either install() or installTrChar(). (install("invalid
+> byte sequence") is, of course, still possible, but is a different
+> problem.)
+
+SET_PRINTNAME is not in the API and not in the public header files so
+this should not be an issue. It would probably be best to refactor
+things so SET_PRINTNAME only exists in memory.c
+
+> This means that translateChar(PRINTNAME(...)) is currently unnecessary,
+> but it may be worth adding a check (opt-in, applicable only during R
+> CMD check, to avoid a performance hit?) to SET_PRINTNAME() to ensure
+> that only native-encoding (or ASCII) symbol names are used. I could also
+> suggest a patch for Writing R Extensions or R Internals to document this
+> assumption.
+>
+> The following translateChar() doesn't hurt (it returns CHAR(x) right
+> away without allocating any memory), but it stands out against most
+> uses of CHAR(PRINTNAME(.)) and EncodeChar(PRINTNAME(.)):
+>
+> --- src/main/subscript.c	(revision 85160)
+> +++ src/main/subscript.c	(working copy)
+> @@ -186,7 +186,7 @@
+> 	    PROTECT(names);
+> 	    for (i = 0; i < nx; i++)
+> 		if (streql(translateChar(STRING_ELT(names, i)),
+> -			   translateChar(PRINTNAME(s)))) {
+> +			   CHAR(PRINTNAME(s)))) {
+> 		    indx = i;
+> 		    break;
+> 		}
+>
+> The following translateChar() can be safely replaced with EncodeChar(),
+> correctly printing funnily-named functions in tracemem() reports:
+>
+> --- src/main/debug.c	(revision 85160)
+> +++ src/main/debug.c	(working copy)
+> @@ -203,7 +203,7 @@
+> 	    && TYPEOF(cptr->call) == LANGSXP) {
+> 	    SEXP fun = CAR(cptr->call);
+> 	    Rprintf("%s ",
+> -		    TYPEOF(fun) == SYMSXP ? translateChar(PRINTNAME(fun)) :
+> +		    TYPEOF(fun) == SYMSXP ? EncodeChar(PRINTNAME(fun)) : "<Anonymous>");
+> 	}
+>     }
+>
+> tracemem(a <- 1:10)
+> `\r\v\t\n` <- function(x) x[1] <- 0
+> `\r\v\t\n`(a)
+> # Now correctly prints:
+> # tracemem[0x55fd11e61e00 -> 0x55fd1081d2a8]: \r\v\t\n
+> # tracemem[0x55fd1081d2a8 -> 0x55fd113277e8]: \r\v\t\n
+
+Sounds good. I've made those two changes in the trunk in r85209.
+
+> What about EncodeChar(PRINTNAME(.))? This is the intended way to report
+> symbols in error messages. Without EncodeChar(),
+> .Internal(`\r\v\t\n`()) actually prints the newlines to standard output
+> as part of the error message instead of escaping them. Unfortunately,
+> EncodeChar() uses a statically-allocated buffer for its return value,
+> *and* the comments say that it's unsafe to use together with
+> errorcall(): errorcall_cpy() must be used instead. I think that's
+> overwriting the statically-allocated buffer before the format arguments
+> (which also contain the return value of EncodeChar()) are processed. In
+> particular, this means that EncodeChar() is unsafe to use with any kind
+> of warnings. The following Coccinelle script locates uses of
+> CHAR(PRINTNAME(.)) inside errors and warnings:
+> @@
+> expression x;
+> expression list arg1, arg2;
+> identifier fun =~ "(Rf_)?(error|warning)(call)?(_cpy)?";
+> @@
+> fun(
+>  arg1,
+> * CHAR(PRINTNAME(x)),
+>  arg2
+> )
+>
+> Some of these, which already use errorcall(), are trivial to fix by
+> replacing CHAR() with EncodeChar() and upgrading errorcall() to
+> errorcall_cpy():
+
+I think it would be best to modify errorcall so errorcall_cpy is not
+necessary. As things are now it is just too easy to forget that
+sometimes errorcall_cpy should be used (and this has lead to some bugs
+recently).
+
+> --- src/main/names.c
+> +++ src/main/names.c
+> @@ -1367,7 +1367,7 @@ attribute_hidden SEXP do_internal(SEXP c
+> 	errorcall(call, _("invalid .Internal() argument"));
+>     if (INTERNAL(fun) == R_NilValue)
+> -	errorcall(call, _("there is no .Internal function '%s'"),
+> +	errorcall_cpy(call, _("there is no .Internal function '%s'"),
+> -		  CHAR(PRINTNAME(fun)));
+> +		  EncodeChar(PRINTNAME(fun)));
+>
+> #ifdef CHECK_INTERNALS
+>     if(R_Is_Running > 1 && getenv("_R_CHECK_INTERNALS2_")) {
+>
+> --- src/main/eval.c
+> +++ src/main/eval.c
+> @@ -1161,7 +1161,7 @@ SEXP eval(SEXP e, SEXP rho)
+> 	    const char *n = CHAR(PRINTNAME(e));
+> -	    if(*n) errorcall(getLexicalCall(rho),
+> +	    if(*n) errorcall_cpy(getLexicalCall(rho),
+> 			     _("argument \"%s\" is missing, with no default"),
+> -			     CHAR(PRINTNAME(e)));
+> +			     EncodeChar(PRINTNAME(e)));
+> 	    else errorcall(getLexicalCall(rho),
+> 			   _("argument is missing, with no default"));
+> 	}
+>
+> --- src/main/match.c
+> +++ src/main/match.c
+> @@ -229,7 +229,7 @@ attribute_hidden SEXP matchArgs_NR(SEXP
+> 		      if (fargused[arg_i] == 2)
+> -			  errorcall(call,
+> +			  errorcall_cpy(call,
+> 	                      _("formal argument \"%s\" matched by multiple actual arguments"),
+> -	                      CHAR(PRINTNAME(TAG(f))));
+> +	                      EncodeChar(PRINTNAME(TAG(f))));
+> 		      if (ARGUSED(b) == 2)
+> 			  errorcall(call,
+> 	                      _("argument %d matches multiple formal arguments"),
+> @@ -272,12 +271,12 @@ attribute_hidden SEXP matchArgs_NR(SEXP
+> 			if (fargused[arg_i] == 1)
+> -			    errorcall(call,
+> +			    errorcall_cpy(call,
+> 				_("formal argument \"%s\" matched by multiple actual arguments"),
+> -				CHAR(PRINTNAME(TAG(f))));
+> +				EncodeChar(PRINTNAME(TAG(f))));
+> 			if (R_warn_partial_match_args) {
+> 			    warningcall(call,
+> 					_("partial argument match of '%s' to '%s'"), CHAR(PRINTNAME(TAG(b))),
+> 					CHAR(PRINTNAME(TAG(f))) );
+> 			}
+> 			SETCAR(a, CAR(b));
+> 			if (CAR(b) != R_MissingArg) SET_MISSING(a, 0);
+>
+> The changes become more complicated with a plain error() (have to
+> figure out the current call and provide it to errorcall_cpy), still
+> more complicated with warnings (there's currently no warningcall_cpy(),
+> though one can be implemented) and even more complicated when multiple
+> symbols are used in the same warning or error, like in the last
+> warningcall() above (EncodeChar() can only be called once at a time).
+>
+> The only solution to the latter problem is an EncodeChar() variant that
+> allocates its memory dynamically. Would R_alloc() be acceptable in this
+> context? With errors, the allocation stack would be quickly reset
+> (except when withCallingHandlers() is in effect?), but with warnings,
+> the code would have to restore it manually every time.
+
+Or allow/require a buffer to be provided. So replacing the calls like
+
+    CHAR(PRINTNAME(sym))
+
+with
+
+    EncodeSymbol(sym, buf, buf_size)
+
+> Is it even worth
+> the effort to try to handle the (pretty rare) non-syntactic symbol names
+> while constructing error messages? Other languages (like Lua or SQLite)
+> provide a special printf specifier (typically %q) to create
+> quoted/escaped string representations, but we're not yet at the point
+> of providing a C-level printf implementation.
+
+Not clear it is worth it. But the situation now is not good, because
+sometimes we encode and sometimes we don't. It would be better to be
+consistent, both for the end user and for maintainers who now have to
+spend time figuring out which way to go.
+
+Best,
+
+luke
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+
+
+From @pencer@gr@ve@ @end|ng |rom prod@y@e@com  Fri Sep 22 23:42:03 2023
+From: @pencer@gr@ve@ @end|ng |rom prod@y@e@com (Spencer Graves)
+Date: Fri, 22 Sep 2023 16:42:03 -0500
+Subject: [Rd] Recent changes to as.complex(NA_real_)
+In-Reply-To: <57f77592-26ad-43dd-8e36-f9989c915308@gmail.com>
+References: <1cf40db9-ea70-483a-a547-270da6926935@gmail.com>
+ <25869.28353.595831.807741@stat.math.ethz.ch>
+ <4abe101e-55be-8800-31ee-e0414c89740e@gmail.com>
+ <57f77592-26ad-43dd-8e36-f9989c915308@gmail.com>
+Message-ID: <468f3df3-5350-4be0-bed1-f7f1bca0ab23@prodsyse.com>
+
+	  Perhaps I shouldn't comment without having read the entire thread, 
+but I will:  I can envision situations where I might want, e.g., 2 from 
+complex(r=2, i=NA_real_).
+
+
+	  Spencer Graves
+
+
+On 9/22/23 3:43 PM, Duncan Murdoch wrote:
+> Since the result of is.na(x) is the same on each of those, I don't see a 
+> problem.? As long as that is consistent, I don't see a problem.? You 
+> shouldn't be using any other test for NA-ness.? You should never be 
+> expecting identical() to treat different types as the same (e.g. 
+> identical(NA, NA_real_) is FALSE, as it should be).? If you are using a 
+> different test, that's user error.
+> 
+> Duncan Murdoch
+> 
+> On 22/09/2023 2:41 p.m., Herv? Pag?s wrote:
+>> We could also question the value of having an infinite number of NA
+>> representations in the complex space. For example all these complex
+>> values are displayed the same way (as NA), are considered NAs by
+>> is.na(), but are not identical or semantically equivalent (from an Re()
+>> or Im() point of view):
+>>
+>> ? ??? NA_real_ + 0i
+>>
+>> ? ??? complex(r=NA_real_, i=Inf)
+>>
+>> ? ??? complex(r=2, i=NA_real_)
+>>
+>> ? ??? complex(r=NaN, i=NA_real_)
+>>
+>> In other words, using a single representation for complex NA (i.e.
+>> complex(r=NA_real_, i=NA_real_)) would avoid a lot of unnecessary
+>> complications and surprises.
+>>
+>> Once you do that, whether as.complex(NA_real_) should return
+>> complex(r=NA_real_, i=0) or complex(r=NA_real_, i=NA_real_) becomes a
+>> moot point.
+>>
+>> Best,
+>>
+>> H.
+>>
+>> On 9/22/23 03:38, Martin Maechler wrote:
+>>>>>>>> Mikael Jagan
+>>>>>>>> ????? on Thu, 21 Sep 2023 00:47:39 -0400 writes:
+>>> ????? > Revisiting this thread from April:
+>>>
+>>> ????? >https://stat.ethz.ch/pipermail/r-devel/2023-April/082545.html
+>>>
+>>> ????? > where the decision (not yet backported) was made for
+>>> ????? > as.complex(NA_real_) to give NA_complex_ instead of
+>>> ????? > complex(r=NA_real_, i=0), to be consistent with
+>>> ????? > help("as.complex") and as.complex(NA) and 
+>>> as.complex(NA_integer_).
+>>>
+>>> ????? > Was any consideration given to the alternative?
+>>> ????? > That is, to changing as.complex(NA) and 
+>>> as.complex(NA_integer_) to
+>>> ????? > give complex(r=NA_real_, i=0), consistent with
+>>> ????? > as.complex(NA_real_), then amending help("as.complex")
+>>> ????? > accordingly?
+>>>
+>>> Hmm, as, from R-core, mostly I was involved, I admit to say "no",
+>>> to my knowledge the (above) alternative wasn't considered.
+>>>
+>>> ??? > The principle that
+>>> ??? > Im(as.complex(<real=(double|integer|logical)>)) should be zero
+>>> ??? > is quite fundamental, in my view, hence the "new" behaviour
+>>> ??? > seems to really violate the principle of least surprise ...
+>>>
+>>> of course "least surprise"? is somewhat subjective.? Still,
+>>> I clearly agree that the above would be one desirable property.
+>>>
+>>> I think that any solution will lead to *some* surprise for some
+>>> cases, I think primarily because there are *many* different
+>>> values z? for which? is.na(z)? is true,? and in any case
+>>> NA_complex_? is only of the many.
+>>>
+>>> I also agree with Mikael that we should reconsider the issue
+>>> that was raised by Davis Vaughan here ("on R-devel") last April.
+>>>
+>>> ????? > Another (but maybe weaker) argument is that
+>>> ????? > double->complex coercions happen more often than
+>>> ????? > logical->complex and integer->complex ones.? Changing the
+>>> ????? > behaviour of the more frequently performed coercion is
+>>> ????? > more likely to affect code "out there".
+>>>
+>>> ????? > Yet another argument is that one expects
+>>>
+>>> ????? >????? identical(as.complex(NA_real_), NA_real_ + (0+0i))
+>>>
+>>> ????? > to be TRUE, i.e., that coercing from double to complex is
+>>> ????? > equivalent to adding a complex zero.? The new behaviour
+>>> ????? > makes the above FALSE, since NA_real_ + (0+0i) gives
+>>> ????? > complex(r=NA_real_, i=0).
+>>>
+>>> No!? --- To my own surprise (!) --- in current R-devel the above is 
+>>> TRUE,
+>>> and
+>>> ??????? NA_real_ + (0+0i)? , the same as
+>>> ??????? NA_real_ + 0i????? , really gives? complex(r=NA, i=NA) :
+>>>
+>>> Using showC() from ?complex
+>>>
+>>> ??? showC <- function(z) noquote(sprintf("(R = %g, I = %g)", Re(z), 
+>>> Im(z)))
+>>>
+>>> we see (in R-devel) quite consistently
+>>>
+>>>> showC(NA_real_ + 0i)
+>>> [1] (R = NA, I = NA)
+>>>> showC(NA?????? + 0i)? # NA is 'logical'
+>>> [1] (R = NA, I = NA)
+>>> where as in R 4.3.1 and "R-patched" -- *in*consistently
+>>>
+>>>> showC(NA_real_ + 0i)
+>>> [1] (R = NA, I = 0)
+>>>> showC(NA + 0i)
+>>> [1] (R = NA, I = NA)
+>>> .... and honestly, I do not see *where* (and when) we changed
+>>> the underlying code (in arithmetic.c !?)? in R-devel to *also*
+>>> produce? NA_complex_? in such complex *arithmetic*
+>>>
+>>>
+>>> ????? > Having said that, one might also (but more naively) expect
+>>>
+>>> ????? >???? identical(as.complex(as.double(NA_complex_)), NA_complex_)
+>>>
+>>> ????? > to be TRUE.
+>>>
+>>> as in current R-devel
+>>>
+>>> ????? > Under my proposal it continues to be FALSE.
+>>>
+>>> as in "R-release"
+>>>
+>>> ????? > Well, I'd prefer if it gave FALSE with a warning
+>>> ????? > "imaginary parts discarded in coercion", but it seems that
+>>> ????? > as.double(complex(r=a, i=b)) never warns when either of
+>>> ????? > 'a' and 'b' is NA_real_ or NaN, even where "information"
+>>> ????? > {nonzero 'b'} is clearly lost ...
+>>>
+>>> The question of *warning* here is related indeed, but I think
+>>> we should try to look at it only *secondary* to your first
+>>> proposal.
+>>>
+>>> ????? > Whatever decision is made about as.complex(NA_real_),
+>>> ????? > maybe these points should be weighed before it becomes part of
+>>> ????? > R-release ...
+>>>
+>>> ????? > Mikael
+>>>
+>>> Indeed.
+>>>
+>>> Can we please get other opinions / ideas here?
+>>>
+>>> Thank you in advance for your thoughts!
+>>> Martin
+>>>
+>>> ---
+>>>
+>>> PS:
+>>>
+>>> ?? Our *print()*ing? of complex NA's ("NA" here meaning NA or NaN)
+>>> ?? is also unsatisfactory, e.g. in the case where all entries of a
+>>> ?? vector are NA in the sense of is.na(.), but their
+>>> ?? Re() and Im() are not all NA:
+>>> ??? showC <- function(z) noquote(sprintf("(R = %g, I = %g)", Re(z), 
+>>> Im(z)))
+>>> ??? z <- complex(, c(11, NA, NA), c(NA, 99, NA))
+>>> ??? z
+>>> ??? showC(z)
+>>>
+>>> gives
+>>>
+>>> ??? > z
+>>> ??? [1] NA NA NA
+>>> ??? > showC(z)
+>>> ??? [1] (R = 11, I = NA) (R = NA, I = 99) (R = NA, I = NA)
+>>>
+>>> but that (printing of complex) *is* another issue,
+>>> in which we have the re-opened bugzilla PR#16752
+>>> ????? ==>https://bugs.r-project.org/show_bug.cgi?id=16752
+>>>
+>>> on which we also worked during the R Sprint in Warwick three
+>>> weeks ago, and where I want to commit changes in any case {but
+>>> think we should change even a bit more than we got to during the
+>>> Sprint}.
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org? mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From hp@ge@@on@g|thub @end|ng |rom gm@||@com  Sat Sep 23 01:55:05 2023
+From: hp@ge@@on@g|thub @end|ng |rom gm@||@com (=?UTF-8?B?SGVydsOpIFBhZ8Oocw==?=)
+Date: Fri, 22 Sep 2023 16:55:05 -0700
+Subject: [Rd] Recent changes to as.complex(NA_real_)
+In-Reply-To: <57f77592-26ad-43dd-8e36-f9989c915308@gmail.com>
+References: <1cf40db9-ea70-483a-a547-270da6926935@gmail.com>
+ <25869.28353.595831.807741@stat.math.ethz.ch>
+ <4abe101e-55be-8800-31ee-e0414c89740e@gmail.com>
+ <57f77592-26ad-43dd-8e36-f9989c915308@gmail.com>
+Message-ID: <6bcad145-a1f9-32a5-c9e8-97041ed2eab7@gmail.com>
+
+The problem is that you have things that are **semantically** different 
+but look exactly the same:
+
+They look the same:
+
+ > x
+[1] NA
+ > y
+[1] NA
+ > z
+[1] NA
+
+ > is.na(x)
+[1] TRUE
+ > is.na(y)
+[1] TRUE
+ > is.na(z)
+[1] TRUE
+
+ > str(x)
+ ?cplx NA
+ > str(y)
+ ?num NA
+ > str(z)
+ ?cplx NA
+
+but they are semantically different e.g.
+
+ > Re(x)
+[1] NA
+ > Re(y)
+[1] -0.5? # surprise!
+
+ > Im(x)? # surprise!
+[1] 2
+ > Im(z)
+[1] NA
+
+so any expression involving Re() or Im() will produce different results 
+on input that look the same on the surface.
+
+You can address this either by normalizing the internal representation 
+of complex NA to always be complex(r=NaN, i=NA_real_), like for 
+NA_complex_, or by allowing the infinite variations that are currently 
+allowed and at the same time making sure that both Re() and Im()? always 
+return NA_real_ on a complex NA.
+
+My point is that the behavior of complex NA should be predictable. Right 
+now it's not. Once it's predictable (with Re() and Im() both returning 
+NA_real_ regardless of internal representation), then it no longer 
+matters what kind of complex NA is returned by as.complex(NA_real_), 
+because they are no onger distinguishable.
+
+H.
+
+On 9/22/23 13:43, Duncan Murdoch wrote:
+> Since the result of is.na(x) is the same on each of those, I don't see 
+> a problem.? As long as that is consistent, I don't see a problem. You 
+> shouldn't be using any other test for NA-ness.? You should never be 
+> expecting identical() to treat different types as the same (e.g. 
+> identical(NA, NA_real_) is FALSE, as it should be).? If you are using 
+> a different test, that's user error.
+>
+> Duncan Murdoch
+>
+> On 22/09/2023 2:41 p.m., Herv? Pag?s wrote:
+>> We could also question the value of having an infinite number of NA
+>> representations in the complex space. For example all these complex
+>> values are displayed the same way (as NA), are considered NAs by
+>> is.na(), but are not identical or semantically equivalent (from an Re()
+>> or Im() point of view):
+>>
+>> ? ??? NA_real_ + 0i
+>>
+>> ? ??? complex(r=NA_real_, i=Inf)
+>>
+>> ? ??? complex(r=2, i=NA_real_)
+>>
+>> ? ??? complex(r=NaN, i=NA_real_)
+>>
+>> In other words, using a single representation for complex NA (i.e.
+>> complex(r=NA_real_, i=NA_real_)) would avoid a lot of unnecessary
+>> complications and surprises.
+>>
+>> Once you do that, whether as.complex(NA_real_) should return
+>> complex(r=NA_real_, i=0) or complex(r=NA_real_, i=NA_real_) becomes a
+>> moot point.
+>>
+>> Best,
+>>
+>> H.
+>>
+>> On 9/22/23 03:38, Martin Maechler wrote:
+>>>>>>>> Mikael Jagan
+>>>>>>>> ????? on Thu, 21 Sep 2023 00:47:39 -0400 writes:
+>>> ????? > Revisiting this thread from April:
+>>>
+>>> >https://stat.ethz.ch/pipermail/r-devel/2023-April/082545.html
+>>>
+>>> ????? > where the decision (not yet backported) was made for
+>>> ????? > as.complex(NA_real_) to give NA_complex_ instead of
+>>> ????? > complex(r=NA_real_, i=0), to be consistent with
+>>> ????? > help("as.complex") and as.complex(NA) and 
+>>> as.complex(NA_integer_).
+>>>
+>>> ????? > Was any consideration given to the alternative?
+>>> ????? > That is, to changing as.complex(NA) and 
+>>> as.complex(NA_integer_) to
+>>> ????? > give complex(r=NA_real_, i=0), consistent with
+>>> ????? > as.complex(NA_real_), then amending help("as.complex")
+>>> ????? > accordingly?
+>>>
+>>> Hmm, as, from R-core, mostly I was involved, I admit to say "no",
+>>> to my knowledge the (above) alternative wasn't considered.
+>>>
+>>> ??? > The principle that
+>>> ??? > Im(as.complex(<real=(double|integer|logical)>)) should be zero
+>>> ??? > is quite fundamental, in my view, hence the "new" behaviour
+>>> ??? > seems to really violate the principle of least surprise ...
+>>>
+>>> of course "least surprise"? is somewhat subjective.? Still,
+>>> I clearly agree that the above would be one desirable property.
+>>>
+>>> I think that any solution will lead to *some* surprise for some
+>>> cases, I think primarily because there are *many* different
+>>> values z? for which? is.na(z)? is true,? and in any case
+>>> NA_complex_? is only of the many.
+>>>
+>>> I also agree with Mikael that we should reconsider the issue
+>>> that was raised by Davis Vaughan here ("on R-devel") last April.
+>>>
+>>> ????? > Another (but maybe weaker) argument is that
+>>> ????? > double->complex coercions happen more often than
+>>> ????? > logical->complex and integer->complex ones. Changing the
+>>> ????? > behaviour of the more frequently performed coercion is
+>>> ????? > more likely to affect code "out there".
+>>>
+>>> ????? > Yet another argument is that one expects
+>>>
+>>> ????? >????? identical(as.complex(NA_real_), NA_real_ + (0+0i))
+>>>
+>>> ????? > to be TRUE, i.e., that coercing from double to complex is
+>>> ????? > equivalent to adding a complex zero.? The new behaviour
+>>> ????? > makes the above FALSE, since NA_real_ + (0+0i) gives
+>>> ????? > complex(r=NA_real_, i=0).
+>>>
+>>> No!? --- To my own surprise (!) --- in current R-devel the above is 
+>>> TRUE,
+>>> and
+>>> ??????? NA_real_ + (0+0i)? , the same as
+>>> ??????? NA_real_ + 0i????? , really gives? complex(r=NA, i=NA) :
+>>>
+>>> Using showC() from ?complex
+>>>
+>>> ??? showC <- function(z) noquote(sprintf("(R = %g, I = %g)", Re(z), 
+>>> Im(z)))
+>>>
+>>> we see (in R-devel) quite consistently
+>>>
+>>>> showC(NA_real_ + 0i)
+>>> [1] (R = NA, I = NA)
+>>>> showC(NA?????? + 0i)? # NA is 'logical'
+>>> [1] (R = NA, I = NA)
+>>> where as in R 4.3.1 and "R-patched" -- *in*consistently
+>>>
+>>>> showC(NA_real_ + 0i)
+>>> [1] (R = NA, I = 0)
+>>>> showC(NA + 0i)
+>>> [1] (R = NA, I = NA)
+>>> .... and honestly, I do not see *where* (and when) we changed
+>>> the underlying code (in arithmetic.c !?)? in R-devel to *also*
+>>> produce? NA_complex_? in such complex *arithmetic*
+>>>
+>>>
+>>> ????? > Having said that, one might also (but more naively) expect
+>>>
+>>> ????? >???? identical(as.complex(as.double(NA_complex_)), NA_complex_)
+>>>
+>>> ????? > to be TRUE.
+>>>
+>>> as in current R-devel
+>>>
+>>> ????? > Under my proposal it continues to be FALSE.
+>>>
+>>> as in "R-release"
+>>>
+>>> ????? > Well, I'd prefer if it gave FALSE with a warning
+>>> ????? > "imaginary parts discarded in coercion", but it seems that
+>>> ????? > as.double(complex(r=a, i=b)) never warns when either of
+>>> ????? > 'a' and 'b' is NA_real_ or NaN, even where "information"
+>>> ????? > {nonzero 'b'} is clearly lost ...
+>>>
+>>> The question of *warning* here is related indeed, but I think
+>>> we should try to look at it only *secondary* to your first
+>>> proposal.
+>>>
+>>> ????? > Whatever decision is made about as.complex(NA_real_),
+>>> ????? > maybe these points should be weighed before it becomes part of
+>>> ????? > R-release ...
+>>>
+>>> ????? > Mikael
+>>>
+>>> Indeed.
+>>>
+>>> Can we please get other opinions / ideas here?
+>>>
+>>> Thank you in advance for your thoughts!
+>>> Martin
+>>>
+>>> ---
+>>>
+>>> PS:
+>>>
+>>> ?? Our *print()*ing? of complex NA's ("NA" here meaning NA or NaN)
+>>> ?? is also unsatisfactory, e.g. in the case where all entries of a
+>>> ?? vector are NA in the sense of is.na(.), but their
+>>> ?? Re() and Im() are not all NA:
+>>> ?? ??? showC <- function(z) noquote(sprintf("(R = %g, I = %g)", 
+>>> Re(z), Im(z)))
+>>> ??? z <- complex(, c(11, NA, NA), c(NA, 99, NA))
+>>> ??? z
+>>> ??? showC(z)
+>>>
+>>> gives
+>>>
+>>> ??? > z
+>>> ??? [1] NA NA NA
+>>> ??? > showC(z)
+>>> ??? [1] (R = 11, I = NA) (R = NA, I = 99) (R = NA, I = NA)
+>>>
+>>> but that (printing of complex) *is* another issue,
+>>> in which we have the re-opened bugzilla PR#16752
+>>> ????? ==>https://bugs.r-project.org/show_bug.cgi?id=16752
+>>>
+>>> on which we also worked during the R Sprint in Warwick three
+>>> weeks ago, and where I want to commit changes in any case {but
+>>> think we should change even a bit more than we got to during the
+>>> Sprint}.
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org? mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+-- 
+Herv? Pag?s
+
+Bioconductor Core Team
+hpages.on.github at gmail.com
+
+	[[alternative HTML version deleted]]
+
+
+From hp@ge@@on@g|thub @end|ng |rom gm@||@com  Sat Sep 23 01:58:06 2023
+From: hp@ge@@on@g|thub @end|ng |rom gm@||@com (=?UTF-8?B?SGVydsOpIFBhZ8Oocw==?=)
+Date: Fri, 22 Sep 2023 16:58:06 -0700
+Subject: [Rd] Recent changes to as.complex(NA_real_)
+In-Reply-To: <6bcad145-a1f9-32a5-c9e8-97041ed2eab7@gmail.com>
+References: <1cf40db9-ea70-483a-a547-270da6926935@gmail.com>
+ <25869.28353.595831.807741@stat.math.ethz.ch>
+ <4abe101e-55be-8800-31ee-e0414c89740e@gmail.com>
+ <57f77592-26ad-43dd-8e36-f9989c915308@gmail.com>
+ <6bcad145-a1f9-32a5-c9e8-97041ed2eab7@gmail.com>
+Message-ID: <c903af83-d9a6-59cf-6e60-1eb28300bc9f@gmail.com>
+
+On 9/22/23 16:55, Herv? Pag?s wrote:
+
+> The problem is that you have things that are **semantically** 
+> different but look exactly the same:
+>
+> They look the same:
+>
+> > x
+> [1] NA
+> > y
+> [1] NA
+> > z
+> [1] NA
+>
+> > is.na(x)
+> [1] TRUE
+> > is.na(y)
+> [1] TRUE
+> > is.na(z)
+> [1] TRUE
+>
+> > str(x)
+> ?cplx NA
+> > str(y)
+> ?num NA
+>
+oops, that was supposed to be:
+
+ > str(y)
+ ?cplx NA
+
+but somehow I managed to copy/paste the wrong thing, sorry.
+
+H.
+
+-- 
+Herv? Pag?s
+
+Bioconductor Core Team
+hpages.on.github at gmail.com
+
+	[[alternative HTML version deleted]]
+
+
