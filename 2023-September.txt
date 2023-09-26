@@ -4782,3 +4782,260 @@ hpages.on.github at gmail.com
 	[[alternative HTML version deleted]]
 
 
+From @g|@nner|n| @end|ng |rom gm@||@com  Sun Sep 24 16:57:00 2023
+From: @g|@nner|n| @end|ng |rom gm@||@com (Simone Giannerini)
+Date: Sun, 24 Sep 2023 16:57:00 +0200
+Subject: [Rd] NROW and NCOL on NULL
+In-Reply-To: <122c7b31-ee47-9b1f-0baf-d792f29cbfdf@gmail.com>
+References: <CANcXGizv3sD3kiE__EUkuaESn44mvtQMrtpO_k=FjUwFQDGnVQ@mail.gmail.com>
+ <936870db-2e16-4b8b-878b-c2dde317319c@gmail.com>
+ <CANcXGiz9g6mAsnNd3=Uc9iQ5xvE8Mg2ws5fbsEFYVXB_HL=Sog@mail.gmail.com>
+ <122c7b31-ee47-9b1f-0baf-d792f29cbfdf@gmail.com>
+Message-ID: <CANcXGizameDFVYKp_14BJf-B6BaH3vv-mdQ3_Rf31ynEnFRGfw@mail.gmail.com>
+
+Thank you for your comment,
+
+On Sat, Sep 23, 2023 at 9:51?PM Ben Bolker <bbolker at gmail.com> wrote:
+>
+>     This is certainly worth discussing, but there's always a heavy
+> burden of back-compatibility; how much better would it be for NCOL and
+> NROW to both return zero, vs. the amount of old code that would be broken?
+
+I do not have an answer to this question but it seems to me that code
+that relies upon NCOL(NULL) being 1 is not extremely good (and
+portable).
+
+>
+>    Furthermore, the reason for this behaviour is justified as
+> consistency with the behaviour of as.matrix() and cbind() for
+> zero-length vectors, from ?NCOL:
+>
+>       ## as.matrix() produces 1-column matrices from 0-length vectors,
+>       ## and so does cbind() :
+>
+>   (of course you could argue that this behaviour should be changed as
+> well ...)
+>
+>
+
+Yes, it is documented and somehow clashes with the more intuitive
+behaviour of subsetting matrices
+
+ > a <- matrix(1:4,2,2)
+> a
+     [,1] [,2]
+[1,]    1    3
+[2,]    2    4
+> a2 <- a[,-(1:2)]
+> a2
+
+[1,]
+[2,]
+> dim(a2)
+[1] 2 0
+
+NULL is often used to declare an undefined value for the argument of a
+function. If such an argument is potentially a matrix, then using NULL
+as the default requires additional code to check for the number of
+columns and use it in the code.
+The same holds to a lesser extent for functions that are expected to
+return a matrix and return NULL instead.
+
+Kind regards,
+
+Simone
+
+> On 2023-09-23 3:41 p.m., Simone Giannerini wrote:
+> > I know it's documented and I know there are other ways to guard
+> > against this behaviour, once you know about this.
+> > The point is whether it might be worth it to make NCOL and NROW return
+> > the same value on NULL and make R more consistent/intuitive and
+> > possibly less error prone.
+> >
+> > Regards,
+> >
+> > Simone
+> >
+> > On Sat, Sep 23, 2023 at 7:50?PM Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+> >>
+> >> It's been documented for a long time that NCOL(NULL) is 1.  What
+> >> particular problems did you have in mind?  There might be other ways to
+> >> guard against them.
+> >>
+> >> Duncan Murdoch
+> >>
+> >> On 23/09/2023 1:43 p.m., Simone Giannerini wrote:
+> >>> Dear list,
+> >>>
+> >>> I do not know what would be the 'correct' answer to the following but
+> >>> I think that they should return the same value to avoid potential
+> >>> problems and hard to debug errors.
+> >>>
+> >>> Regards,
+> >>>
+> >>> Simone
+> >>> ---------------------------------------
+> >>>
+> >>>> NCOL(NULL)
+> >>> [1] 1
+> >>>
+> >>>> NROW(NULL)
+> >>> [1] 0
+> >>>
+> >>>> sessionInfo()
+> >>> R version 4.3.1 RC (2023-06-08 r84523 ucrt)
+> >>> Platform: x86_64-w64-mingw32/x64 (64-bit)
+> >>> Running under: Windows 11 x64 (build 22621)
+> >>>
+> >>> Matrix products: default
+> >>>
+> >>>
+> >>> locale:
+> >>> [1] LC_COLLATE=Italian_Italy.utf8  LC_CTYPE=Italian_Italy.utf8
+> >>> [3] LC_MONETARY=Italian_Italy.utf8 LC_NUMERIC=C
+> >>> [5] LC_TIME=Italian_Italy.utf8
+> >>>
+> >>> time zone: Europe/Rome
+> >>> tzcode source: internal
+> >>>
+> >>> attached base packages:
+> >>> [1] stats     graphics  grDevices utils     datasets  methods   base
+> >>>
+> >>> loaded via a namespace (and not attached):
+> >>> [1] compiler_4.3.1
+> >>>
+> >>
+> >
+> >
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+
+-- 
+___________________________________________________
+
+Simone Giannerini
+Dipartimento di Scienze Statistiche "Paolo Fortunati"
+Universita' di Bologna
+Via delle belle arti 41 - 40126  Bologna,  ITALY
+Tel: +39 051 2098262  Fax: +39 051 232153
+https://simonegiannerini.net/
+
+
+From r@||@@tubner @end|ng |rom gm@||@com  Mon Sep 25 00:30:46 2023
+From: r@||@@tubner @end|ng |rom gm@||@com (Ralf Stubner)
+Date: Sun, 24 Sep 2023 22:30:46 +0000
+Subject: [Rd] Suggestion: User defined sampling
+Message-ID: <CAFQwRQz2DK=94LGxHt5Tf50exTXx5iNiw8uyD4e0=hirUJG2BA@mail.gmail.com>
+
+Hi everybody,
+
+Currently one can alter R's random number generation via RNGkind() in
+three aspects: the RNG itself, the method for drawing from the normal
+distribution and the method for generating integers within a range.
+For the first and second aspect it is possible to supply user defined
+methods. This is not the case for the last aspect, which is handled in
+R_unif_index. I think it would be interesting to add a comparable hook
+there as well. What do you think?
+
+Ralf
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Mon Sep 25 00:55:30 2023
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Mon, 25 Sep 2023 11:55:30 +1300
+Subject: [Rd] Help requested: writing text to a raster in memory
+In-Reply-To: <35a7f4df-98df-4216-ac67-6d22df1d705e@gmail.com>
+References: <35a7f4df-98df-4216-ac67-6d22df1d705e@gmail.com>
+Message-ID: <872DA7B8-D7E6-4D3B-BB72-FD80473E58E0@R-project.org>
+
+Duncan,
+
+drawing text is one of the most complicated things you can do, so it really depends how for you want to go. You can do it badly with a simple cairo show_text API. The steps involved in doing it properly are detecting the direction of the language, finding fonts, finding glyphs (resolving ligatures), applying hints, drawing glyphs etc. Fortunately there are libraries that help with than, but even then it's non-trivial. Probably the most modern pipeline is icu + harfbuzz + freetype + fontconfig + cairo. This is implemented, e.g in https://github.com/s-u/Cairo/blob/master/src/cairotalk.c (the meat is in  L608-) and for all but the drawing part there is an entire R package (in C++) devoted to this: https://github.com/r-lib/textshaping/tree/main/src -- Thomas Lin Pedersen is probably THE expert on this.
+
+Cheers,
+Simon
+
+
+> On 24/09/2023, at 7:44 AM, Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+> 
+> I am in the process of updating the rgl package.  One thing I'd like to do is to change text support in it when using OpenGL to display to be more like the way text is drawn in WebGL displays (i.e. the ones rglwidget() produces).
+> 
+> Currently in R, rgl uses the FTGL library to draw text.  That library is unsupported these days, and uses the old fixed pipeline in OpenGL.
+> 
+> In WebGL, text is displayed by "shaders", programs that run on the GPU. Javascript code prepares bitmap images of the text to display, then the shader transfers parts of that bitmap to the output display.
+> 
+> I'd like to duplicate the WebGL process in the C++ code running the OpenGL display in R.  The first step in this is to render a character vector full of text into an in-memory raster, taking account of font, cex, etc.  (I want one raster for the whole vector, with a recording of locations from which the shader should get each component of it.)
+> 
+> It looks to me as though I could do this using the ragg::agg_capture device in R code, but I'd prefer to do it all in C++ code because I may need to make changes to the raster at times when it's not safe to call back to R, e.g. if some user interaction requires the axis labels to be recomputed and redrawn.
+> 
+> Does anyone with experience doing this kind of thing know of examples I can follow, or have advice on how to proceed?  Or want to volunteer to help with this?
+> 
+> Duncan Murdoch
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Mon Sep 25 03:01:36 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sun, 24 Sep 2023 21:01:36 -0400
+Subject: [Rd] Help requested: writing text to a raster in memory
+In-Reply-To: <872DA7B8-D7E6-4D3B-BB72-FD80473E58E0@R-project.org>
+References: <35a7f4df-98df-4216-ac67-6d22df1d705e@gmail.com>
+ <872DA7B8-D7E6-4D3B-BB72-FD80473E58E0@R-project.org>
+Message-ID: <8eeb8b83-5b84-473d-8f58-9bb126a3491f@gmail.com>
+
+I'm somewhat aware of how tricky it all is.  For now I'm going to do it 
+in R (usng textshaping for layout and base graphics on the 
+ragg::agg_capture device to draw to the bitmap).  I'll avoid allowing 
+changes to happen in the C++ code.
+
+Eventually I'll see if I can translate the code into C++.  I know 
+textshaping has a C interface, but for the actual drawing I'll have to 
+work something else out.  Or maybe just leave it in R, and only try to 
+write a new bitmap when it's safe.
+
+For future reference, will the measurements reported by 
+textshaping::shape_text() match the values used by your Cairo package, 
+or are equivalent measurements available elsewhere?
+
+Duncan Murdoch
+
+On 24/09/2023 6:55 p.m., Simon Urbanek wrote:
+> Duncan,
+> 
+> drawing text is one of the most complicated things you can do, so it really depends how for you want to go. You can do it badly with a simple cairo show_text API. The steps involved in doing it properly are detecting the direction of the language, finding fonts, finding glyphs (resolving ligatures), applying hints, drawing glyphs etc. Fortunately there are libraries that help with than, but even then it's non-trivial. Probably the most modern pipeline is icu + harfbuzz + freetype + fontconfig + cairo. This is implemented, e.g in https://github.com/s-u/Cairo/blob/master/src/cairotalk.c (the meat is in  L608-) and for all but the drawing part there is an entire R package (in C++) devoted to this: https://github.com/r-lib/textshaping/tree/main/src -- Thomas Lin Pedersen is probably THE expert on this.
+> 
+> Cheers,
+> Simon
+> 
+> 
+>> On 24/09/2023, at 7:44 AM, Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+>>
+>> I am in the process of updating the rgl package.  One thing I'd like to do is to change text support in it when using OpenGL to display to be more like the way text is drawn in WebGL displays (i.e. the ones rglwidget() produces).
+>>
+>> Currently in R, rgl uses the FTGL library to draw text.  That library is unsupported these days, and uses the old fixed pipeline in OpenGL.
+>>
+>> In WebGL, text is displayed by "shaders", programs that run on the GPU. Javascript code prepares bitmap images of the text to display, then the shader transfers parts of that bitmap to the output display.
+>>
+>> I'd like to duplicate the WebGL process in the C++ code running the OpenGL display in R.  The first step in this is to render a character vector full of text into an in-memory raster, taking account of font, cex, etc.  (I want one raster for the whole vector, with a recording of locations from which the shader should get each component of it.)
+>>
+>> It looks to me as though I could do this using the ragg::agg_capture device in R code, but I'd prefer to do it all in C++ code because I may need to make changes to the raster at times when it's not safe to call back to R, e.g. if some user interaction requires the axis labels to be recomputed and redrawn.
+>>
+>> Does anyone with experience doing this kind of thing know of examples I can follow, or have advice on how to proceed?  Or want to volunteer to help with this?
+>>
+>> Duncan Murdoch
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+
+
