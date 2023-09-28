@@ -6573,3 +6573,352 @@ Size: 10746 bytes
 Desc: not available
 URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20230926/c4365ddc/attachment.pdf>
 
+From murdoch@dunc@n @end|ng |rom gm@||@com  Tue Sep 26 11:57:41 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 26 Sep 2023 05:57:41 -0400
+Subject: [Rd] Tight bounding box around text in graphics?
+In-Reply-To: <0ca43560-f654-d7ef-360a-24fc1d849e2e@stat.auckland.ac.nz>
+References: <2e926b05-ac9d-4884-8daf-a95d4b879837@gmail.com>
+ <0ca43560-f654-d7ef-360a-24fc1d849e2e@stat.auckland.ac.nz>
+Message-ID: <03883628-caed-4329-957f-e4d35869e124@gmail.com>
+
+Thanks!  I said "base graphics" in my question, but I really have no 
+objection to using grid graphics, so I'll explore those grid functions.
+
+Duncan Murdoch
+
+On 25/09/2023 3:53 p.m., Paul Murrell wrote:
+> Hi
+> 
+> strheight(), which is based GEStrHeight(), is pretty crude, not only
+> ignoring descenders, but also only considering the ascent of the overall
+> font (capital "M").
+> 
+> There is a GEStrMetric(), which returns character-specific ascent and
+> descent, but that is only currently exposed via grid::stringAscent() and
+> grid::stringDescent().  There is also grid::stringHeight(), which is as
+> unsubtle as strheight().
+> 
+> For example, these are all the same (just font ascent) ...
+> 
+>   > strheight("y", "in")
+> [1] 0.1248031
+>   > strheight("x", "in")
+> [1] 0.1248031
+>   > strheight("M", "in")
+> [1] 0.1248031
+> 
+> ... and these are all the same ...
+> 
+>   > convertHeight(stringHeight("y"), "in")
+> [1] 0.124803149606299inches
+>   > convertHeight(stringHeight("x"), "in")
+> [1] 0.124803149606299inches
+>   > convertHeight(stringAscent("M"), "in")
+> [1] 0.124803149606299inches
+> 
+> ... but these have more detail ...
+> 
+>   > convertHeight(stringAscent("y"), "in")
+> [1] 0.0936023622047244inches
+>   > convertHeight(stringDescent("y"), "in")
+> [1] 0.0416010498687664inches
+>   > convertHeight(stringAscent("x"), "in")
+> [1] 0.0936023622047244inches
+>   > convertHeight(stringDescent("x"), "in")
+> [1] 0inches
+>   > convertHeight(stringHeight("M"), "in")
+> [1] 0.124803149606299inches
+>   > convertHeight(stringDescent("M"), "in")
+> [1] 0inches
+> 
+> In theory, it should not be difficult to add a graphics::strascent() and
+> graphics::strdescent() if that would help.
+> 
+> Paul
+> 
+> On 26/09/23 08:06, Duncan Murdoch wrote:
+>> I've mentioned in previous messages that I'm trying to redo rgl text.
+>>
+>> Part of what I need is to measure the size of strings in pixels when
+>> they are drawn by base graphics.
+>>
+>> It appears that
+>>
+>> strwidth(texts, "user", cex = cex, font = font, family = family)
+>>
+>> gives accurate measurements of the width in user coordinates. I've got
+>> those set up to match pixels, so I'm fine here.
+>>
+>> However, the equivalent call for strheight() only measures height above
+>> the baseline according to the docs, and indeed the number is smaller
+>> than the size of what's displayed. Descenders (e.g. the tail of "y")
+>> aren't counted.
+>>
+>> Is there a way to measure how far a character might descend? Is it
+>> valid to assume it won't descend more than a line height below the top
+>> of the char?
+>>
+>> I have a partial solution -- textshaping::shape_text gives a "height"
+>> value that includes lots of space below the character, and a
+>> "top_border" value that measures from the top of the textbox to the
+>> baseline. So I think `height - top_border` would give me what I'm
+>> asking for. But this only works with graphics devices in the ragg
+>> package. Is there a general solution?
+>>
+>> Duncan Murdoch
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>> <https://stat.ethz.ch/mailman/listinfo/r-devel>
+>
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Tue Sep 26 14:53:00 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 26 Sep 2023 08:53:00 -0400
+Subject: [Rd] Tight bounding box around text in graphics?
+In-Reply-To: <03883628-caed-4329-957f-e4d35869e124@gmail.com>
+References: <2e926b05-ac9d-4884-8daf-a95d4b879837@gmail.com>
+ <0ca43560-f654-d7ef-360a-24fc1d849e2e@stat.auckland.ac.nz>
+ <03883628-caed-4329-957f-e4d35869e124@gmail.com>
+Message-ID: <3c316e56-f32c-4611-acb3-27b5577b3cb1@gmail.com>
+
+I've done some exploring, and things aren't working out as I would have 
+expected.  Here's an example:
+
+   library(grid)
+   library(ragg)
+
+   agg_png("test.png")
+   pushViewport(viewport(gp = gpar(cex = 5)))
+   y <-  c(0.2, 0.4, 0.6)
+
+   texts <- c("??", "Tokyo", "Tokyo ??")
+
+   convertHeight(stringDescent(texts), "npc")
+
+   grid.text(texts,
+             x = 0, y = y, just = c(0,0))
+   grid.segments(x0 = 0, x1 = 1, y0 = y, y1 = y)
+
+   popViewport()
+   dev.off()
+
+(In case it doesn't make it through in email, the texts are Tokyo 
+written in kanji, then in roman letters, then in both.)
+
+What I see is that the kanji string is being reported as having zero 
+descent, but in the resulting test.png file, it's clear that it does 
+descend below the baseline.
+
+I can think of lots of reasons for this discrepancy; can you suggest 
+which is likeliest?
+
+  - I have some misconception about how this is supposed to work
+  - The Kanji font on my system misreports some measurements
+  - The ragg::agg_png() device misreports measurements
+  - Some other bug somewhere.
+
+Duncan
+
+
+On 26/09/2023 5:57 a.m., Duncan Murdoch wrote:
+> Thanks!  I said "base graphics" in my question, but I really have no
+> objection to using grid graphics, so I'll explore those grid functions.
+> 
+> Duncan Murdoch
+> 
+> On 25/09/2023 3:53 p.m., Paul Murrell wrote:
+>> Hi
+>>
+>> strheight(), which is based GEStrHeight(), is pretty crude, not only
+>> ignoring descenders, but also only considering the ascent of the overall
+>> font (capital "M").
+>>
+>> There is a GEStrMetric(), which returns character-specific ascent and
+>> descent, but that is only currently exposed via grid::stringAscent() and
+>> grid::stringDescent().  There is also grid::stringHeight(), which is as
+>> unsubtle as strheight().
+>>
+>> For example, these are all the same (just font ascent) ...
+>>
+>>    > strheight("y", "in")
+>> [1] 0.1248031
+>>    > strheight("x", "in")
+>> [1] 0.1248031
+>>    > strheight("M", "in")
+>> [1] 0.1248031
+>>
+>> ... and these are all the same ...
+>>
+>>    > convertHeight(stringHeight("y"), "in")
+>> [1] 0.124803149606299inches
+>>    > convertHeight(stringHeight("x"), "in")
+>> [1] 0.124803149606299inches
+>>    > convertHeight(stringAscent("M"), "in")
+>> [1] 0.124803149606299inches
+>>
+>> ... but these have more detail ...
+>>
+>>    > convertHeight(stringAscent("y"), "in")
+>> [1] 0.0936023622047244inches
+>>    > convertHeight(stringDescent("y"), "in")
+>> [1] 0.0416010498687664inches
+>>    > convertHeight(stringAscent("x"), "in")
+>> [1] 0.0936023622047244inches
+>>    > convertHeight(stringDescent("x"), "in")
+>> [1] 0inches
+>>    > convertHeight(stringHeight("M"), "in")
+>> [1] 0.124803149606299inches
+>>    > convertHeight(stringDescent("M"), "in")
+>> [1] 0inches
+>>
+>> In theory, it should not be difficult to add a graphics::strascent() and
+>> graphics::strdescent() if that would help.
+>>
+>> Paul
+>>
+>> On 26/09/23 08:06, Duncan Murdoch wrote:
+>>> I've mentioned in previous messages that I'm trying to redo rgl text.
+>>>
+>>> Part of what I need is to measure the size of strings in pixels when
+>>> they are drawn by base graphics.
+>>>
+>>> It appears that
+>>>
+>>> strwidth(texts, "user", cex = cex, font = font, family = family)
+>>>
+>>> gives accurate measurements of the width in user coordinates. I've got
+>>> those set up to match pixels, so I'm fine here.
+>>>
+>>> However, the equivalent call for strheight() only measures height above
+>>> the baseline according to the docs, and indeed the number is smaller
+>>> than the size of what's displayed. Descenders (e.g. the tail of "y")
+>>> aren't counted.
+>>>
+>>> Is there a way to measure how far a character might descend? Is it
+>>> valid to assume it won't descend more than a line height below the top
+>>> of the char?
+>>>
+>>> I have a partial solution -- textshaping::shape_text gives a "height"
+>>> value that includes lots of space below the character, and a
+>>> "top_border" value that measures from the top of the textbox to the
+>>> baseline. So I think `height - top_border` would give me what I'm
+>>> asking for. But this only works with graphics devices in the ragg
+>>> package. Is there a general solution?
+>>>
+>>> Duncan Murdoch
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>> <https://stat.ethz.ch/mailman/listinfo/r-devel>
+>>
+> 
+
+-------------- next part --------------
+A non-text attachment was scrubbed...
+Name: test.png
+Type: image/png
+Size: 11907 bytes
+Desc: not available
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20230926/854399a2/attachment.png>
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Tue Sep 26 20:45:28 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 26 Sep 2023 14:45:28 -0400
+Subject: [Rd] Tight bounding box around text in graphics?
+In-Reply-To: <3c316e56-f32c-4611-acb3-27b5577b3cb1@gmail.com>
+References: <2e926b05-ac9d-4884-8daf-a95d4b879837@gmail.com>
+ <0ca43560-f654-d7ef-360a-24fc1d849e2e@stat.auckland.ac.nz>
+ <03883628-caed-4329-957f-e4d35869e124@gmail.com>
+ <3c316e56-f32c-4611-acb3-27b5577b3cb1@gmail.com>
+Message-ID: <72ef0205-1ec5-4029-b9b3-b95fcadbc0d3@gmail.com>
+
+I think this is a `ragg` device bug, so I've posted an issue there: 
+https://github.com/r-lib/ragg/issues/143 .  That issue contains slightly 
+more detail than I included in the earlier message here.
+
+Duncan Murdoch
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Tue Sep 26 23:18:38 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Wed, 27 Sep 2023 00:18:38 +0300
+Subject: [Rd] Crashes and other problems uncovered by static analysis
+Message-ID: <20230927001838.4c3bd10b@Tarkus>
+
+Hello R-devel,
+
+I've been trying to see if static analysers could have caught PR18602.
+Surprisingly, the analysers I've tried don't seem to notice it, but
+they do uncover other problems.
+
+While most of these either stem from slightly too defensive programming
+("condition is always true/false" warnings), are mostly harmless style
+issues ("variable assigned twice without using it in between" /
+"unreachable assignment of <error code> after NORET Rf_error(...)"),
+are unlikely to cause issues in practice (a few unchecked dereferences
+of pointers that could in theory be null), or are just plain false
+positives (e.g. it's a warning every time the code calls snprintf(...,
+gettext(...), ...)), I now also have a small collection of stupid ways
+to crash R.
+
+For example, there are stack buffer overflows in contour() (caused by
+unrealistically long labels) and the "concise traceback" generator
+(caused by unrealistically long function names). (The runtime
+terminates R immediately upon noticing the overflow; the SEGV handler
+is not called.) Also, there's a mostly harmless integer overflow in
+polyroot() that may end up asking for 134217728 Tb of memory given
+gigabyte-sized input. Additionally, gzcon() (but *not* gzfile()) will
+silently fail to work with .gz files containing embedded filenames that
+have 0xff bytes in them (e.g. ? on Latin-1 systems or ? on KOI-8
+systems).
+
+I'm approximately halfway through the ~600 warnings, so there will
+likely be a few more real problems. I can post crashes (and likely
+fixes) to the Bugzilla, unlikely as they are to happen in real life,
+but how serious should a non-crashing problem be to warrant a PR and a
+suggested patch? I'd rather avoid making it like the SQLite forum where
+anyone with a new fuzzer or a static analyser posts a crash (or just a
+suspected warning) then goes off to celebrate and pad their CV.
+
+-- 
+Best regards,
+Ivan
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Tue Sep 26 23:40:47 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Wed, 27 Sep 2023 00:40:47 +0300
+Subject: [Rd] proposal: 'dev.capabilities()' can also query Unicode
+ capabilities of current graphics device
+In-Reply-To: <c18a6c45-ee8d-a55f-6a96-f539a5154f15@stat.auckland.ac.nz>
+References: <CAMigB8EaoRNacP0Z4QUMXjegnks1jCOrx2eN5Z-EK63wtqsLmA@mail.gmail.com>
+ <25866.52214.850601.243688@stat.math.ethz.ch>
+ <20230923234347.27eb5def@parabola>
+ <c18a6c45-ee8d-a55f-6a96-f539a5154f15@stat.auckland.ac.nz>
+Message-ID: <20230927004047.3eedf2f2@Tarkus>
+
+On Tue, 26 Sep 2023 12:39:57 +1300
+Paul Murrell <paul at stat.auckland.ac.nz> wrote:
+
+> Yes, you can set up your own font and TeX installations are a good 
+> source of Type 1 fonts.  Here is an example (paths obviously specific
+> to my [Ubuntu 20.04] OS and TeX installation) ...
+
+Many thanks for the explanation! Your example works on my system
+unchanged. It's notable that the PDF files produced with and without
+the patch only differ in /CreationDate and /ModDate. This may mean that
+the memory problem is much less serious than it looked.
+
+I'll remember to use the fonts from my TeX installation together with
+pdf().
+
+-- 
+Best regards,
+Ivan
+
+
