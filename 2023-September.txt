@@ -6922,3 +6922,132 @@ Best regards,
 Ivan
 
 
+From |uc@r @end|ng |rom |edor@project@org  Wed Sep 27 15:14:43 2023
+From: |uc@r @end|ng |rom |edor@project@org (=?UTF-8?Q?I=C3=B1aki_Ucar?=)
+Date: Wed, 27 Sep 2023 15:14:43 +0200
+Subject: [Rd] About FlexiBLAS in the R-admin docs
+Message-ID: <CALEXWq2x9gygnxt6S906BkQHd139CP783bTDQC4wmeM-uKuW3g@mail.gmail.com>
+
+Hi,
+
+Not sure if this is the right place for this. The "R Installation and
+Administration" guide states:
+
+> Apparently undocumented: FlexiBLAS on Fedora provides a complete LAPACK, but not the enhanced routines from ATLAS or OpenBLAS.
+
+I'm not sure what this means. FlexiBLAS does provide 100% of BLAS and
+LAPACK, and if the active backend (say, OpenBLAS) implements an
+enhanced LAPACK routine, then the call is redirected to the backend.
+If the user switches to another backend and that routine is not
+available there, then the original LAPACK routine is dispatched
+instead.
+
+Best,
+-- 
+I?aki ?car
+
+
+From tr@ver@c @end|ng |rom gm@||@com  Wed Sep 27 22:49:58 2023
+From: tr@ver@c @end|ng |rom gm@||@com (Travers Ching)
+Date: Wed, 27 Sep 2023 13:49:58 -0700
+Subject: [Rd] Minor bug with stats::isoreg
+Message-ID: <CAPLMX9G0PU+5S5K_2KyEd4Ou7UtWSeQnNCGXJd3x3H3jt_5pZQ@mail.gmail.com>
+
+Hello, I'd like to file a small bug report. I searched and didn't find a
+duplicate report.
+
+Calling isoreg with an Inf value causes a segmentation fault, tested on R
+4.3.1 and R 4.2. A reproducible example is: `isoreg(c(0,Inf))`
+
+	[[alternative HTML version deleted]]
+
+
+From bbo|ker @end|ng |rom gm@||@com  Wed Sep 27 23:53:35 2023
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Wed, 27 Sep 2023 17:53:35 -0400
+Subject: [Rd] Minor bug with stats::isoreg
+In-Reply-To: <CAPLMX9G0PU+5S5K_2KyEd4Ou7UtWSeQnNCGXJd3x3H3jt_5pZQ@mail.gmail.com>
+References: <CAPLMX9G0PU+5S5K_2KyEd4Ou7UtWSeQnNCGXJd3x3H3jt_5pZQ@mail.gmail.com>
+Message-ID: <e2a9ce71-6f38-6b22-e0d8-e8c29ce440e0@gmail.com>
+
+
+   Thanks! Submitted as https://bugs.r-project.org/show_bug.cgi?id=18603
+
+
+On 2023-09-27 4:49 p.m., Travers Ching wrote:
+> Hello, I'd like to file a small bug report. I searched and didn't find a
+> duplicate report.
+> 
+> Calling isoreg with an Inf value causes a segmentation fault, tested on R
+> 4.3.1 and R 4.2. A reproducible example is: `isoreg(c(0,Inf))`
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Wed Sep 27 23:59:57 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Thu, 28 Sep 2023 00:59:57 +0300
+Subject: [Rd] Minor bug with stats::isoreg
+In-Reply-To: <CAPLMX9G0PU+5S5K_2KyEd4Ou7UtWSeQnNCGXJd3x3H3jt_5pZQ@mail.gmail.com>
+References: <CAPLMX9G0PU+5S5K_2KyEd4Ou7UtWSeQnNCGXJd3x3H3jt_5pZQ@mail.gmail.com>
+Message-ID: <20230928005957.07666a81@Tarkus>
+
+? Wed, 27 Sep 2023 13:49:58 -0700
+Travers Ching <traversc at gmail.com> ?????:
+
+> Calling isoreg with an Inf value causes a segmentation fault, tested
+> on R 4.3.1 and R 4.2. A reproducible example is: `isoreg(c(0,Inf))`
+
+Indeed, the code in src/library/stats/src/isoreg.c contains the
+following loop:
+
+    do {
+	slope = R_PosInf;
+	for (i = known + 1; i <= n; i++) {
+	    tmp = (REAL(yc)[i] - REAL(yc)[known]) / (i - known);
+            // if `tmp` becomes +Inf or NaN...
+            // or both `tmp` and `slope` become -Inf...
+	    if (tmp < slope) { // <-- then this is false
+		slope = tmp;
+		ip = i; // <-- so this assignment never happens
+	    }
+	}/* tmp := max{i= kn+1,.., n} slope(p[kn] -> p[i])  and
+	  *  ip = argmax{...}... */
+	INTEGER(iKnots)[n_ip++] = ip; // <-- heap overflow and crash
+// ...
+    } while ((known = ip) < n); // <-- this loop never terminates
+
+I'm not quite sure how to fix this. Checking for tmp <= slope would
+have been a one-character patch, but it changes the reference outputs
+and doesn't handle isnan(tmp), so it's probably not correct. The
+INTEGER(iKnots)[n_ip++] = ip; assignment should only be reached in case
+of knots, but since the `ip` index never progresses past the
++/-infinity, the knot condition is triggered repeatedly.
+
+Least squares methods don't handle infinities well anyway, so maybe
+it's best to put the check in the R function instead:
+
+--- src/library/stats/R/isoreg.R	(revision 85226)
++++ src/library/stats/R/isoreg.R	(working copy)
+@@ -22,8 +22,8 @@
+ {
+     xy <- xy.coords(x,y)
+     x <- xy$x
+-    if(anyNA(x) || anyNA(xy$y))
+-	stop("missing values not allowed")
++    if(!all(is.finite(x)) || !all(is.finite(xy$y)))
++	stop("missing and infinite values not allowed")
+     isOrd <- ((!is.null(xy$xlab) && xy$xlab == "Index")
+               || !is.unsorted(x, strictly = TRUE))
+     if(!isOrd) {
+
+
+-- 
+Best regards,
+Ivan
+
+
