@@ -7051,3 +7051,343 @@ Best regards,
 Ivan
 
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Sep 28 10:53:16 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 28 Sep 2023 10:53:16 +0200
+Subject: [Rd] Minor bug with stats::isoreg
+In-Reply-To: <20230928005957.07666a81@Tarkus>
+References: <CAPLMX9G0PU+5S5K_2KyEd4Ou7UtWSeQnNCGXJd3x3H3jt_5pZQ@mail.gmail.com>
+ <20230928005957.07666a81@Tarkus>
+Message-ID: <25877.16124.424991.546698@stat.math.ethz.ch>
+
+>>>>> Ivan Krylov 
+>>>>>     on Thu, 28 Sep 2023 00:59:57 +0300 writes:
+
+    > ? Wed, 27 Sep 2023 13:49:58 -0700 Travers Ching
+    > <traversc at gmail.com> ?????:
+
+    >> Calling isoreg with an Inf value causes a segmentation
+    >> fault, tested on R 4.3.1 and R 4.2. A reproducible
+    >> example is: `isoreg(c(0,Inf))`
+
+    > Indeed, the code in src/library/stats/src/isoreg.c
+    > contains the following loop:
+
+>     do {
+> 	slope = R_PosInf;
+> 	for (i = known + 1; i <= n; i++) {
+> 	    tmp = (REAL(yc)[i] - REAL(yc)[known]) / (i - known);
+>             // if `tmp` becomes +Inf or NaN...
+>             // or both `tmp` and `slope` become -Inf...
+> 	    if (tmp < slope) { // <-- then this is false
+> 		slope = tmp;
+> 		ip = i; // <-- so this assignment never happens
+> 	    }
+> 	}/* tmp := max{i= kn+1,.., n} slope(p[kn] -> p[i])  and
+> 	  *  ip = argmax{...}... */
+> 	INTEGER(iKnots)[n_ip++] = ip; // <-- heap overflow and crash // ...
+>     } while ((known = ip) < n); // <-- this loop never terminates
+
+> I'm not quite sure how to fix this. Checking for tmp <= slope would
+> have been a one-character patch, but it changes the reference outputs
+> and doesn't handle isnan(tmp), so it's probably not correct. The
+> INTEGER(iKnots)[n_ip++] = ip; assignment should only be reached in case
+> of knots, but since the `ip` index never progresses past the
+> +/-infinity, the knot condition is triggered repeatedly.
+
+> Least squares methods don't handle infinities well anyway, so maybe
+> it's best to put the check in the R function instead:
+
+> --- src/library/stats/R/isoreg.R	(revision 85226)
+> +++ src/library/stats/R/isoreg.R	(working copy)
+> @@ -22,8 +22,8 @@
+>  {
+>      xy <- xy.coords(x,y)
+>      x <- xy$x
+> -    if(anyNA(x) || anyNA(xy$y))
+> -	stop("missing values not allowed")
+> +    if(!all(is.finite(x)) || !all(is.finite(xy$y)))
+> +	stop("missing and infinite values not allowed")
+>      isOrd <- ((!is.null(xy$xlab) && xy$xlab == "Index")
+>                || !is.unsorted(x, strictly = TRUE))
+>      if(!isOrd) {
+
+> -- 
+> Best regards,
+> Ivan
+
+
+The above would not even be sufficient: 
+It's the sum(y) really, because internally
+  yc <- cumsum(c(0,y)) and actually  diff(yc)  is used
+where you get to  Inf - Inf ==> NaN
+
+> isoreg(c(5, 9, 1:2, 7e308, 5:8, 3, 8)))
+
+ *** caught segfault ***
+address 0x7e48000, cause 'memory not mapped'
+/u/maechler/bin/R_arg: Zeile 160: 873336 Speicherzugriffsfehler  (Speicherabzug geschrieben) $exe $@
+
+Also, the C code still does not work for long vectors,
+so I want to change the C code anyway.
+
+
+In any case:
+  Thank you, Travers, Ben, and Ivan, for reporting and addressing
+  the issue!
+
+
+------
+
+There is an interesting point here though:
+
+For dealing with +/- Inf, we used to follow the following idea
+in R quite keenly (and sometimes extremely): 
+
+If 'Inf' leads a computation to "fail" (NB:  1/Inf  |-->  0 does *not* fail)
+try to see what the mathematical *or* computational limit
+ x --> Inf would be.
+If that is easily defined, we use that.
+
+So, often as a first step, look at what happens if you replace
+Inf by 1e100  (and then also what happens if you are finite but
+*close* to Inf, i.e. the 7e308 above).
+
+Now here, at least in some cases, such a limit cases are clearly
+detectable, e.g., when you let  y[2] --->  -Inf here
+
+> n <- length(y0 <- c(5, 9, 1:2, 5:8, 3, 8))
+> y2s <- c(10:0, -10, -20, -1000, -1e4, -1e10, -1e100, -1e200, -1e300)
+> iSet <- vapply(y2s, function(y2) isoreg({y <- y0; y[2] <- y2; y})$yf, numeric(n))
+> t(iSet) # *does* change as function of y2 *but* predictably
+              [,1]         [,2] [,3] [,4] [,5] [,6] [,7] [,8] [,9] [,10]
+ [1,]   4.5000e+00   4.5000e+00 4.50 4.50    5    6    6    6    6     8
+ [2,]   4.2500e+00   4.2500e+00 4.25 4.25    5    6    6    6    6     8
+ [3,]   4.0000e+00   4.0000e+00 4.00 4.00    5    6    6    6    6     8
+ [4,]   3.7500e+00   3.7500e+00 3.75 3.75    5    6    6    6    6     8
+ [5,]   3.5000e+00   3.5000e+00 3.50 3.50    5    6    6    6    6     8
+ [6,]   3.2500e+00   3.2500e+00 3.25 3.25    5    6    6    6    6     8
+ [7,]   3.0000e+00   3.0000e+00 3.00 3.00    5    6    6    6    6     8
+ [8,]   2.7500e+00   2.7500e+00 2.75 2.75    5    6    6    6    6     8
+ [9,]   2.5000e+00   2.5000e+00 2.50 2.50    5    6    6    6    6     8
+[10,]   2.2500e+00   2.2500e+00 2.25 2.25    5    6    6    6    6     8
+[11,]   2.0000e+00   2.0000e+00 2.00 2.00    5    6    6    6    6     8
+[12,]  -2.5000e+00  -2.5000e+00 1.00 2.00    5    6    6    6    6     8
+[13,]  -7.5000e+00  -7.5000e+00 1.00 2.00    5    6    6    6    6     8
+[14,]  -4.9750e+02  -4.9750e+02 1.00 2.00    5    6    6    6    6     8
+[15,]  -4.9975e+03  -4.9975e+03 1.00 2.00    5    6    6    6    6     8
+[16,]  -5.0000e+09  -5.0000e+09 1.00 2.00    5    6    6    6    6     8
+[17,]  -5.0000e+99  -5.0000e+99 0.00 0.00    0    0    0    0    0     0
+[18,] -5.0000e+199 -5.0000e+199 0.00 0.00    0    0    0    0    0     0
+[19,] -5.0000e+299 -5.0000e+299 0.00 0.00    0    0    0    0    0     0
+>
+
+so one could say that ideally,
+
+      isoreg(c(5, -Inf, 1:2, 5:8, 3, 8))
+
+should produce fitted values
+
+             c(-Inf, -Inf, 0, 0, ..., 0)
+
+and if someone has a +/-  elegant implementation
+we could again allow  +/-Inf entries in  isoreg(), at least when
+the Inf's have all the same sign.
+
+Martin
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Sep 28 12:11:27 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 28 Sep 2023 12:11:27 +0200
+Subject: [Rd] Recent changes to as.complex(NA_real_)
+In-Reply-To: <A967E2AD-2AA3-4C01-9541-A8B417DC9AB3@warnes.net>
+References: <1b3cd95f-3adb-4cde-b7b4-0ccc83864e65@gmail.com>
+ <A967E2AD-2AA3-4C01-9541-A8B417DC9AB3@warnes.net>
+Message-ID: <25877.20815.563131.508483@stat.math.ethz.ch>
+
+>>>>> Gregory R Warnes 
+>>>>>     on Sat, 23 Sep 2023 13:22:35 -0400 writes:
+
+    > It sounds like we need to add arguments (with sensible
+    > defaults) to complex(), Re(), Im(), is.na.complex() etc to
+    > allow the user to specify the desired behavior.
+
+I don't think I'd like such extra flexibility for all these, 
+... ;-)  and even much less I'd like to be part of the group who
+then has to *maintain* such behavior ;-)
+
+    > --  
+    > Change your thoughts and you change the world.
+    > --Dr. Norman Vincent Peale
+
+     ( .. *some* hybris from the last century ..)
+
+Currently, I'm actually tending to *simplify* things
+drastically, also because it means less surprises in the long
+term and much less code reading / debugging in formatting /
+printing and dealing with complex numbers.
+NB: there *is* the re-opened PR#16752,
+    https://bugs.r-project.org/show_bug.cgi?id=16752
+where the investigation of the (C-level) R source is a major reason
+for my current thinking ..
+
+What if we decided to really treat complex numbers much more
+than currently  as pairs of real (i.e. "double") numbers,
+notably also when print()ing them?
+Consequently, Re() and Im() would continue to return what they
+do now (contrary to Herv?'s original proposal) also in case of
+non-finite numbers.
+
+Of course, *no* change in arithmetic or other Ops (such as '==')
+nor  is.na(), is.finite(), is.nan(), etc.
+
+The current formatting and printing of complex numbers is
+complicated in some cases unnecessarily inaccurate and in other
+cases unnecessarily *ugly*.
+I believe that formatting, we should change to basically format
+the (vector of) real parts and imaginary parts separately.
+E.g., it is really unnecessarily ugly to switch to exponential
+format for both Re and Im, in a situation like this:
+
+> (-1):2 + 1i*1e99
+[1] 0e+00+1e+99i 0e+00+1e+99i 0e+00+1e+99i 0e+00+1e+99i
+
+It is very ugly to use  exponential/scientific format for the Re()
+even if we'd fix the confusing and inaccurate *joint* rounding
+of Re and Im.
+
+... and indeed (as discusses here previously:
+While it makes some sense to print  NA
+identically for logical, integer and double,
+it seems often confusing *not* to show  <Re> + <Im>i
+in the complex case; where that *does* happen for
+Inf and NaN:
+
+ > complex(, NA, ((-1):2))
+ [1] NA NA NA NA
+ > complex(, NaN, ((-1):2))
+ [1] NaN-1i NaN+0i NaN+1i NaN+2i
+ > complex(, c(-Inf,Inf), ((-1):2))
+ [1] -Inf-1i  Inf+0i -Inf+1i  Inf+2i
+ > 
+
+where the first of these *does* keep the finite imaginary
+values, but does not show them
+
+> (cN <- complex(, NA, ((-1):2))); rbind(Re(cN), Im(cN))
+[1] NA NA NA NA
+     [,1] [,2] [,3] [,4]
+[1,]   NA   NA   NA   NA
+[2,]   -1    0    1    2
+>
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Sep 28 18:00:47 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 28 Sep 2023 18:00:47 +0200
+Subject: [Rd] Recent changes to as.complex(NA_real_)
+In-Reply-To: <25877.20815.563131.508483@stat.math.ethz.ch>
+References: <1b3cd95f-3adb-4cde-b7b4-0ccc83864e65@gmail.com>
+ <A967E2AD-2AA3-4C01-9541-A8B417DC9AB3@warnes.net>
+ <25877.20815.563131.508483@stat.math.ethz.ch>
+Message-ID: <25877.41775.806351.984062@stat.math.ethz.ch>
+
+>>>>> Martin Maechler 
+>>>>>     on Thu, 28 Sep 2023 12:11:27 +0200 writes:
+
+>>>>> Gregory R Warnes 
+>>>>>     on Sat, 23 Sep 2023 13:22:35 -0400 writes:
+
+>     > It sounds like we need to add arguments (with sensible
+>     > defaults) to complex(), Re(), Im(), is.na.complex() etc to
+>     > allow the user to specify the desired behavior.
+> 
+> I don't think I'd like such extra flexibility for all these, 
+> ... ;-)  and even much less I'd like to be part of the group who
+> then has to *maintain* such behavior ;-)
+> 
+[..........]
+
+> Currently, I'm actually tending to *simplify* things
+> drastically, also because it means less surprises in the long
+> term and much less code reading / debugging in formatting /
+> printing and dealing with complex numbers.
+> NB: there *is* the re-opened PR#16752,
+>     https://bugs.r-project.org/show_bug.cgi?id=16752
+> where the investigation of the (C-level) R source is a major reason
+> for my current thinking ..
+> 
+> What if we decided to really treat complex numbers much more
+> than currently  as pairs of real (i.e. "double") numbers,
+> notably also when print()ing them?
+> Consequently, Re() and Im() would continue to return what they
+> do now (contrary to Herv?'s original proposal) also in case of
+> non-finite numbers.
+> 
+> Of course, *no* change in arithmetic or other Ops (such as '==')
+> nor  is.na(), is.finite(), is.nan(), etc.
+> 
+> The current formatting and printing of complex numbers is
+> complicated in some cases unnecessarily inaccurate and in other
+> cases unnecessarily *ugly*.
+> I believe that formatting, we should change to basically format
+> the (vector of) real parts and imaginary parts separately.
+> E.g., it is really unnecessarily ugly to switch to exponential
+> format for both Re and Im, in a situation like this:
+> 
+> > (-1):2 + 1i*1e99
+> [1] 0e+00+1e+99i 0e+00+1e+99i 0e+00+1e+99i 0e+00+1e+99i
+> 
+> It is very ugly to use  exponential/scientific format for the Re()
+> even if we'd fix the confusing and inaccurate *joint* rounding
+> of Re and Im.
+
+and then, I end with
+
+> ... and indeed (as discusses here previously:
+> While it makes some sense to print  NA
+> identically for logical, integer and double,
+> it seems often confusing *not* to show  <Re> + <Im>i
+> in the complex case; where that *does* happen for
+> Inf and NaN:
+> 
+>  > complex(, NA, ((-1):2))
+>  [1] NA NA NA NA
+>  > complex(, NaN, ((-1):2))
+>  [1] NaN-1i NaN+0i NaN+1i NaN+2i
+>  > complex(, c(-Inf,Inf), ((-1):2))
+>  [1] -Inf-1i  Inf+0i -Inf+1i  Inf+2i
+>  > 
+> 
+> where the first of these *does* keep the finite imaginary
+> values, but does not show them
+> 
+> > (cN <- complex(, NA, ((-1):2))); rbind(Re(cN), Im(cN))
+> [1] NA NA NA NA
+>      [,1] [,2] [,3] [,4]
+> [1,]   NA   NA   NA   NA
+> [2,]   -1    0    1    2
+> >
+
+where really, I think we should keep that behavior (*), at least
+for now: Changing it as well *does* have a relatively large
+impact, is not back-compatible with (the long history of) S and
+R, *and* it complicates documentation and teaching unnecessarily.
+
+Experts will now how to differentiate the different complex NAs,
+e.g. by using a simple utilities such as {"format complex", "print complex"}
+
+  fc <- function(z) paste0("(",Re(z), ",", Im(z),")")
+  pc <- function(z) noquote(fc(z))
+
+which I've used now for testing/"visualizing" different scenarios
+
+
+Martin
+
+
+---
+*) simply printing 'NA' in cases where is.na(.) is true and is.nan(.) is false
+
+
