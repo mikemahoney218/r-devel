@@ -7391,3 +7391,531 @@ Martin
 *) simply printing 'NA' in cases where is.na(.) is true and is.nan(.) is false
 
 
+From jwood000 @end|ng |rom gm@||@com  Fri Sep 29 18:33:20 2023
+From: jwood000 @end|ng |rom gm@||@com (Joseph Wood)
+Date: Fri, 29 Sep 2023 12:33:20 -0400
+Subject: [Rd] Use of `[` with array and resulting class
+Message-ID: <CAKDcrSgMW1D3AK9oTJSjc8mix-hF6wQ+mVWVWFJHd3qqmudc1g@mail.gmail.com>
+
+Hello,
+
+I recently discovered a possible inconsistency with usage of an object of
+class array.
+
+Consider the following example:
+
+## Setup
+
+a <- array(1:6, dim = c(1, 3, 2))
+a
+, , 1
+
+     [,1] [,2] [,3]
+[1,]    1    2    3
+
+, , 2
+
+     [,1] [,2] [,3]
+[1,]    4    5    6
+
+class(a)
+[1] "array"
+
+dim(a)
+[1] 1 3 2
+
+## Now use `[`
+a[1,,]
+     [,1] [,2]
+[1,]    1    4
+[2,]    2    5
+[3,]    3    6
+
+class(a[1,,])
+[1] "matrix" "array"
+
+dim(a[1,,])
+[1] 3 2
+
+Up until this point, it makes sense to me. Now, let's consider when dim =
+c(1, 6, 1). This is where I have a little trouble understanding the
+behavior.
+
+## Array with dim = c(1, any_number_here, 1)
+
+b <- array(1:6, dim = c(1, 6, 1))
+b
+, , 1
+
+     [,1] [,2] [,3] [,4] [,5] [,6]
+[1,]    1    2    3    4    5    6
+
+class(b)
+[1] "array"
+
+dim(b)
+[1] 1 6 1
+
+## The problem
+
+b[1,,]
+[1] 1 2 3 4 5 6
+
+dim(b[1,,])
+NULL
+
+class(b[1,,])
+[1] "integer"
+
+I would have expected:
+
+b[1,,] ## produced the output with matrix(1:6, ncol = 1)
+     [,1]
+[1,]    1
+[2,]    2
+[3,]    3
+[4,]    4
+[5,]    5
+[6,]    6
+
+class(b[1,,])
+[1] "matrix" "array"
+
+dim(b[1,,])
+[1] 3 1
+
+Is this a bug? If not, any help understanding this behaviour would be much
+appreciated.
+
+Thanks,
+Joseph
+
+	[[alternative HTML version deleted]]
+
+
+From @tevem@rt|n041 @end|ng |rom gm@||@com  Sat Sep 30 06:27:51 2023
+From: @tevem@rt|n041 @end|ng |rom gm@||@com (Steve Martin)
+Date: Sat, 30 Sep 2023 00:27:51 -0400
+Subject: [Rd] Use of `[` with array and resulting class
+In-Reply-To: <CAKDcrSgMW1D3AK9oTJSjc8mix-hF6wQ+mVWVWFJHd3qqmudc1g@mail.gmail.com>
+References: <CAKDcrSgMW1D3AK9oTJSjc8mix-hF6wQ+mVWVWFJHd3qqmudc1g@mail.gmail.com>
+Message-ID: <CAP=dwz-kaK68KfWTLz0RaO8xVUvRXXZC-7apHd9NNR1vju6yow@mail.gmail.com>
+
+This is due to `[` dropping dimensions by default. In your first
+example, think of a[1, , ] as having dimension c(1, 3, 2), but,
+because drop = TRUE, all dimensions of extent 1 (the first dimension)
+are dropped and the result has dimension c(3, 2). In your second
+example, b[1, , ] would have dimension c(1, 6, 1), but now both the
+first and third dimensions are dropped, resulting in a vector with no
+dimensions.
+
+We can use the drop function to explicitly see why b[1, ,] doesn't
+result in a matrix.
+
+> drop(matrix(1:6, 6, 1))
+[1] 1 2 3 4 5 6
+
+Steve
+
+On Fri, 29 Sept 2023 at 23:28, Joseph Wood <jwood000 at gmail.com> wrote:
+>
+> Hello,
+>
+> I recently discovered a possible inconsistency with usage of an object of
+> class array.
+>
+> Consider the following example:
+>
+> ## Setup
+>
+> a <- array(1:6, dim = c(1, 3, 2))
+> a
+> , , 1
+>
+>      [,1] [,2] [,3]
+> [1,]    1    2    3
+>
+> , , 2
+>
+>      [,1] [,2] [,3]
+> [1,]    4    5    6
+>
+> class(a)
+> [1] "array"
+>
+> dim(a)
+> [1] 1 3 2
+>
+> ## Now use `[`
+> a[1,,]
+>      [,1] [,2]
+> [1,]    1    4
+> [2,]    2    5
+> [3,]    3    6
+>
+> class(a[1,,])
+> [1] "matrix" "array"
+>
+> dim(a[1,,])
+> [1] 3 2
+>
+> Up until this point, it makes sense to me. Now, let's consider when dim =
+> c(1, 6, 1). This is where I have a little trouble understanding the
+> behavior.
+>
+> ## Array with dim = c(1, any_number_here, 1)
+>
+> b <- array(1:6, dim = c(1, 6, 1))
+> b
+> , , 1
+>
+>      [,1] [,2] [,3] [,4] [,5] [,6]
+> [1,]    1    2    3    4    5    6
+>
+> class(b)
+> [1] "array"
+>
+> dim(b)
+> [1] 1 6 1
+>
+> ## The problem
+>
+> b[1,,]
+> [1] 1 2 3 4 5 6
+>
+> dim(b[1,,])
+> NULL
+>
+> class(b[1,,])
+> [1] "integer"
+>
+> I would have expected:
+>
+> b[1,,] ## produced the output with matrix(1:6, ncol = 1)
+>      [,1]
+> [1,]    1
+> [2,]    2
+> [3,]    3
+> [4,]    4
+> [5,]    5
+> [6,]    6
+>
+> class(b[1,,])
+> [1] "matrix" "array"
+>
+> dim(b[1,,])
+> [1] 3 1
+>
+> Is this a bug? If not, any help understanding this behaviour would be much
+> appreciated.
+>
+> Thanks,
+> Joseph
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From md @end|ng |rom @und@ku@dk  Sat Sep 30 09:40:06 2023
+From: md @end|ng |rom @und@ku@dk (Matt Denwood)
+Date: Sat, 30 Sep 2023 07:40:06 +0000
+Subject: [Rd] Use of `[` with array and resulting class
+In-Reply-To: <CAKDcrSgMW1D3AK9oTJSjc8mix-hF6wQ+mVWVWFJHd3qqmudc1g@mail.gmail.com>
+References: <CAKDcrSgMW1D3AK9oTJSjc8mix-hF6wQ+mVWVWFJHd3qqmudc1g@mail.gmail.com>
+Message-ID: <A984ED05-E6BD-4C9F-9064-CFCF435E967C@sund.ku.dk>
+
+Hi Joseph
+
+This behaviour is as expected (and as documented by ?`[`) because the default of drop=TRUE coerces the result to the lowest possible dimension, which in your case is a vector rather than array.  Using for example:
+
+b[1,,,drop=FALSE]
+
+... results in an output array with the same number of dimensions (i.e. length of dim()) as the input array.  I always use drop=FALSE when programming in situations where the dimensions of the input array aren't known (and forgetting to do so has several times bitten me when I later come to pass in an array like yours).
+
+I am not aware of a way to make the extract operator behave as you apparently expected (drop the dimension corresponding to the supplied length-1 index but leaving all others even if they are also length 1).  If you want this behaviour then you would be best to create a wrapper function, or perhaps even a derived class, but that is not a topic for r-devel (rather r-help).
+
+Best wishes,
+
+Matt
+
+
+
+?On 30/09/2023, 05:28, "R-devel on behalf of Joseph Wood" <r-devel-bounces at r-project.org <mailto:r-devel-bounces at r-project.org> on behalf of jwood000 at gmail.com <mailto:jwood000 at gmail.com>> wrote:
+
+
+[You don't often get email from jwood000 at gmail.com <mailto:jwood000 at gmail.com>. Learn why this is important at https://aka.ms/LearnAboutSenderIdentification <https://aka.ms/LearnAboutSenderIdentification> ]
+
+
+Hello,
+
+
+I recently discovered a possible inconsistency with usage of an object of
+class array.
+
+
+Consider the following example:
+
+
+## Setup
+
+
+a <- array(1:6, dim = c(1, 3, 2))
+a
+, , 1
+
+
+[,1] [,2] [,3]
+[1,] 1 2 3
+
+
+, , 2
+
+
+[,1] [,2] [,3]
+[1,] 4 5 6
+
+
+class(a)
+[1] "array"
+
+
+dim(a)
+[1] 1 3 2
+
+
+## Now use `[`
+a[1,,]
+[,1] [,2]
+[1,] 1 4
+[2,] 2 5
+[3,] 3 6
+
+
+class(a[1,,])
+[1] "matrix" "array"
+
+
+dim(a[1,,])
+[1] 3 2
+
+
+Up until this point, it makes sense to me. Now, let's consider when dim =
+c(1, 6, 1). This is where I have a little trouble understanding the
+behavior.
+
+
+## Array with dim = c(1, any_number_here, 1)
+
+
+b <- array(1:6, dim = c(1, 6, 1))
+b
+, , 1
+
+
+[,1] [,2] [,3] [,4] [,5] [,6]
+[1,] 1 2 3 4 5 6
+
+
+class(b)
+[1] "array"
+
+
+dim(b)
+[1] 1 6 1
+
+
+## The problem
+
+
+b[1,,]
+[1] 1 2 3 4 5 6
+
+
+dim(b[1,,])
+NULL
+
+
+class(b[1,,])
+[1] "integer"
+
+
+I would have expected:
+
+
+b[1,,] ## produced the output with matrix(1:6, ncol = 1)
+[,1]
+[1,] 1
+[2,] 2
+[3,] 3
+[4,] 4
+[5,] 5
+[6,] 6
+
+
+class(b[1,,])
+[1] "matrix" "array"
+
+
+dim(b[1,,])
+[1] 3 1
+
+
+Is this a bug? If not, any help understanding this behaviour would be much
+appreciated.
+
+
+Thanks,
+Joseph
+
+
+[[alternative HTML version deleted]]
+
+
+______________________________________________
+R-devel at r-project.org <mailto:R-devel at r-project.org> mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel <https://stat.ethz.ch/mailman/listinfo/r-devel>
+
+
+
+
+From ru|pb@rr@d@@ @end|ng |rom @@po@pt  Sat Sep 30 09:41:06 2023
+From: ru|pb@rr@d@@ @end|ng |rom @@po@pt (Rui Barradas)
+Date: Sat, 30 Sep 2023 08:41:06 +0100
+Subject: [Rd] Use of `[` with array and resulting class
+In-Reply-To: <CAKDcrSgMW1D3AK9oTJSjc8mix-hF6wQ+mVWVWFJHd3qqmudc1g@mail.gmail.com>
+References: <CAKDcrSgMW1D3AK9oTJSjc8mix-hF6wQ+mVWVWFJHd3qqmudc1g@mail.gmail.com>
+Message-ID: <7a979fc4-68e7-4ead-8e67-acac40508e76@sapo.pt>
+
+?s 17:33 de 29/09/2023, Joseph Wood escreveu:
+> Hello,
+> 
+> I recently discovered a possible inconsistency with usage of an object of
+> class array.
+> 
+> Consider the following example:
+> 
+> ## Setup
+> 
+> a <- array(1:6, dim = c(1, 3, 2))
+> a
+> , , 1
+> 
+>       [,1] [,2] [,3]
+> [1,]    1    2    3
+> 
+> , , 2
+> 
+>       [,1] [,2] [,3]
+> [1,]    4    5    6
+> 
+> class(a)
+> [1] "array"
+> 
+> dim(a)
+> [1] 1 3 2
+> 
+> ## Now use `[`
+> a[1,,]
+>       [,1] [,2]
+> [1,]    1    4
+> [2,]    2    5
+> [3,]    3    6
+> 
+> class(a[1,,])
+> [1] "matrix" "array"
+> 
+> dim(a[1,,])
+> [1] 3 2
+> 
+> Up until this point, it makes sense to me. Now, let's consider when dim =
+> c(1, 6, 1). This is where I have a little trouble understanding the
+> behavior.
+> 
+> ## Array with dim = c(1, any_number_here, 1)
+> 
+> b <- array(1:6, dim = c(1, 6, 1))
+> b
+> , , 1
+> 
+>       [,1] [,2] [,3] [,4] [,5] [,6]
+> [1,]    1    2    3    4    5    6
+> 
+> class(b)
+> [1] "array"
+> 
+> dim(b)
+> [1] 1 6 1
+> 
+> ## The problem
+> 
+> b[1,,]
+> [1] 1 2 3 4 5 6
+> 
+> dim(b[1,,])
+> NULL
+> 
+> class(b[1,,])
+> [1] "integer"
+> 
+> I would have expected:
+> 
+> b[1,,] ## produced the output with matrix(1:6, ncol = 1)
+>       [,1]
+> [1,]    1
+> [2,]    2
+> [3,]    3
+> [4,]    4
+> [5,]    5
+> [6,]    6
+> 
+> class(b[1,,])
+> [1] "matrix" "array"
+> 
+> dim(b[1,,])
+> [1] 3 1
+> 
+> Is this a bug? If not, any help understanding this behaviour would be much
+> appreciated.
+> 
+> Thanks,
+> Joseph
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+Hello,
+
+You are using the default behavior for objects of class "array" (and 
+"matrix"), which is drop = TRUE. See ?`[`.
+You probably want the second example below.
+
+
+b <- array(1:6, dim = c(1, 6, 1))
+# the default is drop = TRUE
+b[1,,]
+#> [1] 1 2 3 4 5 6
+
+# keep the dim attribute
+b[1, , , drop = FALSE]
+#> , , 1
+#>
+#>      [,1] [,2] [,3] [,4] [,5] [,6]
+#> [1,]    1    2    3    4    5    6
+
+
+Hope this helps,
+
+Rui Barradas
+
+
+
+-- 
+Este e-mail foi analisado pelo software antiv?rus AVG para verificar a presen?a de v?rus.
+www.avg.com
+
+
