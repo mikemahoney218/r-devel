@@ -1,0 +1,471 @@
+From kry|ov@r00t @end|ng |rom gm@||@com  Mon Oct  2 13:58:09 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Mon, 2 Oct 2023 14:58:09 +0300
+Subject: [Rd] [R-pkg-devel] Problem with "compacting" pdf files.
+In-Reply-To: <20231002100113.2ce1c902@rolf-Latitude-E7470>
+References: <20231001211547.4c46512e@rolf-Latitude-E7470>
+ <20231001152234.6bdd40ec@Tarkus>
+ <20231002100113.2ce1c902@rolf-Latitude-E7470>
+Message-ID: <20231002145809.41884ebc@arachnoid>
+
+Dear Rolf,
+
+(Moving this one to R-devel...)
+
+On Sun,  1 Oct 2023 21:01:13 +0000
+Rolf Turner <rolfturner at posteo.net> wrote:
+
+> I *really* think that the instructions from CRAN could have been
+> clearer!  Without your guidance I'd have been at a total loss.
+
+Since the CRAN e-mails quote the R CMD check messages verbatim, would
+it have been enough if R CMD check suggested using --compact-vignettes?
+
+Index: src/library/tools/R/check.R
+===================================================================
+--- src/library/tools/R/check.R	(revision 85249)
++++ src/library/tools/R/check.R	(working copy)
+@@ -3079,7 +3079,8 @@
+                          "  'qpdf' made some significant size reductions:\n",
+                          paste("  ", res, collapse = "\n"),
+                          "\n",
+-                         "  consider running tools::compactPDF() on these files\n")
++                         "  consider running tools::compactPDF() on these files,\n",
++                         "  or build the source package with --compact-vignettes\n")
+             }
+             if (R_check_doc_sizes2) {
+                 gs_cmd <- find_gs_cmd()
+@@ -3093,7 +3094,8 @@
+                                  "  'gs+qpdf' made some significant size reductions:\n",
+                                  paste("  ", res, collapse = "\n"),
+                                  "\n",
+-                                 '  consider running tools::compactPDF(gs_quality = "ebook") on these files\n')
++                                 '  consider running tools::compactPDF(gs_quality = "ebook") on these files,\n',
++                                 '  or build the source package with --compact-vignettes=both\n')
+                     }
+                 } else {
+                     if (!any) noteLog(Log)
+
+Or is there anything else you would prefer to be reworded? Should the
+message link to Writing R Extensions, section 1.4? Recently there was a
+project to improve the R CMD check messages [*], but I managed to miss
+almost all of it.
+
+-- 
+Best regards,
+Ivan
+
+[*] https://github.com/r-devel/r-project-sprint-2023/issues/55
+
+
+From net|kj@ @end|ng |rom gm@||@com  Mon Oct  2 17:18:19 2023
+From: net|kj@ @end|ng |rom gm@||@com (=?UTF-8?Q?Jan_Net=C3=ADk?=)
+Date: Mon, 2 Oct 2023 17:18:19 +0200
+Subject: [Rd] After package update, old S4 method is dispatched
+Message-ID: <CA+6hu7ekxwdH55eSVs5-PxfCv75khNUURbHjT2rB_jLSrCNgZw@mail.gmail.com>
+
+Hello R-devel,
+
+I hope that you are all doing well and that this is the right place to
+discuss my somewhat mysterious issue with S4.
+
+On our Ubuntu server, we have "mirt" package installed which defines S4
+method for "coef" standard generic. We updated the package with the usual
+"install.packages", restarted, and observer error calling coef on mirt
+object that should not be possible: "Error in which: argument "nfact" is
+missing, with no default" (which has no such argument).
+
+After days of investigation, I found that from mirt 1.37 to current 1.40,
+the method changed as well as some internal functions used by the method.
+The aforementioned error stems from the fact that these internal ordinary
+functions were changed properly as we updated the package, but the S4
+method dispatched stuck with the 1.37 version. I am by no means an expert
+on S4 matter, but I know that these are cached to some extent. I thought
+the cache is session-bound and have no idea how the issue can possibly
+persist even after a complete reboot of the machine. I can detach and
+library() mirt in one R session which solves the issue temporarily, but
+emerges right back in any new R session.
+
+Sadly, I cannot provide any reproducible example as I am completely unaware
+of the cause and even I cannot reproduce this issue outside of the server.
+
+Any insights on how this issue could have started would be highly
+appreciated.
+
+Best regards,
+Jan Net?k
+
+	[[alternative HTML version deleted]]
+
+
+From ||@t@ @end|ng |rom dewey@myzen@co@uk  Mon Oct  2 17:35:35 2023
+From: ||@t@ @end|ng |rom dewey@myzen@co@uk (Michael Dewey)
+Date: Mon, 2 Oct 2023 16:35:35 +0100
+Subject: [Rd] [R-pkg-devel] Problem with "compacting" pdf files.
+In-Reply-To: <20231002145809.41884ebc@arachnoid>
+References: <20231001211547.4c46512e@rolf-Latitude-E7470>
+ <20231001152234.6bdd40ec@Tarkus>
+ <20231002100113.2ce1c902@rolf-Latitude-E7470>
+ <20231002145809.41884ebc@arachnoid>
+Message-ID: <e1d7b2d4-6cb8-28e2-8794-d34943a157b7@dewey.myzen.co.uk>
+
+Dear Ivan
+
+I was bitten by this recently but fortunately Rolf had beaten me to 
+writing a question. The one thing which really surprised me is that the 
+current message tells me how much space it would have saved if it had 
+compressed the files in which case my immediate response was "Well, why 
+didn't you compress them then?".
+
+Thank you for your help on this.
+
+Michael
+
+On 02/10/2023 12:58, Ivan Krylov wrote:
+> Dear Rolf,
+> 
+> (Moving this one to R-devel...)
+> 
+> On Sun,  1 Oct 2023 21:01:13 +0000
+> Rolf Turner <rolfturner at posteo.net> wrote:
+> 
+>> I *really* think that the instructions from CRAN could have been
+>> clearer!  Without your guidance I'd have been at a total loss.
+> 
+> Since the CRAN e-mails quote the R CMD check messages verbatim, would
+> it have been enough if R CMD check suggested using --compact-vignettes?
+> 
+> Index: src/library/tools/R/check.R
+> ===================================================================
+> --- src/library/tools/R/check.R	(revision 85249)
+> +++ src/library/tools/R/check.R	(working copy)
+> @@ -3079,7 +3079,8 @@
+>                            "  'qpdf' made some significant size reductions:\n",
+>                            paste("  ", res, collapse = "\n"),
+>                            "\n",
+> -                         "  consider running tools::compactPDF() on these files\n")
+> +                         "  consider running tools::compactPDF() on these files,\n",
+> +                         "  or build the source package with --compact-vignettes\n")
+>               }
+>               if (R_check_doc_sizes2) {
+>                   gs_cmd <- find_gs_cmd()
+> @@ -3093,7 +3094,8 @@
+>                                    "  'gs+qpdf' made some significant size reductions:\n",
+>                                    paste("  ", res, collapse = "\n"),
+>                                    "\n",
+> -                                 '  consider running tools::compactPDF(gs_quality = "ebook") on these files\n')
+> +                                 '  consider running tools::compactPDF(gs_quality = "ebook") on these files,\n',
+> +                                 '  or build the source package with --compact-vignettes=both\n')
+>                       }
+>                   } else {
+>                       if (!any) noteLog(Log)
+> 
+> Or is there anything else you would prefer to be reworded? Should the
+> message link to Writing R Extensions, section 1.4? Recently there was a
+> project to improve the R CMD check messages [*], but I managed to miss
+> almost all of it.
+> 
+
+-- 
+Michael
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Mon Oct  2 20:53:52 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Mon, 2 Oct 2023 14:53:52 -0400
+Subject: [Rd] Problems caused by dev.off() behaviour
+Message-ID: <affab490-cd9f-46e7-ab9f-37a4b13d2557@gmail.com>
+
+I found some weird behaviour and reported it as
+https://bugs.r-project.org/show_bug.cgi?id=18604 and
+https://github.com/yihui/knitr/issues/2297, but it turns out it was user 
+error.
+
+The dev.off() function was behaving as documented, but it behaves in an 
+unexpected (by me) way, and that caused the "bugs".
+
+The issue is that
+
+    dev.off()
+
+doesn't always result in the previous graphics device being made 
+current.  If there are two or more other open graphics devices, it won't 
+choose the previous one, it will choose the next one.
+
+I'm letting people know because this might affect other people too.  If 
+you use dev.off(), don't assume it restores the previous device!
+
+Here's my little workaround alternative:
+
+   safe.dev.off  <- function(which = dev.cur(), prev = dev.prev()) {
+     force(prev)
+     dev.off(which)
+     dev.set(prev)
+   }
+
+Use it just like dev.off(), but it *will* restore the previous device.
+
+Duncan Murdoch
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Mon Oct  2 20:56:26 2023
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Tue, 3 Oct 2023 07:56:26 +1300
+Subject: [Rd] After package update, old S4 method is dispatched
+In-Reply-To: <CA+6hu7ekxwdH55eSVs5-PxfCv75khNUURbHjT2rB_jLSrCNgZw@mail.gmail.com>
+References: <CA+6hu7ekxwdH55eSVs5-PxfCv75khNUURbHjT2rB_jLSrCNgZw@mail.gmail.com>
+Message-ID: <32A80143-4755-4D96-822A-E386840E4438@R-project.org>
+
+Jan,
+
+have you re-installed all packages? If you change (update) any package that uses S4 it may be necessary to re-install all its reverse-dependencies as well since they may include cached values in their namespaces, so the easiest is to make sure you re-install all packages.
+
+Cheers,
+Simon
+
+
+> On Oct 3, 2023, at 4:18 AM, Jan Net?k <netikja at gmail.com> wrote:
+> 
+> Hello R-devel,
+> 
+> I hope that you are all doing well and that this is the right place to
+> discuss my somewhat mysterious issue with S4.
+> 
+> On our Ubuntu server, we have "mirt" package installed which defines S4
+> method for "coef" standard generic. We updated the package with the usual
+> "install.packages", restarted, and observer error calling coef on mirt
+> object that should not be possible: "Error in which: argument "nfact" is
+> missing, with no default" (which has no such argument).
+> 
+> After days of investigation, I found that from mirt 1.37 to current 1.40,
+> the method changed as well as some internal functions used by the method.
+> The aforementioned error stems from the fact that these internal ordinary
+> functions were changed properly as we updated the package, but the S4
+> method dispatched stuck with the 1.37 version. I am by no means an expert
+> on S4 matter, but I know that these are cached to some extent. I thought
+> the cache is session-bound and have no idea how the issue can possibly
+> persist even after a complete reboot of the machine. I can detach and
+> library() mirt in one R session which solves the issue temporarily, but
+> emerges right back in any new R session.
+> 
+> Sadly, I cannot provide any reproducible example as I am completely unaware
+> of the cause and even I cannot reproduce this issue outside of the server.
+> 
+> Any insights on how this issue could have started would be highly
+> appreciated.
+> 
+> Best regards,
+> Jan Net?k
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
+From d@v|@ @end|ng |rom po@|t@co  Mon Oct  2 21:01:41 2023
+From: d@v|@ @end|ng |rom po@|t@co (Davis Vaughan)
+Date: Mon, 2 Oct 2023 15:01:41 -0400
+Subject: [Rd] Should `expand.grid()` consistently drop `NULL` inputs?
+Message-ID: <CABzLhzz11_7LyOUe3vzMN+rmkb7PS9cn4Yd7_LLdBihEK2QJsw@mail.gmail.com>
+
+Hi all,
+
+I noticed that `expand.grid()` has somewhat inconsistent behavior with
+dropping `NULL` inputs. In particular, if there is a leading `NULL`,
+then it ends up as a column in the resulting data frame, which seems
+pretty undesirable. Also, notice in the last example that `Var3` is
+used as the column name on the `NULL`, which is wrong.
+
+I think the most consistent behavior would be to unconditionally drop
+`NULL`s anywhere they appear (i.e. treat an `expand.grid()` call with
+`NULL` inputs as semantically equivalent to the same call without
+`NULL`s).
+
+```
+dropattrs <- function(x) {
+  attributes(x) <- list(names = names(x))
+  x
+}
+
+# `NULL` dropped
+dropattrs(expand.grid(NULL))
+#> named list()
+
+# `NULL` dropped
+dropattrs(expand.grid(1, NULL))
+#> $Var1
+#> numeric(0)
+
+# Oh no! Leading `NULL` ends up in the data frame!
+dropattrs(expand.grid(NULL, 1))
+#> $Var2
+#> NULL
+#>
+#> [[2]]
+#> numeric(0)
+
+# Oh no! This one does too!
+dropattrs(expand.grid(1, NULL, 2))
+#> $Var1
+#> numeric(0)
+#>
+#> $Var3
+#> NULL
+#>
+#> [[3]]
+#> numeric(0)
+```
+
+Thanks,
+Davis
+
+
+From trevor@|@d@v|@ @end|ng |rom gm@||@com  Mon Oct  2 22:21:46 2023
+From: trevor@|@d@v|@ @end|ng |rom gm@||@com (Trevor Davis)
+Date: Mon, 2 Oct 2023 13:21:46 -0700
+Subject: [Rd] Problems caused by dev.off() behaviour
+In-Reply-To: <affab490-cd9f-46e7-ab9f-37a4b13d2557@gmail.com>
+References: <affab490-cd9f-46e7-ab9f-37a4b13d2557@gmail.com>
+Message-ID: <CAMigB8FWHaLWB1SvHi3Bw9dW9jkdHv1C-M3x4NSX0NnqjggyCg@mail.gmail.com>
+
+> Use it just like dev.off(), but it *will* restore the previous device.
+
+I'm observing that if there were no previously open graphics devices then
+your `safe.dev.off()` opens up a new graphics device which may be an
+undesired side effect (because "surprisingly" `dev.set()` on the null
+graphics device opens up a new graphics device).  To avoid that you could
+check if `dev.list()` is greater than length 1L:
+
+   safe.dev.off  <- function(which = dev.cur(), prev = dev.prev()) {
+     force(prev)
+     dev.off(which)
+     if (length(dev.list()) > 1L) {
+       dev.set(prev)
+     }
+   }
+
+Trevor
+
+On Mon, Oct 2, 2023 at 11:54?AM Duncan Murdoch <murdoch.duncan at gmail.com>
+wrote:
+
+> I found some weird behaviour and reported it as
+> https://bugs.r-project.org/show_bug.cgi?id=18604 and
+> https://github.com/yihui/knitr/issues/2297, but it turns out it was user
+> error.
+>
+> The dev.off() function was behaving as documented, but it behaves in an
+> unexpected (by me) way, and that caused the "bugs".
+>
+> The issue is that
+>
+>     dev.off()
+>
+> doesn't always result in the previous graphics device being made
+> current.  If there are two or more other open graphics devices, it won't
+> choose the previous one, it will choose the next one.
+>
+> I'm letting people know because this might affect other people too.  If
+> you use dev.off(), don't assume it restores the previous device!
+>
+> Here's my little workaround alternative:
+>
+>    safe.dev.off  <- function(which = dev.cur(), prev = dev.prev()) {
+>      force(prev)
+>      dev.off(which)
+>      dev.set(prev)
+>    }
+>
+> Use it just like dev.off(), but it *will* restore the previous device.
+>
+> Duncan Murdoch
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Tue Oct  3 02:25:57 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Mon, 2 Oct 2023 20:25:57 -0400
+Subject: [Rd] Problems caused by dev.off() behaviour
+In-Reply-To: <CAMigB8FWHaLWB1SvHi3Bw9dW9jkdHv1C-M3x4NSX0NnqjggyCg@mail.gmail.com>
+References: <affab490-cd9f-46e7-ab9f-37a4b13d2557@gmail.com>
+ <CAMigB8FWHaLWB1SvHi3Bw9dW9jkdHv1C-M3x4NSX0NnqjggyCg@mail.gmail.com>
+Message-ID: <d39b6d56-127d-4c5c-b7b7-e436372fa1ce@gmail.com>
+
+Thanks!  However, isn't length(dev.list()) == 0 when there are no 
+devices?  That's what I'm seeing on MacOS.
+
+Duncan Murdoch
+
+On 02/10/2023 4:21 p.m., Trevor Davis wrote:
+>  > Use it just like dev.off(), but it *will* restore the previous device.
+> 
+> I'm observing that if there were no previously open graphics devices 
+> then your `safe.dev.off()` opens up a new graphics device which may be 
+> an undesired side effect (because "surprisingly" `dev.set()` on the null 
+> graphics device opens up a new graphics device).? To avoid that you 
+> could check if `dev.list()` is greater than length 1L:
+> 
+>  ?? safe.dev.off ?<- function(which = dev.cur(), prev = dev.prev()) {
+>  ? ? ?force(prev)
+>  ? ? ?dev.off(which)
+>  ? ? ?if (length(dev.list()) > 1L) {
+>  ? ? ? ?dev.set(prev)
+>  ? ? ?}
+>  ? ?}
+> 
+> Trevor
+> 
+> On Mon, Oct 2, 2023 at 11:54?AM Duncan Murdoch <murdoch.duncan at gmail.com 
+> <mailto:murdoch.duncan at gmail.com>> wrote:
+> 
+>     I found some weird behaviour and reported it as
+>     https://bugs.r-project.org/show_bug.cgi?id=18604
+>     <https://bugs.r-project.org/show_bug.cgi?id=18604> and
+>     https://github.com/yihui/knitr/issues/2297
+>     <https://github.com/yihui/knitr/issues/2297>, but it turns out it
+>     was user
+>     error.
+> 
+>     The dev.off() function was behaving as documented, but it behaves in an
+>     unexpected (by me) way, and that caused the "bugs".
+> 
+>     The issue is that
+> 
+>      ? ? dev.off()
+> 
+>     doesn't always result in the previous graphics device being made
+>     current.? If there are two or more other open graphics devices, it
+>     won't
+>     choose the previous one, it will choose the next one.
+> 
+>     I'm letting people know because this might affect other people too.? If
+>     you use dev.off(), don't assume it restores the previous device!
+> 
+>     Here's my little workaround alternative:
+> 
+>      ? ?safe.dev.off? <- function(which = dev.cur(), prev = dev.prev()) {
+>      ? ? ?force(prev)
+>      ? ? ?dev.off(which)
+>      ? ? ?dev.set(prev)
+>      ? ?}
+> 
+>     Use it just like dev.off(), but it *will* restore the previous device.
+> 
+>     Duncan Murdoch
+> 
+>     ______________________________________________
+>     R-devel at r-project.org <mailto:R-devel at r-project.org> mailing list
+>     https://stat.ethz.ch/mailman/listinfo/r-devel
+>     <https://stat.ethz.ch/mailman/listinfo/r-devel>
+>
+
+
