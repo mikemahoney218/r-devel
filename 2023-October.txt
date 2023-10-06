@@ -1683,3 +1683,418 @@ wrote:
 	[[alternative HTML version deleted]]
 
 
+From rkoenker @end|ng |rom ||||no|@@edu  Wed Oct  4 10:01:45 2023
+From: rkoenker @end|ng |rom ||||no|@@edu (Koenker, Roger W)
+Date: Wed, 4 Oct 2023 08:01:45 +0000
+Subject: [Rd] as(<dgCMatrix>, "dgTMatrix")' is deprecated.
+In-Reply-To: <20231003224756.6d325751@Tarkus>
+References: <9C686E75-C639-41FA-8276-E008FD58E5D7@illinois.edu>
+ <20231003224756.6d325751@Tarkus>
+Message-ID: <B80F10D8-7590-4BAE-8FB1-21D306CA1822@illinois.edu>
+
+Thanks, Ivan, I should have had the initiative to do this myself.  I?ve now written to the Mosek folks in the hope that they will update this in Rmosek.
+
+Best
+Roger
+
+> On Oct 3, 2023, at 8:47 PM, Ivan Krylov <krylov.r00t at gmail.com> wrote:
+> 
+> On Tue, 3 Oct 2023 16:50:55 +0000
+> "Koenker, Roger W" <rkoenker at illinois.edu> wrote:
+> 
+>> I thought it might come from Rmosek, but mosek folks don?t think so.
+> 
+> I downloaded the Rmosek source package using
+> 
+> download.packages(
+> 'Rmosek', '.',
+> repos='https://urldefense.com/v3/__https://download.mosek.com/R/10.1__;!!DZ3fjg!-J68cgVdf_vRXm7yhSxSNzoDv6i6681nySXG9qhE808C3UTKTWGNCfZEWchGfsh2FZbBpQJuWa8Tr8_mo3f2xFo$ '
+> )
+> 
+> ...and there are the deprecated calls:
+> 
+> 
+> Rmosek/R$ grep -C2 -r as\(.*dgT
+> toCSCMatrix.R-  }
+> toCSCMatrix.R-  else if (is(obj,"dgCMatrix")) {
+> toCSCMatrix.R:    obj <- as(obj,"dgTMatrix")
+> toCSCMatrix.R-  }
+> toCSCMatrix.R-  else if (is(obj,"list") && setequal(names(obj),c("i","j","v","ncol","nrow"))) {
+> --
+> toCSCMatrix.R-                         x=obj[['v']],
+> toCSCMatrix.R-                         dims=c(obj[['nrow']], obj[['ncol']]) )
+> toCSCMatrix.R:    obj <- as(tmp, "dgTMatrix")
+> toCSCMatrix.R-  }
+> toCSCMatrix.R-  else if (canCoerce(obj,"dgTMatrix")) {
+> toCSCMatrix.R-    # Assume coercion is meaningful, and that
+> toCSCMatrix.R-    # users are aware of computational overhead.
+> toCSCMatrix.R:    obj <- as(obj,"dgTMatrix")
+> toCSCMatrix.R-  }
+> toCSCMatrix.R-  else {
+> 
+> 
+> -- 
+> Best regards,
+> Ivan
+
+
+From j@g@nmn2 @end|ng |rom gm@||@com  Wed Oct  4 10:57:00 2023
+From: j@g@nmn2 @end|ng |rom gm@||@com (Mikael Jagan)
+Date: Wed, 4 Oct 2023 04:57:00 -0400
+Subject: [Rd] as(<dgCMatrix>, "dgTMatrix")' is deprecated.
+In-Reply-To: <8BEB8D85-2BC4-4CC7-B783-754688A51B39@illinois.edu>
+References: <8BEB8D85-2BC4-4CC7-B783-754688A51B39@illinois.edu>
+Message-ID: <9cfd5e5c-c28d-4984-8ad2-5133b05d280a@gmail.com>
+
+ > There is a call to mosek and I assumed that this wasn?t going to be helpful 
+for most R-devel recipients.  I tried Duncan?s very reasonable suggestion about 
+options() but it didn?t produce the desired error, so perhaps this isn?t really 
+a warning  but something else???
+ >
+
+The details are described in news(package="Matrix") under "Changes in version
+1.5-0" and implemented in Matrix:::Matrix.DeprecatedCoerce.  That version was
+released in Sep 2022.
+
+At the time, it was too disruptive to signal a proper deprecation warning
+with every as(., "d(g.|.C)Matrix") call, for every reverse dependency of
+Matrix, so we decided that in those most common cases we would use message()
+instead of warning().   A corollary was that options(warn=n) would not have
+the usual effect, so we advertised an alternative to affected maintainers:
+
+     in R:
+
+         options(Matrix.warnDeprecatedCoerce=n)
+
+     on the command line:
+
+         R_MATRIX_WARN_DEPRECATED_COERCE=n R CMD check *.tar.gz
+
+But maybe it is time to begin signaling warnings unconditionally ...
+
+Mikael
+
+ > For those who might have rmosek installed,  I?m doing:
+ >
+ > library(REBayes)
+ > demo(GLmix1)
+ >
+ > Thanks,
+ > Roger
+ >
+ >
+ > > On Oct 3, 2023, at 6:17 PM, Martin Maechler <maechler using 
+stat.math.ethz.ch> wrote:
+ > >
+ > >>>>>> Duncan Murdoch
+ > >>>>>>    on Tue, 3 Oct 2023 12:59:10 -0400 writes:
+ > >
+ > >> On 03/10/2023 12:50 p.m., Koenker, Roger W wrote:
+ > >>> I?ve been getting this warning for a while now (about
+ > >>> five years if memory serves) and I?m finally tired of it,
+ > >>> but also too tired to track it down in Matrix.  As far as
+ > >>> I can grep I have no reference to either deprecated
+ > >>> object, only the apparently innocuous Matrix::Matrix(A,
+ > >>> sparse = TRUE).  Can someone advise, Martin perhaps?  I
+ > >>> thought it might come from Rmosek, but mosek folks don?t
+ > >>> think so.
+ > >>> 
+https://urldefense.com/v3/__https://groups.google.com/g/mosek/c/yEwXmMfHBbg/m/l_mkeM4vAAAJ__;!!DZ3fjg!71re8ipw9fFStkMab0wGuPNSzSaAhPI5vwxd1BCQ7a55mYiRpAq2prn9-wREqKL_G2uBYboXISQfxZYCZ9AFxCnwxdzqTw$ 
+
+ > >
+ > >> A quick scan of that discussion didn't turn up anything
+ > >> relevant, e.g. a script to produce the warning.  Could you
+ > >> be more specific, or just post the script here?
+ > >
+ > >> In general, a good way to locate the source of a warning
+ > >> is to set options(warn=2) to turn it into an error, and
+ > >> then trigger it.  The traceback from the error will
+ > >> include a bunch of junk from the code that catches the
+ > >> warning, but it will also include the context where it was
+ > >> triggered.
+ > >
+ > >> Duncan Murdoch
+ > >
+ > > Indeed.
+ > >
+ > > But Roger is right that it in the end, (almost surely) it is
+ > > from our {Matrix} package.
+ > >
+ > > Indeed for several years now, we have tried to make the setup
+ > > leaner (and hence faster) by not explicitly define coercion
+ > > from <everything> to <everything>  because  the size of
+ > > <everything> is here about 200, and we don't want to have to provide
+ > > 200^2 = 40'000  coercion methods.
+ > >
+ > > Rather, Matrix package users should use to high level abstract Matrix
+ > > classes such as "sparseMatrix" or "CsparseMatrix" or
+ > > "TsparseMatrix" or "dMatrix", "symmetricMatrix".
+ > >
+ > > In the case of  as(<dgCMatrix>, "dgTMatrix") , if you
+ > > replace "dgTMatrix" by "TsparseMatrix"
+ > > the result will be the same but also work in the future when the
+ > > deprecation may have been turned into a defunctation ...
+ > >
+ > > Martin
+
+
+From rkoenker @end|ng |rom ||||no|@@edu  Wed Oct  4 11:07:28 2023
+From: rkoenker @end|ng |rom ||||no|@@edu (Koenker, Roger W)
+Date: Wed, 4 Oct 2023 09:07:28 +0000
+Subject: [Rd] as(<dgCMatrix>, "dgTMatrix")' is deprecated.
+In-Reply-To: <9cfd5e5c-c28d-4984-8ad2-5133b05d280a@gmail.com>
+References: <8BEB8D85-2BC4-4CC7-B783-754688A51B39@illinois.edu>
+ <9cfd5e5c-c28d-4984-8ad2-5133b05d280a@gmail.com>
+Message-ID: <20A539FF-268A-4154-8C01-E415CC956A96@illinois.edu>
+
+thanks, good to know, although at my age this is the sort of knowledge that has a very short half-life. ;-)
+
+R
+
+
+> On Oct 4, 2023, at 9:57 AM, Mikael Jagan <jaganmn2 at gmail.com> wrote:
+> 
+> > There is a call to mosek and I assumed that this wasn?t going to be helpful for most R-devel recipients.  I tried Duncan?s very reasonable suggestion about options() but it didn?t produce the desired error, so perhaps this isn?t really a warning  but something else???
+> >
+> 
+> The details are described in news(package="Matrix") under "Changes in version
+> 1.5-0" and implemented in Matrix:::Matrix.DeprecatedCoerce.  That version was
+> released in Sep 2022.
+> 
+> At the time, it was too disruptive to signal a proper deprecation warning
+> with every as(., "d(g.|.C)Matrix") call, for every reverse dependency of
+> Matrix, so we decided that in those most common cases we would use message()
+> instead of warning().   A corollary was that options(warn=n) would not have
+> the usual effect, so we advertised an alternative to affected maintainers:
+> 
+>    in R:
+> 
+>        options(Matrix.warnDeprecatedCoerce=n)
+> 
+>    on the command line:
+> 
+>        R_MATRIX_WARN_DEPRECATED_COERCE=n R CMD check *.tar.gz
+> 
+> But maybe it is time to begin signaling warnings unconditionally ...
+> 
+> Mikael
+> 
+> > For those who might have rmosek installed,  I?m doing:
+> >
+> > library(REBayes)
+> > demo(GLmix1)
+> >
+> > Thanks,
+> > Roger
+> >
+> >
+> > > On Oct 3, 2023, at 6:17 PM, Martin Maechler <maechler using stat.math.ethz.ch> wrote:
+> > >
+> > >>>>>> Duncan Murdoch
+> > >>>>>>    on Tue, 3 Oct 2023 12:59:10 -0400 writes:
+> > >
+> > >> On 03/10/2023 12:50 p.m., Koenker, Roger W wrote:
+> > >>> I?ve been getting this warning for a while now (about
+> > >>> five years if memory serves) and I?m finally tired of it,
+> > >>> but also too tired to track it down in Matrix.  As far as
+> > >>> I can grep I have no reference to either deprecated
+> > >>> object, only the apparently innocuous Matrix::Matrix(A,
+> > >>> sparse = TRUE).  Can someone advise, Martin perhaps?  I
+> > >>> thought it might come from Rmosek, but mosek folks don?t
+> > >>> think so.
+> > >>> https://urldefense.com/v3/__https://groups.google.com/g/mosek/c/yEwXmMfHBbg/m/l_mkeM4vAAAJ__;!!DZ3fjg!71re8ipw9fFStkMab0wGuPNSzSaAhPI5vwxd1BCQ7a55mYiRpAq2prn9-wREqKL_G2uBYboXISQfxZYCZ9AFxCnwxdzqTw$ 
+> > >
+> > >> A quick scan of that discussion didn't turn up anything
+> > >> relevant, e.g. a script to produce the warning.  Could you
+> > >> be more specific, or just post the script here?
+> > >
+> > >> In general, a good way to locate the source of a warning
+> > >> is to set options(warn=2) to turn it into an error, and
+> > >> then trigger it.  The traceback from the error will
+> > >> include a bunch of junk from the code that catches the
+> > >> warning, but it will also include the context where it was
+> > >> triggered.
+> > >
+> > >> Duncan Murdoch
+> > >
+> > > Indeed.
+> > >
+> > > But Roger is right that it in the end, (almost surely) it is
+> > > from our {Matrix} package.
+> > >
+> > > Indeed for several years now, we have tried to make the setup
+> > > leaner (and hence faster) by not explicitly define coercion
+> > > from <everything> to <everything>  because  the size of
+> > > <everything> is here about 200, and we don't want to have to provide
+> > > 200^2 = 40'000  coercion methods.
+> > >
+> > > Rather, Matrix package users should use to high level abstract Matrix
+> > > classes such as "sparseMatrix" or "CsparseMatrix" or
+> > > "TsparseMatrix" or "dMatrix", "symmetricMatrix".
+> > >
+> > > In the case of  as(<dgCMatrix>, "dgTMatrix") , if you
+> > > replace "dgTMatrix" by "TsparseMatrix"
+> > > the result will be the same but also work in the future when the
+> > > deprecation may have been turned into a defunctation ...
+> > >
+> > > Martin
+
+
+From hp@ge@@on@g|thub @end|ng |rom gm@||@com  Wed Oct  4 19:12:31 2023
+From: hp@ge@@on@g|thub @end|ng |rom gm@||@com (=?UTF-8?B?SGVydsOpIFBhZ8Oocw==?=)
+Date: Wed, 4 Oct 2023 10:12:31 -0700
+Subject: [Rd] as(<dgCMatrix>, "dgTMatrix")' is deprecated.
+In-Reply-To: <25884.19629.134610.492469@stat.math.ethz.ch>
+References: <9C686E75-C639-41FA-8276-E008FD58E5D7@illinois.edu>
+ <ced49291-44da-4aa7-b8ca-ecf92eb23aa1@gmail.com>
+ <25884.19629.134610.492469@stat.math.ethz.ch>
+Message-ID: <5f119e41-c227-f582-d7fe-2a43f94e204c@gmail.com>
+
+Hi Martin,
+
+On 10/3/23 10:17, Martin Maechler wrote:
+>>>>>> Duncan Murdoch
+>>>>>>      on Tue, 3 Oct 2023 12:59:10 -0400 writes:
+>      > On 03/10/2023 12:50 p.m., Koenker, Roger W wrote:
+>      >> I?ve been getting this warning for a while now (about
+>      >> five years if memory serves) and I?m finally tired of it,
+>      >> but also too tired to track it down in Matrix.  As far as
+>      >> I can grep I have no reference to either deprecated
+>      >> object, only the apparently innocuous Matrix::Matrix(A,
+>      >> sparse = TRUE).  Can someone advise, Martin perhaps?  I
+>      >> thought it might come from Rmosek, but mosek folks don?t
+>      >> think so.
+>      >>https://groups.google.com/g/mosek/c/yEwXmMfHBbg/m/l_mkeM4vAAAJ
+>
+>      > A quick scan of that discussion didn't turn up anything
+>      > relevant, e.g. a script to produce the warning.  Could you
+>      > be more specific, or just post the script here?
+>
+>      > In general, a good way to locate the source of a warning
+>      > is to set options(warn=2) to turn it into an error, and
+>      > then trigger it.  The traceback from the error will
+>      > include a bunch of junk from the code that catches the
+>      > warning, but it will also include the context where it was
+>      > triggered.
+>
+>      > Duncan Murdoch
+>
+> Indeed.
+>
+> But Roger is right that it in the end, (almost surely) it is
+> from our {Matrix} package.
+>
+> Indeed for several years now, we have tried to make the setup
+> leaner (and hence faster) by not explicitly define coercion
+> from <everything> to <everything>  because  the size of
+> <everything> is here about 200, and we don't want to have to provide
+> 200^2 = 40'000  coercion methods.
+
+40,000 coercion methods sounds indeed crazy. But have you considered 
+having 200 coercions from ANY to <everything>?
+
+For example the coercion from ANY to dgTMatrix would do as(as(as(from, 
+"dMatrix"), "generalMatrix"), "TsparseMatrix").
+
+Maybe the ANY->xyzMatrix methods could even be generated programmatically?
+
+Best,
+
+H.
+
+>
+> Rather, Matrix package users should use to high level abstract Matrix
+> classes such as "sparseMatrix" or "CsparseMatrix" or
+> "TsparseMatrix" or "dMatrix", "symmetricMatrix".
+>
+> In the case of  as(<dgCMatrix>, "dgTMatrix") , if you
+> replace "dgTMatrix" by "TsparseMatrix"
+> the result will be the same but also work in the future when the
+> deprecation may have been turned into a defunctation ...
+>
+> Martin
+>
+> ______________________________________________
+> R-devel at r-project.org  mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Herv? Pag?s
+
+Bioconductor Core Team
+hpages.on.github at gmail.com
+
+	[[alternative HTML version deleted]]
+
+
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Wed Oct  4 21:03:50 2023
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Wed, 4 Oct 2023 21:03:50 +0200
+Subject: [Rd] [R-pkg-devel] Problem with "compacting" pdf files.
+In-Reply-To: <20231002145809.41884ebc@arachnoid>
+References: <20231001211547.4c46512e@rolf-Latitude-E7470>
+ <20231001152234.6bdd40ec@Tarkus>
+ <20231002100113.2ce1c902@rolf-Latitude-E7470>
+ <20231002145809.41884ebc@arachnoid>
+Message-ID: <25885.46870.856241.962095@hornik.net>
+
+>>>>> Ivan Krylov writes:
+
+Thanks: committed now.
+
+Best
+-k
+
+> Dear Rolf,
+> (Moving this one to R-devel...)
+
+> On Sun,  1 Oct 2023 21:01:13 +0000
+> Rolf Turner <rolfturner at posteo.net> wrote:
+
+>> I *really* think that the instructions from CRAN could have been
+>> clearer!  Without your guidance I'd have been at a total loss.
+
+> Since the CRAN e-mails quote the R CMD check messages verbatim, would
+> it have been enough if R CMD check suggested using --compact-vignettes?
+
+> Index: src/library/tools/R/check.R
+> ===================================================================
+> --- src/library/tools/R/check.R	(revision 85249)
+> +++ src/library/tools/R/check.R	(working copy)
+> @@ -3079,7 +3079,8 @@
+>                           "  'qpdf' made some significant size reductions:\n",
+>                           paste("  ", res, collapse = "\n"),
+>                           "\n",
+> -                         "  consider running tools::compactPDF() on these files\n")
+> +                         "  consider running tools::compactPDF() on these files,\n",
+> +                         "  or build the source package with --compact-vignettes\n")
+>              }
+>              if (R_check_doc_sizes2) {
+>                  gs_cmd <- find_gs_cmd()
+> @@ -3093,7 +3094,8 @@
+>                                   "  'gs+qpdf' made some significant size reductions:\n",
+>                                   paste("  ", res, collapse = "\n"),
+>                                   "\n",
+> -                                 '  consider running tools::compactPDF(gs_quality = "ebook") on these files\n')
+> +                                 '  consider running tools::compactPDF(gs_quality = "ebook") on these files,\n',
+> +                                 '  or build the source package with --compact-vignettes=both\n')
+>                      }
+>                  } else {
+>                      if (!any) noteLog(Log)
+
+> Or is there anything else you would prefer to be reworded? Should the
+> message link to Writing R Extensions, section 1.4? Recently there was a
+> project to improve the R CMD check messages [*], but I managed to miss
+> almost all of it.
+
+> -- 
+> Best regards,
+> Ivan
+
+> [*] https://github.com/r-devel/r-project-sprint-2023/issues/55
+
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
