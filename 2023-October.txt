@@ -2893,3 +2893,105 @@ Charlie
 >
 
 
+From ch|r|com @end|ng |rom goog|e@com  Tue Oct 10 01:57:29 2023
+From: ch|r|com @end|ng |rom goog|e@com (Michael Chirico)
+Date: Mon, 9 Oct 2023 16:57:29 -0700
+Subject: [Rd] FR: valid_regex() to test string validity as a regular
+ expression
+Message-ID: <CAD7Bkx9pEH78_1pUk172f4JZuLVcAgjpegVG8VE8r=5+doE-Zw@mail.gmail.com>
+
+It will be useful to package authors trying to validate input which is
+supposed to be a valid regular expression.
+
+As near as I can tell, the only way we can do so now is to run any
+regex function and check for the warning and/or condition to bubble
+up:
+
+valid_regex <- function(str) {
+  stopifnot(is.character(str), length(str) == 1L)
+  !inherits(tryCatch(grepl(str, ""), condition = identity), "condition")
+}
+
+That's pretty hefty/inscrutable for such a simple validation. I see a
+variety of similar approaches in CRAN packages [1], all slightly
+different. It would be good for R to expose a "canonical" way to run
+this validation.
+
+At root, the problem is that R does not expose the regex compilation
+routines like 'tre_regcomp', so from the R side we have to resort to
+hacky approaches.
+
+Things get slightly complicated by encoding/useBytes modes
+(tre_regwcomp, tre_regncomp, tre_regwncomp, tre_regcompb,
+tre_regncompb; all in tre.h), but all are already present in other
+regex routines, so this is doable.
+
+Exposing a function to compile regular expressions is common in other
+languages, e.g. Go [2], Python [3], JavaScript [4].
+
+[1] https://github.com/search?q=lang%3AR+%2Fis%5Ba-zA-Z0-9._%5D*reg%5Ba-zA-Z0-9._%5D*ex.*%28%3C-%7C%3D%29%5Cs*function%2F+org%3Acran&type=code
+[2] https://pkg.go.dev/regexp#Compile
+[3] https://docs.python.org/3/library/re.html#re.compile
+[4] https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Tue Oct 10 02:19:31 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Mon, 9 Oct 2023 20:19:31 -0400
+Subject: [Rd] FR: valid_regex() to test string validity as a regular
+ expression
+In-Reply-To: <CAD7Bkx9pEH78_1pUk172f4JZuLVcAgjpegVG8VE8r=5+doE-Zw@mail.gmail.com>
+References: <CAD7Bkx9pEH78_1pUk172f4JZuLVcAgjpegVG8VE8r=5+doE-Zw@mail.gmail.com>
+Message-ID: <811b9fd8-4ccf-46c2-bc6a-947a135f3365@gmail.com>
+
+On 09/10/2023 7:57 p.m., Michael Chirico via R-devel wrote:
+> It will be useful to package authors trying to validate input which is
+> supposed to be a valid regular expression.
+> 
+> As near as I can tell, the only way we can do so now is to run any
+> regex function and check for the warning and/or condition to bubble
+> up:
+> 
+> valid_regex <- function(str) {
+>    stopifnot(is.character(str), length(str) == 1L)
+>    !inherits(tryCatch(grepl(str, ""), condition = identity), "condition")
+> }
+> 
+> That's pretty hefty/inscrutable for such a simple validation. I see a
+> variety of similar approaches in CRAN packages [1], all slightly
+> different. It would be good for R to expose a "canonical" way to run
+> this validation.
+
+I think currently we do as.character(str) (or some equivalent), so the 
+test shouldn't require str to be a character to start.  For example, 
+this is currently valid code:
+
+   grepl(1, "abc123")
+
+It's not great style, but shouldn't generate an error.
+
+Duncan Murdoch
+
+> 
+> At root, the problem is that R does not expose the regex compilation
+> routines like 'tre_regcomp', so from the R side we have to resort to
+> hacky approaches.
+> 
+> Things get slightly complicated by encoding/useBytes modes
+> (tre_regwcomp, tre_regncomp, tre_regwncomp, tre_regcompb,
+> tre_regncompb; all in tre.h), but all are already present in other
+> regex routines, so this is doable.
+> 
+> Exposing a function to compile regular expressions is common in other
+> languages, e.g. Go [2], Python [3], JavaScript [4].
+> 
+> [1] https://github.com/search?q=lang%3AR+%2Fis%5Ba-zA-Z0-9._%5D*reg%5Ba-zA-Z0-9._%5D*ex.*%28%3C-%7C%3D%29%5Cs*function%2F+org%3Acran&type=code
+> [2] https://pkg.go.dev/regexp#Compile
+> [3] https://docs.python.org/3/library/re.html#re.compile
+> [4] https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
