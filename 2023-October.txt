@@ -3329,3 +3329,200 @@ that (original post) was very much for R-help,  not at all for R-devel ...
 Martin
 
 
+From georgeo@t @end|ng |rom gm@||@com  Wed Oct 11 23:12:47 2023
+From: georgeo@t @end|ng |rom gm@||@com (George Ostrouchov)
+Date: Wed, 11 Oct 2023 17:12:47 -0400
+Subject: [Rd] About FlexiBLAS in the R-admin docs
+In-Reply-To: <mailman.53774.3.1695895202.51578.r-devel@r-project.org>
+References: <mailman.53774.3.1695895202.51578.r-devel@r-project.org>
+Message-ID: <E698DC79-C258-4A95-A8C6-933A512CA108@gmail.com>
+
+I agree that the "R Installation and Administration" guide statement about FlexiBLAS needs an update. Standard R in CentOS Stream 9, which is now downstream from Fedora, gives the following result for Matrix products in sessionInfo():
+
+> sessionInfo()
+R version 4.3.1 (2023-06-16)
+Platform: x86_64-redhat-linux-gnu (64-bit)
+Running under: CentOS Stream 9
+
+Matrix products: default
+BLAS/LAPACK: FlexiBLAS OPENBLAS-OPENMP;  LAPACK version 3.9.0
+?
+
+So OpenBLAS compiled with OpenMP is the default. FlexiBLAS (via the flexiblas package) is my favorite way to manage core use in multithreaded BLAS computations. It is also the default in the EasyBuild foss compiler toolchain for HPC clusters: https://docs.easybuild.io/common-toolchains/ 
+
+What would be a good way to suggest or construct an update?
+
+Best regards,
+George
+
+
+> Date: Wed, 27 Sep 2023 15:14:43 +0200
+> From: =?UTF-8?Q?I=C3=B1aki_Ucar?= <iucar at fedoraproject.org>
+> To: "r-devel at r-project.org" <R-devel at r-project.org>
+> Subject: [Rd] About FlexiBLAS in the R-admin docs
+> Message-ID:
+> 	<CALEXWq2x9gygnxt6S906BkQHd139CP783bTDQC4wmeM-uKuW3g at mail.gmail.com>
+> Content-Type: text/plain; charset="utf-8"
+> 
+> Hi,
+> 
+> Not sure if this is the right place for this. The "R Installation and
+> Administration" guide states:
+> 
+>> Apparently undocumented: FlexiBLAS on Fedora provides a complete LAPACK, but not the enhanced routines from ATLAS or OpenBLAS.
+> 
+> I'm not sure what this means. FlexiBLAS does provide 100% of BLAS and
+> LAPACK, and if the active backend (say, OpenBLAS) implements an
+> enhanced LAPACK routine, then the call is redirected to the backend.
+> If the user switches to another backend and that routine is not
+> available there, then the original LAPACK routine is dispatched
+> instead.
+> 
+> Best,
+> -- 
+> I?aki ?car
+> 
+
+
+	[[alternative HTML version deleted]]
+
+
+From tdhock5 @end|ng |rom gm@||@com  Thu Oct 12 01:02:06 2023
+From: tdhock5 @end|ng |rom gm@||@com (Toby Hocking)
+Date: Wed, 11 Oct 2023 16:02:06 -0700
+Subject: [Rd] FR: valid_regex() to test string validity as a regular
+ expression
+In-Reply-To: <CAD7Bkx_iUdtNuiB4cb4qMmqyhAzMrpH3bm=JWmRQ7uzYKM86Dg@mail.gmail.com>
+References: <CAD7Bkx9pEH78_1pUk172f4JZuLVcAgjpegVG8VE8r=5+doE-Zw@mail.gmail.com>
+ <7257c6e5-9618-44fb-9483-671cdadf2223@gmail.com>
+ <CAD7Bkx_iUdtNuiB4cb4qMmqyhAzMrpH3bm=JWmRQ7uzYKM86Dg@mail.gmail.com>
+Message-ID: <CALK03d2fq+iS=sDHXC5ewvB82d5pqEh5n1qtzgOrsSM5Ee4Dkw@mail.gmail.com>
+
+Hi Michael, it sounds like you don't want to use a CRAN package for
+this, but you may try re2, see below.
+
+> grepl("(invalid","subject",perl=TRUE)
+Error in grepl("(invalid", "subject", perl = TRUE) :
+  invalid regular expression '(invalid'
+In addition: Warning message:
+In grepl("(invalid", "subject", perl = TRUE) :
+  PCRE pattern compilation error
+    'missing closing parenthesis'
+    at ''
+
+> grepl("(invalid","subject",perl=FALSE)
+Error in grepl("(invalid", "subject", perl = FALSE) :
+  invalid regular expression '(invalid', reason 'Missing ')''
+In addition: Warning message:
+In grepl("(invalid", "subject", perl = FALSE) :
+  TRE pattern compilation error 'Missing ')''
+
+> re2::re2_regexp("(invalid")
+Error: missing ): (invalid
+
+On Tue, Oct 10, 2023 at 7:57?AM Michael Chirico via R-devel
+<r-devel at r-project.org> wrote:
+>
+> > Grepping an empty string might work in many cases...
+>
+> That's precisely why a base R offering is important, as a surer way of
+> validating in all cases. To be clear I am trying to directly access the
+> results of tre_regcomp().
+>
+> > it is probably more portable to simply be prepared to propagate such
+> errors from the actual use on real inputs
+>
+> That works best in self-contained calls -- foo(re) and we execute re inside
+> foo().
+>
+> But the specific context where I found myself looking for a regex validator
+> is more complicated (https://github.com/r-lib/lintr/pull/2225). User
+> supplies a regular expression in a configuration file, only "later" is it
+> actually supplied to grepl().
+>
+> Till now, we've done your suggestion -- just surface the regex error at run
+> time. But our goal is to make it friendlier and fail earlier at "compile
+> time" as the config is loaded, "long" before any regex is actually executed.
+>
+> At a bare minimum this is a good place to return a classed warning (say
+> invalid_regex_warning) to allow finer control than tryCatch(condition=).
+>
+> On Mon, Oct 9, 2023, 11:30?PM Tomas Kalibera <tomas.kalibera at gmail.com>
+> wrote:
+>
+> >
+> > On 10/10/23 01:57, Michael Chirico via R-devel wrote:
+> >
+> > It will be useful to package authors trying to validate input which is
+> > supposed to be a valid regular expression.
+> >
+> > As near as I can tell, the only way we can do so now is to run any
+> > regex function and check for the warning and/or condition to bubble
+> > up:
+> >
+> > valid_regex <- function(str) {
+> >   stopifnot(is.character(str), length(str) == 1L)
+> >   !inherits(tryCatch(grepl(str, ""), condition = identity), "condition")
+> > }
+> >
+> > That's pretty hefty/inscrutable for such a simple validation. I see a
+> > variety of similar approaches in CRAN packages [1], all slightly
+> > different. It would be good for R to expose a "canonical" way to run
+> > this validation.
+> >
+> > At root, the problem is that R does not expose the regex compilation
+> > routines like 'tre_regcomp', so from the R side we have to resort to
+> > hacky approaches.
+> >
+> > Hi Michael,
+> >
+> > I don't think you need compilation functions for that. If a regular
+> > expression is found invalid by a specific third party library R uses, the
+> > library should return and error to R and R should return an error to you,
+> > and you should probably propagate that to your users. Grepping an empty
+> > string might work in many cases as a test, but it is probably more portable
+> > to simply be prepared to propagate such errors from the actual use on real
+> > inputs. In theory, there could be some optimization for a particular case,
+> > the checking may not be the same - but that is the same say for compilation
+> > and checking.
+> >
+> > Things get slightly complicated by encoding/useBytes modes
+> > (tre_regwcomp, tre_regncomp, tre_regwncomp, tre_regcompb,
+> > tre_regncompb; all in tre.h), but all are already present in other
+> > regex routines, so this is doable.
+> >
+> > Re encodings, simply R strings should be valid in their encoding. This is
+> > not just for regular expressions but also for anything else. You shouldn't
+> > assume that R can handle invalid strings in any reasonable way. Definitely
+> > you shouldn't try adding invalid strings in tests - behavior with invalid
+> > strings is unspecified. To test whether a string is valid, there is
+> > validEnc() (or validUTF8()). But, again, it is probably safest to propagate
+> > errors from the regular expression R functions (in case the checks differ,
+> > particularly for non-UTF-8), also, duplicating the encoding checks can be a
+> > non-trivial overhead.
+> >
+> > If there was a strong need to have an automated way to somehow classify
+> > specifically errors from the regex libraries, perhaps R could attach some
+> > classes to them when the library tells.
+> >
+> > Tomas
+> >
+> > Exposing a function to compile regular expressions is common in other
+> > languages, e.g. Go [2], Python [3], JavaScript [4].
+> >
+> > [1] https://github.com/search?q=lang%3AR+%2Fis%5Ba-zA-Z0-9._%5D*reg%5Ba-zA-Z0-9._%5D*ex.*%28%3C-%7C%3D%29%5Cs*function%2F+org%3Acran&type=code
+> > [2] https://pkg.go.dev/regexp#Compile
+> > [3] https://docs.python.org/3/library/re.html#re.compile
+> > [4] https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/RegExp
+> >
+> > ______________________________________________R-devel at r-project.org mailing listhttps://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+> >
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
