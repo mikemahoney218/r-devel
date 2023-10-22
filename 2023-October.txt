@@ -3773,3 +3773,104 @@ Office: A 4.23
 Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
 
 
+From iuke-tier@ey m@iii@g oii uiow@@edu  Fri Oct 20 21:56:20 2023
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Fri, 20 Oct 2023 14:56:20 -0500 (CDT)
+Subject: [Rd] UseMethod forwarding of local variables
+Message-ID: <a5f8e18-95db-fcb8-d8f7-97b42f265a2b@uiowa.edu>
+
+UseMethod has since the beginning had the 'feature' that local
+variables in the generic are added to the environment in which the
+method body is evaluated. This is documented in ?UseMethod and
+R-lang.texi, but use of this 'feature' has been explicitly discouraged
+in R-lang.texi for many years.
+
+This is an unfortunate design decision for a number of reasons (see
+below), so the plan is to remove this 'feature' in the next major
+release.
+
+Fortunately only a small number of packages on CRAN (see below) seem
+to make use of this feature directly; a few more as reverse
+dependencies.  The maintainers of the directly affected packages will
+be notified separately.
+
+Current R-devel allows you to set the environment variable
+R_USEMETHOD_FORWARD_LOCALS=none to run R without this feature or
+R_USEMETHOD_FORWARD_LOCALS=error to signal an error when a forwarded
+variable's value is used.
+
+Some more details:
+
+An example:
+
+     > foo <- function(x) { yyy <- 77; UseMethod("foo") }
+     > foo.bar <- function(x) yyy
+     > foo(structure(1, class = "bar"))
+     [1] 77
+
+Some reasons the design is a bad idea:
+
+- You can't determine what a method does without knowing what the
+   generic it will be called from looks like.
+
+- Code analysis (codetools, the compiler) can't analyze method
+   code reliably.
+
+- You can't debug a method on its own. For the foo() example,
+
+     > foo.bar(structure(1, class = "bar"))
+     Error in foo.bar(structure(1, class = "bar")) : object 'yyy' not found
+
+- A method relying on these variables won't work when reached via NextMethod:
+
+     > foo.baz <- function(x) NextMethod("foo")
+     > foo(structure(2, class = c("baz", "bar")))
+     Error in foo.bar(structure(2, class = c("baz", "bar"))) :
+       object 'yyy' not found
+
+The directly affected CRAN packages I have identified are:
+
+- actuar
+- quanteda
+- optmatch
+- rlang
+- saeRobust
+- Sim.DiffProc
+- sugrrants
+- texmex
+
+Some of these fail with the environment set to 'error' but not to
+'none', so they are getting a value from somewhere else that may or
+may not be right.
+
+Affected as revdeps of optmatch:
+
+- cobalt
+- htetree
+- jointVIP
+- MatchIt
+- PCAmatchR
+- rcbalance
+- rcbsubset
+- RItools
+- stratamatch
+
+Affected as revdeps of texmex:
+
+- lax
+- mobirep
+
+Best,
+
+luke
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+
+
