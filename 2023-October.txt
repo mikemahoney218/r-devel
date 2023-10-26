@@ -3874,3 +3874,218 @@ Department of Statistics and        Fax:               319-335-3017
 Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
 
 
+From @tp @end|ng |rom p|@kor@k|@com  Tue Oct 24 06:01:58 2023
+From: @tp @end|ng |rom p|@kor@k|@com (Andrew Piskorski)
+Date: Tue, 24 Oct 2023 00:01:58 -0400
+Subject: [Rd] as.character.Date() strips names in R 4.3.2 beta, bug?
+Message-ID: <ZTdBtsP6P8F99R4A@piskorski.com>
+
+
+In previous versions of R, as.character.Date() retained any names on
+its input vector.  In R 4.3.2 beta, it removes names.  Is this change
+intentional, or a bug?  (For what it's worth, I greatly dislike this
+change, and hope it gets changed back.)
+
+
+$ grep DESCRIPTION /etc/lsb-release
+DISTRIB_DESCRIPTION="Ubuntu 20.04.1 LTS"
+$ R --vanilla
+R version 4.2.1 Patched (2022-07-09 r82577) -- "Funny-Looking Kid"
+> v2 <- structure(as.Date(c('2021-10-06','2021-10-08')) ,names=c('a','b'))
+> v2
+           a            b
+"2021-10-06" "2021-10-08"
+> class(v2)
+[1] "Date"
+> as.character(v2)
+           a            b
+"2021-10-06" "2021-10-08"
+> as.character.Date(v2)
+           a            b
+"2021-10-06" "2021-10-08"
+
+
+$ grep DESCRIPTION /etc/lsb-release
+DISTRIB_DESCRIPTION="Ubuntu 22.04.3 LTS"
+$ R --vanilla
+R version 4.3.2 beta (2023-10-22 r85392) -- "Eye Holes"
+> v2 <- structure(as.Date(c('2021-10-06','2021-10-08')) ,names=c('a','b'))
+> v2
+           a            b
+"2021-10-06" "2021-10-08"
+> class(v2)
+[1] "Date"
+> as.character(v2)
+[1] "2021-10-06" "2021-10-08"
+> as.character.Date(v2)
+[1] "2021-10-06" "2021-10-08"
+
+-- 
+Andrew Piskorski <atp at piskorski.com>
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Tue Oct 24 10:53:10 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Tue, 24 Oct 2023 10:53:10 +0200
+Subject: [Rd] as.character.Date() strips names in R 4.3.2 beta, bug?
+In-Reply-To: <ZTdBtsP6P8F99R4A@piskorski.com>
+References: <ZTdBtsP6P8F99R4A@piskorski.com>
+Message-ID: <25911.34294.766198.668886@stat.math.ethz.ch>
+
+>>>>> Andrew Piskorski 
+>>>>>     on Tue, 24 Oct 2023 00:01:58 -0400 writes:
+
+    > In previous versions of R, 
+
+Not in R 4.3.0 or 4.3.1   {you are a bit late with updating ..}.
+
+    >     as.character.Date() retained any names on
+    > its input vector.  In R 4.3.2 beta, it removes names.  Is this change
+    > intentional, or a bug?  (For what it's worth, I greatly dislike this
+    > change, and hope it gets changed back.)
+
+Yes, this change has been *very* intentional:  as.character() for
+these objects since 4.3.0 (April 2023) finally behaves as other
+as.character() methods and *does* drop attributes.
+
+The NEWS entry
+(visible since more than a year if you'd follows NEWS.Rd tweats/.. etc)  
+is
+
+   ? ?as.character(<POSIXt>)? now behaves more in line with the
+     methods for atomic vectors such as numbers, and is no longer
+     influenced by ?options()?.  Ditto for
+     ?as.character(<Date>)?.  The ?as.character()? method gets
+     arguments ?digits? and ?OutDec? with defaults _not_
+     depending on ?options()?.  Use of ?as.character(*, format = .)?
+     now warns.
+
+At the time (Sep 2022!) there was quite some traffic on R-devel
+about this, IIRC.
+
+Often it's most convenient for people to use  format() instead
+of as.character() if they want to keep names, notably here,
+because before the fix, the as.character() method for Date and POSIXt
+*was* identical to format()  --- contrary to all other methods
+for "simple" vectors.
+
+There's more about this if just simply at  ?as.character.Date
+
+Best regards,
+Martin
+
+--
+Martin Maechler
+ETH Zurich  and  R Core team
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue Oct 24 12:53:41 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 24 Oct 2023 12:53:41 +0200
+Subject: [Rd] About FlexiBLAS in the R-admin docs
+In-Reply-To: <E698DC79-C258-4A95-A8C6-933A512CA108@gmail.com>
+References: <mailman.53774.3.1695895202.51578.r-devel@r-project.org>
+ <E698DC79-C258-4A95-A8C6-933A512CA108@gmail.com>
+Message-ID: <5bcf6c56-bcfb-4f8b-8ba0-91375a5a540e@gmail.com>
+
+
+On 10/11/23 23:12, George Ostrouchov wrote:
+> I agree that the "R Installation and Administration" guide statement about FlexiBLAS needs an update. Standard R in CentOS Stream 9, which is now downstream from Fedora, gives the following result for Matrix products in sessionInfo():
+>
+>> sessionInfo()
+> R version 4.3.1 (2023-06-16)
+> Platform: x86_64-redhat-linux-gnu (64-bit)
+> Running under: CentOS Stream 9
+>
+> Matrix products: default
+> BLAS/LAPACK: FlexiBLAS OPENBLAS-OPENMP;  LAPACK version 3.9.0
+> ?
+>
+> So OpenBLAS compiled with OpenMP is the default. FlexiBLAS (via the flexiblas package) is my favorite way to manage core use in multithreaded BLAS computations. It is also the default in the EasyBuild foss compiler toolchain for HPC clusters: https://docs.easybuild.io/common-toolchains/
+
+The output of session info is based on that flexiblas is used and on 
+what flexiblas tells R is the backend it uses. R does not attempt to 
+check that optimized LAPACK functions from the backend really end up 
+called via flexiblas, and I don't think it could be realistically checked.
+
+But I've checked one case manually in Fedora 38 using Linux perf tool. 
+The following code:
+
+S <- toeplitz((10:1)/10)
+repeat { R <- rWishart(10, 20, S) }
+
+uses dpotrf from LAPACK, which is optimized in OpenBLAS and ATLAS and 
+the corresponding optimized implementations really appeared on the 
+sampling profile for me from the backend libraries.
+
+The comment from R Admin has been removed now and if anyone runs into 
+the problem (that an optimized LAPACK function is not called from a 
+backend that provides it), it would be best to report it with sufficient 
+detail to flexiblas.
+
+Best
+Tomas
+
+> What would be a good way to suggest or construct an update?
+>
+> Best regards,
+> George
+>
+>
+>> Date: Wed, 27 Sep 2023 15:14:43 +0200
+>> From: =?UTF-8?Q?I=C3=B1aki_Ucar?= <iucar at fedoraproject.org>
+>> To: "r-devel at r-project.org" <R-devel at r-project.org>
+>> Subject: [Rd] About FlexiBLAS in the R-admin docs
+>> Message-ID:
+>> 	<CALEXWq2x9gygnxt6S906BkQHd139CP783bTDQC4wmeM-uKuW3g at mail.gmail.com>
+>> Content-Type: text/plain; charset="utf-8"
+>>
+>> Hi,
+>>
+>> Not sure if this is the right place for this. The "R Installation and
+>> Administration" guide states:
+>>
+>>> Apparently undocumented: FlexiBLAS on Fedora provides a complete LAPACK, but not the enhanced routines from ATLAS or OpenBLAS.
+>> I'm not sure what this means. FlexiBLAS does provide 100% of BLAS and
+>> LAPACK, and if the active backend (say, OpenBLAS) implements an
+>> enhanced LAPACK routine, then the call is redirected to the backend.
+>> If the user switches to another backend and that routine is not
+>> available there, then the original LAPACK routine is dispatched
+>> instead.
+>>
+>> Best,
+>> -- 
+>> I?aki ?car
+>>
+>
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @tp @end|ng |rom p|@kor@k|@com  Tue Oct 24 19:39:55 2023
+From: @tp @end|ng |rom p|@kor@k|@com (Andrew Piskorski)
+Date: Tue, 24 Oct 2023 13:39:55 -0400
+Subject: [Rd] as.character.Date() strips names in R 4.3.2 beta, bug?
+In-Reply-To: <25911.34294.766198.668886@stat.math.ethz.ch>
+References: <ZTdBtsP6P8F99R4A@piskorski.com>
+ <25911.34294.766198.668886@stat.math.ethz.ch>
+Message-ID: <ZTgBa1746/AG4Mjg@piskorski.com>
+
+On Tue, Oct 24, 2023 at 10:53:10AM +0200, Martin Maechler wrote:
+
+> Yes, this change has been *very* intentional:  as.character() for
+> these objects since 4.3.0 (April 2023) finally behaves as other
+> as.character() methods and *does* drop attributes.
+[...]
+
+Thank you for the detailed explanation and pointers to the old info
+I'd missed, Martin.  The as.character.Date tip in particular was very
+helpful in adapting my code to work with this change.
+
+-- 
+Andrew Piskorski <atp at piskorski.com>
+
+
