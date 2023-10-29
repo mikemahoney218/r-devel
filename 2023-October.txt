@@ -4172,3 +4172,104 @@ Hilmar
 	[[alternative HTML version deleted]]
 
 
+From quent|n@thorne @end|ng |rom protonm@||@com  Fri Oct 27 12:16:55 2023
+From: quent|n@thorne @end|ng |rom protonm@||@com (quentin.thorne)
+Date: Fri, 27 Oct 2023 10:16:55 +0000
+Subject: [Rd] Wayland Display Support in R Plot
+Message-ID: <2hucKaz80G9FeAnZlo6F3ti_Y4wcvNkje6QvQcPgLGgxzqb3YIY470MwGZAit4VW2REluwTH062EPltAFjfyUfJ1fTk0dmrcwHjwsO0dtG4=@protonmail.com>
+
+Hello,
+
+I'm interested in understanding the current state of Wayland display support in R plot, and I was wondering if any progress or discussions have taken place regarding this matter.
+
+As Wayland continues to gain popularity as a display protocol on modern Linux systems, having Wayland support for R's plotting capabilities would be a significant enhancement.
+
+Could anyone provide information on the current status of Wayland support in R plot? Are there any ongoing efforts, discussions, or packages in development that address this issue? I would appreciate any insights or guidance in this regard.
+
+Thank you for your time and assistance.
+
+Best regards,
+
+Quentin Thorne
+	[[alternative HTML version deleted]]
+
+
+From @d@mboegh @end|ng |rom gm@||@com  Fri Oct 27 13:32:37 2023
+From: @d@mboegh @end|ng |rom gm@||@com (Adam marstrand)
+Date: Fri, 27 Oct 2023 13:32:37 +0200
+Subject: [Rd] Issues with current data.matrix implementation
+Message-ID: <CADkg1x0bxR6eX20XK_E_5bwdogO1qPsQGtERKQ3DWos_KXa4Jg@mail.gmail.com>
+
+Hi R people,
+
+I have recently had to use some old code which utilizes data.matrix and
+found a functionality which I found unintuitive. We are converting a
+dataframe containing numerical values stored as character strings to a
+matrix using the data.matrix function.
+
+This does unfortunately not yield a numerical matrix consisting of the same
+numbers stored in the original matrix - see for example below:
+
+> df <-
+data.frame(a=c("1","2","7","10"),b=c("1","7","10","19"),c=c("a","b","c","a"),d=c("1","7","a","b"))
+> df
+   a   b    c d
+1  1  1    a 1
+2  2  7    b 7
+3  7  10  c a
+4 10 19  a b
+
+> data.matrix(df)
+     a b c d
+[1,] 1 1 1 1
+[2,] 3 4 2 2
+[3,] 4 2 3 3
+[4,] 2 3 1 4
+
+The current implementation of data.matrix iterates over each column in the
+dataframe and utilizes the following code to convert a column into
+integers:
+
+if (is.character(xi)) {
+      frame[[i]] <- as.integer(as.factor(xi))
+      next
+    }
+
+While I kind of understand the reasoning here, i.e. you avoid NA's when the
+characters are non-numerical, this returns a (to me) unintuitive result
+when providing the function with a dataframe containing numerical
+characters. This makes the values of any two columns output from
+data.matrix very difficult to compare, and not easily traceable to the
+original data. Was this really the original intent behind the function?
+
+I would like to propose a change, which instead checks whether the
+data.matrix function can convert a column to integers without utilizing the
+as.factor intermediary. Otherwise it will use the current implementation.
+
+if (is.character(xi)) {
+      frame[[i]] <- tryCatch({
+        as.integer(xi)
+      }, warning = function(war) {
+        f = as.integer(factor(xi))
+        return(f)
+      })
+      next
+ }
+
+This change results in the following outputs from the data.matrix function
+(using the earlier df):
+
+> data.matrix_new(df)
+      a  b c d
+[1,]  1  1 1 1
+[2,]  2  7 2 2
+[3,]  7 10 3 3
+[4,] 10 19 1 4
+
+Thanks for considering this!
+Best,
+Adam Marstrand
+
+	[[alternative HTML version deleted]]
+
+
