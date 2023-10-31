@@ -4273,3 +4273,426 @@ Adam Marstrand
 	[[alternative HTML version deleted]]
 
 
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Sun Oct 29 18:42:19 2023
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Sun, 29 Oct 2023 10:42:19 -0700
+Subject: [Rd] dim<-() changed in R-devel;
+ no longer removing "dimnames" when doing dim(x) <- dim(x)
+Message-ID: <CAFDcVCTZTjS6ojk=7SordyK517NcKD8KoCK6RgLoYgcoZ13DnQ@mail.gmail.com>
+
+Hello,
+
+the fix of PR18612 (https://bugs.r-project.org/show_bug.cgi?id=18612)
+in r85380 (https://github.com/wch/r-source/commit/2653cc6203fce4c48874111c75bbccac3ac4e803)
+caused a change in `dim<-()`.  Specifically, in the past, any
+`dim<-()` assignment would _always_ remove "dimnames" and "names"
+attributes per help("dim"):
+
+    The replacement method changes the "dim" attribute (provided the
+new value is compatible) and removes any "dimnames" and "names"
+attributes.
+
+In the new version, assigning the same "dim" as before will no longer
+remove "dimnames".  I'm reporting here to check whether this change
+was intended, or if it was an unintended side effect of the bug fix.
+
+For example, in R Under development (unstable) (2023-10-21 r85379), we
+would get:
+
+> x <- array(1:2, dim=c(1,2), dimnames=list("A", c("a","b")))
+> str(dimnames(x))
+List of 2
+ $ : chr "A"
+ $ : chr [1:2] "a" "b"
+
+> dim(x) <- dim(x)    ## Removes "dimnames" no matter what
+> str(dimnames(x))
+ NULL
+
+
+whereas in R Under development (unstable) (2023-10-21 r85380) and
+beyond, we now get:
+
+> x <- array(1:2, dim=c(1,2), dimnames=list("A", c("a","b")))
+> str(dimnames(x))
+List of 2
+ $ : chr "A"
+ $ : chr [1:2] "a" "b"
+
+> dim(x) <- dim(x)    ## No longer removes "dimnames"
+> str(dimnames(x))
+List of 2
+ $ : chr "A"
+ $ : chr [1:2] "a" "b"
+
+> dim(x) <- rev(dim(x))  ## Still removes "dimnames"
+> str(dimnames(x))
+ NULL
+
+/Henrik
+
+
+From p@u| @end|ng |rom @t@t@@uck|@nd@@c@nz  Sun Oct 29 19:54:39 2023
+From: p@u| @end|ng |rom @t@t@@uck|@nd@@c@nz (Paul Murrell)
+Date: Mon, 30 Oct 2023 07:54:39 +1300
+Subject: [Rd] Wayland Display Support in R Plot
+In-Reply-To: <2hucKaz80G9FeAnZlo6F3ti_Y4wcvNkje6QvQcPgLGgxzqb3YIY470MwGZAit4VW2REluwTH062EPltAFjfyUfJ1fTk0dmrcwHjwsO0dtG4=@protonmail.com>
+References: <2hucKaz80G9FeAnZlo6F3ti_Y4wcvNkje6QvQcPgLGgxzqb3YIY470MwGZAit4VW2REluwTH062EPltAFjfyUfJ1fTk0dmrcwHjwsO0dtG4=@protonmail.com>
+Message-ID: <50742ade-f12c-4e32-85ff-481ed7e104c8@stat.auckland.ac.nz>
+
+Hi
+
+I am unaware of any Wayland display support.
+
+One useful way forward would be an R package that provides such a device 
+(along the lines of 'Cairo', 'tikzDevice', et al)
+
+Paul
+
+On 27/10/23 23:16, quentin.thorne via R-devel wrote:
+> Hello,
+> 
+> I'm interested in understanding the current state of Wayland display 
+> support in R plot, and I was wondering if any progress or discussions 
+> have taken place regarding this matter.
+> 
+> As Wayland continues to gain popularity as a display protocol on modern 
+> Linux systems, having Wayland support for R's plotting capabilities 
+> would be a significant enhancement.
+> 
+> Could anyone provide information on the current status of Wayland 
+> support in R plot? Are there any ongoing efforts, discussions, or 
+> packages in development that address this issue? I would appreciate any 
+> insights or guidance in this regard.
+> 
+> Thank you for your time and assistance.
+> 
+> Best regards,
+> 
+> Quentin Thorne
+> [[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel 
+> <https://stat.ethz.ch/mailman/listinfo/r-devel>
+
+-- 
+Dr Paul Murrell
+Te Kura Tatauranga | Department of Statistics
+Waipapa Taumata Rau | The University of Auckland
+Private Bag 92019, Auckland 1142, New Zealand
+64 9 3737599 x85392
+paul at stat.auckland.ac.nz
+www.stat.auckland.ac.nz/~paul/
+
+
+From edd @end|ng |rom deb|@n@org  Sun Oct 29 20:38:20 2023
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Sun, 29 Oct 2023 14:38:20 -0500
+Subject: [Rd] Wayland Display Support in R Plot
+In-Reply-To: <50742ade-f12c-4e32-85ff-481ed7e104c8@stat.auckland.ac.nz>
+References: <2hucKaz80G9FeAnZlo6F3ti_Y4wcvNkje6QvQcPgLGgxzqb3YIY470MwGZAit4VW2REluwTH062EPltAFjfyUfJ1fTk0dmrcwHjwsO0dtG4=@protonmail.com>
+ <50742ade-f12c-4e32-85ff-481ed7e104c8@stat.auckland.ac.nz>
+Message-ID: <25918.46252.345432.450442@rob.eddelbuettel.com>
+
+
+On 30 October 2023 at 07:54, Paul Murrell wrote:
+| I am unaware of any Wayland display support.
+| 
+| One useful way forward would be an R package that provides such a device 
+| (along the lines of 'Cairo', 'tikzDevice', et al)
+
+As I understand it, it is a protocol, and not a device.
+
+Several Linux distributions have long defaulted to it, so we already should
+have thousands of users. While 'not X11' it provides a compatibility layer
+and should be seamless.
+
+I think I needed to fall back to X11 for a particular applications (likely
+OBS) so my session tells me (under Settings -> About -> Windowing System) I
+am still running X11. I'll check again once I upgrade from Ubuntu 23.04 to
+Ubuntu 23.10
+
+See https://en.wikipedia.org/wiki/Wayland_(protocol) for more.
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Sun Oct 29 21:20:07 2023
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Mon, 30 Oct 2023 09:20:07 +1300
+Subject: [Rd] Wayland Display Support in R Plot
+In-Reply-To: <25918.46252.345432.450442@rob.eddelbuettel.com>
+References: <2hucKaz80G9FeAnZlo6F3ti_Y4wcvNkje6QvQcPgLGgxzqb3YIY470MwGZAit4VW2REluwTH062EPltAFjfyUfJ1fTk0dmrcwHjwsO0dtG4=@protonmail.com>
+ <50742ade-f12c-4e32-85ff-481ed7e104c8@stat.auckland.ac.nz>
+ <25918.46252.345432.450442@rob.eddelbuettel.com>
+Message-ID: <DBA3729C-1876-44B9-9E29-47D62B551CD9@R-project.org>
+
+
+
+> On 30/10/2023, at 8:38 AM, Dirk Eddelbuettel <edd at debian.org> wrote:
+> 
+> 
+> On 30 October 2023 at 07:54, Paul Murrell wrote:
+> | I am unaware of any Wayland display support.
+> | 
+> | One useful way forward would be an R package that provides such a device 
+> | (along the lines of 'Cairo', 'tikzDevice', et al)
+> 
+> As I understand it, it is a protocol, and not a device.
+> 
+
+Well, X11 is a protocol, not a device, either.
+
+Wayland is a lot worse, since it doesn't really do much at all - the clients are fully responsible for drawing (doesn't even support remote connections).
+
+Given that Wayland is essentially a "dumb" framebuffer, probably the easiest way would be to take Cairo and add a libwayland back-end. Cairo is already modular so it's relatively straight-forward to add a new back-end to it (I'd probably just copy xlib-backend.c and replace X11 calls with libwayland calls since the low-level design is the same).
+
+However, that is limited only to devices, so you would still run R code in the shell (or other GUI that may or may not by Wayland-based). Given that Wayland is so minimal, you'd need some GUI library for anything beyond that - so you may was well just run a Wayland-based browser and be done with it saving you all the bother (oh, right, that's called RStudio ;)).
+
+One package that may be worth adding Wayland backend to is rgl so you get OpenGL on Wayland - I'd simply re-write it to use GLFW so it works across all platforms and including Wayland.
+
+Cheers,
+Simon
+
+
+
+> Several Linux distributions have long defaulted to it, so we already should
+> have thousands of users. While 'not X11' it provides a compatibility layer
+> and should be seamless.
+> 
+> I think I needed to fall back to X11 for a particular applications (likely
+> OBS) so my session tells me (under Settings -> About -> Windowing System) I
+> am still running X11. I'll check again once I upgrade from Ubuntu 23.04 to
+> Ubuntu 23.10
+> 
+> See https://en.wikipedia.org/wiki/Wayland_(protocol) for more.
+> 
+> Dirk
+> 
+> -- 
+> dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sun Oct 29 21:48:01 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sun, 29 Oct 2023 16:48:01 -0400
+Subject: [Rd] Wayland Display Support in R Plot
+In-Reply-To: <DBA3729C-1876-44B9-9E29-47D62B551CD9@R-project.org>
+References: <2hucKaz80G9FeAnZlo6F3ti_Y4wcvNkje6QvQcPgLGgxzqb3YIY470MwGZAit4VW2REluwTH062EPltAFjfyUfJ1fTk0dmrcwHjwsO0dtG4=@protonmail.com>
+ <50742ade-f12c-4e32-85ff-481ed7e104c8@stat.auckland.ac.nz>
+ <25918.46252.345432.450442@rob.eddelbuettel.com>
+ <DBA3729C-1876-44B9-9E29-47D62B551CD9@R-project.org>
+Message-ID: <53b676f5-11ad-42c7-b012-5e21bb8461e1@gmail.com>
+
+On 29/10/2023 4:20 p.m., Simon Urbanek wrote:
+> 
+> 
+>> On 30/10/2023, at 8:38 AM, Dirk Eddelbuettel <edd at debian.org> wrote:
+>>
+>>
+>> On 30 October 2023 at 07:54, Paul Murrell wrote:
+>> | I am unaware of any Wayland display support.
+>> |
+>> | One useful way forward would be an R package that provides such a device
+>> | (along the lines of 'Cairo', 'tikzDevice', et al)
+>>
+>> As I understand it, it is a protocol, and not a device.
+>>
+> 
+> Well, X11 is a protocol, not a device, either.
+> 
+> Wayland is a lot worse, since it doesn't really do much at all - the clients are fully responsible for drawing (doesn't even support remote connections).
+> 
+> Given that Wayland is essentially a "dumb" framebuffer, probably the easiest way would be to take Cairo and add a libwayland back-end. Cairo is already modular so it's relatively straight-forward to add a new back-end to it (I'd probably just copy xlib-backend.c and replace X11 calls with libwayland calls since the low-level design is the same).
+> 
+> However, that is limited only to devices, so you would still run R code in the shell (or other GUI that may or may not by Wayland-based). Given that Wayland is so minimal, you'd need some GUI library for anything beyond that - so you may was well just run a Wayland-based browser and be done with it saving you all the bother (oh, right, that's called RStudio ;)).
+> 
+> One package that may be worth adding Wayland backend to is rgl so you get OpenGL on Wayland - I'd simply re-write it to use GLFW so it works across all platforms and including Wayland.
+
+I looked into using GLFW a while ago, but it seemed too hard to do 
+without other really major changes to rgl, so that's not going to happen 
+soon (unless someone else does it).
+
+I think the issue was that it was hard to get it to work with the 
+ancient OpenGL 1.2 that rgl uses.  I forget whether it was just hard or 
+actually impossible.
+
+I am slowly working towards having rgl use newer OpenGL versions, but I 
+don't expect this to be done for quite a while.
+
+Duncan Murdoch
+
+> Cheers,
+> Simon
+> 
+> 
+> 
+>> Several Linux distributions have long defaulted to it, so we already should
+>> have thousands of users. While 'not X11' it provides a compatibility layer
+>> and should be seamless.
+>>
+>> I think I needed to fall back to X11 for a particular applications (likely
+>> OBS) so my session tells me (under Settings -> About -> Windowing System) I
+>> am still running X11. I'll check again once I upgrade from Ubuntu 23.04 to
+>> Ubuntu 23.10
+>>
+>> See https://en.wikipedia.org/wiki/Wayland_(protocol) for more.
+>>
+>> Dirk
+>>
+>> -- 
+>> dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From edd @end|ng |rom deb|@n@org  Sun Oct 29 22:29:28 2023
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Sun, 29 Oct 2023 16:29:28 -0500
+Subject: [Rd] Wayland Display Support in R Plot
+In-Reply-To: <DBA3729C-1876-44B9-9E29-47D62B551CD9@R-project.org>
+References: <2hucKaz80G9FeAnZlo6F3ti_Y4wcvNkje6QvQcPgLGgxzqb3YIY470MwGZAit4VW2REluwTH062EPltAFjfyUfJ1fTk0dmrcwHjwsO0dtG4=@protonmail.com>
+ <50742ade-f12c-4e32-85ff-481ed7e104c8@stat.auckland.ac.nz>
+ <25918.46252.345432.450442@rob.eddelbuettel.com>
+ <DBA3729C-1876-44B9-9E29-47D62B551CD9@R-project.org>
+Message-ID: <25918.52920.323280.338555@rob.eddelbuettel.com>
+
+
+On 30 October 2023 at 09:20, Simon Urbanek wrote:
+| > On 30/10/2023, at 8:38 AM, Dirk Eddelbuettel <edd at debian.org> wrote:
+| > On 30 October 2023 at 07:54, Paul Murrell wrote:
+| > | I am unaware of any Wayland display support.
+| > | 
+| > | One useful way forward would be an R package that provides such a device 
+| > | (along the lines of 'Cairo', 'tikzDevice', et al)
+| > 
+| > As I understand it, it is a protocol, and not a device.
+| > 
+| 
+| Well, X11 is a protocol, not a device, either.
+
+Point taken.
+
+| > I think I needed to fall back to X11 for a particular applications (likely
+| > OBS) so my session tells me (under Settings -> About -> Windowing System) I
+| > am still running X11. I'll check again once I upgrade from Ubuntu 23.04 to
+| > Ubuntu 23.10
+
+Booted an older laptop using 22.04, selected 'not X11' in the gdm dialog but
+the same Gnome Menu still says Windowing System: X11.  So I am no longer sure
+how I would convince myself if I am under Wayland there or not.  The answers
+in https://unix.stackexchange.com/questions/202891/how-to-know-whether-wayland-or-x11-is-being-used
+suggest I still run X11 too.  So I got nuttin' here.
+
+In any event, I read OP as asking 'do we need a new device' and I still think
+that the answer to that still is 'likely not' as the X11 compatibility layer
+should cover this.  
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Sun Oct 29 23:20:30 2023
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Mon, 30 Oct 2023 11:20:30 +1300
+Subject: [Rd] GLFW [Was: Wayland Display Support in R Plot]
+In-Reply-To: <53b676f5-11ad-42c7-b012-5e21bb8461e1@gmail.com>
+References: <2hucKaz80G9FeAnZlo6F3ti_Y4wcvNkje6QvQcPgLGgxzqb3YIY470MwGZAit4VW2REluwTH062EPltAFjfyUfJ1fTk0dmrcwHjwsO0dtG4=@protonmail.com>
+ <50742ade-f12c-4e32-85ff-481ed7e104c8@stat.auckland.ac.nz>
+ <25918.46252.345432.450442@rob.eddelbuettel.com>
+ <DBA3729C-1876-44B9-9E29-47D62B551CD9@R-project.org>
+ <53b676f5-11ad-42c7-b012-5e21bb8461e1@gmail.com>
+Message-ID: <095678C7-0403-46FD-968E-825D0B03F30D@R-project.org>
+
+Duncan,
+
+at least according to the docs GLFW doesn't really care - it will forward whatever OpenGL is available on the platform. In fact it says:
+
+"By default it also includes the OpenGL header from your development environment. On some platforms this header only supports older versions of OpenGL. The most extreme case is Windows, where it typically only supports OpenGL 1.2."
+
+so, really, OpenGL 1.2 is perfect.
+
+You can request a minimal version, but don't have to, i.e., old versions are ok. I have tested libglfw3 (3.3.8) with OpenGL 1.2 (on macOS) and it worked just fine.
+
+That said, both points were meant for the list in general - those are nice self-contained projects (add libwayland to Cairo and GLFW to rgl) for someone with spare time to contribute...
+
+Cheers,
+Simon
+
+
+
+> On 30/10/2023, at 9:48 AM, Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+> 
+> On 29/10/2023 4:20 p.m., Simon Urbanek wrote:
+>>> On 30/10/2023, at 8:38 AM, Dirk Eddelbuettel <edd at debian.org> wrote:
+>>> 
+>>> 
+>>> On 30 October 2023 at 07:54, Paul Murrell wrote:
+>>> | I am unaware of any Wayland display support.
+>>> |
+>>> | One useful way forward would be an R package that provides such a device
+>>> | (along the lines of 'Cairo', 'tikzDevice', et al)
+>>> 
+>>> As I understand it, it is a protocol, and not a device.
+>>> 
+>> Well, X11 is a protocol, not a device, either.
+>> Wayland is a lot worse, since it doesn't really do much at all - the clients are fully responsible for drawing (doesn't even support remote connections).
+>> Given that Wayland is essentially a "dumb" framebuffer, probably the easiest way would be to take Cairo and add a libwayland back-end. Cairo is already modular so it's relatively straight-forward to add a new back-end to it (I'd probably just copy xlib-backend.c and replace X11 calls with libwayland calls since the low-level design is the same).
+>> However, that is limited only to devices, so you would still run R code in the shell (or other GUI that may or may not by Wayland-based). Given that Wayland is so minimal, you'd need some GUI library for anything beyond that - so you may was well just run a Wayland-based browser and be done with it saving you all the bother (oh, right, that's called RStudio ;)).
+>> One package that may be worth adding Wayland backend to is rgl so you get OpenGL on Wayland - I'd simply re-write it to use GLFW so it works across all platforms and including Wayland.
+> 
+> I looked into using GLFW a while ago, but it seemed too hard to do without other really major changes to rgl, so that's not going to happen soon (unless someone else does it).
+> 
+> I think the issue was that it was hard to get it to work with the ancient OpenGL 1.2 that rgl uses.  I forget whether it was just hard or actually impossible.
+> 
+> I am slowly working towards having rgl use newer OpenGL versions, but I don't expect this to be done for quite a while.
+> 
+> Duncan Murdoch
+> 
+>> Cheers,
+>> Simon
+>>> Several Linux distributions have long defaulted to it, so we already should
+>>> have thousands of users. While 'not X11' it provides a compatibility layer
+>>> and should be seamless.
+>>> 
+>>> I think I needed to fall back to X11 for a particular applications (likely
+>>> OBS) so my session tells me (under Settings -> About -> Windowing System) I
+>>> am still running X11. I'll check again once I upgrade from Ubuntu 23.04 to
+>>> Ubuntu 23.10
+>>> 
+>>> See https://en.wikipedia.org/wiki/Wayland_(protocol) for more.
+>>> 
+>>> Dirk
+>>> 
+>>> -- 
+>>> dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+>>> 
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>> 
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
