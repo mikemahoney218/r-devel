@@ -4696,3 +4696,610 @@ Simon
 > 
 
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Mon Oct 30 11:53:21 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Mon, 30 Oct 2023 11:53:21 +0100
+Subject: [Rd] dim<-() changed in R-devel;
+ no longer removing "dimnames" when doing dim(x) <- dim(x)
+In-Reply-To: <CAFDcVCTZTjS6ojk=7SordyK517NcKD8KoCK6RgLoYgcoZ13DnQ@mail.gmail.com>
+References: <CAFDcVCTZTjS6ojk=7SordyK517NcKD8KoCK6RgLoYgcoZ13DnQ@mail.gmail.com>
+Message-ID: <25919.35617.446508.577753@stat.math.ethz.ch>
+
+
+>>>>> Henrik Bengtsson 
+>>>>>     on Sun, 29 Oct 2023 10:42:19 -0700 writes:
+
+    > Hello,
+
+    > the fix of PR18612
+    > (https://bugs.r-project.org/show_bug.cgi?id=18612) in
+    > r85380
+    > (https://github.com/wch/r-source/commit/2653cc6203fce4c48874111c75bbccac3ac4e803)
+    > caused a change in `dim<-()`.  Specifically, in the past,
+    > any `dim<-()` assignment would _always_ remove "dimnames"
+    > and "names" attributes per help("dim"):
+
+
+    >     The replacement method changes the "dim" attribute
+    > (provided the new value is compatible) and removes any
+    > "dimnames" and "names" attributes.
+
+    > In the new version, assigning the same "dim" as before
+    > will no longer remove "dimnames".  I'm reporting here to
+    > check whether this change was intended, or if it was an
+    > unintended side effect of the bug fix.
+
+    > For example, in R Under development (unstable) (2023-10-21
+    > r85379), we would get:
+
+    >> x <- array(1:2, dim=c(1,2), dimnames=list("A",
+    >> c("a","b"))) str(dimnames(x))
+    > List of 2 $ : chr "A" $ : chr [1:2] "a" "b"
+
+    >> dim(x) <- dim(x) ## Removes "dimnames" no matter what
+    >> str(dimnames(x))
+    >  NULL
+
+
+    > whereas in R Under development (unstable) (2023-10-21
+    > r85380) and beyond, we now get:
+
+    >> x <- array(1:2, dim=c(1,2), dimnames=list("A",
+    >> c("a","b"))) str(dimnames(x))
+    > List of 2 $ : chr "A" $ : chr [1:2] "a" "b"
+
+    >> dim(x) <- dim(x) ## No longer removes "dimnames"
+    >> str(dimnames(x))
+    > List of 2 $ : chr "A" $ : chr [1:2] "a" "b"
+
+    >> dim(x) <- rev(dim(x)) ## Still removes "dimnames"
+    >> str(dimnames(x))
+    >  NULL
+
+    > /Henrik
+
+Thank you, Henrik.
+
+This is "funny" (in an unusal sense):
+indeed, the change was *in*advertent, by me (svn rev 85380).
+
+I had experimentally {i.e., only in my own private version of R-devel!}
+modified the behavior of `dim<-` somewhat 
+such it does *not* unnecessarily drop dimnames,
+e.g., in your   `dim(x) <- dim(x)` case above,
+one could really argue that it's a "true loss" if x loses
+dimnames "unnecessarily" ... 
+
+OTOH, I knew in the mean time that  `dim<-` has always been
+documented to drop dimnames in all cases,  and even more
+importantly, I got a strong recommendation to *not* go further
+with this idea -- not only for back compatibility reasons, but
+also for internal logical consistency.
+
+Most probably, we will just revert this inadvertent change,
+but before that ... since it has been out in the wild anyway,
+we could quickly consider if it *did* break code.
+
+I assume it did, or you would not have noticed ?
+
+Martin
+
+
+From Roger@B|v@nd @end|ng |rom nhh@no  Mon Oct 30 12:26:01 2023
+From: Roger@B|v@nd @end|ng |rom nhh@no (Roger Bivand)
+Date: Mon, 30 Oct 2023 11:26:01 +0000
+Subject: [Rd] Wayland Display Support in R Plot
+Message-ID: <SV0P279MB047573DF4EAD91093C4080D1EEA1A@SV0P279MB0475.NORP279.PROD.OUTLOOK.COM>
+
+I also noticed this:
+
+https://www.theregister.com/2023/10/13/gnome_proposes_dropping_x11/
+
+which is concerning. Until now, I've retained X11 on Fedora because of difficulties in screen sharing via zoom in Wayland sessions.
+
+Roger
+
+--
+Roger Bivand
+Emeritus Professor
+Norwegian School of Economics
+Postboks 3490 Ytre Sandviken, 5045 Bergen, Norway
+Roger.Bivand at nhh.no
+
+From w|||em @end|ng |rom w||gtenberg@n|  Mon Oct 30 13:17:33 2023
+From: w|||em @end|ng |rom w||gtenberg@n| (Willem Ligtenberg)
+Date: Mon, 30 Oct 2023 13:17:33 +0100
+Subject: [Rd] Wayland Display Support in R Plot
+In-Reply-To: <25918.52920.323280.338555@rob.eddelbuettel.com>
+References: <2hucKaz80G9FeAnZlo6F3ti_Y4wcvNkje6QvQcPgLGgxzqb3YIY470MwGZAit4VW2REluwTH062EPltAFjfyUfJ1fTk0dmrcwHjwsO0dtG4=@protonmail.com>
+ <50742ade-f12c-4e32-85ff-481ed7e104c8@stat.auckland.ac.nz>
+ <25918.46252.345432.450442@rob.eddelbuettel.com>
+ <DBA3729C-1876-44B9-9E29-47D62B551CD9@R-project.org>
+ <25918.52920.323280.338555@rob.eddelbuettel.com>
+Message-ID: <e92c02b9-84c6-4fd5-821d-4f0ee2919a1b@wligtenberg.nl>
+
+On 29-10-2023 22:29, Dirk Eddelbuettel wrote:
+> On 30 October 2023 at 09:20, Simon Urbanek wrote:
+> | > On 30/10/2023, at 8:38 AM, Dirk Eddelbuettel<edd at debian.org>  wrote:
+> | > On 30 October 2023 at 07:54, Paul Murrell wrote:
+> | > | I am unaware of any Wayland display support.
+> | > |
+> | > | One useful way forward would be an R package that provides such a device
+> | > | (along the lines of 'Cairo', 'tikzDevice', et al)
+> | >
+> | > As I understand it, it is a protocol, and not a device.
+> | >
+> |
+> | Well, X11 is a protocol, not a device, either.
+>
+> Point taken.
+>
+> | > I think I needed to fall back to X11 for a particular applications (likely
+> | > OBS) so my session tells me (under Settings -> About -> Windowing System) I
+> | > am still running X11. I'll check again once I upgrade from Ubuntu 23.04 to
+> | > Ubuntu 23.10
+>
+> Booted an older laptop using 22.04, selected 'not X11' in the gdm dialog but
+> the same Gnome Menu still says Windowing System: X11.  So I am no longer sure
+> how I would convince myself if I am under Wayland there or not.  The answers
+> inhttps://unix.stackexchange.com/questions/202891/how-to-know-whether-wayland-or-x11-is-being-used
+> suggest I still run X11 too.  So I got nuttin' here.
+>
+> In any event, I read OP as asking 'do we need a new device' and I still think
+> that the answer to that still is 'likely not' as the X11 compatibility layer
+> should cover this.
+>
+> Dirk
+>
+I just tried it on Ubuntu 23.10. It seems to just work.
+See screenshot here: https://nextcloud.wligtenberg.nl/s/jnbDT4ZiHw2JQ8H
+I should be using wayland, and as far as I know I haven't done anything 
+special to make this work. But there might be some compatibility layer 
+that is active by default.
+If it helps, I could try again using distrobox.
+
+Kind regards,
+
+Willem
+
+	[[alternative HTML version deleted]]
+
+
+From edd @end|ng |rom deb|@n@org  Mon Oct 30 13:46:08 2023
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Mon, 30 Oct 2023 07:46:08 -0500
+Subject: [Rd] Wayland Display Support in R Plot
+In-Reply-To: <e92c02b9-84c6-4fd5-821d-4f0ee2919a1b@wligtenberg.nl>
+References: <2hucKaz80G9FeAnZlo6F3ti_Y4wcvNkje6QvQcPgLGgxzqb3YIY470MwGZAit4VW2REluwTH062EPltAFjfyUfJ1fTk0dmrcwHjwsO0dtG4=@protonmail.com>
+ <50742ade-f12c-4e32-85ff-481ed7e104c8@stat.auckland.ac.nz>
+ <25918.46252.345432.450442@rob.eddelbuettel.com>
+ <DBA3729C-1876-44B9-9E29-47D62B551CD9@R-project.org>
+ <25918.52920.323280.338555@rob.eddelbuettel.com>
+ <e92c02b9-84c6-4fd5-821d-4f0ee2919a1b@wligtenberg.nl>
+Message-ID: <25919.42384.420952.37323@rob.eddelbuettel.com>
+
+
+On 30 October 2023 at 13:17, Willem Ligtenberg via R-devel wrote:
+| I just tried it on Ubuntu 23.10. It seems to just work.
+| See screenshot here: https://nextcloud.wligtenberg.nl/s/jnbDT4ZiHw2JQ8H
+| I should be using wayland, and as far as I know I haven't done anything 
+| special to make this work. But there might be some compatibility layer 
+| that is active by default.
+
+Same here under trusted 22.04 LTS on that older / not quite healthy laptop.
+All it took was to set WaylandEnable=true in /etc/gdm3/custom.conf and a
+systemctl call to restart gdm3.
+
+R plots fine in the x11() default device via plot(cumsum(rnorm(100)), type="l").
+
+Like Roger, I had issues with some third-party apps (obs to record lectures
+comes to mind, maybe also zoom ?) so "we'll see".
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From |uc@r @end|ng |rom |edor@project@org  Mon Oct 30 14:13:08 2023
+From: |uc@r @end|ng |rom |edor@project@org (=?UTF-8?Q?I=C3=B1aki_Ucar?=)
+Date: Mon, 30 Oct 2023 14:13:08 +0100
+Subject: [Rd] Wayland Display Support in R Plot
+In-Reply-To: <SV0P279MB047573DF4EAD91093C4080D1EEA1A@SV0P279MB0475.NORP279.PROD.OUTLOOK.COM>
+References: <SV0P279MB047573DF4EAD91093C4080D1EEA1A@SV0P279MB0475.NORP279.PROD.OUTLOOK.COM>
+Message-ID: <CALEXWq0LMFevo1yYwbaSYKwXQscR-3BZMg5DbXFMifek3VoFfA@mail.gmail.com>
+
+El lun., 30 oct. 2023 12:26, Roger Bivand <Roger.Bivand at nhh.no> escribi?:
+
+> I also noticed this:
+>
+> https://www.theregister.com/2023/10/13/gnome_proposes_dropping_x11/
+>
+> which is concerning. Until now, I've retained X11 on Fedora because of
+> difficulties in screen sharing via zoom in Wayland sessions.
+>
+
+KDE Plasma user here. FWIW, I've been using Wayland for a year and a half
+now with no issues, including screen sharing, etc.
+
+I?aki
+
+
+> Roger
+>
+> --
+> Roger Bivand
+> Emeritus Professor
+> Norwegian School of Economics
+> Postboks 3490 Ytre Sandviken, 5045 Bergen, Norway
+> Roger.Bivand at nhh.no
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From x|e @end|ng |rom y|hu|@n@me  Mon Oct 30 17:18:53 2023
+From: x|e @end|ng |rom y|hu|@n@me (Yihui Xie)
+Date: Mon, 30 Oct 2023 11:18:53 -0500
+Subject: [Rd] system()/system2() using short paths of commands on Windows?
+Message-ID: <CANROs4eMn2V4C2AQScoKugv4vC0JjsnD3AY6e4vzi0=8UaNaNg@mail.gmail.com>
+
+Hi,
+
+It may have been so for 20+ years but I just discovered today that system()
+would always try to use the short path of a command on Windows:
+https://github.com/wch/r-source/blob/635a67/src/gnuwin32/run.c#L141 If
+that's true, I wonder if it could provide an option to disable this
+behavior, because we recently ran into a case in which short paths wouldn't
+work. I wonder what the original motivation of using short paths was. If it
+was to avoid spaces in paths, wouldn't shQuote() work? Thanks!
+
+Regards,
+Yihui
+
+	[[alternative HTML version deleted]]
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Mon Oct 30 18:34:28 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Mon, 30 Oct 2023 18:34:28 +0100
+Subject: [Rd] 
+ system()/system2() using short paths of commands on Windows?
+In-Reply-To: <CANROs4eMn2V4C2AQScoKugv4vC0JjsnD3AY6e4vzi0=8UaNaNg@mail.gmail.com>
+References: <CANROs4eMn2V4C2AQScoKugv4vC0JjsnD3AY6e4vzi0=8UaNaNg@mail.gmail.com>
+Message-ID: <e62e3831-6e3d-48ac-b9fc-ec359687b03f@gmail.com>
+
+
+On 10/30/23 17:18, Yihui Xie wrote:
+> Hi,
+>
+> It may have been so for 20+ years but I just discovered today that system()
+> would always try to use the short path of a command on Windows:
+> https://github.com/wch/r-source/blob/635a67/src/gnuwin32/run.c#L141 If
+> that's true, I wonder if it could provide an option to disable this
+> behavior, because we recently ran into a case in which short paths wouldn't
+> work. I wonder what the original motivation of using short paths was. If it
+> was to avoid spaces in paths, wouldn't shQuote() work? Thanks!
+
+Could you please file a minimal reproducible example that exhibits the 
+problem caused by an attempt to translate to short path names (note 
+there is a fallback to long path names)? In principle, short path names 
+should work when they are returned by Windows, this should not be 
+causing any trouble.
+
+Thanks
+Tomas
+
+>
+> Regards,
+> Yihui
+>
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From x|e @end|ng |rom y|hu|@n@me  Mon Oct 30 19:07:43 2023
+From: x|e @end|ng |rom y|hu|@n@me (Yihui Xie)
+Date: Mon, 30 Oct 2023 13:07:43 -0500
+Subject: [Rd] 
+ system()/system2() using short paths of commands on Windows?
+In-Reply-To: <e62e3831-6e3d-48ac-b9fc-ec359687b03f@gmail.com>
+References: <CANROs4eMn2V4C2AQScoKugv4vC0JjsnD3AY6e4vzi0=8UaNaNg@mail.gmail.com>
+ <e62e3831-6e3d-48ac-b9fc-ec359687b03f@gmail.com>
+Message-ID: <CANROs4ev55PboivB1YpY59RDBQSR_KaHswAZ_JjUz3mFjtcvfQ@mail.gmail.com>
+
+Sure. I'm not sure if it's possible to make it easier to reproduce, but for
+now the example would require installing TinyTeX (via
+tinytex::install_tinytex(), which can be later uninstalled cleanly via
+tinytex::uninstall_tinytex() after you finish the investigation). Then run:
+
+  system2('fmtutil-sys', '--all')
+  # or tinytex:::fmtutil() if fmtutil-sys.exe is not on PATH
+
+and TeX Live would throw an error like this:
+
+  ...\username\AppData\Roaming\TinyTeX\bin\windows\runscript.tlu:864: no
+appropriate script or program found: fmtuti~1
+
+The command "fmtutil-sys" is longer than 8 characters and hence shortened
+to "fmtutil~1". Yes, in principle, TeX Live should work with short path
+names, but it doesn't at the moment. I haven't figured out if it was a
+recent breakage in TeX Live or not (I've tried to contact TeX Live
+developers).
+
+BTW, shell('fmtutil-sys --all') works fine.
+
+Regards,
+Yihui
+--
+https://yihui.org
+
+
+On Mon, Oct 30, 2023 at 12:34?PM Tomas Kalibera <tomas.kalibera at gmail.com>
+wrote:
+
+>
+> On 10/30/23 17:18, Yihui Xie wrote:
+> > Hi,
+> >
+> > It may have been so for 20+ years but I just discovered today that
+> system()
+> > would always try to use the short path of a command on Windows:
+> > https://github.com/wch/r-source/blob/635a67/src/gnuwin32/run.c#L141 If
+> > that's true, I wonder if it could provide an option to disable this
+> > behavior, because we recently ran into a case in which short paths
+> wouldn't
+> > work. I wonder what the original motivation of using short paths was. If
+> it
+> > was to avoid spaces in paths, wouldn't shQuote() work? Thanks!
+>
+> Could you please file a minimal reproducible example that exhibits the
+> problem caused by an attempt to translate to short path names (note
+> there is a fallback to long path names)? In principle, short path names
+> should work when they are returned by Windows, this should not be
+> causing any trouble.
+>
+> Thanks
+> Tomas
+>
+> >
+> > Regards,
+> > Yihui
+> >
+> >       [[alternative HTML version deleted]]
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From r|p|ey @end|ng |rom @t@t@@ox@@c@uk  Mon Oct 30 21:02:58 2023
+From: r|p|ey @end|ng |rom @t@t@@ox@@c@uk (Prof Brian Ripley)
+Date: Mon, 30 Oct 2023 20:02:58 +0000
+Subject: [Rd] 
+ system()/system2() using short paths of commands on Windows?
+In-Reply-To: <CANROs4eMn2V4C2AQScoKugv4vC0JjsnD3AY6e4vzi0=8UaNaNg@mail.gmail.com>
+References: <CANROs4eMn2V4C2AQScoKugv4vC0JjsnD3AY6e4vzi0=8UaNaNg@mail.gmail.com>
+Message-ID: <ead63e0e-70fc-48e8-82d9-460d0d730488@stats.ox.ac.uk>
+
+On 30/10/2023 16:18, Yihui Xie wrote:
+> Hi,
+> 
+> It may have been so for 20+ years but I just discovered today that system()
+> would always try to use the short path of a command on Windows:
+> https://github.com/wch/r-source/blob/635a67/src/gnuwin32/run.c#L141 If
+> that's true, I wonder if it could provide an option to disable this
+> behavior, because we recently ran into a case in which short paths wouldn't
+> work. I wonder what the original motivation of using short paths was. If it
+> was to avoid spaces in paths, wouldn't shQuote() work? Thanks!
+
+No: system on Windows does not use a shell.
+
+The 'original motivation' was to work reliably!  Back in the days of 
+Windows 95 when many parts of Windows only supported 8+3 names.
+
+> 
+> Regards,
+> Yihui
+> 
+> 	[[alternative HTML version deleted]]
+
+Please do re-read the posting guide.  It has ' been so for 20+ years '.
+
+-- 
+Brian D. Ripley,                  ripley at stats.ox.ac.uk
+Emeritus Professor of Applied Statistics, University of Oxford
+
+
+From x|e @end|ng |rom y|hu|@n@me  Mon Oct 30 21:36:50 2023
+From: x|e @end|ng |rom y|hu|@n@me (Yihui Xie)
+Date: Mon, 30 Oct 2023 15:36:50 -0500
+Subject: [Rd] 
+ system()/system2() using short paths of commands on Windows?
+In-Reply-To: <ead63e0e-70fc-48e8-82d9-460d0d730488@stats.ox.ac.uk>
+References: <CANROs4eMn2V4C2AQScoKugv4vC0JjsnD3AY6e4vzi0=8UaNaNg@mail.gmail.com>
+ <ead63e0e-70fc-48e8-82d9-460d0d730488@stats.ox.ac.uk>
+Message-ID: <CANROs4cQ4EnEgf6KM7+bh11CmpRw0OV8rhby4Cbo7OGXo0=R_A@mail.gmail.com>
+
+I have read about "system() not using a shell on Windows" on the help
+page many times before but never understood what it means technically.
+Please forgive my ignorance. I still do not understand it, but thanks
+a lot for the explanation anyway! I'm just curious if the full path
+would work in system() today. If it still would not work because
+today's Windows is still like Windows 95 in this aspect, please ignore
+my question and I will ask Microsoft for a refund.
+
+Regards,
+Yihui
+
+
+
+On Mon, Oct 30, 2023 at 3:03?PM Prof Brian Ripley <ripley at stats.ox.ac.uk> wrote:
+>
+> On 30/10/2023 16:18, Yihui Xie wrote:
+> > Hi,
+> >
+> > It may have been so for 20+ years but I just discovered today that system()
+> > would always try to use the short path of a command on Windows:
+> > https://github.com/wch/r-source/blob/635a67/src/gnuwin32/run.c#L141 If
+> > that's true, I wonder if it could provide an option to disable this
+> > behavior, because we recently ran into a case in which short paths wouldn't
+> > work. I wonder what the original motivation of using short paths was. If it
+> > was to avoid spaces in paths, wouldn't shQuote() work? Thanks!
+>
+> No: system on Windows does not use a shell.
+>
+> The 'original motivation' was to work reliably!  Back in the days of
+> Windows 95 when many parts of Windows only supported 8+3 names.
+>
+> >
+> > Regards,
+> > Yihui
+> >
+> >       [[alternative HTML version deleted]]
+>
+> Please do re-read the posting guide.  It has ' been so for 20+ years '.
+
+My apologies! Sometimes I forget to switch to the plain-text mode when
+writing to R mailing lists.
+
+> --
+> Brian D. Ripley,                  ripley at stats.ox.ac.uk
+> Emeritus Professor of Applied Statistics, University of Oxford
+>
+
+
+From hp@ge@@on@g|thub @end|ng |rom gm@||@com  Tue Oct 31 01:17:47 2023
+From: hp@ge@@on@g|thub @end|ng |rom gm@||@com (=?UTF-8?B?SGVydsOpIFBhZ8Oocw==?=)
+Date: Mon, 30 Oct 2023 17:17:47 -0700
+Subject: [Rd] dim<-() changed in R-devel;
+ no longer removing "dimnames" when doing dim(x) <- dim(x)
+In-Reply-To: <25919.35617.446508.577753@stat.math.ethz.ch>
+References: <CAFDcVCTZTjS6ojk=7SordyK517NcKD8KoCK6RgLoYgcoZ13DnQ@mail.gmail.com>
+ <25919.35617.446508.577753@stat.math.ethz.ch>
+Message-ID: <f9506b49-cce2-4ac7-a66d-12ce17b2aa70@gmail.com>
+
+Hi Martin, Henrik,
+
+I actually like this change.
+
+Makes a lot of sense IMO that dim(x) <- dim(x) be a no-op, or, more 
+generally, that foo(x) <- foo(x) be a no-op for any setter/getter combo.
+
+FWIW S4Arrays::set_dim() does that too. It also preserves the dimnames 
+if the right value is only adding or dropping outermost (ineffective) 
+dimensions:
+
+ ??? > x <- array(1:6, dim=c(2,3,1), dimnames=list(c("A", "B"), 
+c("x","y", "z"), "T"))
+ ??? > S4Arrays:::set_dim(x, 2:3)
+ ? ? ? x y z
+ ??? A 1 3 5
+ ??? B 2 4 6
+
+Note that this is consistent with drop().
+
+Best,
+
+H.
+
+On 10/30/23 03:53, Martin Maechler wrote:
+>>>>>> Henrik Bengtsson
+>>>>>>      on Sun, 29 Oct 2023 10:42:19 -0700 writes:
+>      > Hello,
+>
+>      > the fix of PR18612
+>      > (https://bugs.r-project.org/show_bug.cgi?id=18612) in
+>      > r85380
+>      > (https://github.com/wch/r-source/commit/2653cc6203fce4c48874111c75bbccac3ac4e803)
+>      > caused a change in `dim<-()`.  Specifically, in the past,
+>      > any `dim<-()` assignment would _always_ remove "dimnames"
+>      > and "names" attributes per help("dim"):
+>
+>
+>      >     The replacement method changes the "dim" attribute
+>      > (provided the new value is compatible) and removes any
+>      > "dimnames" and "names" attributes.
+>
+>      > In the new version, assigning the same "dim" as before
+>      > will no longer remove "dimnames".  I'm reporting here to
+>      > check whether this change was intended, or if it was an
+>      > unintended side effect of the bug fix.
+>
+>      > For example, in R Under development (unstable) (2023-10-21
+>      > r85379), we would get:
+>
+>      >> x <- array(1:2, dim=c(1,2), dimnames=list("A",
+>      >> c("a","b"))) str(dimnames(x))
+>      > List of 2 $ : chr "A" $ : chr [1:2] "a" "b"
+>
+>      >> dim(x) <- dim(x) ## Removes "dimnames" no matter what
+>      >> str(dimnames(x))
+>      >  NULL
+>
+>
+>      > whereas in R Under development (unstable) (2023-10-21
+>      > r85380) and beyond, we now get:
+>
+>      >> x <- array(1:2, dim=c(1,2), dimnames=list("A",
+>      >> c("a","b"))) str(dimnames(x))
+>      > List of 2 $ : chr "A" $ : chr [1:2] "a" "b"
+>
+>      >> dim(x) <- dim(x) ## No longer removes "dimnames"
+>      >> str(dimnames(x))
+>      > List of 2 $ : chr "A" $ : chr [1:2] "a" "b"
+>
+>      >> dim(x) <- rev(dim(x)) ## Still removes "dimnames"
+>      >> str(dimnames(x))
+>      >  NULL
+>
+>      > /Henrik
+>
+> Thank you, Henrik.
+>
+> This is "funny" (in an unusal sense):
+> indeed, the change was *in*advertent, by me (svn rev 85380).
+>
+> I had experimentally {i.e., only in my own private version of R-devel!}
+> modified the behavior of `dim<-` somewhat
+> such it does *not* unnecessarily drop dimnames,
+> e.g., in your   `dim(x) <- dim(x)` case above,
+> one could really argue that it's a "true loss" if x loses
+> dimnames "unnecessarily" ...
+>
+> OTOH, I knew in the mean time that  `dim<-` has always been
+> documented to drop dimnames in all cases,  and even more
+> importantly, I got a strong recommendation to *not* go further
+> with this idea -- not only for back compatibility reasons, but
+> also for internal logical consistency.
+>
+> Most probably, we will just revert this inadvertent change,
+> but before that ... since it has been out in the wild anyway,
+> we could quickly consider if it *did* break code.
+>
+> I assume it did, or you would not have noticed ?
+>
+> Martin
+>
+> ______________________________________________
+> R-devel at r-project.org  mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Herv? Pag?s
+
+Bioconductor Core Team
+hpages.on.github at gmail.com
+
+	[[alternative HTML version deleted]]
+
+
