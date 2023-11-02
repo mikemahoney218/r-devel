@@ -5303,3 +5303,889 @@ hpages.on.github at gmail.com
 	[[alternative HTML version deleted]]
 
 
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue Oct 31 09:32:30 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 31 Oct 2023 09:32:30 +0100
+Subject: [Rd] 
+ system()/system2() using short paths of commands on Windows?
+In-Reply-To: <CANROs4ev55PboivB1YpY59RDBQSR_KaHswAZ_JjUz3mFjtcvfQ@mail.gmail.com>
+References: <CANROs4eMn2V4C2AQScoKugv4vC0JjsnD3AY6e4vzi0=8UaNaNg@mail.gmail.com>
+ <e62e3831-6e3d-48ac-b9fc-ec359687b03f@gmail.com>
+ <CANROs4ev55PboivB1YpY59RDBQSR_KaHswAZ_JjUz3mFjtcvfQ@mail.gmail.com>
+Message-ID: <5d27d528-bc5f-4dd7-a926-9b24e61a52b3@gmail.com>
+
+
+On 10/30/23 19:07, Yihui Xie wrote:
+> Sure. I'm not sure if it's possible to make it easier to reproduce, 
+> but for now the example would require installing TinyTeX (via 
+> tinytex::install_tinytex(), which can be later uninstalled cleanly via 
+> tinytex::uninstall_tinytex() after you finish the investigation). Then 
+> run:
+>
+> ? system2('fmtutil-sys', '--all')
+> ? # or tinytex:::fmtutil() if fmtutil-sys.exe is not on PATH
+>
+> and TeX Live would throw an error like this:
+>
+> ...\username\AppData\Roaming\TinyTeX\bin\windows\runscript.tlu:864: no 
+> appropriate script or program found: fmtuti~1
+>
+> The command "fmtutil-sys" is longer than 8 characters and hence 
+> shortened to "fmtutil~1". Yes, in principle, TeX Live should work with 
+> short path names, but it doesn't at the?moment. I haven't figured out 
+> if it was a recent breakage in TeX Live or not (I've tried to contact 
+> TeX Live developers).
+>
+> BTW, shell('fmtutil-sys --all') works fine.
+
+I can reproduce the problem, also separately from R. It is not an R problem
+
+./fmtutil-sys.exe --version
+works
+
+./fmtuti~1 --version
+doesn't work
+
+The problem is in runscript.tlu, when it looks at "progname", it parses 
+it assuming it is the full name, looking for "-sys" suffix, which won't 
+be in the short name:
+
+progname, substcount = string.gsub(progname, '%-sys$', '')
+local sysprog = (substcount > 0) -- true if there was a -sys suffix removed
+
+and it does further processing using the program name.
+
+This has to be fixed on the luatex end, it must be able to work with 
+short paths (e.g. expand it appropriately). You could probably work 
+around the installation before it gets fixed, e.g. by creating another 
+wrapper which would expand to long names, delete the short name, patch 
+the script, etc. After all, if it works via a shell, then probably the 
+shell is expanding to the long names and you have a work-around (I don't 
+know how reliable).
+
+Adding an option to R's system*() functions to use only long names 
+doesn't make sense.
+
+Best
+Tomas
+
+>
+> Regards,
+> Yihui
+> --
+> https://yihui.org
+>
+>
+> On Mon, Oct 30, 2023 at 12:34?PM Tomas Kalibera 
+> <tomas.kalibera at gmail.com> wrote:
+>
+>
+>     On 10/30/23 17:18, Yihui Xie wrote:
+>     > Hi,
+>     >
+>     > It may have been so for 20+ years but I just discovered today
+>     that system()
+>     > would always try to use the short path of a command on Windows:
+>     >
+>     https://github.com/wch/r-source/blob/635a67/src/gnuwin32/run.c#L141 If
+>     > that's true, I wonder if it could provide an option to disable this
+>     > behavior, because we recently ran into a case in which short
+>     paths wouldn't
+>     > work. I wonder what the original motivation of using short paths
+>     was. If it
+>     > was to avoid spaces in paths, wouldn't shQuote() work? Thanks!
+>
+>     Could you please file a minimal reproducible example that exhibits
+>     the
+>     problem caused by an attempt to translate to short path names (note
+>     there is a fallback to long path names)? In principle, short path
+>     names
+>     should work when they are returned by Windows, this should not be
+>     causing any trouble.
+>
+>     Thanks
+>     Tomas
+>
+>     >
+>     > Regards,
+>     > Yihui
+>     >
+>     >? ? ? ?[[alternative HTML version deleted]]
+>     >
+>     > ______________________________________________
+>     > R-devel at r-project.org mailing list
+>     > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+	[[alternative HTML version deleted]]
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Tue Oct 31 09:54:01 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Tue, 31 Oct 2023 11:54:01 +0300
+Subject: [Rd] 
+ system()/system2() using short paths of commands on Windows?
+In-Reply-To: <CANROs4cQ4EnEgf6KM7+bh11CmpRw0OV8rhby4Cbo7OGXo0=R_A@mail.gmail.com>
+References: <CANROs4eMn2V4C2AQScoKugv4vC0JjsnD3AY6e4vzi0=8UaNaNg@mail.gmail.com>
+ <ead63e0e-70fc-48e8-82d9-460d0d730488@stats.ox.ac.uk>
+ <CANROs4cQ4EnEgf6KM7+bh11CmpRw0OV8rhby4Cbo7OGXo0=R_A@mail.gmail.com>
+Message-ID: <20231031115401.100a037f@Tarkus>
+
+On Mon, 30 Oct 2023 15:36:50 -0500
+Yihui Xie <xie at yihui.name> wrote:
+
+> I have read about "system() not using a shell on Windows" on the help
+> page many times before but never understood what it means technically.
+
+This means resolving the path to the executable, then calling
+CreateProcess() to launch that executable with the given parameters and
+other settings:
+https://github.com/wch/r-source/blob/635a672151a18a0e475986af592fab59e7479a9b/src/gnuwin32/run.c#L378-L386
+https://learn.microsoft.com/en-us/windows/win32/api/processthreadsapi/nf-processthreadsapi-createprocessa
+
+As far as I know, CreateProcess() is the most direct officially
+supported way to launch a process on Windows.
+
+The alternative would be assembling the command line and giving it to
+cmd.exe to interpret and launch, as done by shell(). This can be more
+convenient in certain cases, as the shell can expand environment
+variables from %STRINGS% or launch multiple commands separated by &,
+but it also requires extreme care: quoting rules are subtle and have to
+be understood on both the cmd.exe level *and* the C runtime level
+(on Windows, the C runtime is responsible for parsing the string
+returned from GetCommandLine() and creating the `argv` command line
+argument array from it).
+
+Working with shell command lines is like using string operations on
+deparse() output instead of directly operating on language objects:
+less complicated than rocket surgery, but better avoided if
+alternatives exist.
+
+-- 
+Best regards,
+Ivan
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Tue Oct 31 10:05:10 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 31 Oct 2023 05:05:10 -0400
+Subject: [Rd] 
+ system()/system2() using short paths of commands on Windows?
+In-Reply-To: <5d27d528-bc5f-4dd7-a926-9b24e61a52b3@gmail.com>
+References: <CANROs4eMn2V4C2AQScoKugv4vC0JjsnD3AY6e4vzi0=8UaNaNg@mail.gmail.com>
+ <e62e3831-6e3d-48ac-b9fc-ec359687b03f@gmail.com>
+ <CANROs4ev55PboivB1YpY59RDBQSR_KaHswAZ_JjUz3mFjtcvfQ@mail.gmail.com>
+ <5d27d528-bc5f-4dd7-a926-9b24e61a52b3@gmail.com>
+Message-ID: <b83d8ea1-bca7-4dc5-827d-5df1c4c48d9b@gmail.com>
+
+On 31/10/2023 4:32 a.m., Tomas Kalibera wrote:
+> 
+> On 10/30/23 19:07, Yihui Xie wrote:
+>> Sure. I'm not sure if it's possible to make it easier to reproduce,
+>> but for now the example would require installing TinyTeX (via
+>> tinytex::install_tinytex(), which can be later uninstalled cleanly via
+>> tinytex::uninstall_tinytex() after you finish the investigation). Then
+>> run:
+>>
+>>  ? system2('fmtutil-sys', '--all')
+>>  ? # or tinytex:::fmtutil() if fmtutil-sys.exe is not on PATH
+>>
+>> and TeX Live would throw an error like this:
+>>
+>> ...\username\AppData\Roaming\TinyTeX\bin\windows\runscript.tlu:864: no
+>> appropriate script or program found: fmtuti~1
+>>
+>> The command "fmtutil-sys" is longer than 8 characters and hence
+>> shortened to "fmtutil~1". Yes, in principle, TeX Live should work with
+>> short path names, but it doesn't at the?moment. I haven't figured out
+>> if it was a recent breakage in TeX Live or not (I've tried to contact
+>> TeX Live developers).
+>>
+>> BTW, shell('fmtutil-sys --all') works fine.
+> 
+> I can reproduce the problem, also separately from R. It is not an R problem
+> 
+> ./fmtutil-sys.exe --version
+> works
+> 
+> ./fmtuti~1 --version
+> doesn't work
+> 
+> The problem is in runscript.tlu, when it looks at "progname", it parses
+> it assuming it is the full name, looking for "-sys" suffix, which won't
+> be in the short name:
+> 
+> progname, substcount = string.gsub(progname, '%-sys$', '')
+> local sysprog = (substcount > 0) -- true if there was a -sys suffix removed
+> 
+> and it does further processing using the program name.
+> 
+> This has to be fixed on the luatex end, it must be able to work with
+> short paths (e.g. expand it appropriately). You could probably work
+> around the installation before it gets fixed, e.g. by creating another
+> wrapper which would expand to long names, delete the short name, patch
+> the script, etc. After all, if it works via a shell, then probably the
+> shell is expanding to the long names and you have a work-around (I don't
+> know how reliable).
+> 
+> Adding an option to R's system*() functions to use only long names
+> doesn't make sense.
+
+On the other hand, not modifying the executable name would make a lot of 
+sense, wouldn't it?  I'm pretty sure all supported versions of Windows 
+can handle long filenames.
+
+Duncan Murdoch
+
+
+From pd@me@ @end|ng |rom cb@@dk  Tue Oct 31 10:07:53 2023
+From: pd@me@ @end|ng |rom cb@@dk (Peter Dalgaard)
+Date: Tue, 31 Oct 2023 09:07:53 +0000
+Subject: [Rd] R 4.3.2 is released
+Message-ID: <9C7406A5-ACA0-4EC0-8F23-8D8E673F457B@cbs.dk>
+
+The build system rolled up R-4.3.2.tar.gz (codename "Eye Holes") this morning.
+
+This is a minor update, with a few bug fixes.
+
+The list below details the changes in this release. 
+
+You can get the source code from
+
+https://cran.r-project.org/src/base/R-4/R-4.3.2.tar.gz
+
+or wait for it to be mirrored at a CRAN site nearer to you.
+
+Binaries for various platforms will appear in due course.
+
+
+For the R Core Team,
+
+Peter Dalgaard
+
+
+These are the checksums (md5 and SHA-256) for the freshly created files, in case you wish
+to check that they are uncorrupted:
+
+MD5 (AUTHORS) = 320967884b547734d6279dedbc739dd4
+MD5 (COPYING) = eb723b61539feef013de476e68b5c50a
+MD5 (COPYING.LIB) = a6f89e2100d9b6cdffcea4f398e37343
+MD5 (FAQ) = 97a3ddc25aab502a70bfb1a79ab6f862
+MD5 (INSTALL) = 7893f754308ca31f1ccf62055090ad7b
+MD5 (NEWS) = b9ad3b7a9f54856444ec9849a69b18e3
+MD5 (NEWS.0) = bfcd7c147251b5474d96848c6f57e5a8
+MD5 (NEWS.1) = 4108ab429e768e29b1c3b418c224246e
+MD5 (NEWS.2) = b38d94569700664205a76a7de836ba83
+MD5 (NEWS.3) = e55ed2c8a547b827b46e08eb7137ba23
+MD5 (R-latest.tar.gz) = 3217f2606bbde5a76fe4deaa4b4d3321
+MD5 (README) = f468f281c919665e276a1b691decbbe6
+MD5 (RESOURCES) = a79b9b338cab09bd665f6b62ac6f455b
+MD5 (THANKS) = 45b6d2e88a6ecb5b24fa33a781351cd5
+MD5 (VERSION-INFO.dcf) = 8d6576e0a33475e8b6dcb61f8e49a2b4
+MD5 (R-4/R-4.3.2.tar.gz) = 3217f2606bbde5a76fe4deaa4b4d3321
+
+60a0d150e6fc1f424be76ad7b645d236b56e747692a4679f81ce6536c550e949  AUTHORS
+e6d6a009505e345fe949e1310334fcb0747f28dae2856759de102ab66b722cb4  COPYING
+6095e9ffa777dd22839f7801aa845b31c9ed07f3d6bf8a26dc5d2dec8ccc0ef3  COPYING.LIB
+3a47bca1e2a7db27c0ca12be388c238e2608ff2f768e627650a71a0ffc826038  FAQ
+f87461be6cbaecc4dce44ac58e5bd52364b0491ccdadaf846cb9b452e9550f31  INSTALL
+ec6844344589b717144d51ca3d5d1dbe5bc453d69287c06430f9bb2263abe01f  NEWS
+4e21b62f515b749f80997063fceab626d7258c7d650e81a662ba8e0640f12f62  NEWS.0
+5de7657c5e58e481403c0dd1a74a5c090b3ef481ce75a91dfe05d4b03f63163f  NEWS.1
+cde079b6beab7d700d3d4ecda494e2681ad3b7f8fab13b68be090f949393ec62  NEWS.2
+1910a2405300b9bc7c76beeb0753a5249cf799afe175ce28f8d782fab723e012  NEWS.3
+b3f5760ac2eee8026a3f0eefcb25b47723d978038eee8e844762094c860c452a  R-latest.tar.gz
+2fdd3e90f23f32692d4b3a0c0452f2c219a10882033d1774f8cadf25886c3ddc  README
+8b7d3856100220f4555d4d57140829f2e81c27eccec5b441f5dce616e9ec9061  RESOURCES
+8319c5415de58ee10d4bc058d79c370fd8e6b2ad09e25d7a1e04b74ca5f380a6  THANKS
+f3acaa77b0034a44c9c9b02767a2d383a7c2c2e2a3e7fec929fa20c5102304c5  VERSION-INFO.dcf
+b3f5760ac2eee8026a3f0eefcb25b47723d978038eee8e844762094c860c452a  R-4/R-4.3.2.tar.gz
+
+This is the relevant part of the NEWS file
+
+CHANGES IN R 4.3.2:
+
+  NEW FEATURES:
+
+    * The default initialization of the "repos" option from the
+      repositories file at startup can be skipped by setting
+      environment variable R_REPOSITORIES to NULL such that
+      getOption("repos") is empty if not set elsewhere.
+
+    * qr.X() is now an implicit S4 generic in methods.
+
+    * iconv(to = "ASCII//TRANSLIT") is emulated using substitution on
+      platforms which do not support it (notably Alpine Linux).  This
+      should give a human-readable conversion in ASCII on all platforms
+      (rather than NA_character_).
+
+    * trans3d() gains options continuous and verbose addressing the
+      problem of possible "wrap around" when projecting too long
+      curves, as reported by Achim Zeileis in PR#18537.
+
+    * tools::showNonASCII() has been rewritten to work better on macOS
+      14 (which has a changed implementation of iconv()).
+
+    * tiff(type = "quartz") (the default on macOS) now warns if
+      compression is specified: it continues to be ignored.
+
+  INSTALLATION on a UNIX-ALIKE:
+
+    * There is some support for building with Intel's LLVM-based
+      compilers on x86_64 Linux, such as (C) icx, (C++) ipcx and
+      (Fortran) ifx from oneAPI 2023.x.y.
+
+    * There is support for using LLVM's flang-new as the Fortran
+      compiler from LLVM 16.0.x (preferably 17.0.0 or later).
+
+  UTILITIES:
+
+    * R CMD check reports the use of the Fortran 90 random number
+      generator RANDOM_NUMBER() and the subroutines to initialize it.
+
+      'Writing R Extensions' has example code to use R's RNGs from
+      Fortran.
+
+  BUG FIXES:
+
+    * substr(x, n, L) <- cc now works (more) correctly for multibyte
+      UTF-8 strings x when L > nchar(x), thanks to a report and patch
+      by 'Architect 95'.
+
+    * contrib.url(character()) now returns 0-length character() as
+      documented, which also avoids spurious warnings from
+      available.packages() et al. in the edge case of an empty vector
+      of repository URLs.
+
+    * readChar(., 4e8) no longer fails, thanks to Kodi Arfer's report
+      (PR#18557).
+
+    * lapply(<list>, as.data.frame) no longer warns falsely for some
+      base vector components.
+
+    * Communication between parent and child processes in the multicore
+      part of parallel could fail on platforms that do not support an
+      arbitrarily large payload in system functions read()/write() on
+      pipes (seen on macOS where a restriction to INT_MAX bytes is
+      documented, without doing a partial read unlike Linux). The
+      payload is now split into 1Gb chunks to avoid that problem.
+      (PR#18571)
+
+    * qqplot(x,y, conf.level=.) gives better confidence bounds when
+      length(x) != length(y), thanks to Alexander Ploner's report and
+      patch proposal (PR#18557).
+
+    * norm(<0-length>, "2") now gives zero instead of an error, as all
+      the other norm types, thanks to Mikael Jagan's PR#18542.
+
+    * Build-stage Rd macros \packageAuthor and \packageMaintainer now
+      process Authors at R, fixing NA results when the package DESCRIPTION
+      omits Author and Maintainer fields.
+
+    * Formatting and printing complex numbers could give things like
+      0.1683-0i because of rounding error: -0i is now replaced by +0i.
+
+    * postscript() refused to accept a title comment containing the
+      letter "W" (PR#18599).
+
+    * isoreg(c(1,Inf)) signals an error instead of segfaulting, fixing
+      PR#18603.
+
+    * tiff(type = "Xlib") was only outputting the last page of
+      multi-page plots.
+
+    * tools::latexToUtf8() again knows about \~{n} and other letters
+      with tilde, fixing a regression in R 4.3.0, and about \^{i} as an
+      alternative to \^{\i} (similarly with other accents).
+      Furthermore, LaTeX codes for accented I letters are now correctly
+      converted, also fixing related mistakes in
+      tools::encoded_text_to_latex().
+
+    * tar(*, tar = "internal") no longer creates out-of-spec tar files
+      in the very rare case of user or group names longer than 32
+      bytes, fixing PR#17871 with thanks to Ivan Krylov.
+
+    * When using the "internal" timezone datetime code, adding a
+      fraction of a second no longer adds one second, fixing PR#16856
+      from a patch by Ivan Krylov.
+
+    * tools::checkRd() no longer produces spurious notes about
+      "unnecessary braces" from multi-line Rd results of \Sexpr macros.
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue Oct 31 10:22:05 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 31 Oct 2023 10:22:05 +0100
+Subject: [Rd] 
+ system()/system2() using short paths of commands on Windows?
+In-Reply-To: <CANROs4cQ4EnEgf6KM7+bh11CmpRw0OV8rhby4Cbo7OGXo0=R_A@mail.gmail.com>
+References: <CANROs4eMn2V4C2AQScoKugv4vC0JjsnD3AY6e4vzi0=8UaNaNg@mail.gmail.com>
+ <ead63e0e-70fc-48e8-82d9-460d0d730488@stats.ox.ac.uk>
+ <CANROs4cQ4EnEgf6KM7+bh11CmpRw0OV8rhby4Cbo7OGXo0=R_A@mail.gmail.com>
+Message-ID: <51408cbb-42ea-4aea-801c-80ebe0f98de8@gmail.com>
+
+On 10/30/23 21:36, Yihui Xie wrote:
+> I have read about "system() not using a shell on Windows" on the help
+> page many times before but never understood what it means technically.
+> Please forgive my ignorance. I still do not understand it, but thanks
+> a lot for the explanation anyway!
+
+As the documentation says, system() on Windows runs the command 
+directly, without a shell (without cmd.exe). As it says,
+
+'command must be an executable (extensions ?.exe?, ?.com?) or a batch 
+file (extensions ?.cmd? and ?.bat?): these extensions are tried in turn 
+if none is supplied. This means that redirection, pipes, DOS internal 
+commands, ... cannot be used: see shell if you want to pass a shell 
+command-line. '
+
+Things like redirection, pipes, etc are implemented by a shell, you can 
+use shell() to run a command via "cmd.exe /c ...", so these would work.
+
+> I'm just curious if the full path
+> would work in system() today. If it still would not work because
+> today's Windows is still like Windows 95 in this aspect, please ignore
+> my question and I will ask Microsoft for a refund.
+
+I am not sure if you are asking a general question or specifically still 
+for this use. In principle, short names are still useful to get rid of 
+spaces (sometimes they are not quoted correctly, sometimes they cannot 
+be quoted correctly such as in make). Also short names reduce the risk 
+of running over the path-length limits. So R uses short names when they 
+are available, but supports also long names and tries itself to quote 
+properly.
+
+You have run into a case when an external wrapper has a bug and isn't 
+able to deal with short names. There could easily be other wrappers 
+around, which have a different bug and cannot deal with long names, e.g. 
+because of spaces, when passing them to other programs. Very much like 
+in luatex. And they may have been written in times when they actually 
+were correct.
+
+Best Tomas
+
+> Regards,
+> Yihui
+>
+>
+>
+> On Mon, Oct 30, 2023 at 3:03?PM Prof Brian Ripley<ripley at stats.ox.ac.uk>  wrote:
+>> On 30/10/2023 16:18, Yihui Xie wrote:
+>>> Hi,
+>>>
+>>> It may have been so for 20+ years but I just discovered today that system()
+>>> would always try to use the short path of a command on Windows:
+>>> https://github.com/wch/r-source/blob/635a67/src/gnuwin32/run.c#L141  If
+>>> that's true, I wonder if it could provide an option to disable this
+>>> behavior, because we recently ran into a case in which short paths wouldn't
+>>> work. I wonder what the original motivation of using short paths was. If it
+>>> was to avoid spaces in paths, wouldn't shQuote() work? Thanks!
+>> No: system on Windows does not use a shell.
+>>
+>> The 'original motivation' was to work reliably!  Back in the days of
+>> Windows 95 when many parts of Windows only supported 8+3 names.
+>>
+>>> Regards,
+>>> Yihui
+>>>
+>>>        [[alternative HTML version deleted]]
+>> Please do re-read the posting guide.  It has ' been so for 20+ years '.
+> My apologies! Sometimes I forget to switch to the plain-text mode when
+> writing to R mailing lists.
+>
+>> --
+>> Brian D. Ripley,ripley at stats.ox.ac.uk
+>> Emeritus Professor of Applied Statistics, University of Oxford
+>>
+> ______________________________________________
+> R-devel at r-project.org  mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+	[[alternative HTML version deleted]]
+
+
+From |uc@r @end|ng |rom |edor@project@org  Tue Oct 31 10:45:20 2023
+From: |uc@r @end|ng |rom |edor@project@org (=?UTF-8?Q?I=C3=B1aki_Ucar?=)
+Date: Tue, 31 Oct 2023 10:45:20 +0100
+Subject: [Rd] About FlexiBLAS in the R-admin docs
+In-Reply-To: <5bcf6c56-bcfb-4f8b-8ba0-91375a5a540e@gmail.com>
+References: <mailman.53774.3.1695895202.51578.r-devel@r-project.org>
+ <E698DC79-C258-4A95-A8C6-933A512CA108@gmail.com>
+ <5bcf6c56-bcfb-4f8b-8ba0-91375a5a540e@gmail.com>
+Message-ID: <CALEXWq0BFQ62UbJt9yNmG6EWSgEJkyoQ2wT3XV7T2XxNERySEw@mail.gmail.com>
+
+On Tue, 24 Oct 2023 at 12:53, Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+>
+> The output of session info is based on that flexiblas is used and on
+> what flexiblas tells R is the backend it uses. R does not attempt to
+> check that optimized LAPACK functions from the backend really end up
+> called via flexiblas, and I don't think it could be realistically checked.
+>
+> But I've checked one case manually in Fedora 38 using Linux perf tool.
+> The following code:
+>
+> S <- toeplitz((10:1)/10)
+> repeat { R <- rWishart(10, 20, S) }
+>
+> uses dpotrf from LAPACK, which is optimized in OpenBLAS and ATLAS and
+> the corresponding optimized implementations really appeared on the
+> sampling profile for me from the backend libraries.
+>
+> The comment from R Admin has been removed now and if anyone runs into
+> the problem (that an optimized LAPACK function is not called from a
+> backend that provides it), it would be best to report it with sufficient
+> detail to flexiblas.
+
+Thanks, Tomas. Yes, if an expected redirection to an optimized
+function does not happen, that would be a bug in FlexiBLAS and should
+be reported upstream.
+
+Related to this, a small detail... I noticed that the R configure
+script reports "BLAS(FlexiBlas)" correctly as an external library, but
+then "LAPACK(generic)". This should be FlexiBLAS too instead of
+"generic". It doesn't make any difference, since the LAPACK symbols in
+FlexiBLAS are called anyway, but it's misleading.
+
+Best,
+-- 
+I?aki ?car
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Tue Oct 31 11:09:28 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Tue, 31 Oct 2023 11:09:28 +0100
+Subject: [Rd] dim<-() changed in R-devel;
+ no longer removing "dimnames" when doing dim(x) <- dim(x)
+In-Reply-To: <f9506b49-cce2-4ac7-a66d-12ce17b2aa70@gmail.com>
+References: <CAFDcVCTZTjS6ojk=7SordyK517NcKD8KoCK6RgLoYgcoZ13DnQ@mail.gmail.com>
+ <25919.35617.446508.577753@stat.math.ethz.ch>
+ <f9506b49-cce2-4ac7-a66d-12ce17b2aa70@gmail.com>
+Message-ID: <25920.53848.884351.249140@stat.math.ethz.ch>
+
+>>>>> Herv? Pag?s 
+>>>>>     on Mon, 30 Oct 2023 17:17:47 -0700 writes:
+
+    > Hi Martin, Henrik, I actually like this change.
+
+
+    > Makes a lot of sense IMO that dim(x) <- dim(x) be a no-op,
+    > or, more generally, that foo(x) <- foo(x) be a no-op for
+    > any setter/getter combo.
+
+yes.
+For me, another "strong" reason for a change was that I could
+add {or modify more generally} the *names* of dim(.)  --- and
+believe me, these can be somewhat "handy" when you a relatively
+large simulation result array `ANS` say where
+length(dim(ANS)) is 4 or 5.
+
+Still, I've reverted the change for now, as it needed more
+discussion etc and was unplanned for.
+
+So, now, again,
+
+  A <- array(1:120, c(2,3,4,5),
+            dimnames = list(c("N1", "N2"), LETTERS[1:3], NULL, NULL))
+  str(A)
+  # int [1:2, 1:3, 1:4, 1:5] 1 2 3 4 5 6 7 8 9 10 ...
+  # - attr(*, "dimnames")=List of 4
+  #  ..$ : chr [1:2] "N1" "N2"
+  #  ..$ : chr [1:3] "A" "B" "C"
+  #  ..$ : NULL
+  #  ..$ : NULL
+
+ names(dim(A)) <- c("SSize", "Kind", "method", "rep")
+ dim(A) # is nice ..
+ # SSize   Kind method    rep 
+ #     2      3      4      5 
+
+ dimnames(A) #  *but* is lost (again, after my revert)
+
+
+    > FWIW S4Arrays::set_dim() does that too. It also preserves
+    > the dimnames if the right value is only adding or dropping
+    > outermost (ineffective) dimensions:
+
+    >> x <- array(1:6, dim=c(2,3,1), dimnames=list(c("A", "B"), c("x","y", "z"), "T"))
+    >> S4Arrays:::set_dim(x, 2:3)
+    >   x y z
+    > A 1 3 5
+    > B 2 4 6
+
+    > Note that this is consistent with drop().
+
+Yes, that's nice  ... and the drop() consistency is an extra.
+Martin
+
+    > Best,
+
+    > H.
+
+
+    > On 10/30/23 03:53, Martin Maechler wrote:
+    >>>>>>> Henrik Bengtsson
+    >>>>>>> on Sun, 29 Oct 2023 10:42:19 -0700 writes:
+    >> > Hello,
+    >> 
+    >> > the fix of PR18612
+    >> > (https://bugs.r-project.org/show_bug.cgi?id=18612) in
+    >> > r85380
+    >> > (https://github.com/wch/r-source/commit/2653cc6203fce4c48874111c75bbccac3ac4e803)
+    >> > caused a change in `dim<-()`.  Specifically, in the past,
+    >> > any `dim<-()` assignment would _always_ remove "dimnames"
+    >> > and "names" attributes per help("dim"):
+    >> 
+    >> 
+    >> >     The replacement method changes the "dim" attribute
+    >> > (provided the new value is compatible) and removes any
+    >> > "dimnames" and "names" attributes.
+    >> 
+    >> > In the new version, assigning the same "dim" as before
+    >> > will no longer remove "dimnames".  I'm reporting here to
+    >> > check whether this change was intended, or if it was an
+    >> > unintended side effect of the bug fix.
+    >> 
+    >> > For example, in R Under development (unstable) (2023-10-21
+    >> > r85379), we would get:
+    >> 
+    >> >> x <- array(1:2, dim=c(1,2), dimnames=list("A",
+    >> >> c("a","b"))) str(dimnames(x))
+    >> > List of 2 $ : chr "A" $ : chr [1:2] "a" "b"
+    >> 
+    >> >> dim(x) <- dim(x) ## Removes "dimnames" no matter what
+    >> >> str(dimnames(x))
+    >> >  NULL
+    >> 
+    >> 
+    >> > whereas in R Under development (unstable) (2023-10-21
+    >> > r85380) and beyond, we now get:
+    >> 
+    >> >> x <- array(1:2, dim=c(1,2), dimnames=list("A",
+    >> >> c("a","b"))) str(dimnames(x))
+    >> > List of 2 $ : chr "A" $ : chr [1:2] "a" "b"
+    >> 
+    >> >> dim(x) <- dim(x) ## No longer removes "dimnames"
+    >> >> str(dimnames(x))
+    >> > List of 2 $ : chr "A" $ : chr [1:2] "a" "b"
+    >> 
+    >> >> dim(x) <- rev(dim(x)) ## Still removes "dimnames"
+    >> >> str(dimnames(x))
+    >> >  NULL
+    >> 
+    >> > /Henrik
+    >> 
+    >> Thank you, Henrik.
+    >> 
+    >> This is "funny" (in an unusal sense):
+    >> indeed, the change was *in*advertent, by me (svn rev 85380).
+    >> 
+    >> I had experimentally {i.e., only in my own private version of R-devel!}
+    >> modified the behavior of `dim<-` somewhat
+    >> such it does *not* unnecessarily drop dimnames,
+    >> e.g., in your   `dim(x) <- dim(x)` case above,
+    >> one could really argue that it's a "true loss" if x loses
+    >> dimnames "unnecessarily" ...
+    >> 
+    >> OTOH, I knew in the mean time that  `dim<-` has always been
+    >> documented to drop dimnames in all cases,  and even more
+    >> importantly, I got a strong recommendation to *not* go further
+    >> with this idea -- not only for back compatibility reasons, but
+    >> also for internal logical consistency.
+    >> 
+    >> Most probably, we will just revert this inadvertent change,
+    >> but before that ... since it has been out in the wild anyway,
+    >> we could quickly consider if it *did* break code.
+    >> 
+    >> I assume it did, or you would not have noticed ?
+    >> 
+    >> Martin
+    >> 
+    >> ______________________________________________
+    >> R-devel at r-project.org  mailing list
+    >> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+    > -- 
+    > Herv? Pag?s
+
+    > Bioconductor Core Team
+    > hpages.on.github at gmail.com
+
+    > [[alternative HTML version deleted]]
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Tue Oct 31 12:00:54 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Tue, 31 Oct 2023 12:00:54 +0100
+Subject: [Rd] warnings() in R-devel: inherits from "warnings" -
+ summary(warnings())
+Message-ID: <25920.56934.379577.489590@stat.math.ethz.ch>
+
+A few minutes ago, I have committed (svn rev 85445)
+to R-devel {R's development source code, https://svn.r-project.org/R/trunk/} 
+
+a change with NEWS entry
+
+    * warnings() now always inherits from "warnings" as documented,
+      newly also in the case of no warnings, where it previously
+      returned NULL.
+
+
+In addition to changing the R code to follow the help page,
+another plus is that now
+
+  summary(warnings())
+
+in the case of *no* warnings, correctly does
+
+  R> summary(warnings())
+  no warnings
+
+instead of in current (released) R 
+
+  R> summary(warnings())
+  Length  Class   Mode
+       0   NULL   NULL
+
+In a few CRAN / Bioc packages authors had used checks
+
+   if( is.null(warnings()) )
+
+which will no longer do what was intended, as
+the condition will always be FALSEm
+so we strongly recommend you replace all
+
+    is.null(warnings())
+by  length(warnings()) == 0
+
+(which works the same in current *and* future R versions).
+
+One package maintainer has already been alerted, as he had
+    stopifnot(is.null(warnings()))
+at the end of his test script and needs to replace it.
+
+Something like
+
+   summary(warnings())
+   stopifnot(length(warnings()) == 0)
+
+maybe a good way to end *such* test R scripts (where you treat
+warnings as errors in the end):
+Show (a summary of) the warnings if there are, and still stop.
+
+Otherwise, we now *can* recommend using
+  summary(warnings())
+more generally,
+and particularly useful sometimes after
+
+ options(nwarnings = 1e5) # to get practically all warnings
+
+
+Best regards,
+Martin
+
+--
+Martin Maechler
+ETH Zurich  and   R Core team
+
+
+From x|e @end|ng |rom y|hu|@n@me  Tue Oct 31 14:19:05 2023
+From: x|e @end|ng |rom y|hu|@n@me (Yihui Xie)
+Date: Tue, 31 Oct 2023 08:19:05 -0500
+Subject: [Rd] 
+ system()/system2() using short paths of commands on Windows?
+In-Reply-To: <51408cbb-42ea-4aea-801c-80ebe0f98de8@gmail.com>
+References: <CANROs4eMn2V4C2AQScoKugv4vC0JjsnD3AY6e4vzi0=8UaNaNg@mail.gmail.com>
+ <ead63e0e-70fc-48e8-82d9-460d0d730488@stats.ox.ac.uk>
+ <CANROs4cQ4EnEgf6KM7+bh11CmpRw0OV8rhby4Cbo7OGXo0=R_A@mail.gmail.com>
+ <51408cbb-42ea-4aea-801c-80ebe0f98de8@gmail.com>
+Message-ID: <CANROs4cNdZ=h87FLNiy1HPgdykr=D=a7W9Fhn=exXcgacrwbyA@mail.gmail.com>
+
+Okay, thanks everyone for the clear explanations! Now I understand it
+much better.
+
+Before I wrote to r-devel, I guessed it was probably a problem on TeX
+Live's side rather than R, therefore I also reported it to them and
+I'm still waiting for a response. If they cannot fix it, and R's
+system() has to use short paths, I will resort to workarounds. Many
+thanks again!
+
+Regards,
+Yihui
+
+
+
+On Tue, Oct 31, 2023 at 4:22?AM Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+>
+> On 10/30/23 21:36, Yihui Xie wrote:
+>
+> I have read about "system() not using a shell on Windows" on the help
+> page many times before but never understood what it means technically.
+> Please forgive my ignorance. I still do not understand it, but thanks
+> a lot for the explanation anyway!
+>
+> As the documentation says, system() on Windows runs the command directly, without a shell (without cmd.exe). As it says,
+>
+> 'command must be an executable (extensions ?.exe?, ?.com?) or a batch file (extensions ?.cmd? and ?.bat?): these extensions are tried in turn if none is supplied. This means that redirection, pipes, DOS internal commands, ... cannot be used: see shell if you want to pass a shell command-line. '
+>
+> Things like redirection, pipes, etc are implemented by a shell, you can use shell() to run a command via "cmd.exe /c ...", so these would work.
+>
+> I'm just curious if the full path
+> would work in system() today. If it still would not work because
+> today's Windows is still like Windows 95 in this aspect, please ignore
+> my question and I will ask Microsoft for a refund.
+>
+> I am not sure if you are asking a general question or specifically still for this use. In principle, short names are still useful to get rid of spaces (sometimes they are not quoted correctly, sometimes they cannot be quoted correctly such as in make). Also short names reduce the risk of running over the path-length limits. So R uses short names when they are available, but supports also long names and tries itself to quote properly.
+>
+> You have run into a case when an external wrapper has a bug and isn't able to deal with short names. There could easily be other wrappers around, which have a different bug and cannot deal with long names, e.g. because of spaces, when passing them to other programs. Very much like in luatex. And they may have been written in times when they actually were correct.
+>
+> Best Tomas
+>
+> Regards,
+> Yihui
+>
+>
+>
+> On Mon, Oct 30, 2023 at 3:03?PM Prof Brian Ripley <ripley at stats.ox.ac.uk> wrote:
+>
+> On 30/10/2023 16:18, Yihui Xie wrote:
+>
+> Hi,
+>
+> It may have been so for 20+ years but I just discovered today that system()
+> would always try to use the short path of a command on Windows:
+> https://github.com/wch/r-source/blob/635a67/src/gnuwin32/run.c#L141 If
+> that's true, I wonder if it could provide an option to disable this
+> behavior, because we recently ran into a case in which short paths wouldn't
+> work. I wonder what the original motivation of using short paths was. If it
+> was to avoid spaces in paths, wouldn't shQuote() work? Thanks!
+>
+> No: system on Windows does not use a shell.
+>
+> The 'original motivation' was to work reliably!  Back in the days of
+> Windows 95 when many parts of Windows only supported 8+3 names.
+>
+> Regards,
+> Yihui
+>
+>       [[alternative HTML version deleted]]
+>
+> Please do re-read the posting guide.  It has ' been so for 20+ years '.
+>
+> My apologies! Sometimes I forget to switch to the plain-text mode when
+> writing to R mailing lists.
+>
+> --
+> Brian D. Ripley,                  ripley at stats.ox.ac.uk
+> Emeritus Professor of Applied Statistics, University of Oxford
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
