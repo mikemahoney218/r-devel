@@ -1,0 +1,345 @@
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Wed Nov  1 12:57:26 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Wed, 1 Nov 2023 12:57:26 +0100
+Subject: [Rd] configure output with flexiblas [was Re: About FlexiBLAS in
+ the R-admin docs]
+In-Reply-To: <CALEXWq0BFQ62UbJt9yNmG6EWSgEJkyoQ2wT3XV7T2XxNERySEw@mail.gmail.com>
+References: <mailman.53774.3.1695895202.51578.r-devel@r-project.org>
+ <E698DC79-C258-4A95-A8C6-933A512CA108@gmail.com>
+ <5bcf6c56-bcfb-4f8b-8ba0-91375a5a540e@gmail.com>
+ <CALEXWq0BFQ62UbJt9yNmG6EWSgEJkyoQ2wT3XV7T2XxNERySEw@mail.gmail.com>
+Message-ID: <9cab2be0-618f-4f78-a353-9563670c795f@gmail.com>
+
+
+On 10/31/23 10:45, I?aki Ucar wrote:
+> On Tue, 24 Oct 2023 at 12:53, Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+>> The output of session info is based on that flexiblas is used and on
+>> what flexiblas tells R is the backend it uses. R does not attempt to
+>> check that optimized LAPACK functions from the backend really end up
+>> called via flexiblas, and I don't think it could be realistically checked.
+>>
+>> But I've checked one case manually in Fedora 38 using Linux perf tool.
+>> The following code:
+>>
+>> S <- toeplitz((10:1)/10)
+>> repeat { R <- rWishart(10, 20, S) }
+>>
+>> uses dpotrf from LAPACK, which is optimized in OpenBLAS and ATLAS and
+>> the corresponding optimized implementations really appeared on the
+>> sampling profile for me from the backend libraries.
+>>
+>> The comment from R Admin has been removed now and if anyone runs into
+>> the problem (that an optimized LAPACK function is not called from a
+>> backend that provides it), it would be best to report it with sufficient
+>> detail to flexiblas.
+> Thanks, Tomas. Yes, if an expected redirection to an optimized
+> function does not happen, that would be a bug in FlexiBLAS and should
+> be reported upstream.
+>
+> Related to this, a small detail... I noticed that the R configure
+> script reports "BLAS(FlexiBlas)" correctly as an external library, but
+> then "LAPACK(generic)". This should be FlexiBLAS too instead of
+> "generic". It doesn't make any difference, since the LAPACK symbols in
+> FlexiBLAS are called anyway, but it's misleading.
+
+This depends on how you configure R. On Fedora 38,
+
+../trunk/configure --with-blas=flexiblas --with-lapack
+
+reports "BLAS(FlexiBlas), LAPACK(in blas)" and from my reading of 
+R-admin, this is the recommended way of configuring with flexiblas.
+
+Configuring via (is this what you had in mind?):
+
+../trunk/configure --with-blas=flexiblas --with-lapack=flexiblas
+
+reports "BLAS(FlexiBlas), LAPACK(generic)". The build would actually do 
+"-lflexiblas -lflexiblas", the former for LAPACK (from --with-lapack 
+value) and the latter for BLAS (from --with-blas value). The "generic" 
+here means not from BLAS, but from an extra standalone library. Compare 
+with the first (recommended) use when the build would only link 
+"-lflexiblas" once.
+
+Best,
+Tomas
+
+>
+> Best,
+
+
+From |uc@r @end|ng |rom |edor@project@org  Wed Nov  1 13:29:50 2023
+From: |uc@r @end|ng |rom |edor@project@org (=?UTF-8?Q?I=C3=B1aki_Ucar?=)
+Date: Wed, 1 Nov 2023 13:29:50 +0100
+Subject: [Rd] 
+ configure output with flexiblas [was Re: About FlexiBLAS in
+ the R-admin docs]
+In-Reply-To: <9cab2be0-618f-4f78-a353-9563670c795f@gmail.com>
+References: <mailman.53774.3.1695895202.51578.r-devel@r-project.org>
+ <E698DC79-C258-4A95-A8C6-933A512CA108@gmail.com>
+ <5bcf6c56-bcfb-4f8b-8ba0-91375a5a540e@gmail.com>
+ <CALEXWq0BFQ62UbJt9yNmG6EWSgEJkyoQ2wT3XV7T2XxNERySEw@mail.gmail.com>
+ <9cab2be0-618f-4f78-a353-9563670c795f@gmail.com>
+Message-ID: <CALEXWq0fy-CGgDeraUhVh4gO3z1+BaZcmO9ioaXsj0D=a-CZ8g@mail.gmail.com>
+
+On Wed, 1 Nov 2023 at 12:57, Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+>
+>
+> On 10/31/23 10:45, I?aki Ucar wrote:
+> > On Tue, 24 Oct 2023 at 12:53, Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+> >> The output of session info is based on that flexiblas is used and on
+> >> what flexiblas tells R is the backend it uses. R does not attempt to
+> >> check that optimized LAPACK functions from the backend really end up
+> >> called via flexiblas, and I don't think it could be realistically checked.
+> >>
+> >> But I've checked one case manually in Fedora 38 using Linux perf tool.
+> >> The following code:
+> >>
+> >> S <- toeplitz((10:1)/10)
+> >> repeat { R <- rWishart(10, 20, S) }
+> >>
+> >> uses dpotrf from LAPACK, which is optimized in OpenBLAS and ATLAS and
+> >> the corresponding optimized implementations really appeared on the
+> >> sampling profile for me from the backend libraries.
+> >>
+> >> The comment from R Admin has been removed now and if anyone runs into
+> >> the problem (that an optimized LAPACK function is not called from a
+> >> backend that provides it), it would be best to report it with sufficient
+> >> detail to flexiblas.
+> > Thanks, Tomas. Yes, if an expected redirection to an optimized
+> > function does not happen, that would be a bug in FlexiBLAS and should
+> > be reported upstream.
+> >
+> > Related to this, a small detail... I noticed that the R configure
+> > script reports "BLAS(FlexiBlas)" correctly as an external library, but
+> > then "LAPACK(generic)". This should be FlexiBLAS too instead of
+> > "generic". It doesn't make any difference, since the LAPACK symbols in
+> > FlexiBLAS are called anyway, but it's misleading.
+>
+> This depends on how you configure R. On Fedora 38,
+>
+> ../trunk/configure --with-blas=flexiblas --with-lapack
+>
+> reports "BLAS(FlexiBlas), LAPACK(in blas)" and from my reading of
+> R-admin, this is the recommended way of configuring with flexiblas.
+>
+> Configuring via (is this what you had in mind?):
+>
+> ../trunk/configure --with-blas=flexiblas --with-lapack=flexiblas
+>
+> reports "BLAS(FlexiBlas), LAPACK(generic)". The build would actually do
+> "-lflexiblas -lflexiblas", the former for LAPACK (from --with-lapack
+> value) and the latter for BLAS (from --with-blas value). The "generic"
+> here means not from BLAS, but from an extra standalone library. Compare
+> with the first (recommended) use when the build would only link
+> "-lflexiblas" once.
+
+I see. I didn't understand that part then. I thought that a library
+should be specified.
+
+-- 
+I?aki ?car
+
+
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Wed Nov  1 17:49:29 2023
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Wed, 1 Nov 2023 09:49:29 -0700
+Subject: [Rd] dim<-() changed in R-devel;
+ no longer removing "dimnames" when doing dim(x) <- dim(x)
+In-Reply-To: <25919.35617.446508.577753@stat.math.ethz.ch>
+References: <CAFDcVCTZTjS6ojk=7SordyK517NcKD8KoCK6RgLoYgcoZ13DnQ@mail.gmail.com>
+ <25919.35617.446508.577753@stat.math.ethz.ch>
+Message-ID: <CAFDcVCQp2sADajgfa1yAhvcha_mGEN7tvkKkh+dm-tacmr4g_A@mail.gmail.com>
+
+> I assume it did, or you would not have noticed ?
+
+I noticed it because I got a notice from CRAN about 'matrixStats'
+starting to fail on R-devel.  It was a non-critical failure, because
+it was due to how the package tests compare the results to the
+corresponding base-R implementation. Basically, for legacy reasons
+there was a `dim(res) <- dim` statement and anything following assumed
+the "dimnames" would be done. I've since rewritten the tests to not
+make such assumptions, which resulted in code that is easier to
+follow. So, there were good outcomes from this change too :)
+
+The discussion on whether certain R expressions (e.g. dim(x) <-
+dim(x)) should be no-op is interesting, but it's much bigger, and I
+can see how it becomes a quite complicated discussion.
+
+Thanks,
+
+Henrik
+
+
+On Mon, Oct 30, 2023 at 3:53?AM Martin Maechler
+<maechler at stat.math.ethz.ch> wrote:
+>
+>
+> >>>>> Henrik Bengtsson
+> >>>>>     on Sun, 29 Oct 2023 10:42:19 -0700 writes:
+>
+>     > Hello,
+>
+>     > the fix of PR18612
+>     > (https://bugs.r-project.org/show_bug.cgi?id=18612) in
+>     > r85380
+>     > (https://github.com/wch/r-source/commit/2653cc6203fce4c48874111c75bbccac3ac4e803)
+>     > caused a change in `dim<-()`.  Specifically, in the past,
+>     > any `dim<-()` assignment would _always_ remove "dimnames"
+>     > and "names" attributes per help("dim"):
+>
+>
+>     >     The replacement method changes the "dim" attribute
+>     > (provided the new value is compatible) and removes any
+>     > "dimnames" and "names" attributes.
+>
+>     > In the new version, assigning the same "dim" as before
+>     > will no longer remove "dimnames".  I'm reporting here to
+>     > check whether this change was intended, or if it was an
+>     > unintended side effect of the bug fix.
+>
+>     > For example, in R Under development (unstable) (2023-10-21
+>     > r85379), we would get:
+>
+>     >> x <- array(1:2, dim=c(1,2), dimnames=list("A",
+>     >> c("a","b"))) str(dimnames(x))
+>     > List of 2 $ : chr "A" $ : chr [1:2] "a" "b"
+>
+>     >> dim(x) <- dim(x) ## Removes "dimnames" no matter what
+>     >> str(dimnames(x))
+>     >  NULL
+>
+>
+>     > whereas in R Under development (unstable) (2023-10-21
+>     > r85380) and beyond, we now get:
+>
+>     >> x <- array(1:2, dim=c(1,2), dimnames=list("A",
+>     >> c("a","b"))) str(dimnames(x))
+>     > List of 2 $ : chr "A" $ : chr [1:2] "a" "b"
+>
+>     >> dim(x) <- dim(x) ## No longer removes "dimnames"
+>     >> str(dimnames(x))
+>     > List of 2 $ : chr "A" $ : chr [1:2] "a" "b"
+>
+>     >> dim(x) <- rev(dim(x)) ## Still removes "dimnames"
+>     >> str(dimnames(x))
+>     >  NULL
+>
+>     > /Henrik
+>
+> Thank you, Henrik.
+>
+> This is "funny" (in an unusal sense):
+> indeed, the change was *in*advertent, by me (svn rev 85380).
+>
+> I had experimentally {i.e., only in my own private version of R-devel!}
+> modified the behavior of `dim<-` somewhat
+> such it does *not* unnecessarily drop dimnames,
+> e.g., in your   `dim(x) <- dim(x)` case above,
+> one could really argue that it's a "true loss" if x loses
+> dimnames "unnecessarily" ...
+>
+> OTOH, I knew in the mean time that  `dim<-` has always been
+> documented to drop dimnames in all cases,  and even more
+> importantly, I got a strong recommendation to *not* go further
+> with this idea -- not only for back compatibility reasons, but
+> also for internal logical consistency.
+>
+> Most probably, we will just revert this inadvertent change,
+> but before that ... since it has been out in the wild anyway,
+> we could quickly consider if it *did* break code.
+>
+> I assume it did, or you would not have noticed ?
+>
+> Martin
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Wed Nov  1 19:47:23 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Wed, 1 Nov 2023 19:47:23 +0100
+Subject: [Rd] 
+ configure output with flexiblas [was Re: About FlexiBLAS in
+ the R-admin docs]
+In-Reply-To: <CALEXWq0fy-CGgDeraUhVh4gO3z1+BaZcmO9ioaXsj0D=a-CZ8g@mail.gmail.com>
+References: <mailman.53774.3.1695895202.51578.r-devel@r-project.org>
+ <E698DC79-C258-4A95-A8C6-933A512CA108@gmail.com>
+ <5bcf6c56-bcfb-4f8b-8ba0-91375a5a540e@gmail.com>
+ <CALEXWq0BFQ62UbJt9yNmG6EWSgEJkyoQ2wT3XV7T2XxNERySEw@mail.gmail.com>
+ <9cab2be0-618f-4f78-a353-9563670c795f@gmail.com>
+ <CALEXWq0fy-CGgDeraUhVh4gO3z1+BaZcmO9ioaXsj0D=a-CZ8g@mail.gmail.com>
+Message-ID: <22cf8a28-7c7e-4396-83e1-5e1d22cd4a44@gmail.com>
+
+
+On 11/1/23 13:29, I?aki Ucar wrote:
+> On Wed, 1 Nov 2023 at 12:57, Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+>>
+>> On 10/31/23 10:45, I?aki Ucar wrote:
+>>> On Tue, 24 Oct 2023 at 12:53, Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+>>>> The output of session info is based on that flexiblas is used and on
+>>>> what flexiblas tells R is the backend it uses. R does not attempt to
+>>>> check that optimized LAPACK functions from the backend really end up
+>>>> called via flexiblas, and I don't think it could be realistically checked.
+>>>>
+>>>> But I've checked one case manually in Fedora 38 using Linux perf tool.
+>>>> The following code:
+>>>>
+>>>> S <- toeplitz((10:1)/10)
+>>>> repeat { R <- rWishart(10, 20, S) }
+>>>>
+>>>> uses dpotrf from LAPACK, which is optimized in OpenBLAS and ATLAS and
+>>>> the corresponding optimized implementations really appeared on the
+>>>> sampling profile for me from the backend libraries.
+>>>>
+>>>> The comment from R Admin has been removed now and if anyone runs into
+>>>> the problem (that an optimized LAPACK function is not called from a
+>>>> backend that provides it), it would be best to report it with sufficient
+>>>> detail to flexiblas.
+>>> Thanks, Tomas. Yes, if an expected redirection to an optimized
+>>> function does not happen, that would be a bug in FlexiBLAS and should
+>>> be reported upstream.
+>>>
+>>> Related to this, a small detail... I noticed that the R configure
+>>> script reports "BLAS(FlexiBlas)" correctly as an external library, but
+>>> then "LAPACK(generic)". This should be FlexiBLAS too instead of
+>>> "generic". It doesn't make any difference, since the LAPACK symbols in
+>>> FlexiBLAS are called anyway, but it's misleading.
+>> This depends on how you configure R. On Fedora 38,
+>>
+>> ../trunk/configure --with-blas=flexiblas --with-lapack
+>>
+>> reports "BLAS(FlexiBlas), LAPACK(in blas)" and from my reading of
+>> R-admin, this is the recommended way of configuring with flexiblas.
+>>
+>> Configuring via (is this what you had in mind?):
+>>
+>> ../trunk/configure --with-blas=flexiblas --with-lapack=flexiblas
+>>
+>> reports "BLAS(FlexiBlas), LAPACK(generic)". The build would actually do
+>> "-lflexiblas -lflexiblas", the former for LAPACK (from --with-lapack
+>> value) and the latter for BLAS (from --with-blas value). The "generic"
+>> here means not from BLAS, but from an extra standalone library. Compare
+>> with the first (recommended) use when the build would only link
+>> "-lflexiblas" once.
+> I see. I didn't understand that part then. I thought that a library
+> should be specified.
+
+I read this from R-Admin re --with-lapack:
+
+"In practice its main uses are without a value,
+
+- with an `enhanced' BLAS such as ATLAS, FlexiBLAS, MKL or OpenBLAS which
+contains a full LAPACK (to avoid possible conflicts), or
+
+- on Debian/Ubuntu systems to select the system liblapack which can
+be switched by the `alternatives' mechanism.
+"
+
+I've updated configure in R-devel to detect when the same library is 
+specified explicitly for blas and lapack, so that now even that is 
+handled and reported as LAPACK in Blas libs.
+
+Best
+Tomas
+
+>
+
+
