@@ -343,3 +343,385 @@ Tomas
 >
 
 
+From kry|ov@r00t @end|ng |rom gm@||@com  Fri Nov  3 15:54:08 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Fri, 3 Nov 2023 17:54:08 +0300
+Subject: [Rd] svd() of a 30000 by 30000 matrix segfaults: 32-bit length
+ overflow in LAPACK?
+Message-ID: <20231103175408.38a07b4a@arachnoid>
+
+Dear Dr. Robert M Flight, dear R-developers,
+
+By an accident, I've noticed this problem reported on Mastodon [1].
+
+On a computer with ?32G of RAM, running the following code (which may
+take 5 CPU-hours and allocate 27G of RAM!) results in a segfault:
+
+n_val <- 30000
+tmp_matrix <- matrix(rnorm((n_val ^ 2) / 2), nrow = n_val, ncol = n_val)
+svd_res <- svd(tmp_matrix)
+
+Tim Taylor says [2] that this doesn't fail for a 20000 by 20000 matrix,
+which suggests a 32-bit integer overflow: 30000*30000*8 is 7.2e9, which
+is more than 4.3e9, which is more than 2^32, while 20000*20000*8 is
+3.2e9, slightly below the threshold.
+
+Here's the backtrace from the crash:
+
+#0  0x00007ffff462ac71 in dlasd3 (nl=468, nr=467, sqre=1, k=921, d=..., q=..., ldq=921, dsigma=..., u=...,
+    ldu=30000, u2=..., ldu2=936, vt=..., ldvt=30000, vt2=..., ldvt2=937, idxc=..., ctot=..., z=..., info=0)
+    at ../../../../src/modules/lapack/dlapack.f:82312
+#1  0x00007ffff464578b in dlasd1 (nl=468, nr=467, sqre=1, d=..., alpha=-0.58048560936028271,
+    beta=-0.40955467846435345, u=..., ldu=30000, vt=..., ldvt=30000, idxq=..., iwork=..., work=..., info=0)
+    at ../../../../src/modules/lapack/dlapack.f:81271
+#2  0x00007ffff4681bf2 in dlasd0 (n=29964, sqre=0, d=..., e=..., u=..., ldu=30000, vt=..., ldvt=30000, smlsiz=25,
+    iwork=..., work=..., info=0) at ../../../../src/modules/lapack/dlapack.f:80956
+#3  0x00007ffff468fd5e in dbdsdc (uplo=..., compq=..., n=30000, d=..., e=..., u=..., ldu=30000, vt=...,
+    ldvt=30000, q=..., iq=..., work=..., iwork=..., info=0, _uplo=1, _compq=1)
+    at ../../../../src/modules/lapack/dlapack.f:1525
+#4  0x00007ffff46c1f81 in dgesdd (jobz=..., m=30000, n=30000, a=..., lda=30000, s=..., u=..., ldu=30000, vt=...,
+    ldvt=30000, work=..., lwork=2010000, iwork=..., info=0, _jobz=1)
+    at ../../../../src/modules/lapack/dlapack.f:23312
+#5  0x00007ffff4c5550f in La_svd (jobu=<optimized out>, x=<optimized out>, s=0x555557b88670, u=0x7ffbc379f010,
+    vt=0x7ffa1652a010) at ../../../../src/include/Rinlinedfuns.h:120
+
+The place of the crash and the state of the registers suggests some
+kind of buffer overrun:
+
+(gdb) frame 0
+#0  0x00007ffff462ac71 in dlasd3 (nl=468, nr=467, sqre=1, k=921, d=..., q=..., ldq=921, dsigma=..., u=...,
+    ldu=30000, u2=..., ldu2=936, vt=..., ldvt=30000, vt2=..., ldvt2=937, idxc=..., ctot=..., z=..., info=0)
+    at ../../../../src/modules/lapack/dlapack.f:82312
+82312               Q( J, I ) = U( JC, I ) / TEMP
+(gdb) disas
+...
+   0x00007ffff462ac60 <+1824>:  movslq -0x4(%r10,%rdx,4),%rsi
+   0x00007ffff462ac65 <+1829>:  add    %r12,%rsi
+   0x00007ffff462ac68 <+1832>:  movsd  (%rcx,%rsi,8),%xmm1
+   0x00007ffff462ac6d <+1837>:  divsd  %xmm0,%xmm1
+=> 0x00007ffff462ac71 <+1841>:  movsd  %xmm1,(%rbx,%rdx,8)
+...
+(gdb) info reg
+rbx            0x7ffff45c38d8      140737293072600
+rcx            0x7ffbc379f040      140719293067328
+rdx            0xe5                229
+rsi            0x517d2c            5340460
+
+0x7ffff45c38d8 looks precariously close to the end of the valid
+userspace address range for processes typically running on my computer.
+I was also able to reproduce this with OpenBLAS (0.3.5, LAPACK 3.8.0).
+
+We seem to be overflowing the WORK array. The DGESDD documentation says
+that for JOBZ = 'S', WORK must be of length >= 4*mn*mn + 7*mn, where
+mn = min(M, N). For M = N = 30000, this comes out to 3600210000, while
+the actual length of the WORK array is only 2010000 (as returned from a
+previous call to DGESDD with LWORK = -1).
+
+I think this is caused by an overflow in the value of the BDSPAC
+variable. At the point where MINWRK is assigned (MAX(MINWRK,MAXWRK) to
+become LWORK later), the following can be observed:
+
+22721                           MINWRK = 3*N + MAX( M, BDSPAC )
+0x7ffff7e9a2e0 <dgesdd_+7632>   cmp    %ecx,%esi
+(gdb) p M
+$48 = 30000
+(gdb) p BDSPAC
+$49 = <optimized out>
+(gdb) p $ecx
+$50 = -1594847296
+(gdb) p $esi
+$51 = 30000
+
+The debugger insists that the BDSPAC variable is optimised out for most
+of the duration of its existence, but it can be proven that it
+overflows:
+
+22613                  BDSPAC = 3*N*N + 4*N
+(gdb) ptype BDSPAC
+type = integer(kind=4)
+(gdb) p BDSPAC
+$60 = <optimized out>
+(gdb) p (int32_t)(3*M*M + 4*M)
+$61 = -1594847296
+
+Is there anything R can do at this point, given the required length of
+LWORK being impossible to represent using a signed 32-bit integer?
+
+-- 
+Best regards,
+Ivan
+
+[1] https://mastodon.social/@rmflight/111341279750995911
+
+[2] https://mastodon.social/@_TimTaylor at fosstodon.org/111341425112070441
+
+
+From hp@ge@@on@g|thub @end|ng |rom gm@||@com  Fri Nov  3 23:10:40 2023
+From: hp@ge@@on@g|thub @end|ng |rom gm@||@com (=?UTF-8?B?SGVydsOpIFBhZ8Oocw==?=)
+Date: Fri, 3 Nov 2023 15:10:40 -0700
+Subject: [Rd] 'R CMD INSTALL' keeps going on despite serious errors,
+ and returns exit code 0
+Message-ID: <81945eb7-df8f-446d-b7e7-8f2b591807b4@gmail.com>
+
+Hi list,
+
+Here is an example:
+
+ ??? hpages at XPS15:~$ R CMD INSTALL CoreGx
+ ??? * installing to library ?/home/hpages/R/R-4.4.r85388/site-library?
+ ??? * installing *source* package ?CoreGx? ...
+ ??? ** using staged installation
+ ??? ** R
+ ??? ** data
+ ??? *** moving datasets to lazyload DB
+ ??? ** inst
+ ??? ** byte-compile and prepare package for lazy loading
+ ??? Error : in method for ?updateObject? with signature 
+?object="CoreSet"?:? arguments (?verbose?) after ?...? in the generic 
+must appear in the method, in the same place at the end of the argument list
+ ??? Error: unable to load R code in package ?CoreGx?
+ ??? ** help
+ ??? *** installing help indices
+ ??? ** building package indices
+ ??? ** installing vignettes
+ ??? ** testing if installed package can be loaded from temporary location
+ ??? Error : in method for ?updateObject? with signature 
+?object="CoreSet"?:? arguments (?verbose?) after ?...? in the generic 
+must appear in the method, in the same place at the end of the argument list
+ ??? Error: package or namespace load failed for ?CoreGx?:
+ ?unable to load R code in package ?CoreGx?
+ ??? Error: loading failed
+ ??? ** testing if installed package can be loaded from final location
+ ??? Error : in method for ?updateObject? with signature 
+?object="CoreSet"?:? arguments (?verbose?) after ?...? in the generic 
+must appear in the method, in the same place at the end of the argument list
+ ??? Error: package or namespace load failed for ?CoreGx?:
+ ?unable to load R code in package ?CoreGx?
+ ??? Error: loading failed
+ ??? Error : in method for ?updateObject? with signature 
+?object="CoreSet"?:? arguments (?verbose?) after ?...? in the generic 
+must appear in the method, in the same place at the end of the argument list
+ ??? Error: unable to load R code in package ?CoreGx?
+ ??? ** testing if installed package keeps a record of temporary 
+installation path
+ ??? * DONE (CoreGx)
+
+Many serious errors were ignored. Plus the command returned exit code 0:
+
+ ??? hpages at XPS15:~$ echo $?
+ ??? 0
+
+This is with R 4.4, that BioC 3.19 will be based on and that we only 
+started to use recently for our daily builds.
+
+Strangely, we only see this on Linux. On Windows and Mac, we get the 
+usual hard error, as expected. See:
+
+- 
+https://bioconductor.org/checkResults/3.19/bioc-LATEST/CoreGx/nebbiolo1-install.html
+
+- 
+https://bioconductor.org/checkResults/3.19/bioc-LATEST/CoreGx/palomino3-install.html
+
+- 
+https://bioconductor.org/checkResults/3.19/bioc-LATEST/CoreGx/merida1-install.html
+
+To reproduce:
+
+ ??? library(remotes)
+ ??? install_git("https://git.bioconductor.org/packages/CoreGx")
+
+Thanks,
+
+H.
+
+ > sessionInfo()
+R Under development (unstable) (2023-10-22 r85388)
+Platform: x86_64-pc-linux-gnu
+Running under: Ubuntu 23.10
+
+Matrix products: default
+BLAS:?? /home/hpages/R/R-4.4.r85388/lib/libRblas.so
+LAPACK: /usr/lib/x86_64-linux-gnu/lapack/liblapack.so.3.11.0
+
+locale:
+ ?[1] LC_CTYPE=en_US.UTF-8?????? LC_NUMERIC=C
+ ?[3] LC_TIME=en_US.UTF-8??????? LC_COLLATE=en_US.UTF-8
+ ?[5] LC_MONETARY=en_US.UTF-8??? LC_MESSAGES=en_US.UTF-8
+ ?[7] LC_PAPER=en_US.UTF-8?????? LC_NAME=C
+ ?[9] LC_ADDRESS=C?????????????? LC_TELEPHONE=C
+[11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C
+
+time zone: America/Los_Angeles
+tzcode source: system (glibc)
+
+attached base packages:
+[1] stats???? graphics? grDevices utils???? datasets? methods base
+
+other attached packages:
+[1] remotes_2.4.2.1
+
+loaded via a namespace (and not attached):
+ ?[1] processx_3.8.2??? compiler_4.4.0??? R6_2.5.1 rprojroot_2.0.3
+ ?[5] cli_3.6.1???????? prettyunits_1.2.0 tools_4.4.0 crayon_1.5.2
+ ?[9] desc_1.4.2??????? callr_3.7.3?????? pkgbuild_1.4.2 ps_1.7.5
+
+-- 
+Herv? Pag?s
+
+Bioconductor Core Team
+hpages.on.github at gmail.com
+
+	[[alternative HTML version deleted]]
+
+
+From hp@ge@@on@g|thub @end|ng |rom gm@||@com  Fri Nov  3 23:37:01 2023
+From: hp@ge@@on@g|thub @end|ng |rom gm@||@com (=?UTF-8?B?SGVydsOpIFBhZ8Oocw==?=)
+Date: Fri, 3 Nov 2023 15:37:01 -0700
+Subject: [Rd] 'R CMD INSTALL' keeps going on despite serious errors,
+ and returns exit code 0
+In-Reply-To: <81945eb7-df8f-446d-b7e7-8f2b591807b4@gmail.com>
+References: <81945eb7-df8f-446d-b7e7-8f2b591807b4@gmail.com>
+Message-ID: <0b8bc01b-5f1d-4b21-9c19-09121e35e7c5@gmail.com>
+
+Forgot to mention that the package actually got installed, but is 
+unloadable (not surprisingly):
+
+ ??? > "CoreGx" %in% rownames(installed.packages())
+ ??? [1] TRUE
+
+ ??? > suppressWarnings(suppressMessages(library(CoreGx)))
+ ??? Error : in method for ?updateObject? with signature 
+?object="CoreSet"?:? arguments (?verbose?) after ?...? in the generic 
+must appear in the method, in the same place at the end of the argument list
+ ??? Error: package or namespace load failed for ?CoreGx?:
+ ? ?? unable to load R code in package ?CoreGx?
+
+Best,
+
+H.
+
+On 11/3/23 15:10, Herv? Pag?s wrote:
+>
+> Hi list,
+>
+> Here is an example:
+>
+> ??? hpages at XPS15:~$ R CMD INSTALL CoreGx
+> ??? * installing to library ?/home/hpages/R/R-4.4.r85388/site-library?
+> ??? * installing *source* package ?CoreGx? ...
+> ??? ** using staged installation
+> ??? ** R
+> ??? ** data
+> ??? *** moving datasets to lazyload DB
+> ??? ** inst
+> ??? ** byte-compile and prepare package for lazy loading
+> ??? Error : in method for ?updateObject? with signature 
+> ?object="CoreSet"?:? arguments (?verbose?) after ?...? in the generic 
+> must appear in the method, in the same place at the end of the 
+> argument list
+> ??? Error: unable to load R code in package ?CoreGx?
+> ??? ** help
+> ??? *** installing help indices
+> ??? ** building package indices
+> ??? ** installing vignettes
+> ??? ** testing if installed package can be loaded from temporary location
+> ??? Error : in method for ?updateObject? with signature 
+> ?object="CoreSet"?:? arguments (?verbose?) after ?...? in the generic 
+> must appear in the method, in the same place at the end of the 
+> argument list
+> ??? Error: package or namespace load failed for ?CoreGx?:
+> ?unable to load R code in package ?CoreGx?
+> ??? Error: loading failed
+> ??? ** testing if installed package can be loaded from final location
+> ??? Error : in method for ?updateObject? with signature 
+> ?object="CoreSet"?:? arguments (?verbose?) after ?...? in the generic 
+> must appear in the method, in the same place at the end of the 
+> argument list
+> ??? Error: package or namespace load failed for ?CoreGx?:
+> ?unable to load R code in package ?CoreGx?
+> ??? Error: loading failed
+> ??? Error : in method for ?updateObject? with signature 
+> ?object="CoreSet"?:? arguments (?verbose?) after ?...? in the generic 
+> must appear in the method, in the same place at the end of the 
+> argument list
+> ??? Error: unable to load R code in package ?CoreGx?
+> ??? ** testing if installed package keeps a record of temporary 
+> installation path
+> ??? * DONE (CoreGx)
+>
+> Many serious errors were ignored. Plus the command returned exit code 0:
+>
+> ??? hpages at XPS15:~$ echo $?
+> ??? 0
+>
+> This is with R 4.4, that BioC 3.19 will be based on and that we only 
+> started to use recently for our daily builds.
+>
+> Strangely, we only see this on Linux. On Windows and Mac, we get the 
+> usual hard error, as expected. See:
+>
+> - 
+> https://bioconductor.org/checkResults/3.19/bioc-LATEST/CoreGx/nebbiolo1-install.html
+>
+> - 
+> https://bioconductor.org/checkResults/3.19/bioc-LATEST/CoreGx/palomino3-install.html
+>
+> - 
+> https://bioconductor.org/checkResults/3.19/bioc-LATEST/CoreGx/merida1-install.html
+>
+> To reproduce:
+>
+> ??? library(remotes)
+> ??? install_git("https://git.bioconductor.org/packages/CoreGx")
+>
+> Thanks,
+>
+> H.
+>
+> > sessionInfo()
+> R Under development (unstable) (2023-10-22 r85388)
+> Platform: x86_64-pc-linux-gnu
+> Running under: Ubuntu 23.10
+>
+> Matrix products: default
+> BLAS:?? /home/hpages/R/R-4.4.r85388/lib/libRblas.so
+> LAPACK: /usr/lib/x86_64-linux-gnu/lapack/liblapack.so.3.11.0
+>
+> locale:
+> ?[1] LC_CTYPE=en_US.UTF-8?????? LC_NUMERIC=C
+> ?[3] LC_TIME=en_US.UTF-8??????? LC_COLLATE=en_US.UTF-8
+> ?[5] LC_MONETARY=en_US.UTF-8??? LC_MESSAGES=en_US.UTF-8
+> ?[7] LC_PAPER=en_US.UTF-8?????? LC_NAME=C
+> ?[9] LC_ADDRESS=C?????????????? LC_TELEPHONE=C
+> [11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C
+>
+> time zone: America/Los_Angeles
+> tzcode source: system (glibc)
+>
+> attached base packages:
+> [1] stats???? graphics? grDevices utils???? datasets? methods base
+>
+> other attached packages:
+> [1] remotes_2.4.2.1
+>
+> loaded via a namespace (and not attached):
+> ?[1] processx_3.8.2??? compiler_4.4.0??? R6_2.5.1 rprojroot_2.0.3
+> ?[5] cli_3.6.1???????? prettyunits_1.2.0 tools_4.4.0 crayon_1.5.2
+> ?[9] desc_1.4.2??????? callr_3.7.3?????? pkgbuild_1.4.2 ps_1.7.5
+>
+> -- 
+> Herv? Pag?s
+>
+> Bioconductor Core Team
+> hpages.on.github at gmail.com
+
+-- 
+Herv? Pag?s
+
+Bioconductor Core Team
+hpages.on.github at gmail.com
+
+	[[alternative HTML version deleted]]
+
+
