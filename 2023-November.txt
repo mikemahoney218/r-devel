@@ -2607,3 +2607,299 @@ Mikael
 >      >> >>
 
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Fri Nov 10 14:19:49 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Fri, 10 Nov 2023 14:19:49 +0100
+Subject: [Rd] 
+ [R] Why Rprofile.site is not built with manual installation of
+ R devel in linux?
+In-Reply-To: <205A4E17-50C5-45F0-8D91-F400C1B89E6E@dcn.davis.ca.us>
+References: <AM6PR02MB44230F37BC7E7A139581925F94AFA@AM6PR02MB4423.eurprd02.prod.outlook.com>
+ <205A4E17-50C5-45F0-8D91-F400C1B89E6E@dcn.davis.ca.us>
+Message-ID: <25934.11765.552272.1395@stat.math.ethz.ch>
+
+>>>>> Jeff Newmiller via R-help 
+>>>>>     on Thu, 09 Nov 2023 12:08:07 -0800 writes:
+
+    > No clue. Tip: R-devel is the mailing list for anything
+    > related to development versions of R. Off-topic here.
+
+Yes.  Alternatively, as he uses Debian, there's the
+R-SIG-Debian  mailing list, too.
+
+--> I'm CC'ing  both R-devel and R-SIG-Debian instead of R-help.
+
+    > On November 9, 2023 2:59:44 AM PST, "Iago Gin? V?zquez" <iago.gine at sjd.es> wrote:
+    >> Hi all,
+    >> 
+    >> I downloaded R-devel as explicited in https://developer.r-project.org/SVNtips.html
+    >> Then, I tried to install it through instructions in https://cran.r-project.org/doc/manuals/r-devel/R-admin.html#Installation
+    >> (taking into account also https://stat.ethz.ch/pipermail/r-devel/2016-May/072777.html)
+    >> So:
+    >> export REPOS=https://svn.r-project.org/R
+    >> export RTOP=~ #adjust as necessary
+    >> cd $RTOP
+    >> svn co $REPOS/trunk r-devel/R
+    >> cd r-devel/R
+    >> tools/rsync-recommended
+    >> mkdir ../build-R
+    >> cd ../build-R
+    >> ../R/configure --prefix=/where/you/want/R/to/go
+    >> make
+    >> make check
+
+all fine till here.
+
+I never do the following two (they are not necessary, if you
+keep your  .../r-devel/build-R/  directory and  symlink the
+.../r-devel/build-R/bin/R  to some  <in_our_PATH>/R-devel
+{which is what I do all the time; by that I can easily symlink
+to more than one of different R-devel-<foo> versions etc}
+
+Still I cannot believe that these are the problem.
+
+    >> make install
+    >> make install-tests
+
+    >> cd tests
+    >> ## followed by one of
+    >> ../bin/R CMD make check
+    >> ../bin/R CMD make check-devel
+
+I've never used    ../bin/R CMD make check
+instead of simply  make check
+(which you already did earlier),
+and ditto replacing 'check' with 'check-devel'.
+
+But even if I do that now, I don't get your error,
+*and*  I have not made use of an  Rprofile.site  for a very long time
+(and do *not* have any inside (my variant of your) build-R/
+
+
+    >> And here I get the following error
+    >> checking package 'base'
+    >> Error in file(filename, "r", encoding = encoding) :
+    >> cannot open the connection
+    >> Calls: source -> file
+    >> In addition: Warning message:
+    >> In file(filename, "r", encoding = encoding) :
+    >> cannot open file '.../etc/Rprofile.site': No such file or directory
+    >> Execution halted
+
+You must have forgotten to tell us a bit more about your setup.
+I never get the above error,
+and I do *not* have an  Rprofile.site  either in my  <build-R>/etc/
+
+Have you by chance set an R_LIBS_SITE or similar environment
+variable ?
+Does
+	env | grep '^R_'
+
+give a hint?
+
+    >> where the dots ... specify the path to the build-R folder where R-devel was built. And I check the etc folder and indeed there is no the Rprofile.site
+    >> -rw-r--r-- 1 iago iago  209 Nov  9 08:27 javaconf
+    >> -rw-r--r-- 1 iago iago  770 Nov  9 08:35 ldpaths
+    >> -rw-r--r-- 1 iago iago 6672 Nov  9 08:35 Makeconf
+    >> -rw-r--r-- 1 iago iago 3336 Nov  9 08:27 Makefile
+    >> -rw-r--r-- 1 iago iago 1853 Nov  9 08:27 Renviron
+    >> -rw-r--r-- 1 iago iago 1173 Nov  9 08:32 repositories
+
+
+    >> I note that make install installed R in the path I specified in  ../R/configure --prefix=/where/you/want/R/to/go
+    >> however
+    >> 1. make install-tests installed the tests folder in build-R .
+
+Are your sure?  I don't see how it would do this when I do
+
+    make -n install-tests
+
+(the `-n` "simulates" the make and tells you what make *would* do if you left away the `-n`)
+Rather it would (try to) install to the same place that
+
+    make -n install
+
+would do , namely the  $PREFIX/tests/  directory.
+Maybe you are just confused, because indeed, your
+.../build-R/tests/  directory also contains many of the files
+needed for the tests {but not e.g. the crucial *.R  ones !}.
+
+
+    >> 2.  In the installed R in /where/you/want/R/to/go, there is no even etc folder, there are only the folders bin, lib and share.
+
+    >> Am I  skipping some step? I am on Debain 12.
+Deb*ia*n  {Debora(h) + Ian }
+
+Could it be that the Debian/Ubuntu default (for *their* build of
+/usr/bin/R ) where they indeed use an  Rprofile.site and hence
+that Debian-specific setup is hurting you here  in some way?
+
+I'm close to sure that Debian users may be able to help you one
+step further.
+
+Martin
+
+    >> Thank you!
+    >> Iago
+
+
+From edd @end|ng |rom deb|@n@org  Fri Nov 10 14:41:17 2023
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Fri, 10 Nov 2023 07:41:17 -0600
+Subject: [Rd] 
+ [R] Why Rprofile.site is not built with manual installation of
+ R devel in linux?
+In-Reply-To: <25934.11765.552272.1395@stat.math.ethz.ch>
+References: <AM6PR02MB44230F37BC7E7A139581925F94AFA@AM6PR02MB4423.eurprd02.prod.outlook.com>
+ <205A4E17-50C5-45F0-8D91-F400C1B89E6E@dcn.davis.ca.us>
+ <25934.11765.552272.1395@stat.math.ethz.ch>
+Message-ID: <25934.13053.707608.395510@rob.eddelbuettel.com>
+
+
+On 10 November 2023 at 14:19, Martin Maechler wrote:
+|     >> 2.  In the installed R in /where/you/want/R/to/go, there is no even etc folder, there are only the folders bin, lib and share.
+
+That would appear to be an error in the locally installed R.
+
+What the package does has been discussed before. Per the Linux Filesystem
+Standard (or Filesystem Hierarchy or whatever it is called), Linux distro
+such as Debian and Ubuntu use _both_ /usr/lib _and_ /usr/share so the
+directories are split. Use the `R.home()` function to find them:
+
+    $ Rscript -e 'sapply(c("bin", "doc", "etc"), R.home)'
+                   bin                doc                etc 
+      "/usr/lib/R/bin" "/usr/share/R/doc"   "/usr/lib/R/etc" 
+    $ 
+
+That is from the packaged R via r-base-core.
+
+The behaviour can easily be validated by invoking, say, a Docker container
+based on these same (Debian) packages. One of the containers I look after in
+the Rocker Project has also been aliased to just 'r-base' for years by Docker
+itself so just prefix the above by 'docker run --rm -ti r-base' to run in a
+clean container:
+
+    $ docker run --rm -ti r-base Rscript -e 'sapply(c("bin", "doc", "etc"), R.home)'
+                   bin                doc                etc 
+      "/usr/lib/R/bin" "/usr/share/R/doc"   "/usr/lib/R/etc" 
+    $ 
+
+Being able to run Docker for such tests is a good superpower and on most
+systems these days only one package installation away.
+
+For a locally built one (my r-devel build here) it works the same but points
+of course to a different directory:
+
+    $ RDscript -e 'sapply(c("bin", "doc", "etc"), R.home)'
+                                   bin                                doc
+    "/usr/local/lib/R-devel/lib/R/bin" "/usr/local/lib/R-devel/lib/R/doc"
+                                   etc 
+    "/usr/local/lib/R-devel/lib/R/etc"
+    $ 
+
+As suggested, question for 'R on Debian, Ubuntu, ...' should probably go to
+r-sig-debian which is now CCed.  As usual, you must be subscribed to post or
+else you will get mistaken for a spammer and ignored.
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From |@go@g|ne @end|ng |rom @jd@e@  Fri Nov 10 17:06:02 2023
+From: |@go@g|ne @end|ng |rom @jd@e@ (=?iso-8859-1?Q?Iago_Gin=E9_V=E1zquez?=)
+Date: Fri, 10 Nov 2023 16:06:02 +0000
+Subject: [Rd] 
+ [R] Why Rprofile.site is not built with manual installation of
+ R devel in linux?
+In-Reply-To: <25934.13053.707608.395510@rob.eddelbuettel.com>
+References: <AM6PR02MB44230F37BC7E7A139581925F94AFA@AM6PR02MB4423.eurprd02.prod.outlook.com>
+ <205A4E17-50C5-45F0-8D91-F400C1B89E6E@dcn.davis.ca.us>
+ <25934.11765.552272.1395@stat.math.ethz.ch>
+ <25934.13053.707608.395510@rob.eddelbuettel.com>
+Message-ID: <AM6PR02MB44230EDF08B28923C2D45E5A94AEA@AM6PR02MB4423.eurprd02.prod.outlook.com>
+
+Thanks all for your answers.
+
+First of all, I wrote to R-help and not R-devel, because I wanted to get help and not discussing anything relative to R development, and also because this issue could be due to my fault (as it was indeed), and not to the R devel branch...
+
+Thanks particularly to Martin, because one of his comments enlighten the issue with my tests.
+
+
+You must have forgotten to tell us a bit more about your setup.
+I never get the above error,
+and I do *not* have an  Rprofile.site  either in my  <build-R>/etc/
+
+Have you by chance set an R_LIBS_SITE or similar environment
+variable ?
+Does
+        env | grep '^R_'
+
+give a hint?
+
+Indeed, I had a ~/.Rprofile file sourcing the Rprofile.site file of Debian stable installation, so changing its name made the issue to vanish.
+
+Iago
+
+________________________________
+De: Dirk Eddelbuettel <edd at debian.org>
+Enviat el: divendres, 10 de novembre de 2023 14:41
+Per a: Martin Maechler <maechler at stat.math.ethz.ch>
+A/c: Iago Gin? V?zquez <iago.gine at sjd.es>; R-SIG-debian at r-project.org <R-SIG-debian at r-project.org>; r-devel at r-project.org <r-devel at r-project.org>; Jeff Newmiller <jdnewmil at dcn.davis.ca.us>
+Tema: Re: [Rd] [R] Why Rprofile.site is not built with manual installation of R devel in linux?
+
+
+On 10 November 2023 at 14:19, Martin Maechler wrote:
+|     >> 2.  In the installed R in /where/you/want/R/to/go, there is no even etc folder, there are only the folders bin, lib and share.
+
+That would appear to be an error in the locally installed R.
+
+What the package does has been discussed before. Per the Linux Filesystem
+Standard (or Filesystem Hierarchy or whatever it is called), Linux distro
+such as Debian and Ubuntu use _both_ /usr/lib _and_ /usr/share so the
+directories are split. Use the `R.home()` function to find them:
+
+    $ Rscript -e 'sapply(c("bin", "doc", "etc"), R.home)'
+                   bin                doc                etc
+      "/usr/lib/R/bin" "/usr/share/R/doc"   "/usr/lib/R/etc"
+    $
+
+That is from the packaged R via r-base-core.
+
+The behaviour can easily be validated by invoking, say, a Docker container
+based on these same (Debian) packages. One of the containers I look after in
+the Rocker Project has also been aliased to just 'r-base' for years by Docker
+itself so just prefix the above by 'docker run --rm -ti r-base' to run in a
+clean container:
+
+    $ docker run --rm -ti r-base Rscript -e 'sapply(c("bin", "doc", "etc"), R.home)'
+                   bin                doc                etc
+      "/usr/lib/R/bin" "/usr/share/R/doc"   "/usr/lib/R/etc"
+    $
+
+Being able to run Docker for such tests is a good superpower and on most
+systems these days only one package installation away.
+
+For a locally built one (my r-devel build here) it works the same but points
+of course to a different directory:
+
+    $ RDscript -e 'sapply(c("bin", "doc", "etc"), R.home)'
+                                   bin                                doc
+    "/usr/local/lib/R-devel/lib/R/bin" "/usr/local/lib/R-devel/lib/R/doc"
+                                   etc
+    "/usr/local/lib/R-devel/lib/R/etc"
+    $
+
+As suggested, question for 'R on Debian, Ubuntu, ...' should probably go to
+r-sig-debian which is now CCed.  As usual, you must be subscribed to post or
+else you will get mistaken for a spammer and ignored.
+
+Dirk
+
+--
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+	[[alternative HTML version deleted]]
+
+
