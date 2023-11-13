@@ -2903,3 +2903,51 @@ dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
 	[[alternative HTML version deleted]]
 
 
+From kry|ov@r00t @end|ng |rom gm@||@com  Sat Nov 11 06:28:13 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Sat, 11 Nov 2023 08:28:13 +0300
+Subject: [Rd] New syntax for positional-only function parameters?
+In-Reply-To: <w-ucjjtNdxQhl8Zu_e2FPoUCgc_P2TH5EXER3li56cz76Zt6YjohZrns85_ZaNLITdRwiSkqPGN7tPmheYu-N4kZNX0MhRtgE64ysN8C6Zc=@protonmail.com>
+References: <w-ucjjtNdxQhl8Zu_e2FPoUCgc_P2TH5EXER3li56cz76Zt6YjohZrns85_ZaNLITdRwiSkqPGN7tPmheYu-N4kZNX0MhRtgE64ysN8C6Zc=@protonmail.com>
+Message-ID: <754821DB-5E12-4AA7-BAF9-B2388DFC9595@gmail.com>
+
+6 ?????? 2023 ?. 22:54:24 GMT+03:00, mikkmart via R-devel <r-devel at r-project.org> ?????:
+
+>The pattern of functions accepting other functions as inputs and
+>passing additional ... arguments to them is prevalent throughout
+>the R ecosystem. Currently, however, all such functions must one
+>way or another tackle the problem of inadvertently passing arguments
+>meant to go to ... as arguments to the function itself instead.
+>
+>The typical workaround is to use somehow obfuscated names for the
+>parameters in the main function in order to make such collisions
+>unlikely.
+
+Some additional workarounds can be suggested. For example,
+
+* Take a MoreArgs argument, like in mapply(). Cons: this argument forwarding is not perfect, e.g. a missing argument will cause an error, even if the target function could have handled it.
+
+* Curry some or all of the arguments, i.e. replace the original closure with the one calling the original function and passing it extra arguments, e.g. my_lapply(X, curry(f, X = X, f = f), ...). I think I remember someone asking for dedicated currying syntax in R. Cons: a simple curry() implementation will suffer from the same problem.
+
+* Instead of taking the extra arguments in the same call, return a closure that would take them and perform the call: e.g. my_lapply(f, X)(...). Cons: this is not what R code usually looks like.
+
+>Python's PEP 570 discusses the same issue in the context of Python [1].
+>
+>Concretely, borrowing syntax from Python, the proposal would be
+>to have something along the lines of:
+>
+>    g <- function(x, f, /, ...) match.call()
+>    g(1, f, x = 2) == quote(g(1, f, x = 2))
+
+This is realistic to implement. In addition to changes in gram.y (or, perhaps, to the declare() special interface for giving extra instructions to the parser that was suggested for declaring arguments for NSE) to mark the formals as positional-only, the argument matching mechanism in src/main/match.c:matchArgs_NR will need to be changed to take the flag into account.
+
+I think it's also possible to implement a function with its own argument matching in C by making it .External and walking the LISTSXP it receives, but that's of course much less convenient that writing R.
+
+Unfortunately, this won't immediately help the original lapply(). Somewhere, there's a lot of R code calling lapply(X = X, FUN = FUN, ...), which is currently valid. If positional-only arguments are adopted, lapply() would have to go through a long deprecation cycle before being able to protect its callers from argument name collisions. Still, a new lapply2() would be able to use this immediately.
+
+
+-- 
+Best regards,
+Ivan
+
+
