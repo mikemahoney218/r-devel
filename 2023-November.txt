@@ -3916,3 +3916,100 @@ Tomas
 >
 
 
+From @nto|ne@|@br| @end|ng |rom gm@||@com  Wed Nov 15 19:49:00 2023
+From: @nto|ne@|@br| @end|ng |rom gm@||@com (Antoine Fabri)
+Date: Wed, 15 Nov 2023 19:49:00 +0100
+Subject: [Rd] saveRDS()/readRDS() on environments
+Message-ID: <CAEKh8ujNve1y=R2z-70yO9NZWxZrX_EGH3OXS5rNKC3_W0tHiA@mail.gmail.com>
+
+Dear r-devel,
+
+I was surprised to see that saveRDS() and readRDS() work quite well with
+environments, see below:
+
+```
+z <- 3 # in global env
+y <- new.env()
+y$a <- 1
+x <- new.env(parent = y)
+x$b <- 2
+saveRDS(x, "x.RDS")
+
+# in a new session
+x <- readRDS("x.RDS")
+y <- parent.env(x)
+x$b
+#> [1] 2
+y$a
+#> [1] 1
+parent.env(y)
+#> <environment: R_GlobalEnv>
+z
+#> Error: object 'z' not found
+```
+We know that environments by definition cannot be cloned without
+compromises, and we see above that compromises were made: we did save the
+first parent, but didn't save or at least restore the global env. I don't
+see this documented in `?ReadRDS`, did I miss something ?
+
+I would like to know what rules are followed, if I had to guess I would
+think that parents are saved until a "special environment" is reached (such
+as global env, empty env, package envs, namespaces, imports, datasets), but
+I'd like clarifications on this point.
+
+Thanks,
+
+Antoine
+
+	[[alternative HTML version deleted]]
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Wed Nov 15 20:13:34 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Wed, 15 Nov 2023 22:13:34 +0300
+Subject: [Rd] saveRDS()/readRDS() on environments
+In-Reply-To: <CAEKh8ujNve1y=R2z-70yO9NZWxZrX_EGH3OXS5rNKC3_W0tHiA@mail.gmail.com>
+References: <CAEKh8ujNve1y=R2z-70yO9NZWxZrX_EGH3OXS5rNKC3_W0tHiA@mail.gmail.com>
+Message-ID: <20231115221334.1039560a@Tarkus>
+
+On Wed, 15 Nov 2023 19:49:00 +0100
+Antoine Fabri <antoine.fabri at gmail.com> wrote:
+
+> I would like to know what rules are followed, if I had to guess I
+> would think that parents are saved until a "special environment" is
+> reached (such as global env, empty env, package envs, namespaces,
+> imports, datasets), but I'd like clarifications on this point.
+
+This is what R Internals has to say:
+
+>> Serialization in R needs to take into account that objects may
+>> contain references to environments, which then have enclosing
+>> environments and so on. (Environments recognized as package or name
+>> space environments are saved by name.
+
+>> Some objects are written as if they were SEXPTYPEs: such
+>> pseudo-SEXPTYPEs cover R_NilValue, R_EmptyEnv, R_BaseEnv,
+>> R_GlobalEnv, R_UnboundValue, R_MissingArg and R_BaseNamespace. 
+
+>> Environments are treated in several ways: as we have seen, some are
+>> written as specific pseudo-SEXPTYPEs. Package and namespace
+>> environments are written with pseudo-SEXPTYPEs followed by the name.
+>> ?Normal? environments are written out as ENVSXPs with an integer
+>> indicating if the environment is locked followed by the enclosure,
+>> frame, ?tag? (the hash table) and attributes. 
+
+<http://mirrors.dotsrc.org/cran/doc/manuals/R-ints.html#Serialization-Formats>
+
+(I would normally link to cran.r-project.org, but they are undergoing
+maintenance until tomorrow.)
+
+To summarise, ordinary, anonymous environments (including those
+originating from a call frame that a closure may inherit!) are saved.
+Package-related environments are referenced by name, and so is the
+global environment.
+
+-- 
+Best regards,
+Ivan
+
+
