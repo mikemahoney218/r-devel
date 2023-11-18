@@ -4013,3 +4013,96 @@ Best regards,
 Ivan
 
 
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Thu Nov 16 15:28:52 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Thu, 16 Nov 2023 15:28:52 +0100
+Subject: [Rd] 
+ system()/system2() using short paths of commands on Windows?
+In-Reply-To: <b83d8ea1-bca7-4dc5-827d-5df1c4c48d9b@gmail.com>
+References: <CANROs4eMn2V4C2AQScoKugv4vC0JjsnD3AY6e4vzi0=8UaNaNg@mail.gmail.com>
+ <e62e3831-6e3d-48ac-b9fc-ec359687b03f@gmail.com>
+ <CANROs4ev55PboivB1YpY59RDBQSR_KaHswAZ_JjUz3mFjtcvfQ@mail.gmail.com>
+ <5d27d528-bc5f-4dd7-a926-9b24e61a52b3@gmail.com>
+ <b83d8ea1-bca7-4dc5-827d-5df1c4c48d9b@gmail.com>
+Message-ID: <38fb725b-1066-4722-9df3-797532d2f591@gmail.com>
+
+
+On 10/31/23 10:05, Duncan Murdoch wrote:
+> On 31/10/2023 4:32 a.m., Tomas Kalibera wrote:
+>>
+>> On 10/30/23 19:07, Yihui Xie wrote:
+>>> Sure. I'm not sure if it's possible to make it easier to reproduce,
+>>> but for now the example would require installing TinyTeX (via
+>>> tinytex::install_tinytex(), which can be later uninstalled cleanly via
+>>> tinytex::uninstall_tinytex() after you finish the investigation). Then
+>>> run:
+>>>
+>>> ?? system2('fmtutil-sys', '--all')
+>>> ?? # or tinytex:::fmtutil() if fmtutil-sys.exe is not on PATH
+>>>
+>>> and TeX Live would throw an error like this:
+>>>
+>>> ...\username\AppData\Roaming\TinyTeX\bin\windows\runscript.tlu:864: no
+>>> appropriate script or program found: fmtuti~1
+>>>
+>>> The command "fmtutil-sys" is longer than 8 characters and hence
+>>> shortened to "fmtutil~1". Yes, in principle, TeX Live should work with
+>>> short path names, but it doesn't at the?moment. I haven't figured out
+>>> if it was a recent breakage in TeX Live or not (I've tried to contact
+>>> TeX Live developers).
+>>>
+>>> BTW, shell('fmtutil-sys --all') works fine.
+>>
+>> I can reproduce the problem, also separately from R. It is not an R 
+>> problem
+>>
+>> ./fmtutil-sys.exe --version
+>> works
+>>
+>> ./fmtuti~1 --version
+>> doesn't work
+>>
+>> The problem is in runscript.tlu, when it looks at "progname", it parses
+>> it assuming it is the full name, looking for "-sys" suffix, which won't
+>> be in the short name:
+>>
+>> progname, substcount = string.gsub(progname, '%-sys$', '')
+>> local sysprog = (substcount > 0) -- true if there was a -sys suffix 
+>> removed
+>>
+>> and it does further processing using the program name.
+>>
+>> This has to be fixed on the luatex end, it must be able to work with
+>> short paths (e.g. expand it appropriately). You could probably work
+>> around the installation before it gets fixed, e.g. by creating another
+>> wrapper which would expand to long names, delete the short name, patch
+>> the script, etc. After all, if it works via a shell, then probably the
+>> shell is expanding to the long names and you have a work-around (I don't
+>> know how reliable).
+>>
+>> Adding an option to R's system*() functions to use only long names
+>> doesn't make sense.
+>
+> On the other hand, not modifying the executable name would make a lot 
+> of sense, wouldn't it?? I'm pretty sure all supported versions of 
+> Windows can handle long filenames.
+
+There could be an option to pass the "module" name directly, which would 
+end up as the first argument of CreateProcess, so avoid the search-path 
+lookup and the complete path expansion. That would make sense, but I am 
+not persuaded it is needed. I don't think the luatex wrapper bug is a 
+strong enough case to complicate the code and API (which is already 
+rather complicated) any further. It would not be "just" a new option, 
+but also dissecting the module name from the command (when not using a 
+shell).
+
+While thinking about this and reading the related code I found a bug in 
+handling paths with spaces when short paths are not available, fixed now.
+
+Tomas
+
+>
+> Duncan Murdoch
+>
+
+
