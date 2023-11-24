@@ -4256,3 +4256,382 @@ Simon
 > 
 
 
+From j@g@nmn2 @end|ng |rom gm@||@com  Wed Nov 22 19:14:33 2023
+From: j@g@nmn2 @end|ng |rom gm@||@com (Mikael Jagan)
+Date: Wed, 22 Nov 2023 13:14:33 -0500
+Subject: [Rd] 
+ R-4.3 version list.files function could not work correctly in
+ chinese
+In-Reply-To: <mailman.53703.5.1692266401.61248.r-devel@r-project.org>
+References: <mailman.53703.5.1692266401.61248.r-devel@r-project.org>
+Message-ID: <eb5ce558-0ef3-4b16-baf4-d954527e22b9@gmail.com>
+
+FWIW, a user on Stack Overflow just reported the same issue with list.files
+running R 4.3.z on Windows.  They do not observe the issue running R-devel,
+with Tomas' patch (r84960).  It is still the case that their file names did
+not exceed 260 wide characters.
+
+     https://stackoverflow.com/q/77527167/12685768
+
+Mikael
+
+On 2023-08-17 6:00 am, r-devel-request at r-project.org wrote:
+> Message: 5
+> Date: Wed, 16 Aug 2023 16:00:13 +0200
+> From: Tomas Kalibera<tomas.kalibera at gmail.com>
+> To: Ivan Krylov<krylov.r00t at gmail.com>
+> Cc:"r-devel at r-project.org"  <r-devel at r-project.org>
+> Subject: Re: [Rd]  R-4.3 version list.files function could not work
+> 	correctly in chinese
+> Message-ID:<21e91609-85b2-103b-8e23-12eadff62784 at gmail.com>
+> Content-Type: text/plain; charset="utf-8"; Format="flowed"
+> 
+> 
+> On 8/16/23 13:22, Ivan Krylov wrote:
+>> On Wed, 16 Aug 2023 09:42:09 +0200
+>> Tomas Kalibera<tomas.kalibera at gmail.com>  wrote:
+>>
+>>> Fixed in R-devel (84960). Please let me know if you see any problem
+>>> with the fix.
+>> Thank you for implementing the fix! I gave ??? the link to the
+>> GitHub Action build of the r84960 installer.
+> Thanks and thanks for looking at the change.
+>> I'm worried that ??? was seeing FindNextFileA fail for a different
+>> reason (all the examples given at the Capital of Statistics forum
+>> seemed to use less than 256/4 = 64 characters per file name...), but
+>> maybe this won't reappear with the switch to FindNextFileW. If this
+>> keeps happening, it might be worth producing a warning when
+>> FindNextFileW() fails with an unexpected GetLastError() value.
+> I've added a warning to R-devel when list.files() on Windows stops
+> listing a directory due to an error.
+> 
+> There is probably not more we can do unless there is a revised bug
+> report of the original problem.
+> 
+>> fs::dir_fs() uses NtQueryDirectoryFile() and WideCharToMultiByte()
+>> instead of FindNextFileW() and wcstombs(), but maybe this shouldn't
+>> matter. In particular, both list.files() and fs::dir_fs() would fail
+>> given a file name that cannot be represented in UTF-8 (invalid UTF-16
+>> surrogate pairs?)
+> Right, R only support file names that are valid strings, this assumption
+> is present at many places in the code, so it is fine/consistent to be
+> here as well. The choice of opendir/readdir in R was probably motivated
+> by minimization of platform-specific code.
+> 
+> Best
+> Tomas
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Wed Nov 22 19:29:27 2023
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Wed, 22 Nov 2023 19:29:27 +0100
+Subject: [Rd] 
+ R-4.3 version list.files function could not work correctly in
+ chinese
+In-Reply-To: <eb5ce558-0ef3-4b16-baf4-d954527e22b9@gmail.com>
+References: <mailman.53703.5.1692266401.61248.r-devel@r-project.org>
+ <eb5ce558-0ef3-4b16-baf4-d954527e22b9@gmail.com>
+Message-ID: <83239264-bbfc-48ce-a0aa-a5c9a7f20978@gmail.com>
+
+On 11/22/23 19:14, Mikael Jagan wrote:
+> FWIW, a user on Stack Overflow just reported the same issue with 
+> list.files
+> running R 4.3.z on Windows.? They do not observe the issue running 
+> R-devel,
+> with Tomas' patch (r84960).? It is still the case that their file 
+> names did
+> not exceed 260 wide characters.
+>
+> ??? https://stackoverflow.com/q/77527167/12685768
+Great, thanks!
+
+Tomas
+
+>
+> Mikael
+>
+> On 2023-08-17 6:00 am, r-devel-request at r-project.org wrote:
+>> Message: 5
+>> Date: Wed, 16 Aug 2023 16:00:13 +0200
+>> From: Tomas Kalibera<tomas.kalibera at gmail.com>
+>> To: Ivan Krylov<krylov.r00t at gmail.com>
+>> Cc:"r-devel at r-project.org"? <r-devel at r-project.org>
+>> Subject: Re: [Rd]? R-4.3 version list.files function could not work
+>> ????correctly in chinese
+>> Message-ID:<21e91609-85b2-103b-8e23-12eadff62784 at gmail.com>
+>> Content-Type: text/plain; charset="utf-8"; Format="flowed"
+>>
+>>
+>> On 8/16/23 13:22, Ivan Krylov wrote:
+>>> On Wed, 16 Aug 2023 09:42:09 +0200
+>>> Tomas Kalibera<tomas.kalibera at gmail.com>? wrote:
+>>>
+>>>> Fixed in R-devel (84960). Please let me know if you see any problem
+>>>> with the fix.
+>>> Thank you for implementing the fix! I gave ??? the link to the
+>>> GitHub Action build of the r84960 installer.
+>> Thanks and thanks for looking at the change.
+>>> I'm worried that ??? was seeing FindNextFileA fail for a different
+>>> reason (all the examples given at the Capital of Statistics forum
+>>> seemed to use less than 256/4 = 64 characters per file name...), but
+>>> maybe this won't reappear with the switch to FindNextFileW. If this
+>>> keeps happening, it might be worth producing a warning when
+>>> FindNextFileW() fails with an unexpected GetLastError() value.
+>> I've added a warning to R-devel when list.files() on Windows stops
+>> listing a directory due to an error.
+>>
+>> There is probably not more we can do unless there is a revised bug
+>> report of the original problem.
+>>
+>>> fs::dir_fs() uses NtQueryDirectoryFile() and WideCharToMultiByte()
+>>> instead of FindNextFileW() and wcstombs(), but maybe this shouldn't
+>>> matter. In particular, both list.files() and fs::dir_fs() would fail
+>>> given a file name that cannot be represented in UTF-8 (invalid UTF-16
+>>> surrogate pairs?)
+>> Right, R only support file names that are valid strings, this assumption
+>> is present at many places in the code, so it is fine/consistent to be
+>> here as well. The choice of opendir/readdir in R was probably motivated
+>> by minimization of platform-specific code.
+>>
+>> Best
+>> Tomas
+
+
+From n@r@@ @end|ng |rom @t@n|ord@edu  Wed Nov 22 20:50:54 2023
+From: n@r@@ @end|ng |rom @t@n|ord@edu (Balasubramanian Narasimhan)
+Date: Wed, 22 Nov 2023 11:50:54 -0800
+Subject: [Rd] Matrix 1.6.2+ versus Matrix 1.6.2-
+Message-ID: <3fadf247-0b1b-4ec2-b9dd-4e26e07f405e@stanford.edu>
+
+Package Rmosek compiles fine using Matrix versions 1.6.2- but not with 
+anything beyond Matrix 1.6.2.? (FYI, Rmosek provides R interfaces to the 
+excellent MOSEK solver; academic licenses are free.)
+
+Here is the error message:
+
+    rmsk_obj_matrices.cc:50:9: error: use of undeclared identifier 'Matrix_isclass_Csparse'
+     ?? 50 |???? if (Matrix_isclass_Csparse(val)) {
+     ????? |???????? ^
+    rmsk_obj_matrices.cc:171:9: error: use of undeclared identifier 'Matrix_isclass_triplet'
+     ? 171 |???? if (Matrix_isclass_triplet(val)) {
+     ????? |???????? ^
+    rmsk_obj_matrices.cc:225:24: error: use of undeclared identifier 'M_chm_triplet_to_SEXP'
+     ? 225 |?? matrixhandle.protect(M_chm_triplet_to_SEXP(tmp, 0, 0, 0, NULL, R_NilValue));
+
+These API entry points are no longer in the recent headers. My quick 
+examination shows that the first two seem like mostly R API stuff and so 
+can be copied over to Rmosek easily but the last one looks more involved 
+in my cursory examination.
+
+I was going to let the author of Rmosek know, but I do not see any 
+mention of these API entries going away in the NEWS for Matrix.
+
+Would be good to point the author to a suggested approach or even 
+provide the beginnings of a fix. Any thoughts, particularly by Matrix 
+authors (Martin, Mikael)?
+
+Thanks in advance.
+
+-Naras
+
+
+	[[alternative HTML version deleted]]
+
+
+From j@n@g|e|xner @end|ng |rom gm@||@com  Wed Nov 22 19:39:03 2023
+From: j@n@g|e|xner @end|ng |rom gm@||@com (Jan Gleixner)
+Date: Wed, 22 Nov 2023 19:39:03 +0100
+Subject: [Rd] seq edge cases
+Message-ID: <88ae4919-8d46-4174-9981-9df33c88124b@gmail.com>
+
+I think that, if called with |length.out=1|, |seq| and |seq.int| should 
+return |start| - no matter the value of the other parameters.
+Currently they always return |NaN| / error if called with |by=Inf|, for 
+example.
+
+|for (n in 4:0) print(seq(1, by=1/(n-1), length.out=n)) # [1] 1.000000 
+1.333333 1.666667 2.000000 # [1] 1.0 1.5 2.0 # [1] 1 2 # [1] NaN <- this 
+should be 1 # integer(0) for (n in 4:0) print(seq.int(1, by=1/(n-1), 
+length.out=n)) # [1] 1.000000 1.333333 1.666667 2.000000 # [1] 1.0 1.5 
+2.0 # [1] 1 2 # Error in seq.int(1, by = 1/(n - 1), length.out = n) : <- 
+this should be 1, not an error # 'by' must be a finite number # 
+integer(0) <- (result for n=0) |
+
+I believe changing this would prevent quite some edge case bugs, for 
+example this one:
+
+|> colorspace::divergingx_hcl(1) Error in seq.int(1, by = -2/(n - 1), 
+length.out = n2) : 'by' must be a finite number |
+
+Do see any downside to this?
+
+-Jan
+
+?
+
+-------------- next part --------------
+A non-text attachment was scrubbed...
+Name: OpenPGP_signature.asc
+Type: application/pgp-signature
+Size: 840 bytes
+Desc: OpenPGP digital signature
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20231122/a7945fb2/attachment.sig>
+
+From j@g@nmn2 @end|ng |rom gm@||@com  Wed Nov 22 22:14:18 2023
+From: j@g@nmn2 @end|ng |rom gm@||@com (Mikael Jagan)
+Date: Wed, 22 Nov 2023 16:14:18 -0500
+Subject: [Rd] Matrix 1.6.2+ versus Matrix 1.6.2-
+Message-ID: <7420f82a-0f27-4bae-afa0-f8111ff288fe@gmail.com>
+
+Naras,
+
+Thanks.  I'm a bit confused, because Rmosek does not declare Matrix as a
+dependency:
+
+     > tools::package_dependencies("Rmosek", which = "all")[[1L]]
+     [1] "pkgbuild"
+
+nor does it contain code needing compilation:
+
+     > packageDescription("Rmosek", fields="NeedsCompilation")
+     [1] "no"
+
+Can you explain the nature of the dependency and how I can reproduce your
+output?  Is an _external_ library somehow linking Matrix ... ?
+
+Note that the 3 removed entry points were unused by all reverse LinkingTo
+on CRAN and BioC at the time that Matrix 1.6-2 was released.  We can
+suggest replacements (probably off list; I don't know that R-devel is the
+right forum) but only if we are able to see the code being compiled ...
+
+Mikael
+
+ > Package Rmosek compiles fine using Matrix versions 1.6.2- but not with
+ > anything beyond Matrix 1.6.2.  (FYI, Rmosek provides R interfaces to the
+ > excellent MOSEK solver; academic licenses are free.)
+ >
+ > Here is the error message:
+ >
+ >     rmsk_obj_matrices.cc:50:9: error: use of undeclared identifier 
+'Matrix_isclass_Csparse'
+ >         50 |     if (Matrix_isclass_Csparse(val)) {
+ >            |         ^
+ >     rmsk_obj_matrices.cc:171:9: error: use of undeclared identifier 
+'Matrix_isclass_triplet'
+ >        171 |     if (Matrix_isclass_triplet(val)) {
+ >            |         ^
+ >     rmsk_obj_matrices.cc:225:24: error: use of undeclared identifier 
+'M_chm_triplet_to_SEXP'
+ >        225 |   matrixhandle.protect(M_chm_triplet_to_SEXP(tmp, 0, 0, 0, NULL, 
+R_NilValue));
+ >
+ > These API entry points are no longer in the recent headers. My quick
+ > examination shows that the first two seem like mostly R API stuff and so
+ > can be copied over to Rmosek easily but the last one looks more involved
+ > in my cursory examination.
+ >
+ > I was going to let the author of Rmosek know, but I do not see any
+ > mention of these API entries going away in the NEWS for Matrix.
+ >
+ > Would be good to point the author to a suggested approach or even
+ > provide the beginnings of a fix. Any thoughts, particularly by Matrix
+ > authors (Martin, Mikael)?
+ >
+ > Thanks in advance.
+ >
+ > -Naras
+
+
+From n@r@@ @end|ng |rom @t@n|ord@edu  Wed Nov 22 23:10:04 2023
+From: n@r@@ @end|ng |rom @t@n|ord@edu (Balasubramanian Narasimhan)
+Date: Wed, 22 Nov 2023 14:10:04 -0800
+Subject: [Rd] Matrix 1.6.2+ versus Matrix 1.6.2-
+In-Reply-To: <7420f82a-0f27-4bae-afa0-f8111ff288fe@gmail.com>
+References: <7420f82a-0f27-4bae-afa0-f8111ff288fe@gmail.com>
+Message-ID: <aa3571d7-badf-46b2-a143-58390e2bac03@stanford.edu>
+
+Thanks Mikael.
+
+[I too wondered if this topic was appropriate for the list and in the 
+end thought it might be. We can probably take this offline after this 
+exchange and summarize if appropriate.]
+
+The actual source of the package is here: 
+https://download.mosek.com/R/10.1/src/contrib/Rmosek_10.1.14.tar.gz
+
+and requires a download of the optimizer first using an academic 
+license: https://www.mosek.com/products/academic-licenses/
+
+The optimizer typically installs under ~/mosek.
+
+Then one installs Rmosek from CRAN as usual and follows the instructions 
+it emits as it is loaded. The installation needs to know the Mosek bin 
+directory: on a mac it is "~/mosek/10.1/tools/platform/osx64x86/bin". 
+That begins the source installation process.
+
+-Naras
+
+
+On 11/22/23 1:14 PM, Mikael Jagan wrote:
+> Naras,
+>
+> Thanks.? I'm a bit confused, because Rmosek does not declare Matrix as a
+> dependency:
+>
+> ??? > tools::package_dependencies("Rmosek", which = "all")[[1L]]
+> ??? [1] "pkgbuild"
+>
+> nor does it contain code needing compilation:
+>
+> ??? > packageDescription("Rmosek", fields="NeedsCompilation")
+> ??? [1] "no"
+>
+> Can you explain the nature of the dependency and how I can reproduce your
+> output?? Is an _external_ library somehow linking Matrix ... ?
+>
+> Note that the 3 removed entry points were unused by all reverse LinkingTo
+> on CRAN and BioC at the time that Matrix 1.6-2 was released.? We can
+> suggest replacements (probably off list; I don't know that R-devel is the
+> right forum) but only if we are able to see the code being compiled ...
+>
+> Mikael
+>
+> > Package Rmosek compiles fine using Matrix versions 1.6.2- but not with
+> > anything beyond Matrix 1.6.2.? (FYI, Rmosek provides R interfaces to 
+> the
+> > excellent MOSEK solver; academic licenses are free.)
+> >
+> > Here is the error message:
+> >
+> >???? rmsk_obj_matrices.cc:50:9: error: use of undeclared identifier 
+> 'Matrix_isclass_Csparse'
+> >???????? 50 |???? if (Matrix_isclass_Csparse(val)) {
+> >??????????? |???????? ^
+> >???? rmsk_obj_matrices.cc:171:9: error: use of undeclared identifier 
+> 'Matrix_isclass_triplet'
+> >??????? 171 |???? if (Matrix_isclass_triplet(val)) {
+> >??????????? |???????? ^
+> >???? rmsk_obj_matrices.cc:225:24: error: use of undeclared identifier 
+> 'M_chm_triplet_to_SEXP'
+> >??????? 225 | matrixhandle.protect(M_chm_triplet_to_SEXP(tmp, 0, 0, 
+> 0, NULL, R_NilValue));
+> >
+> > These API entry points are no longer in the recent headers. My quick
+> > examination shows that the first two seem like mostly R API stuff 
+> and so
+> > can be copied over to Rmosek easily but the last one looks more 
+> involved
+> > in my cursory examination.
+> >
+> > I was going to let the author of Rmosek know, but I do not see any
+> > mention of these API entries going away in the NEWS for Matrix.
+> >
+> > Would be good to point the author to a suggested approach or even
+> > provide the beginnings of a fix. Any thoughts, particularly by Matrix
+> > authors (Martin, Mikael)?
+> >
+> > Thanks in advance.
+> >
+> > -Naras
+
+
