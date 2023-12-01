@@ -5327,3 +5327,144 @@ On Tue, Nov 28, 2023 at 10:34?AM Bill Dunlap <williamwdunlap at gmail.com> wrote
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From du@@@@dr|@n @end|ng |rom un|buc@ro  Wed Nov 29 00:33:21 2023
+From: du@@@@dr|@n @end|ng |rom un|buc@ro (=?UTF-8?B?QWRyaWFuIER1yJlh?=)
+Date: Wed, 29 Nov 2023 00:33:21 +0100
+Subject: [Rd] capture error messages from loading shared objects
+In-Reply-To: <CAFDcVCR0yiTNojdqfskTMZws7zXEnHGnD=n3qkAha0S6FmYoPw@mail.gmail.com>
+References: <CAA1TD3qzysOEKsU51pTDd2yvdpH4=3NBsYwHMy0MLg-FCKnAKQ@mail.gmail.com>
+ <20231128132834.0ea405b0@arachnoid>
+ <CAA1TD3o227kcyt4wiAVoJJF83+3P-2MC4q8N4W0gLVLHBz0U5Q@mail.gmail.com>
+ <CAHqSRuQK8fGuy2hkS_Puko6DNuyCAm8tCc1h4SmmafpyvXx+6Q@mail.gmail.com>
+ <CAFDcVCR0yiTNojdqfskTMZws7zXEnHGnD=n3qkAha0S6FmYoPw@mail.gmail.com>
+Message-ID: <CAJ=0CtBrm-MOCTsHQRCnFoO1xNxzSbRX6D_+qeOYBqNkcqoffQ@mail.gmail.com>
+
+Thanks Henrik and Bill,
+
+Indeed, but I do have a function called tryCatchWEM() in package admisc
+that captures all that.
+
+My use case was to test for different architectures (for instance, arm64 vs
+Intel MacOS) embedding R in cross-platform applications.
+I needed to test if the package could be loaded, and previously used
+requireNamespace() being unaware, as Ivan pointed out, that internally that
+function already does tryCatch() with loadNamespace().
+
+That was the reason why my own function tryCatchWEM() could not capture
+that specific error message.
+I now do:
+> admisc::tryCatchWEM(loadNamespace("foobar"))
+$error
+[1] "there is no package called ?foobar?"
+
+(and the error message is captured just fine).
+
+All the best,
+Adrian
+
+On Tue, Nov 28, 2023 at 7:45?PM Henrik Bengtsson <henrik.bengtsson at gmail.com>
+wrote:
+
+> Careful; tryCatch() on non-error conditions will break out of what's
+> evaluated, e.g.
+>
+> res <- tryCatch({
+>   cat("1\n")
+>   message("2")
+>   cat("3\n")
+>   42
+> }, message = identity)
+>
+> will output '1' but not '3', because it returns as soon as the first
+> message() is called.
+>
+> To "record" messages (same for warnings), use withCallingHandlers()
+> instead, e.g.
+>
+> msgs <- list()
+> res <- withCallingHandlers({
+>   cat("1\n")
+>   message("2")
+>   cat("3\n")
+>   42
+> }, message = function(m) {
+>   msgs <<- c(msgs, list(m))
+>   invokeRestart("muffleMessage")
+> })
+>
+> This will output '1', muffle '2', output '3', and return 42, and 'msgs'
+> holds
+>
+> > msgs
+> [[1]]
+> <simpleMessage in message("2"): 2
+>
+> /Henrik
+>
+> On Tue, Nov 28, 2023 at 10:34?AM Bill Dunlap <williamwdunlap at gmail.com>
+> wrote:
+> >
+> > If you would like to save the error message instead of suppressing it,
+> you
+> > can use tryCatch(message=function(e)e, ...).
+> >
+> > -BIll
+> >
+> > On Tue, Nov 28, 2023 at 3:55?AM Adrian Dusa <dusa.adrian at unibuc.ro>
+> wrote:
+> >
+> > > Once again, Ivan, many thanks.
+> > > Yes, that does solve it.
+> > > Best wishes,
+> > > Adrian
+> > >
+> > > On Tue, Nov 28, 2023 at 11:28?AM Ivan Krylov <krylov.r00t at gmail.com>
+> > > wrote:
+> > >
+> > > > ? Tue, 28 Nov 2023 10:46:45 +0100
+> > > > Adrian Dusa <dusa.adrian at unibuc.ro> ?????:
+> > > >
+> > > > > tryCatch(requireNamespace("foobar"), error = function(e) e)
+> > > >
+> > > > I think you meant loadNamespace() (which throws errors), not
+> > > > requireNamespace() (which internally uses
+> tryCatch(loadNamespace(...))
+> > > > and may or may not print the error depending on the `quietly`
+> argument).
+> > > >
+> > > > --
+> > > > Best regards,
+> > > > Ivan
+> > > >
+> > >
+> > >         [[alternative HTML version deleted]]
+> > >
+> > > ______________________________________________
+> > > R-devel at r-project.org mailing list
+> > > https://stat.ethz.ch/mailman/listinfo/r-devel
+> > >
+> >
+> >         [[alternative HTML version deleted]]
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+-- 
+Adrian Dusa
+University of Bucharest
+Romanian Social Data Archive
+Soseaua Panduri nr. 90-92
+050663 Bucharest sector 5
+Romania
+https://adriandusa.eu
+
+	[[alternative HTML version deleted]]
+
+
