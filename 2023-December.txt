@@ -303,3 +303,49 @@ Best regards
 Hilmar
 
 
+From kry|ov@r00t @end|ng |rom gm@||@com  Tue Dec 12 13:55:19 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Tue, 12 Dec 2023 15:55:19 +0300
+Subject: [Rd] 
+ Partial matching performance in data frame rownames using [
+In-Reply-To: <de5e1dad-7ffc-4c35-8c51-1e0e21e585b9@gmx.de>
+References: <de5e1dad-7ffc-4c35-8c51-1e0e21e585b9@gmx.de>
+Message-ID: <20231212155519.2ccbd3d2@arachnoid>
+
+? Mon, 11 Dec 2023 21:11:48 +0100
+Hilmar Berger via R-devel <r-devel at r-project.org> ?????:
+
+> What was unexpected is that in this case was that [.data.frame was
+> hanging for a long time (I waited about 10 minutes and then restarted
+> R). Also, this cannot be interrupted in interactive mode.
+
+That's unfortunate. If an operation takes a long time, it ought to be
+interruptible. Here's a patch that passes make check-devel:
+
+--- src/main/unique.c	(revision 85667)
++++ src/main/unique.c	(working copy)
+@@ -1631,6 +1631,7 @@
+ 	}
+     }
+ 
++    unsigned int ic = 9999;
+     if(nexact < n_input) {
+ 	/* Second pass, partial matching */
+ 	for (R_xlen_t i = 0; i < n_input; i++) {
+@@ -1642,6 +1643,10 @@
+ 	    mtch = 0;
+ 	    mtch_count = 0;
+ 	    for (int j = 0; j < n_target; j++) {
++		if (!--ic) {
++		    R_CheckUserInterrupt();
++		    ic = 9999;
++		}
+ 		if (no_dups && used[j]) continue;
+ 		if (strncmp(ss, tar[j], temp) == 0) {
+ 		    mtch = j + 1;
+
+-- 
+Best regards,
+Ivan
+
+
