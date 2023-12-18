@@ -728,3 +728,193 @@ Iago
 	[[alternative HTML version deleted]]
 
 
+From kry|ov@r00t @end|ng |rom gm@||@com  Sat Dec 16 10:48:42 2023
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Sat, 16 Dec 2023 12:48:42 +0300
+Subject: [Rd] 
+ Partial matching performance in data frame rownames using [
+In-Reply-To: <8022eea1-9577-476c-9f06-67e8f32a6a61@gmx.de>
+References: <de5e1dad-7ffc-4c35-8c51-1e0e21e585b9@gmx.de>
+ <20231212155519.2ccbd3d2@arachnoid>
+ <8022eea1-9577-476c-9f06-67e8f32a6a61@gmx.de>
+Message-ID: <20231216124842.4d889cdd@Tarkus>
+
+On Wed, 13 Dec 2023 09:04:18 +0100
+Hilmar Berger via R-devel <r-devel at r-project.org> wrote:
+
+> Still, I feel that default partial matching cripples the functionality
+> of data.frame for larger tables.
+
+Changing the default now would require a long deprecation cycle to give
+everyone who uses `[.data.frame` and relies on partial matching
+(whether they know it or not) enough time to adjust.
+
+Still, adding an argument feels like a small change: edit
+https://svn.r-project.org/R/trunk/src/library/base/R/dataframe.R and
+add a condition before calling pmatch(). Adjust the warning() for named
+arguments. Don't forget to document the new argument in the man page at
+https://svn.r-project.org/R/trunk/src/library/base/man/Extract.data.frame.Rd
+
+Index: src/library/base/R/dataframe.R
+===================================================================
+--- src/library/base/R/dataframe.R	(revision 85664)
++++ src/library/base/R/dataframe.R	(working copy)
+@@ -591,14 +591,14 @@
+ ###  These are a little less general than S
+ 
+ `[.data.frame` <-
+-    function(x, i, j, drop = if(missing(i)) TRUE else length(cols) == 1)
++    function(x, i, j, drop = if(missing(i)) TRUE else length(cols) == 1, pmatch.rows = TRUE)
+ {
+     mdrop <- missing(drop)
+     Narg <- nargs() - !mdrop  # number of arg from x,i,j that were specified
+     has.j <- !missing(j)
+-    if(!all(names(sys.call()) %in% c("", "drop"))
++    if(!all(names(sys.call()) %in% c("", "drop", "pmatch.rows"))
+        && !isS4(x)) # at least don't warn for callNextMethod!
+-        warning("named arguments other than 'drop' are discouraged")
++        warning("named arguments other than 'drop', 'pmatch.rows' are discouraged")
+ 
+     if(Narg < 3L) {  # list-like indexing or matrix indexing
+         if(!mdrop) warning("'drop' argument will be ignored")
+@@ -679,7 +679,11 @@
+             ## for consistency with [, <length-1>]
+             if(is.character(i)) {
+                 rows <- attr(xx, "row.names")
+-                i <- pmatch(i, rows, duplicates.ok = TRUE)
++                i <- if (pmatch.rows) {
++                    pmatch(i, rows, duplicates.ok = TRUE)
++                } else {
++                    match(i, rows)
++                }
+             }
+             ## need to figure which col was selected:
+             ## cannot use .subset2 directly as that may
+@@ -699,7 +703,11 @@
+                  # as this can be expensive.
+     if(is.character(i)) {
+         rows <- attr(xx, "row.names")
+-        i <- pmatch(i, rows, duplicates.ok = TRUE)
++        i <- if (pmatch.rows) {
++            pmatch(i, rows, duplicates.ok = TRUE)
++        } else {
++            match(i, rows)
++        }
+     }
+     for(j in seq_along(x)) {
+         xj <- xx[[ sxx[j] ]]
+Index: src/library/base/man/Extract.data.frame.Rd
+===================================================================
+--- src/library/base/man/Extract.data.frame.Rd	(revision 85664)
++++ src/library/base/man/Extract.data.frame.Rd	(working copy)
+@@ -15,7 +15,7 @@
+   Extract or replace subsets of data frames.
+ }
+ \usage{
+-\method{[}{data.frame}(x, i, j, drop = )
++\method{[}{data.frame}(x, i, j, drop =, pmatch.rows = TRUE)
+ \method{[}{data.frame}(x, i, j) <- value
+ \method{[[}{data.frame}(x, ..., exact = TRUE)
+ \method{[[}{data.frame}(x, i, j) <- value
+@@ -45,6 +45,9 @@
+     column is selected.}
+ 
+    \item{exact}{logical: see \code{\link{[}}, and applies to column names.}
++
++   \item{pmatch.rows}{logical: whether to perform partial matching on
++     row names in case \code{i} is a character vector.}
+ }
+ \details{
+   Data frames can be indexed in several modes.  When \code{[} and
+
+
+system.time({r <- d1[q2,, drop=FALSE, pmatch.rows = FALSE]})
+#    user  system elapsed 
+#   0.478   0.004   0.482 
+
+Unfortunately, that would be only the beginning. The prose in the whole
+?`[.data.frame` would have to be updated; the new behaviour would have
+to be tested in tests/**.R. There may be very good reasons why named
+arguments to `[` other than drop= are discouraged for data.frames. I'm
+afraid I lack the whole-project view to consider whether such an
+addition would be safe.
+
+-- 
+Best regards,
+Ivan
+
+
+From greg @end|ng |rom w@rne@@net  Sat Dec 16 23:34:18 2023
+From: greg @end|ng |rom w@rne@@net (Gregory Warnes)
+Date: Sat, 16 Dec 2023 17:34:18 -0500
+Subject: [Rd] zapsmall(x) for scalar x
+Message-ID: <EC76CAE0-A775-4DCB-AD99-81B47E963225@warnes.net>
+
+I was quite suprised to discover that applying `zapsmall` to a scalar value has no apparent effect.  For example: 
+
+> y <- 2.220446e-16
+> zapsmall(y,)
+[1] 2.2204e-16
+
+I was expecting zapsmall(x)` to act like
+
+> round(y, digits=getOption('digits'))
+[1] 0
+
+Looking at the current source code, indicates that `zapsmall` is expecting a vector:
+
+zapsmall <-
+function (x, digits = getOption("digits")) 
+{
+    if (length(digits) == 0L) 
+        stop("invalid 'digits'")
+    if (all(ina <- is.na(x))) 
+        return(x)
+    mx <- max(abs(x[!ina]))
+    round(x, digits = if (mx > 0) max(0L, digits - as.numeric(log10(mx))) else digits)
+}
+
+If `x` is a non-zero scalar, zapsmall will never perform rounding.
+
+The man page simply states:
+zapsmall determines a digits argument dr for calling round(x, digits = dr) such that values close to zero (compared with the maximal absolute value) are ?zapped?, i.e., replaced by 0.
+
+and doesn?t provide any details about how ?close to zero? is defined. 
+
+Perhaps handling the special when `x` is a scalar (or only contains a single non-NA value)  would make sense:
+
+zapsmall <-
+function (x, digits = getOption("digits")) 
+{
+    if (length(digits) == 0L) 
+        stop("invalid 'digits'")
+    if (all(ina <- is.na(x))) 
+        return(x)
+    mx <- max(abs(x[!ina]))
+    round(x, digits = if (mx > 0 && (length(x)-sum(ina))>1 ) max(0L, digits - as.numeric(log10(mx))) else digits)
+}
+
+Yielding:
+
+> y <- 2.220446e-16
+> zapsmall(y)
+[1] 0
+
+Another edge case would be when all of the non-na values are the same:
+
+> y <- 2.220446e-16
+> zapsmall(c(y,y))
+[1] 2.220446e-16 2.220446e-16
+
+Thoughts?
+
+
+Gregory R. Warnes, Ph.D.
+greg at warnes.net
+Eternity is a long time, take a friend!
+
+
+
+	[[alternative HTML version deleted]]
+
+
