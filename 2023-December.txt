@@ -918,3 +918,661 @@ Eternity is a long time, take a friend!
 	[[alternative HTML version deleted]]
 
 
+From @tevem@rt|n041 @end|ng |rom gm@||@com  Sun Dec 17 06:11:31 2023
+From: @tevem@rt|n041 @end|ng |rom gm@||@com (Steve Martin)
+Date: Sun, 17 Dec 2023 00:11:31 -0500
+Subject: [Rd] zapsmall(x) for scalar x
+In-Reply-To: <EC76CAE0-A775-4DCB-AD99-81B47E963225@warnes.net>
+References: <EC76CAE0-A775-4DCB-AD99-81B47E963225@warnes.net>
+Message-ID: <CAP=dwz8bGEvMEiXL+64dNH0cYtvAF3Y6ouCiVfX99y+1-VGGUA@mail.gmail.com>
+
+Zapping a vector of small numbers to zero would cause problems when
+printing the results of summary(). For example, if
+zapsmall(c(2.220446e-16, ..., 2.220446e-16)) == c(0, ..., 0) then
+print(summary(2.220446e-16), digits = 7) would print
+   Min. 1st Qu.  Median    Mean 3rd Qu.    Max.
+        0          0            0           0           0          0
+
+The same problem can also appear when printing the results of
+summary.glm() with show.residuals = TRUE if there's little dispersion
+in the residuals.
+
+Steve
+
+On Sat, 16 Dec 2023 at 17:34, Gregory Warnes <greg at warnes.net> wrote:
+>
+> I was quite suprised to discover that applying `zapsmall` to a scalar value has no apparent effect.  For example:
+>
+> > y <- 2.220446e-16
+> > zapsmall(y,)
+> [1] 2.2204e-16
+>
+> I was expecting zapsmall(x)` to act like
+>
+> > round(y, digits=getOption('digits'))
+> [1] 0
+>
+> Looking at the current source code, indicates that `zapsmall` is expecting a vector:
+>
+> zapsmall <-
+> function (x, digits = getOption("digits"))
+> {
+>     if (length(digits) == 0L)
+>         stop("invalid 'digits'")
+>     if (all(ina <- is.na(x)))
+>         return(x)
+>     mx <- max(abs(x[!ina]))
+>     round(x, digits = if (mx > 0) max(0L, digits - as.numeric(log10(mx))) else digits)
+> }
+>
+> If `x` is a non-zero scalar, zapsmall will never perform rounding.
+>
+> The man page simply states:
+> zapsmall determines a digits argument dr for calling round(x, digits = dr) such that values close to zero (compared with the maximal absolute value) are ?zapped?, i.e., replaced by 0.
+>
+> and doesn?t provide any details about how ?close to zero? is defined.
+>
+> Perhaps handling the special when `x` is a scalar (or only contains a single non-NA value)  would make sense:
+>
+> zapsmall <-
+> function (x, digits = getOption("digits"))
+> {
+>     if (length(digits) == 0L)
+>         stop("invalid 'digits'")
+>     if (all(ina <- is.na(x)))
+>         return(x)
+>     mx <- max(abs(x[!ina]))
+>     round(x, digits = if (mx > 0 && (length(x)-sum(ina))>1 ) max(0L, digits - as.numeric(log10(mx))) else digits)
+> }
+>
+> Yielding:
+>
+> > y <- 2.220446e-16
+> > zapsmall(y)
+> [1] 0
+>
+> Another edge case would be when all of the non-na values are the same:
+>
+> > y <- 2.220446e-16
+> > zapsmall(c(y,y))
+> [1] 2.220446e-16 2.220446e-16
+>
+> Thoughts?
+>
+>
+> Gregory R. Warnes, Ph.D.
+> greg at warnes.net
+> Eternity is a long time, take a friend!
+>
+>
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From greg @end|ng |rom w@rne@@net  Sun Dec 17 14:43:08 2023
+From: greg @end|ng |rom w@rne@@net (Gregory R. Warnes)
+Date: Sun, 17 Dec 2023 08:43:08 -0500
+Subject: [Rd] zapsmall(x) for scalar x
+In-Reply-To: <CAP=dwz8bGEvMEiXL+64dNH0cYtvAF3Y6ouCiVfX99y+1-VGGUA@mail.gmail.com>
+References: <CAP=dwz8bGEvMEiXL+64dNH0cYtvAF3Y6ouCiVfX99y+1-VGGUA@mail.gmail.com>
+Message-ID: <B7FE40A5-18D3-437B-A446-EEA5B20A98AA@warnes.net>
+
+Isn?t that the correct outcome?  The user can change the number of digits if they want to see small values?
+
+
+--  
+Change your thoughts and you change the world.
+--Dr. Norman Vincent Peale
+
+> On Dec 17, 2023, at 12:11?AM, Steve Martin <stevemartin041 at gmail.com> wrote:
+> 
+> ?Zapping a vector of small numbers to zero would cause problems when
+> printing the results of summary(). For example, if
+> zapsmall(c(2.220446e-16, ..., 2.220446e-16)) == c(0, ..., 0) then
+> print(summary(2.220446e-16), digits = 7) would print
+>   Min. 1st Qu.  Median    Mean 3rd Qu.    Max.
+>        0          0            0           0           0          0
+> 
+> The same problem can also appear when printing the results of
+> summary.glm() with show.residuals = TRUE if there's little dispersion
+> in the residuals.
+> 
+> Steve
+> 
+>> On Sat, 16 Dec 2023 at 17:34, Gregory Warnes <greg at warnes.net> wrote:
+>> 
+>> I was quite suprised to discover that applying `zapsmall` to a scalar value has no apparent effect.  For example:
+>> 
+>>> y <- 2.220446e-16
+>>> zapsmall(y,)
+>> [1] 2.2204e-16
+>> 
+>> I was expecting zapsmall(x)` to act like
+>> 
+>>> round(y, digits=getOption('digits'))
+>> [1] 0
+>> 
+>> Looking at the current source code, indicates that `zapsmall` is expecting a vector:
+>> 
+>> zapsmall <-
+>> function (x, digits = getOption("digits"))
+>> {
+>>    if (length(digits) == 0L)
+>>        stop("invalid 'digits'")
+>>    if (all(ina <- is.na(x)))
+>>        return(x)
+>>    mx <- max(abs(x[!ina]))
+>>    round(x, digits = if (mx > 0) max(0L, digits - as.numeric(log10(mx))) else digits)
+>> }
+>> 
+>> If `x` is a non-zero scalar, zapsmall will never perform rounding.
+>> 
+>> The man page simply states:
+>> zapsmall determines a digits argument dr for calling round(x, digits = dr) such that values close to zero (compared with the maximal absolute value) are ?zapped?, i.e., replaced by 0.
+>> 
+>> and doesn?t provide any details about how ?close to zero? is defined.
+>> 
+>> Perhaps handling the special when `x` is a scalar (or only contains a single non-NA value)  would make sense:
+>> 
+>> zapsmall <-
+>> function (x, digits = getOption("digits"))
+>> {
+>>    if (length(digits) == 0L)
+>>        stop("invalid 'digits'")
+>>    if (all(ina <- is.na(x)))
+>>        return(x)
+>>    mx <- max(abs(x[!ina]))
+>>    round(x, digits = if (mx > 0 && (length(x)-sum(ina))>1 ) max(0L, digits - as.numeric(log10(mx))) else digits)
+>> }
+>> 
+>> Yielding:
+>> 
+>>> y <- 2.220446e-16
+>>> zapsmall(y)
+>> [1] 0
+>> 
+>> Another edge case would be when all of the non-na values are the same:
+>> 
+>>> y <- 2.220446e-16
+>>> zapsmall(c(y,y))
+>> [1] 2.220446e-16 2.220446e-16
+>> 
+>> Thoughts?
+>> 
+>> 
+>> Gregory R. Warnes, Ph.D.
+>> greg at warnes.net
+>> Eternity is a long time, take a friend!
+>> 
+>> 
+>> 
+>>        [[alternative HTML version deleted]]
+>> 
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sun Dec 17 15:17:03 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sun, 17 Dec 2023 09:17:03 -0500
+Subject: [Rd] zapsmall(x) for scalar x
+In-Reply-To: <B7FE40A5-18D3-437B-A446-EEA5B20A98AA@warnes.net>
+References: <CAP=dwz8bGEvMEiXL+64dNH0cYtvAF3Y6ouCiVfX99y+1-VGGUA@mail.gmail.com>
+ <B7FE40A5-18D3-437B-A446-EEA5B20A98AA@warnes.net>
+Message-ID: <f993249d-65be-4a14-b9a6-003a05398a29@gmail.com>
+
+I'm really confused.  Steve's example wasn't a scalar x, it was a 
+vector.  Your zapsmall() proposal wouldn't zap it to zero, and I don't 
+see why summary() would if it was using your proposal.
+
+Duncan Murdoch
+
+On 17/12/2023 8:43 a.m., Gregory R. Warnes wrote:
+> Isn?t that the correct outcome?  The user can change the number of digits if they want to see small values?
+> 
+> 
+> --
+> Change your thoughts and you change the world.
+> --Dr. Norman Vincent Peale
+> 
+>> On Dec 17, 2023, at 12:11?AM, Steve Martin <stevemartin041 at gmail.com> wrote:
+>>
+>> ?Zapping a vector of small numbers to zero would cause problems when
+>> printing the results of summary(). For example, if
+>> zapsmall(c(2.220446e-16, ..., 2.220446e-16)) == c(0, ..., 0) then
+>> print(summary(2.220446e-16), digits = 7) would print
+>>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.
+>>         0          0            0           0           0          0
+>>
+>> The same problem can also appear when printing the results of
+>> summary.glm() with show.residuals = TRUE if there's little dispersion
+>> in the residuals.
+>>
+>> Steve
+>>
+>>> On Sat, 16 Dec 2023 at 17:34, Gregory Warnes <greg at warnes.net> wrote:
+>>>
+>>> I was quite suprised to discover that applying `zapsmall` to a scalar value has no apparent effect.  For example:
+>>>
+>>>> y <- 2.220446e-16
+>>>> zapsmall(y,)
+>>> [1] 2.2204e-16
+>>>
+>>> I was expecting zapsmall(x)` to act like
+>>>
+>>>> round(y, digits=getOption('digits'))
+>>> [1] 0
+>>>
+>>> Looking at the current source code, indicates that `zapsmall` is expecting a vector:
+>>>
+>>> zapsmall <-
+>>> function (x, digits = getOption("digits"))
+>>> {
+>>>     if (length(digits) == 0L)
+>>>         stop("invalid 'digits'")
+>>>     if (all(ina <- is.na(x)))
+>>>         return(x)
+>>>     mx <- max(abs(x[!ina]))
+>>>     round(x, digits = if (mx > 0) max(0L, digits - as.numeric(log10(mx))) else digits)
+>>> }
+>>>
+>>> If `x` is a non-zero scalar, zapsmall will never perform rounding.
+>>>
+>>> The man page simply states:
+>>> zapsmall determines a digits argument dr for calling round(x, digits = dr) such that values close to zero (compared with the maximal absolute value) are ?zapped?, i.e., replaced by 0.
+>>>
+>>> and doesn?t provide any details about how ?close to zero? is defined.
+>>>
+>>> Perhaps handling the special when `x` is a scalar (or only contains a single non-NA value)  would make sense:
+>>>
+>>> zapsmall <-
+>>> function (x, digits = getOption("digits"))
+>>> {
+>>>     if (length(digits) == 0L)
+>>>         stop("invalid 'digits'")
+>>>     if (all(ina <- is.na(x)))
+>>>         return(x)
+>>>     mx <- max(abs(x[!ina]))
+>>>     round(x, digits = if (mx > 0 && (length(x)-sum(ina))>1 ) max(0L, digits - as.numeric(log10(mx))) else digits)
+>>> }
+>>>
+>>> Yielding:
+>>>
+>>>> y <- 2.220446e-16
+>>>> zapsmall(y)
+>>> [1] 0
+>>>
+>>> Another edge case would be when all of the non-na values are the same:
+>>>
+>>>> y <- 2.220446e-16
+>>>> zapsmall(c(y,y))
+>>> [1] 2.220446e-16 2.220446e-16
+>>>
+>>> Thoughts?
+>>>
+>>>
+>>> Gregory R. Warnes, Ph.D.
+>>> greg at warnes.net
+>>> Eternity is a long time, take a friend!
+>>>
+>>>
+>>>
+>>>         [[alternative HTML version deleted]]
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From b@row||ng@on @end|ng |rom |@nc@@ter@@c@uk  Sun Dec 17 18:26:23 2023
+From: b@row||ng@on @end|ng |rom |@nc@@ter@@c@uk (Barry Rowlingson)
+Date: Sun, 17 Dec 2023 17:26:23 +0000
+Subject: [Rd] [External] Re:  zapsmall(x) for scalar x
+In-Reply-To: <bbcaa531201446a69c7fdedd311393ed@LO6P265MB6080.GBRP265.PROD.OUTLOOK.COM>
+References: <CAP=dwz8bGEvMEiXL+64dNH0cYtvAF3Y6ouCiVfX99y+1-VGGUA@mail.gmail.com>
+ <B7FE40A5-18D3-437B-A446-EEA5B20A98AA@warnes.net>
+ <bbcaa531201446a69c7fdedd311393ed@LO6P265MB6080.GBRP265.PROD.OUTLOOK.COM>
+Message-ID: <CANVKczNLxChkreGnAa=oDUz7w8SEG_i3xW3_9k3BjaC7Q_Y+9Q@mail.gmail.com>
+
+I think what's been missed is that zapsmall works relative to the absolute
+largest value in the vector. Hence if there's only one
+item in the vector, it is the largest, so its not zapped. The function's
+raison d'etre isn't to replace absolutely small values,
+but small values relative to the largest. Hence a vector of similar tiny
+values doesn't get zapped.
+
+Maybe the line in the docs:
+
+" (compared with the maximal absolute value)"
+
+needs to read:
+
+" (compared with the maximal absolute value in the vector)"
+
+Barry
+
+
+
+
+
+On Sun, Dec 17, 2023 at 2:17?PM Duncan Murdoch <murdoch.duncan at gmail.com>
+wrote:
+
+> This email originated outside the University. Check before clicking links
+> or attachments.
+>
+> I'm really confused.  Steve's example wasn't a scalar x, it was a
+> vector.  Your zapsmall() proposal wouldn't zap it to zero, and I don't
+> see why summary() would if it was using your proposal.
+>
+> Duncan Murdoch
+>
+> On 17/12/2023 8:43 a.m., Gregory R. Warnes wrote:
+> > Isn?t that the correct outcome?  The user can change the number of
+> digits if they want to see small values?
+> >
+> >
+> > --
+> > Change your thoughts and you change the world.
+> > --Dr. Norman Vincent Peale
+> >
+> >> On Dec 17, 2023, at 12:11?AM, Steve Martin <stevemartin041 at gmail.com>
+> wrote:
+> >>
+> >> ?Zapping a vector of small numbers to zero would cause problems when
+> >> printing the results of summary(). For example, if
+> >> zapsmall(c(2.220446e-16, ..., 2.220446e-16)) == c(0, ..., 0) then
+> >> print(summary(2.220446e-16), digits = 7) would print
+> >>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.
+> >>         0          0            0           0           0          0
+> >>
+> >> The same problem can also appear when printing the results of
+> >> summary.glm() with show.residuals = TRUE if there's little dispersion
+> >> in the residuals.
+> >>
+> >> Steve
+> >>
+> >>> On Sat, 16 Dec 2023 at 17:34, Gregory Warnes <greg at warnes.net> wrote:
+> >>>
+> >>> I was quite suprised to discover that applying `zapsmall` to a scalar
+> value has no apparent effect.  For example:
+> >>>
+> >>>> y <- 2.220446e-16
+> >>>> zapsmall(y,)
+> >>> [1] 2.2204e-16
+> >>>
+> >>> I was expecting zapsmall(x)` to act like
+> >>>
+> >>>> round(y, digits=getOption('digits'))
+> >>> [1] 0
+> >>>
+> >>> Looking at the current source code, indicates that `zapsmall` is
+> expecting a vector:
+> >>>
+> >>> zapsmall <-
+> >>> function (x, digits = getOption("digits"))
+> >>> {
+> >>>     if (length(digits) == 0L)
+> >>>         stop("invalid 'digits'")
+> >>>     if (all(ina <- is.na(x)))
+> >>>         return(x)
+> >>>     mx <- max(abs(x[!ina]))
+> >>>     round(x, digits = if (mx > 0) max(0L, digits -
+> as.numeric(log10(mx))) else digits)
+> >>> }
+> >>>
+> >>> If `x` is a non-zero scalar, zapsmall will never perform rounding.
+> >>>
+> >>> The man page simply states:
+> >>> zapsmall determines a digits argument dr for calling round(x, digits =
+> dr) such that values close to zero (compared with the maximal absolute
+> value) are ?zapped?, i.e., replaced by 0.
+> >>>
+> >>> and doesn?t provide any details about how ?close to zero? is defined.
+> >>>
+> >>> Perhaps handling the special when `x` is a scalar (or only contains a
+> single non-NA value)  would make sense:
+> >>>
+> >>> zapsmall <-
+> >>> function (x, digits = getOption("digits"))
+> >>> {
+> >>>     if (length(digits) == 0L)
+> >>>         stop("invalid 'digits'")
+> >>>     if (all(ina <- is.na(x)))
+> >>>         return(x)
+> >>>     mx <- max(abs(x[!ina]))
+> >>>     round(x, digits = if (mx > 0 && (length(x)-sum(ina))>1 ) max(0L,
+> digits - as.numeric(log10(mx))) else digits)
+> >>> }
+> >>>
+> >>> Yielding:
+> >>>
+> >>>> y <- 2.220446e-16
+> >>>> zapsmall(y)
+> >>> [1] 0
+> >>>
+> >>> Another edge case would be when all of the non-na values are the same:
+> >>>
+> >>>> y <- 2.220446e-16
+> >>>> zapsmall(c(y,y))
+> >>> [1] 2.220446e-16 2.220446e-16
+> >>>
+> >>> Thoughts?
+> >>>
+> >>>
+> >>> Gregory R. Warnes, Ph.D.
+> >>> greg at warnes.net
+> >>> Eternity is a long time, take a friend!
+> >>>
+> >>>
+> >>>
+> >>>         [[alternative HTML version deleted]]
+> >>>
+> >>> ______________________________________________
+> >>> R-devel at r-project.org mailing list
+> >>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+> >       [[alternative HTML version deleted]]
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From @tevem@rt|n041 @end|ng |rom gm@||@com  Sun Dec 17 22:01:04 2023
+From: @tevem@rt|n041 @end|ng |rom gm@||@com (Steve Martin)
+Date: Sun, 17 Dec 2023 16:01:04 -0500
+Subject: [Rd] [External] Re:  zapsmall(x) for scalar x
+In-Reply-To: <CANVKczNLxChkreGnAa=oDUz7w8SEG_i3xW3_9k3BjaC7Q_Y+9Q@mail.gmail.com>
+References: <CAP=dwz8bGEvMEiXL+64dNH0cYtvAF3Y6ouCiVfX99y+1-VGGUA@mail.gmail.com>
+ <B7FE40A5-18D3-437B-A446-EEA5B20A98AA@warnes.net>
+ <bbcaa531201446a69c7fdedd311393ed@LO6P265MB6080.GBRP265.PROD.OUTLOOK.COM>
+ <CANVKczNLxChkreGnAa=oDUz7w8SEG_i3xW3_9k3BjaC7Q_Y+9Q@mail.gmail.com>
+Message-ID: <CAP=dwz_yARvyBtBHLwqtPBwZym7zwmTv52xEOXttaYXBb1cKGA@mail.gmail.com>
+
+Sorry for being unclear. I was commenting on the edge case that
+Gregory brought up when calling zapsmall() with a vector of small
+values. I thought Gregory was asking for thoughts on that as well, but
+maybe I misunderstood. IMO it would be weird for zapsmall() to make a
+small scalar zero but not a vector of the identical values.
+
+The example with summary() was meant to show that zapping a vector of
+small values to 0 could change the current printing behavior for
+certain objects. Ducan is right that zapping only a scalar to zero
+wouldn't do anything.
+
+>>> Isn?t that the correct outcome?  The user can change the number of digits if they want to see small values?
+
+I'm not sure a user would be able to change the digits without
+updating other functions. If xx[finite] <- zapsmall(x[finite]) in
+print.summaryDefault() makes a vector of 0s (e.g., zapsmall(x) works
+like round(x, digits = getOption("digits")) and getOptions("digits")
+is 7) then calling print(summary(2.220446e-16), digits = 16) would
+still print a vector of 0s. The digits argument to print() wouldn't do
+anything.
+
+In any case, I just wanted to point out that changes to zapsmall() in
+the corner case Gregory brought up could affect the way certain
+objects are printed, both changing the current behavior and perhaps
+requiring changes to some other functions.
+
+Steve
+
+On Sun, 17 Dec 2023 at 12:26, Barry Rowlingson
+<b.rowlingson at lancaster.ac.uk> wrote:
+>
+> I think what's been missed is that zapsmall works relative to the absolute largest value in the vector. Hence if there's only one
+> item in the vector, it is the largest, so its not zapped. The function's raison d'etre isn't to replace absolutely small values,
+> but small values relative to the largest. Hence a vector of similar tiny values doesn't get zapped.
+>
+> Maybe the line in the docs:
+>
+> " (compared with the maximal absolute value)"
+>
+> needs to read:
+>
+> " (compared with the maximal absolute value in the vector)"
+>
+> Barry
+>
+>
+>
+>
+>
+> On Sun, Dec 17, 2023 at 2:17?PM Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+>>
+>> This email originated outside the University. Check before clicking links or attachments.
+>>
+>> I'm really confused.  Steve's example wasn't a scalar x, it was a
+>> vector.  Your zapsmall() proposal wouldn't zap it to zero, and I don't
+>> see why summary() would if it was using your proposal.
+>>
+>> Duncan Murdoch
+>>
+>> On 17/12/2023 8:43 a.m., Gregory R. Warnes wrote:
+>> > Isn?t that the correct outcome?  The user can change the number of digits if they want to see small values?
+>> >
+>> >
+>> > --
+>> > Change your thoughts and you change the world.
+>> > --Dr. Norman Vincent Peale
+>> >
+>> >> On Dec 17, 2023, at 12:11?AM, Steve Martin <stevemartin041 at gmail.com> wrote:
+>> >>
+>> >> ?Zapping a vector of small numbers to zero would cause problems when
+>> >> printing the results of summary(). For example, if
+>> >> zapsmall(c(2.220446e-16, ..., 2.220446e-16)) == c(0, ..., 0) then
+>> >> print(summary(2.220446e-16), digits = 7) would print
+>> >>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.
+>> >>         0          0            0           0           0          0
+>> >>
+>> >> The same problem can also appear when printing the results of
+>> >> summary.glm() with show.residuals = TRUE if there's little dispersion
+>> >> in the residuals.
+>> >>
+>> >> Steve
+>> >>
+>> >>> On Sat, 16 Dec 2023 at 17:34, Gregory Warnes <greg at warnes.net> wrote:
+>> >>>
+>> >>> I was quite suprised to discover that applying `zapsmall` to a scalar value has no apparent effect.  For example:
+>> >>>
+>> >>>> y <- 2.220446e-16
+>> >>>> zapsmall(y,)
+>> >>> [1] 2.2204e-16
+>> >>>
+>> >>> I was expecting zapsmall(x)` to act like
+>> >>>
+>> >>>> round(y, digits=getOption('digits'))
+>> >>> [1] 0
+>> >>>
+>> >>> Looking at the current source code, indicates that `zapsmall` is expecting a vector:
+>> >>>
+>> >>> zapsmall <-
+>> >>> function (x, digits = getOption("digits"))
+>> >>> {
+>> >>>     if (length(digits) == 0L)
+>> >>>         stop("invalid 'digits'")
+>> >>>     if (all(ina <- is.na(x)))
+>> >>>         return(x)
+>> >>>     mx <- max(abs(x[!ina]))
+>> >>>     round(x, digits = if (mx > 0) max(0L, digits - as.numeric(log10(mx))) else digits)
+>> >>> }
+>> >>>
+>> >>> If `x` is a non-zero scalar, zapsmall will never perform rounding.
+>> >>>
+>> >>> The man page simply states:
+>> >>> zapsmall determines a digits argument dr for calling round(x, digits = dr) such that values close to zero (compared with the maximal absolute value) are ?zapped?, i.e., replaced by 0.
+>> >>>
+>> >>> and doesn?t provide any details about how ?close to zero? is defined.
+>> >>>
+>> >>> Perhaps handling the special when `x` is a scalar (or only contains a single non-NA value)  would make sense:
+>> >>>
+>> >>> zapsmall <-
+>> >>> function (x, digits = getOption("digits"))
+>> >>> {
+>> >>>     if (length(digits) == 0L)
+>> >>>         stop("invalid 'digits'")
+>> >>>     if (all(ina <- is.na(x)))
+>> >>>         return(x)
+>> >>>     mx <- max(abs(x[!ina]))
+>> >>>     round(x, digits = if (mx > 0 && (length(x)-sum(ina))>1 ) max(0L, digits - as.numeric(log10(mx))) else digits)
+>> >>> }
+>> >>>
+>> >>> Yielding:
+>> >>>
+>> >>>> y <- 2.220446e-16
+>> >>>> zapsmall(y)
+>> >>> [1] 0
+>> >>>
+>> >>> Another edge case would be when all of the non-na values are the same:
+>> >>>
+>> >>>> y <- 2.220446e-16
+>> >>>> zapsmall(c(y,y))
+>> >>> [1] 2.220446e-16 2.220446e-16
+>> >>>
+>> >>> Thoughts?
+>> >>>
+>> >>>
+>> >>> Gregory R. Warnes, Ph.D.
+>> >>> greg at warnes.net
+>> >>> Eternity is a long time, take a friend!
+>> >>>
+>> >>>
+>> >>>
+>> >>>         [[alternative HTML version deleted]]
+>> >>>
+>> >>> ______________________________________________
+>> >>> R-devel at r-project.org mailing list
+>> >>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>> >
+>> >       [[alternative HTML version deleted]]
+>> >
+>> > ______________________________________________
+>> > R-devel at r-project.org mailing list
+>> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
