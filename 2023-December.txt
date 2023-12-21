@@ -2630,3 +2630,821 @@ wrote:
 	[[alternative HTML version deleted]]
 
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Tue Dec 19 17:25:30 2023
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Tue, 19 Dec 2023 17:25:30 +0100
+Subject: [Rd] [External] Re: zapsmall(x) for scalar x
+In-Reply-To: <CAP=dwz-oWc_K9ABHd4JQRYceY5+PsPmGTGGg1RmQw9+_xq=+hQ@mail.gmail.com>
+References: <CAP=dwz8bGEvMEiXL+64dNH0cYtvAF3Y6ouCiVfX99y+1-VGGUA@mail.gmail.com>
+ <B7FE40A5-18D3-437B-A446-EEA5B20A98AA@warnes.net>
+ <bbcaa531201446a69c7fdedd311393ed@LO6P265MB6080.GBRP265.PROD.OUTLOOK.COM>
+ <CANVKczNLxChkreGnAa=oDUz7w8SEG_i3xW3_9k3BjaC7Q_Y+9Q@mail.gmail.com>
+ <f3751191-443f-4577-805a-2577a87506ed@insa-toulouse.fr>
+ <25984.7656.269922.822939@stat.math.ethz.ch>
+ <b2463b7c-755a-47c9-8c31-75ba748777bf@insa-toulouse.fr>
+ <CAP=dwz-oWc_K9ABHd4JQRYceY5+PsPmGTGGg1RmQw9+_xq=+hQ@mail.gmail.com>
+Message-ID: <25985.50170.190748.540475@stat.math.ethz.ch>
+
+>>>>> Steve Martin 
+>>>>>     on Mon, 18 Dec 2023 07:56:46 -0500 writes:
+
+    > Does mFUN() really need to be a function of x and the NA values of x? I
+    > can't think of a case where it would be used on anything but the non-NA
+    > values of x.
+
+    > I think it would be easier to specify a different mFUN() (and document this
+    > new argument) if the function has one argument and is applied to the non-NA
+    > values of x.
+
+    > zapsmall <- function(x,
+    >     digits = getOption("digits"),
+    >     mFUN = function(x) max(abs(x)),
+    >     min.d = 0L) {
+    >     if (length(digits) == 0L)
+    >         stop("invalid 'digits'")
+    >     if (all(ina <- is.na(x)))
+    >         return(x)
+    >     mx <- mFUN(x[!ina])
+    >     round(x, digits = if(mx > 0) max(min.d, digits - as.numeric(log10(mx)))
+    > else digits)
+    > }
+
+    > Steve
+
+Thank you, Steve,
+you are right that it would look simpler to do it that way.
+
+On the other hand, in your case, mFUN() no longer sees the
+original  n observations, and would not know if there where NAs
+in that case how many NAs there were in the original data.
+
+The examples I have on my version of zapsmall's help page (see below)
+uses a robust mFUN, "the upper hinge of a box plot":
+
+   mF_rob <- function(x, ina) boxplot.stats(x, do.conf=FALSE)$stats[5]
+
+and if you inspect boxplot.stats() you may know that indeed it
+also wants to use the full data 'x' to compute its statistics and
+then deal with NAs directly.  Your simplified mFUN interface
+would not be fully consistent with boxplot(), and I think could
+not be made so,  hence my more flexible 2-argument "design" for  mFUN().
+
+.... and BTW, these examples also exemplify the use of  `min.d`
+about which  Serguei Sokol asked for an example or two.
+
+Here I repeat my definition of zapsmall, and then my current set
+of examples:
+
+zapsmall <- function(x, digits = getOption("digits"),
+                     mFUN = function(x, ina) max(abs(x[!ina])), min.d = 0L)
+{
+    if (length(digits) == 0L)
+        stop("invalid 'digits'")
+    if (all(ina <- is.na(x)))
+        return(x)
+    mx <- mFUN(x, ina)
+    round(x, digits = if(mx > 0) max(min.d, digits - as.numeric(log10(mx))) else digits)
+}
+
+
+##--- \examples{
+x2 <- pi * 100^(-2:2)/10
+   print(  x2, digits = 4)
+zapsmall(  x2) # automatical digits
+zapsmall(  x2, digits = 4)
+zapsmall(c(x2, Inf)) # round()s to integer ..
+zapsmall(c(x2, Inf), min.d=-Inf) # everything  is small wrt  Inf
+
+(z <- exp(1i*0:4*pi/2))
+zapsmall(z)
+
+zapShow <- function(x, ...) rbind(orig = x, zapped = zapsmall(x, ...))
+zapShow(x2)
+
+## using a *robust* mFUN
+mF_rob <- function(x, ina) boxplot.stats(x, do.conf=FALSE)$stats[5]
+## with robust mFUN(), 'Inf' is no longer distorting the picture:
+zapShow(c(x2, Inf), mFUN = mF_rob)
+zapShow(c(x2, Inf), mFUN = mF_rob, min.d = -5) # the same
+zapShow(c(x2, 999), mFUN = mF_rob) # same *rounding* as w/ Inf
+zapShow(c(x2, 999), mFUN = mF_rob, min.d =  3) # the same
+zapShow(c(x2, 999), mFUN = mF_rob, min.d =  8) # small diff
+##--- }
+
+
+
+    > On Mon, Dec 18, 2023, 05:47 Serguei Sokol via R-devel <r-devel at r-project.org>
+    > wrote:
+
+> Le 18/12/2023 ? 11:24, Martin Maechler a ?crit :
+> >>>>>> Serguei Sokol via R-devel
+> >>>>>>      on Mon, 18 Dec 2023 10:29:02 +0100 writes:
+> >      > Le 17/12/2023 ? 18:26, Barry Rowlingson a ?crit :
+> >      >> I think what's been missed is that zapsmall works relative to the absolute
+> >      >> largest value in the vector. Hence if there's only one
+> >      >> item in the vector, it is the largest, so its not zapped. The function's
+> >      >> raison d'etre isn't to replace absolutely small values,
+> >      >> but small values relative to the largest. Hence a vector of similar tiny
+> >      >> values doesn't get zapped.
+> >      >>
+> >      >> Maybe the line in the docs:
+> >      >>
+> >      >> " (compared with the maximal absolute value)"
+> >      >>
+> >      >> needs to read:
+> >      >>
+> >      >> " (compared with the maximal absolute value in the vector)"
+> >
+> >      > I agree that this change in the doc would clarify the situation but
+> >      > would not resolve proposed corner cases.
+> >
+> >      > I think that an additional argument 'mx' (absolute max value of
+> >      > reference) would do. Consider:
+> >
+> >      > zapsmall2 <-
+> >      > function (x, digits = getOption("digits"), mx=max(abs(x),  na.rm=TRUE))
+> >      > {
+> >      >     if (length(digits) == 0L)
+> >      >         stop("invalid 'digits'")
+> >      >     if (all(ina <- is.na(x)))
+> >      >         return(x)
+> >      >     round(x, digits = if (mx > 0) max(0L, digits - as.numeric(log10(mx))) else digits)
+> >      > }
+> >
+> >      > then zapsmall2() without explicit 'mx' behaves
+> >      > identically to actual
+> >      > zapsmall() and for a scalar or a vector of identical value, user
+> can
+> >      > manually fix the scale of what should be considered as small:
+> >
+> >      >> zapsmall2(y)
+> >      > [1] 2.220446e-16
+> >      >> zapsmall2(y, mx=1)
+> >      > [1] 0
+> >      >> zapsmall2(c(y, y), mx=1)
+> >      > [1] 0 0
+> >      >> zapsmall2(c(y, NA))
+> >      > [1] 2.220446e-16           NA
+> >      >> zapsmall2(c(y, NA), mx=1)
+> >      > [1]  0 NA
+> >
+> >      > Obviously, the name 'zapsmall2' was chosen just for this
+> explanation.
+> >      > The original name 'zapsmall' could be reused as a full backward
+> >      > compatibility is preserved.
+> >
+> >      > Best,
+> >      > Serguei.
+[.......................]
+
+
+From j@goreck| @end|ng |rom w|t@edu@p|  Tue Dec 19 19:29:40 2023
+From: j@goreck| @end|ng |rom w|t@edu@p| (Jan Gorecki)
+Date: Tue, 19 Dec 2023 19:29:40 +0100
+Subject: [Rd] tools:: extracting pkg dependencies from DCF
+In-Reply-To: <CAOO9MKVxEwe6Vxy_SMDaw5Wy-x2c-qUqqz3B5Y2wa3485Q_Ejg@mail.gmail.com>
+References: <CAOO9MKVH1u3ojT4PHiVpQfS3xnq9ysWjp37vEyAQRtGKJ6cgtQ@mail.gmail.com>
+ <CA+6hu7cjkoG9K0bX-eAZJWPqSHu7T84XTZdgAyN0cFFcc9nYdQ@mail.gmail.com>
+ <CAOO9MKW+2k-VgbFwybqAFZU+qT3FTwUJG8kGy9dTitmvHu5-ig@mail.gmail.com>
+ <CAD4oTHE23nGhjz6p1-Qc0Jur3hASsFoHJ-jfn74jOBJYC95DPw@mail.gmail.com>
+ <CAOO9MKVe8zUio4KCB=+F3neGQnd8Q_794y2MKj7gpbosF2WUpQ@mail.gmail.com>
+ <0ED5F2BA-61F0-4210-870B-61EACBE6431C@R-project.org>
+ <CAOO9MKX2_wAC1BCzp8saNHNd=J_=7=t3h-mrc7tUDymzARO+sg@mail.gmail.com>
+ <CAOO9MKUnQqXVorTm0RD3PymVSqHOCuczZa3Px7CNv2Z5BYgZZw@mail.gmail.com>
+ <CAD4oTHGJ0a00Ap4ho+2-fVvzXP-8qO1W15+RuvZuO_UQcCVTWw@mail.gmail.com>
+ <CAOO9MKWQNoGdbRPXmVtJUR-H9hxrJDTU-8J_C5iCKucgzTJoSQ@mail.gmail.com>
+ <CAD4oTHERXkoCY2GfYSTbxqF8kK28d-LZMcjDr2biwEaMktU-7Q@mail.gmail.com>
+ <CAOO9MKVxEwe6Vxy_SMDaw5Wy-x2c-qUqqz3B5Y2wa3485Q_Ejg@mail.gmail.com>
+Message-ID: <CAOO9MKXTE1wBtNpyZ_XCc0B-jjvLtNRJ3e0rJTKUauGjJVLT9A@mail.gmail.com>
+
+Hello all,
+
+Following up on this old thread as I have recently observed, rather a
+bad practice (maintaining order of installation for R packages rather
+than relying on R for that), for solving a problem that R branch
+tools4pkgs (mentioned in this email) addresses very well.
+More details can be found in
+https://github.com/dewittpe/R-install-dependencies/issues/3
+
+Therefore I extracted functionality from base R branch and put into
+standalone package, named after R branch:
+https://github.com/jangorecki/tools4pkgs
+Sharing for whoever would reach this email thread in future.
+
+Best Regards,
+Jan Gorecki
+
+
+On Sat, Oct 29, 2022 at 6:26?PM Jan Gorecki <j.gorecki at wit.edu.pl> wrote:
+>
+> Thank you Gabriel,
+>
+> Just for future readers. Below is a base R way to address this common
+> problem, as instructed by you (+stopifnot to suppress print).
+>
+> Rscript -e 'stopifnot(file.copy("DESCRIPTION",
+> file.path(tdir<-tempdir(), "PACKAGES")));
+> db<-available.packages(paste0("file://", tdir));
+> install.packages(setdiff(tools::package_dependencies(read.dcf("DESCRIPTION",
+> fields="Package")[[1L]], db, which="most")[[1L]],
+> installed.packages(priority="high")[,"Package"]))'
+>
+> 3 liner, 310 chars long command, far from ideal, but does work.
+>
+> Best,
+> Jan
+>
+>
+> On Fri, Oct 28, 2022 at 10:42 PM Gabriel Becker <gabembecker at gmail.com> wrote:
+> >
+> > Hi Jan,
+> >
+> >
+> > On Fri, Oct 28, 2022 at 1:57 PM Jan Gorecki <j.gorecki at wit.edu.pl> wrote:
+> >>
+> >> Gabriel,
+> >>
+> >> It is the most basic CI use case. One wants to install only
+> >> dependencies only of the package, and run R CMD check on the package.
+> >
+> >
+> > Really what you're looking for though, is to install all the dependencies which aren't present right? Excluding base packages is just a particular way to do that under certain assumptions about the CI environment.
+> >
+> > So
+> >
+> >
+> > needed_pkgs <- setdiff(package_dependencies(...), installed.packages()[,"Package"])
+> > install.packages(needed_pkgs, repos = fancyrepos)
+> >
+> >
+> > will do what you want without installing the package itself, if that is important. This will filter out base and recommended packages (which will be already installed in your CI container, since R is).
+> >
+> >
+> > Now this does not take into account versioned dependencies, so it's not actually fully correct (whereas installing the package is), but it gets you where you're trying to go. And in a clean CI container without cached package installation for the deps, its equivalent.
+> >
+> >
+> > Also, as an aside, if you need to get the base packages, you can do
+> >
+> > installed.packages(priority="base")[,"Package"]
+> >
+> >        base    compiler    datasets    graphics   grDevices        grid
+> >
+> >      "base"  "compiler"  "datasets"  "graphics" "grDevices"      "grid"
+> >
+> >     methods    parallel     splines       stats      stats4       tcltk
+> >
+> >   "methods"  "parallel"   "splines"     "stats"    "stats4"     "tcltk"
+> >
+> >       tools       utils
+> >
+> >     "tools"     "utils"
+> >
+> >
+> > (to get base and recommended packages use 'high' instead of 'base')
+> >
+> > No need to be reaching down into unexported functions. So if you *really* only want to exclude base functions (which likely will give you some protection from versioned dep issues), you can change the code above to
+> >
+> > needed_pkgs <- setdiff(package_dependencies(...), installed.packages(priority = "high")[,"Package"])
+> > install.packages(needed_pkgs, repos = fancyrepos)
+> >
+> > Best,
+> > ~G
+> >
+> >>
+> >> On Fri, Oct 28, 2022 at 8:42 PM Gabriel Becker <gabembecker at gmail.com> wrote:
+> >> >
+> >> > Hi Jan,
+> >> >
+> >> > The reason, I suspect without speaking for R-core, is that by design you should not be specifying package dependencies as additional packages to install. install.packages already does this for you, as it did in the construct of a repository code that I provided previously in the thread. You should be *only* doing
+> >> >
+> >> > install.packages(<pkg in question>, repos = *)
+> >> >
+> >> > Then everything happens automatically via extremely well tested very mature code.
+> >> >
+> >> > I (still) don't understand why you'd need to pass install.packages the vector of dependencies yourself, as that is counter to install.packages' core design.
+> >> >
+> >> > Does that make sense?
+> >> >
+> >> > Best,
+> >> > ~G
+> >> >
+> >> > On Fri, Oct 28, 2022 at 12:18 PM Jan Gorecki <j.gorecki at wit.edu.pl> wrote:
+> >> >>
+> >> >> Gabriel,
+> >> >>
+> >> >> I am trying to design generic solution that could be applied to
+> >> >> arbitrary package. Therefore I went with the latter solution you
+> >> >> proposed.
+> >> >> If we wouldn't have to exclude base packages, then its a 3 liner
+> >> >>
+> >> >> file.copy("DESCRIPTION", file.path(tdir<-tempdir(), "PACKAGES"));
+> >> >> db<-available.packages(paste0("file://", tdir));
+> >> >> utils::install.packages(tools::package_dependencies("pkgname", db,
+> >> >> which="most")[[1L]])
+> >> >>
+> >> >> As you noticed, we still have to filter out base packages. Otherwise
+> >> >> it won't be a robust utility that can be used in CI. Therefore we have
+> >> >> to add a call to tools:::.get_standard_package_names() which is an
+> >> >> internal function (as of now). Not only complicating the call but also
+> >> >> putting the functionality outside of safe use.
+> >> >>
+> >> >> Considering above, don't you agree that the following one liner could
+> >> >> nicely address the problem? The problem that hundreds/thousands of
+> >> >> packages are now addressing in their CI scripts by using a third party
+> >> >> packages.
+> >> >>
+> >> >> utils::install.packages(packages.dcf("DESCRIPTION", which="most"))
+> >> >>
+> >> >> It is hard to me to understand why R members don't consider this basic
+> >> >> functionality to be part of base R. Possibly they just don't need it
+> >> >> themselves. Yet isn't this sufficient that hundreds/thousands of
+> >> >> packages does need this functionality?
+> >> >>
+> >> >> Best regards,
+> >> >> Jan
+> >> >>
+> >> >> On Mon, Oct 17, 2022 at 8:39 AM Jan Gorecki <j.gorecki at wit.edu.pl> wrote:
+> >> >> >
+> >> >> > Gabriel and Simon
+> >> >> >
+> >> >> > I completely agree with what you are saying.
+> >> >> > The thing is that obtaining recursive deps, all/most whatever, is already well supported in core R. What is missing is just this single functionality I am requesting.
+> >> >> >
+> >> >> > If you will look into the branch you can see there is mirror.packages function meant to mirror a slice of CRAN. It is doing exactly what you described: package_dependencies; to obtain recursive deps, then download all, etc.
+> >> >> > I would love to have this function provided by core R as well, but we need to start somewhere.
+> >> >> >
+> >> >> > There are other use cases as well.
+> >> >> > For example CI, where one wants to install all/most dependencies and then run R CMD check. Then we don't worry about recursive deps are they will be resolved automatically.
+> >> >> > I don't think it's reasonable to force users to use 3rd party packages to handle such a common and simple use case. Otherwise one has to hard code deps in CI script. Not robust at all.
+> >> >> >
+> >> >> > packages.dcf and repos.dcf makes all that way easier, and are solid base for building customized orchestration like mirroring slice of CRAN.
+> >> >> >
+> >> >> > Best regards
+> >> >> > Jan
+> >> >> >
+> >> >> > On Sun, Oct 16, 2022, 01:31 Simon Urbanek <simon.urbanek at r-project.org> wrote:
+> >> >> >>
+> >> >> >> Jan,
+> >> >> >>
+> >> >> >> I think using a single DCF as input is not very practical and would not be useful in the context you describe (creating self contained repos) since they typically concern a list of packages, but essentially splitting out the part of install.packages() which determines which files will be pulled from where would be very useful as it would be trivial to use it to create repository (what we always do in corporate environments) instead of installing the packages. I suspect that install packages is already too complex so instead of adding a flag to install.packages one could move that functionality into a separate function - we all do that constantly for the sites we manage, so it would be certainly something worthwhile.
+> >> >> >>
+> >> >> >> Cheers,
+> >> >> >> Simon
+> >> >> >>
+> >> >> >>
+> >> >> >> > On Oct 15, 2022, at 7:14 PM, Jan Gorecki <j.gorecki at wit.edu.pl> wrote:
+> >> >> >> >
+> >> >> >> > Hi Gabriel,
+> >> >> >> >
+> >> >> >> > It's very nice usage you provided here. Maybe instead of adding new
+> >> >> >> > function we could extend packages_depenedncies then? To accept file path to
+> >> >> >> > dsc file.
+> >> >> >> >
+> >> >> >> > What about repos.dcf? Maybe additional repositories could be an attribute
+> >> >> >> > attached to returned character vector.
+> >> >> >> >
+> >> >> >> > The use case is to, for a given package sources, obtain its dependencies,
+> >> >> >> > so one can use that for installing them/mirroring CRAN subset, or whatever.
+> >> >> >> > The later is especially important for a production environment where one
+> >> >> >> > wants to have fixed version of packages, and mirroring relevant subset of
+> >> >> >> > CRAN is the most simple, and IMO reliable, way to manage such environment.
+> >> >> >> >
+> >> >> >> > Regards
+> >> >> >> > Jan
+> >> >> >> >
+> >> >> >> > On Fri, Oct 14, 2022, 23:34 Gabriel Becker <gabembecker at gmail.com> wrote:
+> >> >> >> >
+> >> >> >> >> Hi Jan and Jan,
+> >> >> >> >>
+> >> >> >> >> Can you explain a little more what exactly you want the non-recursive,
+> >> >> >> >> non-version aware dependencies from an individual package for?
+> >> >> >> >>
+> >> >> >> >> Either way package_dependencies will do this for you* with a little
+> >> >> >> >> "aggressive convincing". It wants output from available.packages, but who
+> >> >> >> >> really cares what it wants? It's a function and we are people :)
+> >> >> >> >>
+> >> >> >> >>> library(tools)
+> >> >> >> >>> db <- read.dcf("~/gabe/checkedout/rtables_clean/DESCRIPTION")
+> >> >> >> >>> package_dependencies("rtables", db, which = intersect(c("Depends",
+> >> >> >> >> "Suggests", "Imports", "LinkingTo"), colnames(db)))
+> >> >> >> >> $rtables
+> >> >> >> >> [1] "methods"    "magrittr"   "formatters" "dplyr"      "tibble"
+> >> >> >> >> [6] "tidyr"      "testthat"   "xml2"       "knitr"      "rmarkdown"
+> >> >> >> >> [11] "flextable"  "officer"    "stats"      "htmltools"  "grid"
+> >> >> >> >>
+> >> >> >> >>
+> >> >> >> >> The only gotcha that I see immediately is that "LinkingTo" isn't always
+> >> >> >> >> there (whereas it is with real output from available.packages). If you
+> >> >> >> >> know your package doesn't have that (or that it does) at call time , this
+> >> >> >> >> becomes a one-liner:
+> >> >> >> >>
+> >> >> >> >> package_dependencies("rtables", db =
+> >> >> >> >> read.dcf("~/gabe/checkedout/rtables_clean/DESCRIPTION"), which =
+> >> >> >> >> c("Depends", "Suggests", "Imports"))
+> >> >> >> >> $rtables
+> >> >> >> >> [1] "methods"    "magrittr"   "formatters" "dplyr"      "tibble"
+> >> >> >> >> [6] "tidyr"      "testthat"   "xml2"       "knitr"      "rmarkdown"
+> >> >> >> >> [11] "flextable"  "officer"    "stats"      "htmltools"  "grid"
+> >> >> >> >>
+> >> >> >> >> You can also trick it a slightly different way by giving it what it
+> >> >> >> >> actually wants
+> >> >> >> >>
+> >> >> >> >>> tdir <- tempdir()
+> >> >> >> >>> file.copy("~/gabe/checkedout/rtables_clean/DESCRIPTION", file.path(tdir,
+> >> >> >> >> "PACKAGES"))
+> >> >> >> >> [1] TRUE
+> >> >> >> >>> avl <- available.packages(paste0("file://", tdir))
+> >> >> >> >>> library(tools)
+> >> >> >> >>> package_dependencies("rtables", avl)
+> >> >> >> >> $rtables
+> >> >> >> >> [1] "methods"    "magrittr"   "formatters" "stats"      "htmltools"
+> >> >> >> >> [6] "grid"
+> >> >> >> >>
+> >> >> >> >>> package_dependencies("rtables", avl, which = "all")
+> >> >> >> >> $rtables
+> >> >> >> >> [1] "methods"    "magrittr"   "formatters" "stats"      "htmltools"
+> >> >> >> >> [6] "grid"       "dplyr"      "tibble"     "tidyr"      "testthat"
+> >> >> >> >> [11] "xml2"       "knitr"      "rmarkdown"  "flextable"  "officer"
+> >> >> >> >>
+> >> >> >> >> So the only real benefits I see that we'd be picking up here is automatic
+> >> >> >> >> filtering by priority, and automatic extraction of the package name from
+> >> >> >> >> the DESCRIPTION file. I'm not sure either of those warrant a new exported
+> >> >> >> >> function that R-core has to maintain forever.
+> >> >> >> >>
+> >> >> >> >> Best,
+> >> >> >> >> ~G
+> >> >> >> >>
+> >> >> >> >> * I haven't tested this across all OSes, but I dont' know of any reason it
+> >> >> >> >> wouldn't work generally.
+> >> >> >> >>
+> >> >> >> >> On Fri, Oct 14, 2022 at 2:33 PM Jan Gorecki <j.gorecki at wit.edu.pl> wrote:
+> >> >> >> >>
+> >> >> >> >>> Hello Jan,
+> >> >> >> >>>
+> >> >> >> >>> Thanks for confirming about many packages reinventing this missing
+> >> >> >> >>> functionality.
+> >> >> >> >>> packages.dcf was not meant handle versions. It just extracts names of
+> >> >> >> >>> dependencies... Yes, such a simple thing, yet missing in base R.
+> >> >> >> >>>
+> >> >> >> >>> Versions of packages can be controlled when setting up R pkgs repo. This
+> >> >> >> >>> is
+> >> >> >> >>> how I used to handle it. Making a CRAN subset mirror of fixed version
+> >> >> >> >>> pkgs.
+> >> >> >> >>> BTW. function for that is also included in mentioned branch. I am just not
+> >> >> >> >>> proposing it, to increase the chance of having at least this simple,
+> >> >> >> >>> missing, functionality merged.
+> >> >> >> >>>
+> >> >> >> >>> Best
+> >> >> >> >>> Jan
+> >> >> >> >>>
+> >> >> >> >>> On Fri, Oct 14, 2022, 15:14 Jan Net?k <netikja at gmail.com> wrote:
+> >> >> >> >>>
+> >> >> >> >>>> Hello Jan,
+> >> >> >> >>>>
+> >> >> >> >>>> I have seen many packages that implemented dependencies "extraction" on
+> >> >> >> >>>> their own for internal purposes and today I was doing exactly that for
+> >> >> >> >>>> mine. It's not a big deal using read.dcf on DESCRIPTION. It was
+> >> >> >> >>> sufficient
+> >> >> >> >>>> for me, but I had to take care of some \n chars (the overall returned
+> >> >> >> >>> value
+> >> >> >> >>>> has some rough edges, in my opinion). However, the function from the
+> >> >> >> >>> branch
+> >> >> >> >>>> seems to not care about version requirements, which are crucial for me.
+> >> >> >> >>>> Maybe that is something to reconsider before merging.
+> >> >> >> >>>>
+> >> >> >> >>>> Best,
+> >> >> >> >>>> Jan
+> >> >> >> >>>>
+> >> >> >> >>>> p? 14. 10. 2022 v 2:27 odes?latel Jan Gorecki <j.gorecki at wit.edu.pl>
+> >> >> >> >>>> napsal:
+> >> >> >> >>>>
+> >> >> >> >>>>> Dear R devs,
+> >> >> >> >>>>>
+> >> >> >> >>>>> I would like to raise a request for a simple helper function.
+> >> >> >> >>>>> Utility function to extract package dependencies from DESCRIPTION file.
+> >> >> >> >>>>>
+> >> >> >> >>>>> I do think that tools package is better place, for such a fundamental
+> >> >> >> >>>>> functionality, than community packages.
+> >> >> >> >>>>>
+> >> >> >> >>>>> tools pkg seems perfect fit (having already great function
+> >> >> >> >>>>> write_PACKAGES).
+> >> >> >> >>>>>
+> >> >> >> >>>>> Functionality I am asking for is already in R svn repository since
+> >> >> >> >>> 2016,
+> >> >> >> >>>>> in
+> >> >> >> >>>>> a branch tools4pkgs. Function is called 'packages.dcf'.
+> >> >> >> >>>>> Another one 'repos.dcf' would be a good functional complementary to it.
+> >> >> >> >>>>>
+> >> >> >> >>>>> Those two simple helper functions really makes it easier for
+> >> >> >> >>> organizations
+> >> >> >> >>>>> to glue together usage of their own R packages repos and CRAN repo in a
+> >> >> >> >>>>> smooth way. That could possibly help to offload CRAN from new
+> >> >> >> >>> submissions.
+> >> >> >> >>>>>
+> >> >> >> >>>>> gh mirror link for easy preview:
+> >> >> >> >>>>>
+> >> >> >> >>>>>
+> >> >> >> >>> https://github.com/wch/r-source/blob/tools4pkgs/src/library/tools/R/packages.R#L419
+> >> >> >> >>>>>
+> >> >> >> >>>>> Regards
+> >> >> >> >>>>> Jan Gorecki
+> >> >> >> >>>>>
+> >> >> >> >>>>>        [[alternative HTML version deleted]]
+> >> >> >> >>>>>
+> >> >> >> >>>>> ______________________________________________
+> >> >> >> >>>>> R-devel at r-project.org mailing list
+> >> >> >> >>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> >> >> >> >>>>>
+> >> >> >> >>>>
+> >> >> >> >>>
+> >> >> >> >>>        [[alternative HTML version deleted]]
+> >> >> >> >>>
+> >> >> >> >>> ______________________________________________
+> >> >> >> >>> R-devel at r-project.org mailing list
+> >> >> >> >>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> >> >> >> >>>
+> >> >> >> >>
+> >> >> >> >
+> >> >> >> >       [[alternative HTML version deleted]]
+> >> >> >> >
+> >> >> >> > ______________________________________________
+> >> >> >> > R-devel at r-project.org mailing list
+> >> >> >> > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >> >> >> >
+> >> >> >>
+
+
+From tdhock5 @end|ng |rom gm@||@com  Tue Dec 19 21:57:01 2023
+From: tdhock5 @end|ng |rom gm@||@com (Toby Hocking)
+Date: Tue, 19 Dec 2023 13:57:01 -0700
+Subject: [Rd] 
+ Partial matching performance in data frame rownames using [
+In-Reply-To: <20231216124842.4d889cdd@Tarkus>
+References: <de5e1dad-7ffc-4c35-8c51-1e0e21e585b9@gmx.de>
+ <20231212155519.2ccbd3d2@arachnoid>
+ <8022eea1-9577-476c-9f06-67e8f32a6a61@gmx.de> <20231216124842.4d889cdd@Tarkus>
+Message-ID: <CALK03d00QLn6zwWVo7urwSnY3H+Gxmq5bpHGL3ezGvKsrSYmYA@mail.gmail.com>
+
+Hi Hilmar and Ivan,
+I have used your code examples to write a blog post about this topic,
+which has figures that show the asymptotic time complexity of the
+various approaches,
+https://tdhock.github.io/blog/2023/df-partial-match/
+The asymptotic complexity of partial matching appears to be quadratic
+O(N^2) whereas the other approaches are asymptotically faster: linear
+O(N) or log-linear O(N log N).
+I think that accepting Ivan's pmatch.rows patch would add un-necessary
+complexity to base R, since base R already provides an efficient
+work-around, d1[match(q1,rownames(d1)),]
+I do think the CheckUserInterrupt patch is a good idea, though.
+Best,
+Toby
+
+On Sat, Dec 16, 2023 at 2:49?AM Ivan Krylov <krylov.r00t at gmail.com> wrote:
+>
+> On Wed, 13 Dec 2023 09:04:18 +0100
+> Hilmar Berger via R-devel <r-devel at r-project.org> wrote:
+>
+> > Still, I feel that default partial matching cripples the functionality
+> > of data.frame for larger tables.
+>
+> Changing the default now would require a long deprecation cycle to give
+> everyone who uses `[.data.frame` and relies on partial matching
+> (whether they know it or not) enough time to adjust.
+>
+> Still, adding an argument feels like a small change: edit
+> https://svn.r-project.org/R/trunk/src/library/base/R/dataframe.R and
+> add a condition before calling pmatch(). Adjust the warning() for named
+> arguments. Don't forget to document the new argument in the man page at
+> https://svn.r-project.org/R/trunk/src/library/base/man/Extract.data.frame.Rd
+>
+> Index: src/library/base/R/dataframe.R
+> ===================================================================
+> --- src/library/base/R/dataframe.R      (revision 85664)
+> +++ src/library/base/R/dataframe.R      (working copy)
+> @@ -591,14 +591,14 @@
+>  ###  These are a little less general than S
+>
+>  `[.data.frame` <-
+> -    function(x, i, j, drop = if(missing(i)) TRUE else length(cols) == 1)
+> +    function(x, i, j, drop = if(missing(i)) TRUE else length(cols) == 1, pmatch.rows = TRUE)
+>  {
+>      mdrop <- missing(drop)
+>      Narg <- nargs() - !mdrop  # number of arg from x,i,j that were specified
+>      has.j <- !missing(j)
+> -    if(!all(names(sys.call()) %in% c("", "drop"))
+> +    if(!all(names(sys.call()) %in% c("", "drop", "pmatch.rows"))
+>         && !isS4(x)) # at least don't warn for callNextMethod!
+> -        warning("named arguments other than 'drop' are discouraged")
+> +        warning("named arguments other than 'drop', 'pmatch.rows' are discouraged")
+>
+>      if(Narg < 3L) {  # list-like indexing or matrix indexing
+>          if(!mdrop) warning("'drop' argument will be ignored")
+> @@ -679,7 +679,11 @@
+>              ## for consistency with [, <length-1>]
+>              if(is.character(i)) {
+>                  rows <- attr(xx, "row.names")
+> -                i <- pmatch(i, rows, duplicates.ok = TRUE)
+> +                i <- if (pmatch.rows) {
+> +                    pmatch(i, rows, duplicates.ok = TRUE)
+> +                } else {
+> +                    match(i, rows)
+> +                }
+>              }
+>              ## need to figure which col was selected:
+>              ## cannot use .subset2 directly as that may
+> @@ -699,7 +703,11 @@
+>                   # as this can be expensive.
+>      if(is.character(i)) {
+>          rows <- attr(xx, "row.names")
+> -        i <- pmatch(i, rows, duplicates.ok = TRUE)
+> +        i <- if (pmatch.rows) {
+> +            pmatch(i, rows, duplicates.ok = TRUE)
+> +        } else {
+> +            match(i, rows)
+> +        }
+>      }
+>      for(j in seq_along(x)) {
+>          xj <- xx[[ sxx[j] ]]
+> Index: src/library/base/man/Extract.data.frame.Rd
+> ===================================================================
+> --- src/library/base/man/Extract.data.frame.Rd  (revision 85664)
+> +++ src/library/base/man/Extract.data.frame.Rd  (working copy)
+> @@ -15,7 +15,7 @@
+>    Extract or replace subsets of data frames.
+>  }
+>  \usage{
+> -\method{[}{data.frame}(x, i, j, drop = )
+> +\method{[}{data.frame}(x, i, j, drop =, pmatch.rows = TRUE)
+>  \method{[}{data.frame}(x, i, j) <- value
+>  \method{[[}{data.frame}(x, ..., exact = TRUE)
+>  \method{[[}{data.frame}(x, i, j) <- value
+> @@ -45,6 +45,9 @@
+>      column is selected.}
+>
+>     \item{exact}{logical: see \code{\link{[}}, and applies to column names.}
+> +
+> +   \item{pmatch.rows}{logical: whether to perform partial matching on
+> +     row names in case \code{i} is a character vector.}
+>  }
+>  \details{
+>    Data frames can be indexed in several modes.  When \code{[} and
+>
+>
+> system.time({r <- d1[q2,, drop=FALSE, pmatch.rows = FALSE]})
+> #    user  system elapsed
+> #   0.478   0.004   0.482
+>
+> Unfortunately, that would be only the beginning. The prose in the whole
+> ?`[.data.frame` would have to be updated; the new behaviour would have
+> to be tested in tests/**.R. There may be very good reasons why named
+> arguments to `[` other than drop= are discouraged for data.frames. I'm
+> afraid I lack the whole-project view to consider whether such an
+> addition would be safe.
+>
+> --
+> Best regards,
+> Ivan
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From tdhock5 @end|ng |rom gm@||@com  Tue Dec 19 21:57:31 2023
+From: tdhock5 @end|ng |rom gm@||@com (Toby Hocking)
+Date: Tue, 19 Dec 2023 13:57:31 -0700
+Subject: [Rd] 
+ Partial matching performance in data frame rownames using [
+In-Reply-To: <20231216124842.4d889cdd@Tarkus>
+References: <de5e1dad-7ffc-4c35-8c51-1e0e21e585b9@gmx.de>
+ <20231212155519.2ccbd3d2@arachnoid>
+ <8022eea1-9577-476c-9f06-67e8f32a6a61@gmx.de> <20231216124842.4d889cdd@Tarkus>
+Message-ID: <CALK03d2gzY1=iegH6FYCE2m1z7G-W-+Y9OgfKtrs1xmH2co8rg@mail.gmail.com>
+
+Hi Hilmar and Ivan,
+I have used your code examples to write a blog post about this topic,
+which has figures that show the asymptotic time complexity of the
+various approaches,
+https://tdhock.github.io/blog/2023/df-partial-match/
+The asymptotic complexity of partial matching appears to be quadratic
+O(N^2) whereas the other approaches are asymptotically faster: linear
+O(N) or log-linear O(N log N).
+I think that accepting Ivan's pmatch.rows patch would add un-necessary
+complexity to base R, since base R already provides an efficient
+work-around, d1[match(q1,rownames(d1)),]
+I do think the CheckUserInterrupt patch is a good idea, though.
+Best,
+Toby
+
+On Sat, Dec 16, 2023 at 2:49?AM Ivan Krylov <krylov.r00t at gmail.com> wrote:
+>
+> On Wed, 13 Dec 2023 09:04:18 +0100
+> Hilmar Berger via R-devel <r-devel at r-project.org> wrote:
+>
+> > Still, I feel that default partial matching cripples the functionality
+> > of data.frame for larger tables.
+>
+> Changing the default now would require a long deprecation cycle to give
+> everyone who uses `[.data.frame` and relies on partial matching
+> (whether they know it or not) enough time to adjust.
+>
+> Still, adding an argument feels like a small change: edit
+> https://svn.r-project.org/R/trunk/src/library/base/R/dataframe.R and
+> add a condition before calling pmatch(). Adjust the warning() for named
+> arguments. Don't forget to document the new argument in the man page at
+> https://svn.r-project.org/R/trunk/src/library/base/man/Extract.data.frame.Rd
+>
+> Index: src/library/base/R/dataframe.R
+> ===================================================================
+> --- src/library/base/R/dataframe.R      (revision 85664)
+> +++ src/library/base/R/dataframe.R      (working copy)
+> @@ -591,14 +591,14 @@
+>  ###  These are a little less general than S
+>
+>  `[.data.frame` <-
+> -    function(x, i, j, drop = if(missing(i)) TRUE else length(cols) == 1)
+> +    function(x, i, j, drop = if(missing(i)) TRUE else length(cols) == 1, pmatch.rows = TRUE)
+>  {
+>      mdrop <- missing(drop)
+>      Narg <- nargs() - !mdrop  # number of arg from x,i,j that were specified
+>      has.j <- !missing(j)
+> -    if(!all(names(sys.call()) %in% c("", "drop"))
+> +    if(!all(names(sys.call()) %in% c("", "drop", "pmatch.rows"))
+>         && !isS4(x)) # at least don't warn for callNextMethod!
+> -        warning("named arguments other than 'drop' are discouraged")
+> +        warning("named arguments other than 'drop', 'pmatch.rows' are discouraged")
+>
+>      if(Narg < 3L) {  # list-like indexing or matrix indexing
+>          if(!mdrop) warning("'drop' argument will be ignored")
+> @@ -679,7 +679,11 @@
+>              ## for consistency with [, <length-1>]
+>              if(is.character(i)) {
+>                  rows <- attr(xx, "row.names")
+> -                i <- pmatch(i, rows, duplicates.ok = TRUE)
+> +                i <- if (pmatch.rows) {
+> +                    pmatch(i, rows, duplicates.ok = TRUE)
+> +                } else {
+> +                    match(i, rows)
+> +                }
+>              }
+>              ## need to figure which col was selected:
+>              ## cannot use .subset2 directly as that may
+> @@ -699,7 +703,11 @@
+>                   # as this can be expensive.
+>      if(is.character(i)) {
+>          rows <- attr(xx, "row.names")
+> -        i <- pmatch(i, rows, duplicates.ok = TRUE)
+> +        i <- if (pmatch.rows) {
+> +            pmatch(i, rows, duplicates.ok = TRUE)
+> +        } else {
+> +            match(i, rows)
+> +        }
+>      }
+>      for(j in seq_along(x)) {
+>          xj <- xx[[ sxx[j] ]]
+> Index: src/library/base/man/Extract.data.frame.Rd
+> ===================================================================
+> --- src/library/base/man/Extract.data.frame.Rd  (revision 85664)
+> +++ src/library/base/man/Extract.data.frame.Rd  (working copy)
+> @@ -15,7 +15,7 @@
+>    Extract or replace subsets of data frames.
+>  }
+>  \usage{
+> -\method{[}{data.frame}(x, i, j, drop = )
+> +\method{[}{data.frame}(x, i, j, drop =, pmatch.rows = TRUE)
+>  \method{[}{data.frame}(x, i, j) <- value
+>  \method{[[}{data.frame}(x, ..., exact = TRUE)
+>  \method{[[}{data.frame}(x, i, j) <- value
+> @@ -45,6 +45,9 @@
+>      column is selected.}
+>
+>     \item{exact}{logical: see \code{\link{[}}, and applies to column names.}
+> +
+> +   \item{pmatch.rows}{logical: whether to perform partial matching on
+> +     row names in case \code{i} is a character vector.}
+>  }
+>  \details{
+>    Data frames can be indexed in several modes.  When \code{[} and
+>
+>
+> system.time({r <- d1[q2,, drop=FALSE, pmatch.rows = FALSE]})
+> #    user  system elapsed
+> #   0.478   0.004   0.482
+>
+> Unfortunately, that would be only the beginning. The prose in the whole
+> ?`[.data.frame` would have to be updated; the new behaviour would have
+> to be tested in tests/**.R. There may be very good reasons why named
+> arguments to `[` other than drop= are discouraged for data.frames. I'm
+> afraid I lack the whole-project view to consider whether such an
+> addition would be safe.
+>
+> --
+> Best regards,
+> Ivan
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
