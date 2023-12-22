@@ -3448,3 +3448,196 @@ On Sat, Dec 16, 2023 at 2:49?AM Ivan Krylov <krylov.r00t at gmail.com> wrote:
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From @tevem@rt|n041 @end|ng |rom gm@||@com  Wed Dec 20 04:01:12 2023
+From: @tevem@rt|n041 @end|ng |rom gm@||@com (Steve Martin)
+Date: Tue, 19 Dec 2023 22:01:12 -0500
+Subject: [Rd] [External] Re: zapsmall(x) for scalar x
+In-Reply-To: <25985.50170.190748.540475@stat.math.ethz.ch>
+References: <CAP=dwz8bGEvMEiXL+64dNH0cYtvAF3Y6ouCiVfX99y+1-VGGUA@mail.gmail.com>
+ <B7FE40A5-18D3-437B-A446-EEA5B20A98AA@warnes.net>
+ <bbcaa531201446a69c7fdedd311393ed@LO6P265MB6080.GBRP265.PROD.OUTLOOK.COM>
+ <CANVKczNLxChkreGnAa=oDUz7w8SEG_i3xW3_9k3BjaC7Q_Y+9Q@mail.gmail.com>
+ <f3751191-443f-4577-805a-2577a87506ed@insa-toulouse.fr>
+ <25984.7656.269922.822939@stat.math.ethz.ch>
+ <b2463b7c-755a-47c9-8c31-75ba748777bf@insa-toulouse.fr>
+ <CAP=dwz-oWc_K9ABHd4JQRYceY5+PsPmGTGGg1RmQw9+_xq=+hQ@mail.gmail.com>
+ <25985.50170.190748.540475@stat.math.ethz.ch>
+Message-ID: <CAP=dwz9bcSMuTriwj=RqgBLjSBPqZ9S=SB=+97FFidqSpztvmw@mail.gmail.com>
+
+Thanks for sharing, Martin. You're right that the interface for mFUN
+should be more general than I initially thought.*
+
+Perhaps you have other cases/examples where the ina argument is
+useful, in which case ignore me, but your example with the robust mFUN
+doesn't use the ina argument. What about having mFUN be only an
+argument of x (NAs and all), with a default of \(x) max(abs(x), na.rm
+= TRUE)? It's a minor difference, but it might make the mFUN argument
+a bit simpler to use (no need to carry a dummy argument when NAs in x
+can be handled directly).
+
+Steve
+
+* Tangent: Does boxplot.stats() use the number of NA values? The
+documentation says NAs are omitted, and a quick scan of the code and
+some tests suggests boxplot.stats(x) should give the same result as
+boxplot.stats(x[!is.na(x)]), although I may be missing something. But
+your point is well taken, and the interface should be more general
+than I initially thought.
+
+On Tue, 19 Dec 2023 at 11:25, Martin Maechler
+<maechler at stat.math.ethz.ch> wrote:
+>
+> >>>>> Steve Martin
+> >>>>>     on Mon, 18 Dec 2023 07:56:46 -0500 writes:
+>
+>     > Does mFUN() really need to be a function of x and the NA values of x? I
+>     > can't think of a case where it would be used on anything but the non-NA
+>     > values of x.
+>
+>     > I think it would be easier to specify a different mFUN() (and document this
+>     > new argument) if the function has one argument and is applied to the non-NA
+>     > values of x.
+>
+>     > zapsmall <- function(x,
+>     >     digits = getOption("digits"),
+>     >     mFUN = function(x) max(abs(x)),
+>     >     min.d = 0L) {
+>     >     if (length(digits) == 0L)
+>     >         stop("invalid 'digits'")
+>     >     if (all(ina <- is.na(x)))
+>     >         return(x)
+>     >     mx <- mFUN(x[!ina])
+>     >     round(x, digits = if(mx > 0) max(min.d, digits - as.numeric(log10(mx)))
+>     > else digits)
+>     > }
+>
+>     > Steve
+>
+> Thank you, Steve,
+> you are right that it would look simpler to do it that way.
+>
+> On the other hand, in your case, mFUN() no longer sees the
+> original  n observations, and would not know if there where NAs
+> in that case how many NAs there were in the original data.
+>
+> The examples I have on my version of zapsmall's help page (see below)
+> uses a robust mFUN, "the upper hinge of a box plot":
+>
+>    mF_rob <- function(x, ina) boxplot.stats(x, do.conf=FALSE)$stats[5]
+>
+> and if you inspect boxplot.stats() you may know that indeed it
+> also wants to use the full data 'x' to compute its statistics and
+> then deal with NAs directly.  Your simplified mFUN interface
+> would not be fully consistent with boxplot(), and I think could
+> not be made so,  hence my more flexible 2-argument "design" for  mFUN().
+>
+> .... and BTW, these examples also exemplify the use of  `min.d`
+> about which  Serguei Sokol asked for an example or two.
+>
+> Here I repeat my definition of zapsmall, and then my current set
+> of examples:
+>
+> zapsmall <- function(x, digits = getOption("digits"),
+>                      mFUN = function(x, ina) max(abs(x[!ina])), min.d = 0L)
+> {
+>     if (length(digits) == 0L)
+>         stop("invalid 'digits'")
+>     if (all(ina <- is.na(x)))
+>         return(x)
+>     mx <- mFUN(x, ina)
+>     round(x, digits = if(mx > 0) max(min.d, digits - as.numeric(log10(mx))) else digits)
+> }
+>
+>
+> ##--- \examples{
+> x2 <- pi * 100^(-2:2)/10
+>    print(  x2, digits = 4)
+> zapsmall(  x2) # automatical digits
+> zapsmall(  x2, digits = 4)
+> zapsmall(c(x2, Inf)) # round()s to integer ..
+> zapsmall(c(x2, Inf), min.d=-Inf) # everything  is small wrt  Inf
+>
+> (z <- exp(1i*0:4*pi/2))
+> zapsmall(z)
+>
+> zapShow <- function(x, ...) rbind(orig = x, zapped = zapsmall(x, ...))
+> zapShow(x2)
+>
+> ## using a *robust* mFUN
+> mF_rob <- function(x, ina) boxplot.stats(x, do.conf=FALSE)$stats[5]
+> ## with robust mFUN(), 'Inf' is no longer distorting the picture:
+> zapShow(c(x2, Inf), mFUN = mF_rob)
+> zapShow(c(x2, Inf), mFUN = mF_rob, min.d = -5) # the same
+> zapShow(c(x2, 999), mFUN = mF_rob) # same *rounding* as w/ Inf
+> zapShow(c(x2, 999), mFUN = mF_rob, min.d =  3) # the same
+> zapShow(c(x2, 999), mFUN = mF_rob, min.d =  8) # small diff
+> ##--- }
+>
+>
+>
+>     > On Mon, Dec 18, 2023, 05:47 Serguei Sokol via R-devel <r-devel at r-project.org>
+>     > wrote:
+>
+> > Le 18/12/2023 ? 11:24, Martin Maechler a ?crit :
+> > >>>>>> Serguei Sokol via R-devel
+> > >>>>>>      on Mon, 18 Dec 2023 10:29:02 +0100 writes:
+> > >      > Le 17/12/2023 ? 18:26, Barry Rowlingson a ?crit :
+> > >      >> I think what's been missed is that zapsmall works relative to the absolute
+> > >      >> largest value in the vector. Hence if there's only one
+> > >      >> item in the vector, it is the largest, so its not zapped. The function's
+> > >      >> raison d'etre isn't to replace absolutely small values,
+> > >      >> but small values relative to the largest. Hence a vector of similar tiny
+> > >      >> values doesn't get zapped.
+> > >      >>
+> > >      >> Maybe the line in the docs:
+> > >      >>
+> > >      >> " (compared with the maximal absolute value)"
+> > >      >>
+> > >      >> needs to read:
+> > >      >>
+> > >      >> " (compared with the maximal absolute value in the vector)"
+> > >
+> > >      > I agree that this change in the doc would clarify the situation but
+> > >      > would not resolve proposed corner cases.
+> > >
+> > >      > I think that an additional argument 'mx' (absolute max value of
+> > >      > reference) would do. Consider:
+> > >
+> > >      > zapsmall2 <-
+> > >      > function (x, digits = getOption("digits"), mx=max(abs(x),  na.rm=TRUE))
+> > >      > {
+> > >      >     if (length(digits) == 0L)
+> > >      >         stop("invalid 'digits'")
+> > >      >     if (all(ina <- is.na(x)))
+> > >      >         return(x)
+> > >      >     round(x, digits = if (mx > 0) max(0L, digits - as.numeric(log10(mx))) else digits)
+> > >      > }
+> > >
+> > >      > then zapsmall2() without explicit 'mx' behaves
+> > >      > identically to actual
+> > >      > zapsmall() and for a scalar or a vector of identical value, user
+> > can
+> > >      > manually fix the scale of what should be considered as small:
+> > >
+> > >      >> zapsmall2(y)
+> > >      > [1] 2.220446e-16
+> > >      >> zapsmall2(y, mx=1)
+> > >      > [1] 0
+> > >      >> zapsmall2(c(y, y), mx=1)
+> > >      > [1] 0 0
+> > >      >> zapsmall2(c(y, NA))
+> > >      > [1] 2.220446e-16           NA
+> > >      >> zapsmall2(c(y, NA), mx=1)
+> > >      > [1]  0 NA
+> > >
+> > >      > Obviously, the name 'zapsmall2' was chosen just for this
+> > explanation.
+> > >      > The original name 'zapsmall' could be reused as a full backward
+> > >      > compatibility is preserved.
+> > >
+> > >      > Best,
+> > >      > Serguei.
+> [.......................]
+>
+
+
