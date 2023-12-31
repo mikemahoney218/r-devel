@@ -3817,3 +3817,604 @@ On 19.12.23 21:57, Toby Hocking wrote:
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From obregonm@teo @end|ng |rom gm@||@com  Fri Dec 29 15:13:42 2023
+From: obregonm@teo @end|ng |rom gm@||@com (Mateo =?ISO-8859-1?Q?Obreg=F3n?=)
+Date: Fri, 29 Dec 2023 14:13:42 +0000
+Subject: [Rd] eval(parse()) within mutate() returning same value for all rows
+Message-ID: <2013074.tdWV9SEqCh@tikre>
+
+Hi all-
+
+Looking through stackoverflow for R string combining examples, I found the 
+following from 3 years ago:
+
+<https://stackoverflow.com/questions/63881854/how-to-format-strings-using-values-from-other-column-in-r>
+
+The top answer suggests to use eval(parse(sprintf())). I tried the suggestion 
+and it did not return the expected combines strings. I thought that this might 
+be an issue with some leftover values being reused, so I explicitly eval() 
+with a new.env():
+
+> library(dplyr)
+> df <- tibble(words=c("%s plus %s equals %s"), 
+args=c("1,1,2","2,2,4","3,3,6"))
+> df |> mutate(combined = eval(parse(text=sprintf("sprintf('%s', %s)", words, 
+args)), envir=new.env()))
+
+# A tibble: 3 ? 3
+  words                args  combined         
+  <chr>                <chr> <chr>            
+1 %s plus %s equals %s 1,1,2 3 plus 3 equals 6
+2 %s plus %s equals %s 2,2,4 3 plus 3 equals 6
+3 %s plus %s equals %s 3,3,6 3 plus 3 equals 6
+
+The `combined`  is not what I was expecting, as the same last eval() is 
+returned for all three rows.
+ 
+Am I missing something? What has changed in the past three years?
+
+Mateo.
+--  
+Mateo Obreg?n
+
+
+From d@v|dhughjone@ @end|ng |rom gm@||@com  Fri Dec 29 16:30:52 2023
+From: d@v|dhughjone@ @end|ng |rom gm@||@com (David Hugh-Jones)
+Date: Fri, 29 Dec 2023 15:30:52 +0000
+Subject: [Rd] The case for a pipe assignment operator + database of R code
+Message-ID: <CAARY7kjYwQitdYfQS60fpj4FuQpVkyaTTWC_9AfAppwAv6V0hA@mail.gmail.com>
+
+Hi all,
+
+I wrote up the case for having a pipe assignment operator in R here:
+https://hughjonesd.github.io/case-for-pipe-assignment.html
+
+A pipe assignment operator would expand e.g.
+
+obj <|> do_something()
+
+to
+
+obj <- obj |> do_something()
+
+and therefore to
+
+obj <- do_something(obj)
+
+Just for fun, I made a patch to the R source at
+https://hughjonesd.github.io/pipe-assignment.patch. It is highly imperfect,
+and made against github rather than svn, so it is just a proof of concept.
+
+Maybe more interesting to list readers is the dataset of R code I created
+to learn how people use assignments in real world code. It has about 26000
+code snippets, from github, Stackoverflow questions, and R package
+examples. It might be useful if you are researching real world usage
+patterns in R. I didn't know of any existing resources:
+
+https://github.com/hughjonesd/codesamples
+
+Happy new year!
+
+David
+
+	[[alternative HTML version deleted]]
+
+
+From edd @end|ng |rom deb|@n@org  Fri Dec 29 16:35:20 2023
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Fri, 29 Dec 2023 09:35:20 -0600
+Subject: [Rd] eval(parse()) within mutate() returning same value for all
+ rows
+In-Reply-To: <2013074.tdWV9SEqCh@tikre>
+References: <2013074.tdWV9SEqCh@tikre>
+Message-ID: <25998.59192.264601.245718@rob.eddelbuettel.com>
+
+
+On 29 December 2023 at 14:13, Mateo Obreg?n wrote:
+| Hi all-
+| 
+| Looking through stackoverflow for R string combining examples, I found the 
+| following from 3 years ago:
+| 
+| <https://stackoverflow.com/questions/63881854/how-to-format-strings-using-values-from-other-column-in-r>
+| 
+| The top answer suggests to use eval(parse(sprintf())). I tried the suggestion 
+
+Well:
+
+   > fortunes::fortune(106)
+
+   If the answer is parse() you should usually rethink the question.
+      -- Thomas Lumley
+         R-help (February 2005)
+   
+   > 
+
+| and it did not return the expected combines strings. I thought that this might 
+| be an issue with some leftover values being reused, so I explicitly eval() 
+| with a new.env():
+| 
+| > library(dplyr)
+| > df <- tibble(words=c("%s plus %s equals %s"), 
+| args=c("1,1,2","2,2,4","3,3,6"))
+| > df |> mutate(combined = eval(parse(text=sprintf("sprintf('%s', %s)", words, 
+| args)), envir=new.env()))
+| 
+| # A tibble: 3 ? 3
+|   words                args  combined         
+|   <chr>                <chr> <chr>            
+| 1 %s plus %s equals %s 1,1,2 3 plus 3 equals 6
+| 2 %s plus %s equals %s 2,2,4 3 plus 3 equals 6
+| 3 %s plus %s equals %s 3,3,6 3 plus 3 equals 6
+| 
+| The `combined`  is not what I was expecting, as the same last eval() is 
+| returned for all three rows.
+|  
+| Am I missing something? What has changed in the past three years?
+
+Nothing if you use the first answer which relies only on base R and still
+works: 
+
+   > words <- c('%s + %s equal %s', '%s + %s equal %s')
+   > arguments <- c('1,1,2', '2,2,4')
+   > df <- data.frame(words, arguments)
+   > df
+                words arguments
+   1 %s + %s equal %s     1,1,2
+   2 %s + %s equal %s     2,2,4
+   > df$combined <- apply(df, 1, function(x) do.call(sprintf, c(as.list(strsplit(x[2], ',')[[1]]), fmt = x[[1]])))
+   > df
+                words arguments      combined
+   1 %s + %s equal %s     1,1,2 1 + 1 equal 2
+   2 %s + %s equal %s     2,2,4 2 + 2 equal 4
+   > 
+
+I am not the best person to answer what may have changed in `dplyr` in those
+three years -- and neither is this list which is primarily concerned with
+developing R itself.  
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From j@goreck| @end|ng |rom w|t@edu@p|  Fri Dec 29 17:10:13 2023
+From: j@goreck| @end|ng |rom w|t@edu@p| (Jan Gorecki)
+Date: Fri, 29 Dec 2023 17:10:13 +0100
+Subject: [Rd] eval(parse()) within mutate() returning same value for all
+ rows
+In-Reply-To: <2013074.tdWV9SEqCh@tikre>
+References: <2013074.tdWV9SEqCh@tikre>
+Message-ID: <CAOO9MKWyOnYxfVYykfOH0uV-44UO5FLHqbs6taS4GsQpNuuOwQ@mail.gmail.com>
+
+Unless you are able to reproduce the problem without dplyr then you should
+submit your question to dplyr issues tracker. R-devel is for issues in R,
+not in a third party packages.
+
+On Fri, Dec 29, 2023, 15:13 Mateo Obreg?n <obregonmateo at gmail.com> wrote:
+
+> Hi all-
+>
+> Looking through stackoverflow for R string combining examples, I found the
+> following from 3 years ago:
+>
+> <
+> https://stackoverflow.com/questions/63881854/how-to-format-strings-using-values-from-other-column-in-r
+> >
+>
+> The top answer suggests to use eval(parse(sprintf())). I tried the
+> suggestion
+> and it did not return the expected combines strings. I thought that this
+> might
+> be an issue with some leftover values being reused, so I explicitly eval()
+> with a new.env():
+>
+> > library(dplyr)
+> > df <- tibble(words=c("%s plus %s equals %s"),
+> args=c("1,1,2","2,2,4","3,3,6"))
+> > df |> mutate(combined = eval(parse(text=sprintf("sprintf('%s', %s)",
+> words,
+> args)), envir=new.env()))
+>
+> # A tibble: 3 ? 3
+>   words                args  combined
+>   <chr>                <chr> <chr>
+> 1 %s plus %s equals %s 1,1,2 3 plus 3 equals 6
+> 2 %s plus %s equals %s 2,2,4 3 plus 3 equals 6
+> 3 %s plus %s equals %s 3,3,6 3 plus 3 equals 6
+>
+> The `combined`  is not what I was expecting, as the same last eval() is
+> returned for all three rows.
+>
+> Am I missing something? What has changed in the past three years?
+>
+> Mateo.
+> --
+> Mateo Obreg?n
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From obregonm@teo @end|ng |rom gm@||@com  Fri Dec 29 17:55:08 2023
+From: obregonm@teo @end|ng |rom gm@||@com (Mateo =?ISO-8859-1?Q?Obreg=F3n?=)
+Date: Fri, 29 Dec 2023 16:55:08 +0000
+Subject: [Rd] eval(parse()) within mutate() returning same value for all
+ rows
+In-Reply-To: <25998.59192.264601.245718@rob.eddelbuettel.com>
+References: <2013074.tdWV9SEqCh@tikre>
+ <25998.59192.264601.245718@rob.eddelbuettel.com>
+Message-ID: <6003260.lOV4Wx5bFT@tikre>
+
+Thanks Dirk for your response.
+
+The "base" R code is just too unwieldy to be easily understandable. The 
+eval(parse(sprintf())) solution provided is ungainly too, but at least its 
+more understandable from a casual reading of it.
+
+I'll punt this case over to the dplyr people then.
+
+Cheers.
+
+Mateo.
+--  
+Mateo Obreg?n
+On Friday, 29 December 2023 15:35:20 GMT Dirk Eddelbuettel wrote:
+> On 29 December 2023 at 14:13, Mateo Obreg?n wrote:
+> | Hi all-
+> | 
+> | Looking through stackoverflow for R string combining examples, I found the
+> | following from 3 years ago:
+> | 
+> | <https://stackoverflow.com/questions/63881854/how-to-format-strings-using-> | values-from-other-column-in-r>
+> | 
+> | The top answer suggests to use eval(parse(sprintf())). I tried the
+> | suggestion
+> Well:
+>    > fortunes::fortune(106)
+> 
+>    If the answer is parse() you should usually rethink the question.
+>       -- Thomas Lumley
+>          R-help (February 2005)
+> 
+> | and it did not return the expected combines strings. I thought that this
+> | might be an issue with some leftover values being reused, so I explicitly
+> | eval()| 
+> | with a new.env():
+> | > library(dplyr)
+> | > df <- tibble(words=c("%s plus %s equals %s"),
+> | 
+> | args=c("1,1,2","2,2,4","3,3,6"))
+> | 
+> | > df |> mutate(combined = eval(parse(text=sprintf("sprintf('%s', %s)",
+> | > words,
+> | 
+> | args)), envir=new.env()))
+> | 
+> | # A tibble: 3 ? 3
+> | 
+> |   words                args  combined
+> |   <chr>                <chr> <chr>
+> | 
+> | 1 %s plus %s equals %s 1,1,2 3 plus 3 equals 6
+> | 2 %s plus %s equals %s 2,2,4 3 plus 3 equals 6
+> | 3 %s plus %s equals %s 3,3,6 3 plus 3 equals 6
+> | 
+> | The `combined`  is not what I was expecting, as the same last eval() is
+> | returned for all three rows.
+> | 
+> | Am I missing something? What has changed in the past three years?
+> 
+> Nothing if you use the first answer which relies only on base R and still
+> 
+> works:
+>    > words <- c('%s + %s equal %s', '%s + %s equal %s')
+>    > arguments <- c('1,1,2', '2,2,4')
+>    > df <- data.frame(words, arguments)
+>    > df
+> 
+>                 words arguments
+>    1 %s + %s equal %s     1,1,2
+>    2 %s + %s equal %s     2,2,4
+> 
+>    > df$combined <- apply(df, 1, function(x) do.call(sprintf,
+>    > c(as.list(strsplit(x[2], ',')[[1]]), fmt = x[[1]]))) df
+> 
+>                 words arguments      combined
+>    1 %s + %s equal %s     1,1,2 1 + 1 equal 2
+>    2 %s + %s equal %s     2,2,4 2 + 2 equal 4
+> 
+> 
+> I am not the best person to answer what may have changed in `dplyr` in those
+> three years -- and neither is this list which is primarily concerned with
+> developing R itself.
+> 
+> Dirk
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Fri Dec 29 18:22:47 2023
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Fri, 29 Dec 2023 12:22:47 -0500
+Subject: [Rd] eval(parse()) within mutate() returning same value for all
+ rows
+In-Reply-To: <2013074.tdWV9SEqCh@tikre>
+References: <2013074.tdWV9SEqCh@tikre>
+Message-ID: <b8bd6768-6bd3-44d3-b73e-941a0db8157f@gmail.com>
+
+On 29/12/2023 9:13 a.m., Mateo Obreg?n wrote:
+> Hi all-
+> 
+> Looking through stackoverflow for R string combining examples, I found the
+> following from 3 years ago:
+> 
+> <https://stackoverflow.com/questions/63881854/how-to-format-strings-using-values-from-other-column-in-r>
+> 
+> The top answer suggests to use eval(parse(sprintf())). I tried the suggestion
+> and it did not return the expected combines strings. I thought that this might
+> be an issue with some leftover values being reused, so I explicitly eval()
+> with a new.env():
+> 
+>> library(dplyr)
+>> df <- tibble(words=c("%s plus %s equals %s"),
+> args=c("1,1,2","2,2,4","3,3,6"))
+>> df |> mutate(combined = eval(parse(text=sprintf("sprintf('%s', %s)", words,
+> args)), envir=new.env()))
+> 
+> # A tibble: 3 ? 3
+>    words                args  combined
+>    <chr>                <chr> <chr>
+> 1 %s plus %s equals %s 1,1,2 3 plus 3 equals 6
+> 2 %s plus %s equals %s 2,2,4 3 plus 3 equals 6
+> 3 %s plus %s equals %s 3,3,6 3 plus 3 equals 6
+> 
+> The `combined`  is not what I was expecting, as the same last eval() is
+> returned for all three rows.
+>   
+> Am I missing something? What has changed in the past three years?
+> 
+
+I don't know if this is a change, but when `eval()` is passed an 
+expression vector, it evaluates the elements in order and returns the 
+value of the last one.  This is only partially documented:
+
+"Value:  The result of evaluating the object: for an expression vector 
+this is the result of evaluating the last element."
+
+
+That text has been unchanged in the help page for 13 years.
+
+Duncan Murdoch
+
+
+From ggrothend|eck @end|ng |rom gm@||@com  Fri Dec 29 19:45:06 2023
+From: ggrothend|eck @end|ng |rom gm@||@com (Gabor Grothendieck)
+Date: Fri, 29 Dec 2023 13:45:06 -0500
+Subject: [Rd] eval(parse()) within mutate() returning same value for all
+ rows
+In-Reply-To: <2013074.tdWV9SEqCh@tikre>
+References: <2013074.tdWV9SEqCh@tikre>
+Message-ID: <CAP01uRk7evHT99UQpkEgGynpvoD5R=4hW9NtV8uSXZJAGySucg@mail.gmail.com>
+
+If the question is how to accomplish this as opposed to how to use eval
+then we can do it without eval like this provided we can assume that words
+contains three %s .
+
+  library(dplyr)
+  library(tidyr)
+  df <- tibble(words=c("%s plus %s equals %s"),args=c("1,1,2","2,2,4","3,3,6"))
+
+  df |>
+    separate_wider_delim(args, ",", names = c("a", "b", "c")) |>
+    mutate(combined = sprintf(words, a, b, c))
+  ## # A tibble: 3 ? 5
+  ## words                a     b     c     combined
+  ## <chr>                <chr> <chr> <chr> <chr>
+  ## 1 %s plus %s equals %s 1     1     2     1 plus 1 equals 2
+  ## 2 %s plus %s equals %s 2     2     4     2 plus 2 equals 4
+  ## 3 %s plus %s equals %s 3     3     6     3 plus 3 equals 6
+
+On Fri, Dec 29, 2023 at 9:14?AM Mateo Obreg?n <obregonmateo at gmail.com> wrote:
+>
+> Hi all-
+>
+> Looking through stackoverflow for R string combining examples, I found the
+> following from 3 years ago:
+>
+> <https://stackoverflow.com/questions/63881854/how-to-format-strings-using-values-from-other-column-in-r>
+>
+> The top answer suggests to use eval(parse(sprintf())). I tried the suggestion
+> and it did not return the expected combines strings. I thought that this might
+> be an issue with some leftover values being reused, so I explicitly eval()
+> with a new.env():
+>
+> > library(dplyr)
+> > df <- tibble(words=c("%s plus %s equals %s"),
+> args=c("1,1,2","2,2,4","3,3,6"))
+> > df |> mutate(combined = eval(parse(text=sprintf("sprintf('%s', %s)", words,
+> args)), envir=new.env()))
+>
+> # A tibble: 3 ? 3
+>   words                args  combined
+>   <chr>                <chr> <chr>
+> 1 %s plus %s equals %s 1,1,2 3 plus 3 equals 6
+> 2 %s plus %s equals %s 2,2,4 3 plus 3 equals 6
+> 3 %s plus %s equals %s 3,3,6 3 plus 3 equals 6
+>
+> The `combined`  is not what I was expecting, as the same last eval() is
+> returned for all three rows.
+>
+> Am I missing something? What has changed in the past three years?
+>
+> Mateo.
+> --
+> Mateo Obreg?n
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+
+-- 
+Statistics & Software Consulting
+GKX Group, GKX Associates Inc.
+tel: 1-877-GKX-GROUP
+email: ggrothendieck at gmail.com
+
+
+From obregonm@teo @end|ng |rom gm@||@com  Fri Dec 29 23:31:59 2023
+From: obregonm@teo @end|ng |rom gm@||@com (Mateo =?ISO-8859-1?Q?Obreg=F3n?=)
+Date: Fri, 29 Dec 2023 22:31:59 +0000
+Subject: [Rd] eval(parse()) within mutate() returning same value for all
+ rows
+In-Reply-To: <CAP01uRk7evHT99UQpkEgGynpvoD5R=4hW9NtV8uSXZJAGySucg@mail.gmail.com>
+References: <2013074.tdWV9SEqCh@tikre>
+ <CAP01uRk7evHT99UQpkEgGynpvoD5R=4hW9NtV8uSXZJAGySucg@mail.gmail.com>
+Message-ID: <12350979.O9o76ZdvQC@tikre>
+
+Thanks Gabor, I like your solution that splits the args into separate columns, 
+in turn making the sprintf() call more interpretable .
+
+Cheers.
+
+Mateo.
+--  
+Mateo Obreg?n
+On Friday, 29 December 2023 18:45:06 GMT Gabor Grothendieck wrote:
+> If the question is how to accomplish this as opposed to how to use eval
+> then we can do it without eval like this provided we can assume that words
+> contains three %s .
+> 
+>   library(dplyr)
+>   library(tidyr)
+>   df <- tibble(words=c("%s plus %s equals
+> %s"),args=c("1,1,2","2,2,4","3,3,6"))
+> 
+>   df |>
+>     separate_wider_delim(args, ",", names = c("a", "b", "c")) |>
+>     mutate(combined = sprintf(words, a, b, c))
+>   ## # A tibble: 3 ? 5
+>   ## words                a     b     c     combined
+>   ## <chr>                <chr> <chr> <chr> <chr>
+>   ## 1 %s plus %s equals %s 1     1     2     1 plus 1 equals 2
+>   ## 2 %s plus %s equals %s 2     2     4     2 plus 2 equals 4
+>   ## 3 %s plus %s equals %s 3     3     6     3 plus 3 equals 6
+> 
+> On Fri, Dec 29, 2023 at 9:14?AM Mateo Obreg?n <obregonmateo at gmail.com> 
+wrote:
+> > Hi all-
+> > 
+> > Looking through stackoverflow for R string combining examples, I found the
+> > following from 3 years ago:
+> > 
+> > <https://stackoverflow.com/questions/63881854/how-to-format-strings-using-> > values-from-other-column-in-r>
+> > 
+> > The top answer suggests to use eval(parse(sprintf())). I tried the
+> > suggestion and it did not return the expected combines strings. I thought
+> > that this might be an issue with some leftover values being reused, so I
+> > explicitly eval()> 
+> > with a new.env():
+> > > library(dplyr)
+> > > df <- tibble(words=c("%s plus %s equals %s"),
+> > 
+> > args=c("1,1,2","2,2,4","3,3,6"))
+> > 
+> > > df |> mutate(combined = eval(parse(text=sprintf("sprintf('%s', %s)",
+> > > words,
+> > 
+> > args)), envir=new.env()))
+> > 
+> > # A tibble: 3 ? 3
+> > 
+> >   words                args  combined
+> >   <chr>                <chr> <chr>
+> > 
+> > 1 %s plus %s equals %s 1,1,2 3 plus 3 equals 6
+> > 2 %s plus %s equals %s 2,2,4 3 plus 3 equals 6
+> > 3 %s plus %s equals %s 3,3,6 3 plus 3 equals 6
+> > 
+> > The `combined`  is not what I was expecting, as the same last eval() is
+> > returned for all three rows.
+> > 
+> > Am I missing something? What has changed in the past three years?
+> > 
+> > Mateo.
+> > --
+> > Mateo Obreg?n
+> > 
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From edd @end|ng |rom deb|@n@org  Sat Dec 30 00:14:30 2023
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Fri, 29 Dec 2023 17:14:30 -0600
+Subject: [Rd] eval(parse()) within mutate() returning same value for all
+ rows
+In-Reply-To: <12350979.O9o76ZdvQC@tikre>
+References: <2013074.tdWV9SEqCh@tikre>
+ <CAP01uRk7evHT99UQpkEgGynpvoD5R=4hW9NtV8uSXZJAGySucg@mail.gmail.com>
+ <12350979.O9o76ZdvQC@tikre>
+Message-ID: <25999.21206.525585.406149@rob.eddelbuettel.com>
+
+
+On 29 December 2023 at 22:31, Mateo Obreg?n wrote:
+| Thanks Gabor, I like your solution that splits the args into separate columns, 
+| in turn making the sprintf() call more interpretable .
+
+Well you may also like `tstrsplit()`, a gem inside data.table:
+
+> suppressMessages(library(data.table))
+>
+> D <- data.table(words="%s plus %s equals %s", args=c("1,1,2", "2,2,4", "3,3,6"))
+> D
+                  words   args
+                 <char> <char>
+1: %s plus %s equals %s  1,1,2
+2: %s plus %s equals %s  2,2,4
+3: %s plus %s equals %s  3,3,6
+>
+> D[, c('a','b','c') := tstrsplit(args, ",")]
+> D
+                  words   args      a      b      c
+                 <char> <char> <char> <char> <char>
+1: %s plus %s equals %s  1,1,2      1      1      2
+2: %s plus %s equals %s  2,2,4      2      2      4
+3: %s plus %s equals %s  3,3,6      3      3      6
+>
+> D[, res := sprintf(words, a, b, c)]
+> D
+                  words   args      a      b      c               res
+                 <char> <char> <char> <char> <char>            <char>
+1: %s plus %s equals %s  1,1,2      1      1      2 1 plus 1 equals 2
+2: %s plus %s equals %s  2,2,4      2      2      4 2 plus 2 equals 4
+3: %s plus %s equals %s  3,3,6      3      3      6 3 plus 3 equals 6
+> 
+
+so all we do here is a one-liner in data.table if you're so inclined:
+
+
+> D <- data.table(words="%s plus %s equals %s", args=c("1,1,2", "2,2,4", "3,3,6"))
+> D[, c('a','b','c') := tstrsplit(args, ",")][, res := sprintf(words, a, b, c)][, .(res)]
+                 res
+              <char>
+1: 1 plus 1 equals 2
+2: 2 plus 2 equals 4
+3: 3 plus 3 equals 6
+> 
+
+data.table is very powerful and expressive. It is much worth getting into
+which I really only did ten or so years into using R.
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
