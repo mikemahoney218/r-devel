@@ -4418,3 +4418,107 @@ Dirk
 dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
 
 
+From ggrothend|eck @end|ng |rom gm@||@com  Sat Dec 30 23:02:00 2023
+From: ggrothend|eck @end|ng |rom gm@||@com (Gabor Grothendieck)
+Date: Sat, 30 Dec 2023 17:02:00 -0500
+Subject: [Rd] eval(parse()) within mutate() returning same value for all
+ rows
+In-Reply-To: <CAP01uRk7evHT99UQpkEgGynpvoD5R=4hW9NtV8uSXZJAGySucg@mail.gmail.com>
+References: <2013074.tdWV9SEqCh@tikre>
+ <CAP01uRk7evHT99UQpkEgGynpvoD5R=4hW9NtV8uSXZJAGySucg@mail.gmail.com>
+Message-ID: <CAP01uRkUAh+TEG9fWp1vcG9nX2Ee73GY-gufNCCa5Tzs_B=LRA@mail.gmail.com>
+
+Here is a solution that does not hard code 3:
+
+  library(dplyr)
+  library(purrr)
+  library(tidyr)
+
+  df %>%
+     separate_wider_delim(args, ",", names_sep = "") %>%
+     mutate(combined = exec(sprintf, .[[1]], !!!.[-1]))
+  ## # A tibble: 3 ? 5
+  ## words                args1 args2 args3 combined
+  ## <chr>                <chr> <chr> <chr> <chr>
+  ## 1 %s plus %s equals %s 1     1     2     1 plus 1 equals 2
+  ## 2 %s plus %s equals %s 2     2     4     2 plus 2 equals 4
+  ## 3 %s plus %s equals %s 3     3     6     3 plus 3 equals 6
+
+On Fri, Dec 29, 2023 at 1:45?PM Gabor Grothendieck
+<ggrothendieck at gmail.com> wrote:
+>
+> If the question is how to accomplish this as opposed to how to use eval
+> then we can do it without eval like this provided we can assume that words
+> contains three %s .
+>
+>   library(dplyr)
+>   library(tidyr)
+>   df <- tibble(words=c("%s plus %s equals %s"),args=c("1,1,2","2,2,4","3,3,6"))
+>
+>   df |>
+>     separate_wider_delim(args, ",", names = c("a", "b", "c")) |>
+>     mutate(combined = sprintf(words, a, b, c))
+>   ## # A tibble: 3 ? 5
+>   ## words                a     b     c     combined
+>   ## <chr>                <chr> <chr> <chr> <chr>
+>   ## 1 %s plus %s equals %s 1     1     2     1 plus 1 equals 2
+>   ## 2 %s plus %s equals %s 2     2     4     2 plus 2 equals 4
+>   ## 3 %s plus %s equals %s 3     3     6     3 plus 3 equals 6
+>
+> On Fri, Dec 29, 2023 at 9:14?AM Mateo Obreg?n <obregonmateo at gmail.com> wrote:
+> >
+> > Hi all-
+> >
+> > Looking through stackoverflow for R string combining examples, I found the
+> > following from 3 years ago:
+> >
+> > <https://stackoverflow.com/questions/63881854/how-to-format-strings-using-values-from-other-column-in-r>
+> >
+> > The top answer suggests to use eval(parse(sprintf())). I tried the suggestion
+> > and it did not return the expected combines strings. I thought that this might
+> > be an issue with some leftover values being reused, so I explicitly eval()
+> > with a new.env():
+> >
+> > > library(dplyr)
+> > > df <- tibble(words=c("%s plus %s equals %s"),
+> > args=c("1,1,2","2,2,4","3,3,6"))
+> > > df |> mutate(combined = eval(parse(text=sprintf("sprintf('%s', %s)", words,
+> > args)), envir=new.env()))
+> >
+> > # A tibble: 3 ? 3
+> >   words                args  combined
+> >   <chr>                <chr> <chr>
+> > 1 %s plus %s equals %s 1,1,2 3 plus 3 equals 6
+> > 2 %s plus %s equals %s 2,2,4 3 plus 3 equals 6
+> > 3 %s plus %s equals %s 3,3,6 3 plus 3 equals 6
+> >
+> > The `combined`  is not what I was expecting, as the same last eval() is
+> > returned for all three rows.
+> >
+> > Am I missing something? What has changed in the past three years?
+> >
+> > Mateo.
+> > --
+> > Mateo Obreg?n
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+>
+>
+> --
+> Statistics & Software Consulting
+> GKX Group, GKX Associates Inc.
+> tel: 1-877-GKX-GROUP
+> email: ggrothendieck at gmail.com
+
+
+
+-- 
+Statistics & Software Consulting
+GKX Group, GKX Associates Inc.
+tel: 1-877-GKX-GROUP
+email: ggrothendieck at gmail.com
+
+
