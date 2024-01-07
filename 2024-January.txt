@@ -1,0 +1,94 @@
+From du@@@@dr|@n @end|ng |rom gm@||@com  Thu Jan  4 10:57:15 2024
+From: du@@@@dr|@n @end|ng |rom gm@||@com (=?UTF-8?B?QWRyaWFuIER1yJlh?=)
+Date: Thu, 4 Jan 2024 11:57:15 +0200
+Subject: [Rd] static html vignette
+Message-ID: <CAJ=0CtCZM4AW_obdmipvd_X9pcF_b2JD49qbbNVpX+Z9VnZwGg@mail.gmail.com>
+
+Dear All,
+
+I learned how to include a static pdf vignette into an R package, using a
+dummy .Rnw file to include an already produced "vignette.pdf" file:
+
+\documentclass{article}
+\usepackage{pdfpages}
+\begin{document}
+\includepdf[pages=-, fitpaper=true]{vignette.pdf}
+\end{document}
+
+I wonder if it would be possible to include an html static vignette. Such
+Rmarkdown (to html) vignettes can be produced using package "knitr", which
+users are forced to install (along with dozens of knitr-dependent packages
+from tidyverse) despite having nothing to do with the package itself.
+
+If at all possible, I would like to avoid having users install "knitr" via
+the Suggests field. I love that package, but I don't like its dependency
+chain.
+
+Thank you for any suggestions,
+Adrian
+
+	[[alternative HTML version deleted]]
+
+
+From kry|ov@r00t @end|ng |rom gm@||@com  Thu Jan  4 11:55:48 2024
+From: kry|ov@r00t @end|ng |rom gm@||@com (Ivan Krylov)
+Date: Thu, 4 Jan 2024 13:55:48 +0300
+Subject: [Rd] static html vignette
+In-Reply-To: <CAJ=0CtCZM4AW_obdmipvd_X9pcF_b2JD49qbbNVpX+Z9VnZwGg@mail.gmail.com>
+References: <CAJ=0CtCZM4AW_obdmipvd_X9pcF_b2JD49qbbNVpX+Z9VnZwGg@mail.gmail.com>
+Message-ID: <20240104135548.03db2b3a@Tarkus>
+
+On Thu, 4 Jan 2024 11:57:15 +0200
+Adrian Du?a <dusa.adrian at gmail.com> wrote:
+
+> I wonder if it would be possible to include an html static vignette. 
+
+This is better suited for R-package-devel, not R-devel.
+
+I would say that static vignettes are against the spirit of vignettes:
+the idea is to provide another layer of unit testing to the package by
+providing a deeper executable example than is possible with just Rd
+examples. I think that Bioconductor will even refuse a package with a
+vignette with no executable code in it.
+
+Still, you can use the R.rsp package to provide static vignettes in
+both PDF and HTML formats:
+https://cran.r-project.org/package=R.rsp/vignettes/R_packages-Static_PDF_and_HTML_vignettes.pdf
+
+This will add 6 packages to your total Suggests budget:
+
+setdiff(
+ unlist(package_dependencies('R.rsp', recursive=TRUE)),
+ unlist(standard_package_names())
+)
+# [1] "R.methodsS3" "R.oo"        "R.utils"     "R.cache"     "digest"  
+
+HTML vignettes currently have much better accessibility than PDF
+vignettes, and the need for a low-dependency-footprint (in terms of
+both R packages and external tools like Pandoc) HTML vignette engine is
+evident <https://github.com/rstats-gsod/gsod2022/issues/5>. It's easy
+to solve this problem ~80% of the way, but making something that ticks
+all the boxes (zero-dependency and/or suitable for inclusion into R
+itself, handles plots *and* math, low-boilerplate, no external
+dependencies like Pandoc or JavaScript CDNs, compact output) is a hard
+problem that's mostly not fun to work on.
+
+The R2HTML package has no non-core hard dependencies and provides an
+HTML Sweave engine, but I'm not sure it can be used in a vignette (and
+it probably needs more maintainer work to be up to modern standards).
+
+The zero-dependency approach will be to bring your own vignette engine
+with you, but that requires lots of additional work (including bug
+workarounds: <https://bugs.r-project.org/show_bug.cgi?id=18191>). I've
+seen CRAN packages that do that, but I cannot find them right now. Yet
+another trick would be to provide a dummy *.Rnw file to trigger the
+vignette-building code and a Makefile in which the real vignette is
+produced (removing the dummy vignette and its intermediate output).
+Again, writing a portable Makefile is non-trivial and only lets you
+work around PR18191.
+
+-- 
+Best regards,
+Ivan
+
+
