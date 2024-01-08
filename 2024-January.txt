@@ -92,3 +92,100 @@ Best regards,
 Ivan
 
 
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Sat Jan  6 18:38:06 2024
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Sat, 6 Jan 2024 09:38:06 -0800
+Subject: [Rd] tools::startDynamicHelp(): Randomly prevents R from exiting
+ (on MS Windows)
+Message-ID: <CAFDcVCSYSQ4zWvGuUdZ0PGC7C50GaRJtfAwqTq172vq30fEnQQ@mail.gmail.com>
+
+ISSUE:
+
+On MS Windows, running cmd.exe, calling
+
+Rscript --vanilla -e "port <- tools::startDynamicHelp(); port; port <-
+tools::startDynamicHelp(FALSE); port"
+
+will sometimes stall R at the end, preventing it from existing.  This
+also happens when running R in interactive mode.  It seems to stem
+from calling tools::startDynamicHelp(FALSE).
+
+Before filing a formal bug report, can someone please confirm this
+behavior? You might have to call it multiple times to hit the bug.
+
+DETAILS:
+
+Microsoft Windows [Version 10.0.19045.3803]
+(c) Microsoft Corporation. All rights reserved.
+
+C:\Users\hb>R --version
+R version 4.3.2 (2023-10-31 ucrt) -- "Eye Holes"
+Copyright (C) 2023 The R Foundation for Statistical Computing
+Platform: x86_64-w64-mingw32/x64 (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under the terms of the
+GNU General Public License versions 2 or 3.
+For more information about these matters see
+https://www.gnu.org/licenses/.
+
+C:\Users\hb> Rscript --vanilla -e "port <- tools::startDynamicHelp();
+port; port <- tools::startDynamicHelp(FALSE); port"
+starting httpd help server ... done
+[1] 18897
+[1] 0
+
+[WORKED]
+
+C:\Users\hb> Rscript --vanilla -e "port <- tools::startDynamicHelp();
+port; port <- tools::startDynamicHelp(FALSE); port"
+starting httpd help server ... done
+[1] 17840
+[1] 0
+
+[STALLED]
+
+Bugwhisperer Bengtsson
+
+
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Sun Jan  7 03:13:15 2024
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Sat, 6 Jan 2024 18:13:15 -0800
+Subject: [Rd] 
+ tools::startDynamicHelp(): Randomly prevents R from exiting
+ (on MS Windows)
+In-Reply-To: <-kCL9HFdp7ApJkMOcy3SQa_-wjC2s5EkS2u8QrZqPdD9UUHVc9mtScrUZgVDrrX3CCa5Z8Bu657o4geN9sXutavIkKrHq9WUeQwOGEC8IE4=@protonmail.com>
+References: <CAFDcVCSYSQ4zWvGuUdZ0PGC7C50GaRJtfAwqTq172vq30fEnQQ@mail.gmail.com>
+ <-kCL9HFdp7ApJkMOcy3SQa_-wjC2s5EkS2u8QrZqPdD9UUHVc9mtScrUZgVDrrX3CCa5Z8Bu657o4geN9sXutavIkKrHq9WUeQwOGEC8IE4=@protonmail.com>
+Message-ID: <CAFDcVCTu9rXfeVvTnR5qDMDJMgpH33HEXSYnq+B9SAUD-LmopQ@mail.gmail.com>
+
+Thank you for confirming this. I just filed PR#18650
+(https://bugs.r-project.org/show_bug.cgi?id=18650).
+
+FWIW, I've found two other issues with startDynamicHelp() prior to this:
+
+* https://bugs.r-project.org/show_bug.cgi?id=18645
+* https://bugs.r-project.org/show_bug.cgi?id=18648
+
+/Henrik
+
+On Sat, Jan 6, 2024 at 5:53?PM Steve Martin <marberts at protonmail.com> wrote:
+>
+> Henrik,
+>
+> I was able to reproduce this both with Rscript and interactively using the same version of R you're using (fresh install) and Windows 10.0.22621.2715. It took about a dozen tries.
+>
+> Steve
+>
+>
+>
+>
+>
+>
+> -------- Original Message --------
+> On Jan 6, 2024, 12:38, Henrik Bengtsson < henrik.bengtsson at gmail.com> wrote:
+>
+>
+> ISSUE: On MS Windows, running cmd.exe, calling Rscript --vanilla -e "port <- tools::startDynamicHelp(); port; port <- tools::startDynamicHelp(FALSE); port" will sometimes stall R at the end, preventing it from existing. This also happens when running R in interactive mode. It seems to stem from calling tools::startDynamicHelp(FALSE). Before filing a formal bug report, can someone please confirm this behavior? You might have to call it multiple times to hit the bug. DETAILS: Microsoft Windows [Version 10.0.19045.3803] (c) Microsoft Corporation. All rights reserved. C:\Users\hb>R --version R version 4.3.2 (2023-10-31 ucrt) -- "Eye Holes" Copyright (C) 2023 The R Foundation for Statistical Computing Platform: x86_64-w64-mingw32/x64 (64-bit) R is free software and comes with ABSOLUTELY NO WARRANTY. You are welcome to redistribute it under the terms of the GNU General Public License versions 2 or 3. For more information about these matters see https://www.gnu.org/licenses/. C:\Users\hb> Rscript --vanilla -e "port <- tools::startDynamicHelp(); port; port <- tools::startDynamicHelp(FALSE); port" starting httpd help server ... done [1] 18897 [1] 0 [WORKED] C:\Users\hb> Rscript --vanilla -e "port <- tools::startDynamicHelp(); port; port <- tools::startDynamicHelp(FALSE); port" starting httpd help server ... done [1] 17840 [1] 0 [STALLED] Bugwhisperer Bengtsson ______________________________________________ R-devel at r-project.org mailing list https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
