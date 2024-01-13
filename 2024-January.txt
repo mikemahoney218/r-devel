@@ -717,3 +717,216 @@ Index: src/main/unique.c
      /* Handle the dots */
 
 
+From me @end|ng |rom h@rmen@toppe|@@n|  Wed Jan 10 22:36:46 2024
+From: me @end|ng |rom h@rmen@toppe|@@n| (Harmen Stoppels)
+Date: Wed, 10 Jan 2024 21:36:46 +0000
+Subject: [Rd] Sys.which() caching path to `which`
+In-Reply-To: <F5607414-92E9-4D46-AD93-8100D9ED6997@R-project.org>
+References: <20240110224331.24ee0edf@Tarkus>
+ <F5607414-92E9-4D46-AD93-8100D9ED6997@R-project.org>
+Message-ID: <smSiCiOj6OVa5cU_i6rZFGKxzIKgEwi_KLsJrvUaxhHlgHjO1S2GT8qHbE3F6Zb2p69GpWrDZB3A_nbcetlUNmX8BLoXfVy8gh3FOn-s2gA=@harmenstoppels.nl>
+
+For context: I don't think Nix and Guix have to relocate anything, cause I think they require absolute paths like /nix/store where all binaries go. Spack on the other hand can install packages w/o sudo to a location of choice, e.g. ~/spack/opt/spack. That's why we have to patch binaries.
+
+However, Spack's relocation stuff is not about creating truly relocatable binaries where everything is referenced by relative paths. We still use absolute paths almost everywhere, it's just that they have to be rewired when the location things are built is different from where they are installed.
+
+I'm sure there are people who would like to have an actually fully relocatable R, but that's not my goal.
+
+> I would claim it is not an unreasonable expectation that the user doesn't delete tools after R was built. Obviously it is tedious, but Spack may need to patch all absolute paths if it wants to relocate things (it's not easy as it includes all linker paths as well FWIW) - they must be doing something like that already as even the R start-up script uses absolute paths
+
+Basically Spack does (a) special handling of the dynamic section of ELF files for Linux / FreeBSD, and load commands of mach-o files for macOS, (b) find & replace of prefixes in text files / scripts and (c) somewhat fancy but still basic replacement of C-strings containing prefixes in binaries.
+
+This works reliably because the package prefixes contain hashes that make false positives unlikely.
+
+It's just that it does not work when the absolute path to be relocated is captured inside serialized bytecode in a zlib-compressed database base.rdb :)
+
+I believe `which` is the only occurrence of this.
+ 
+> That said, WHICH is a mess - it may make sense to switch to the command -v built-in which is part of POSIX (where available - which is almost everywhere today) which would not require an external tool
+
+That sounds like a decent solution to me, probably `command -v` is more commonly available than `which`.
+
+> I don't think this is the only problem Spack has... (and that's just core R - even a bigger can of worms with R packages :P).
+
+We can deal with most issues, just not with compressed byte code.
+
+
+From m@rchywk@ @end|ng |rom hotm@||@com  Thu Jan 11 12:30:43 2024
+From: m@rchywk@ @end|ng |rom hotm@||@com (Mike Marchywka)
+Date: Thu, 11 Jan 2024 11:30:43 +0000
+Subject: [Rd] using Paraview "in-situ" with R?
+In-Reply-To: <450D9456-89A0-4589-B677-F5A524B2928E@gmail.com>
+References: <mailman.53974.3.1704884401.50676.r-devel@r-project.org>
+ <450D9456-89A0-4589-B677-F5A524B2928E@gmail.com>
+Message-ID: <BL3PR11MB63385CEDAE7F3469C6D6189FBE682@BL3PR11MB6338.namprd11.prod.outlook.com>
+
+Thanks. I take it though you see "R" in this role as adding to the capabilities of 
+the viewers, maybe adding some quick model fits over FEM results or something?
+Right now I was imagining working with freefem and rolling my own c++ code
+with supporting use of R code. Ideally I could easily overlay stuff without
+messing around with temp files.  There are a lot of R things, probably
+optimizations etc, that may be nice to view as they progress
+with more than just a figure of merit. 
+Right now I'm just trying to use Runge-Kutta on a simple orbit 
+and the mjmdatascope output is much more useful on-the-fly 
+than text or after the fact.
+
+
+?Mike Marchywka?
+44 Crosscreek Trail
+Jasper GA 30143
+was 306 Charles Cox Drive? Canton, GA 30115
+470-758-0799
+404-788-1216?
+
+
+
+
+________________________________________
+From: George Ostrouchov <georgeost at gmail.com>
+Sent: Wednesday, January 10, 2024 3:06 PM
+To: r-devel at r-project.org
+Cc: Mike Marchywka
+Subject: Re:  [Rd] using Paraview "in-situ" with R?
+
+At ORNL, we worked with VisIt (a sibling of Paraview, both funded largely by DOE) around 2016 and made an in situ demo with R. We used packages pbdMPI (on CRAN) and pbdDMAT (on GitHub/RbigData), which were in part built for this purpose. Later also the package hola (on GitHub/RbigData) was built to connect with adios2, which can do buffered in situ connections with various codes.
+
+But the VisIt developers were not interested in R (preferring to roll their own), so that direction fizzled. Paraview is a competetive sibling of VisIt, so I don?t know if they would be interested. The packages we developed are viable for that purpose. There is a lot in R that could benefit Paraview (or VisIt).
+
+George
+
+>
+> Message: 1
+> Date: Tue, 9 Jan 2024 14:20:17 +0000
+> From: Mike Marchywka <marchywka at hotmail.com>
+> To: R-devel <r-devel at r-project.org>
+> Subject: [Rd] using Paraview "in-situ" with R?
+> Message-ID:
+>       <BL3PR11MB6338D814D9A3FF932D7E7F49BE6A2 at BL3PR11MB6338.namprd11.prod.outlook.com>
+>
+> Content-Type: text/plain; charset="iso-8859-1"
+>
+> I had previously asked about R interfaces to various "other" visualization
+> tools specifically lightweights for monitoring progress of
+> various codes. I was working on this,
+>
+> https://github.com/mmarchywka/mjmdatascope
+>
+> but in the meantime found out that Paraview has an "in-situ"
+> capability for similar objectives.
+>
+> https://discourse.paraview.org/t/does-or-can-paraview-support-streaming-input/13637/9
+>
+> While R does have a lot of plotting features,
+> it seems like an excellent tool to interface to R allowing visualization without
+> a bunch of temp files or
+>
+> Is anyone aware of anyone doing this interface or reasons its  a boondoggle?
+>
+> Thanks.
+>
+>
+>
+>  Mike Marchywka
+> 44 Crosscreek Trail
+> Jasper GA 30143
+> was 306 Charles Cox Drive  Canton, GA 30115
+> 470-758-0799
+> 404-788-1216
+>
+
+
+
+From georgeo@t @end|ng |rom gm@||@com  Thu Jan 11 18:41:05 2024
+From: georgeo@t @end|ng |rom gm@||@com (George Ostrouchov)
+Date: Thu, 11 Jan 2024 12:41:05 -0500
+Subject: [Rd] using Paraview "in-situ" with R?
+In-Reply-To: <BL3PR11MB63385CEDAE7F3469C6D6189FBE682@BL3PR11MB6338.namprd11.prod.outlook.com>
+References: <mailman.53974.3.1704884401.50676.r-devel@r-project.org>
+ <450D9456-89A0-4589-B677-F5A524B2928E@gmail.com>
+ <BL3PR11MB63385CEDAE7F3469C6D6189FBE682@BL3PR11MB6338.namprd11.prod.outlook.com>
+Message-ID: <A7B623F5-9619-4EFF-97C4-7B4AAE8B2A21@gmail.com>
+
+Thanks for adding more explanation. As Ivan Krylov mentioned earlier, this sounds like an idea for developing an R package. The viewers and R largely operate in communities that so far have little interaction and both can benefit from ideas in the other. 
+
+George
+
+> On Jan 11, 2024, at 6:30?AM, Mike Marchywka <marchywka at hotmail.com> wrote:
+> 
+> Thanks. I take it though you see "R" in this role as adding to the capabilities of 
+> the viewers, maybe adding some quick model fits over FEM results or something?
+> Right now I was imagining working with freefem and rolling my own c++ code
+> with supporting use of R code. Ideally I could easily overlay stuff without
+> messing around with temp files.  There are a lot of R things, probably
+> optimizations etc, that may be nice to view as they progress
+> with more than just a figure of merit. 
+> Right now I'm just trying to use Runge-Kutta on a simple orbit 
+> and the mjmdatascope output is much more useful on-the-fly 
+> than text or after the fact.
+> 
+> 
+>  Mike Marchywka 
+> 44 Crosscreek Trail
+> Jasper GA 30143
+> was 306 Charles Cox Drive  Canton, GA 30115
+> 470-758-0799
+> 404-788-1216 
+> 
+> 
+> 
+> 
+> ________________________________________
+> From: George Ostrouchov <georgeost at gmail.com>
+> Sent: Wednesday, January 10, 2024 3:06 PM
+> To: r-devel at r-project.org
+> Cc: Mike Marchywka
+> Subject: Re:  [Rd] using Paraview "in-situ" with R?
+> 
+> At ORNL, we worked with VisIt (a sibling of Paraview, both funded largely by DOE) around 2016 and made an in situ demo with R. We used packages pbdMPI (on CRAN) and pbdDMAT (on GitHub/RbigData), which were in part built for this purpose. Later also the package hola (on GitHub/RbigData) was built to connect with adios2, which can do buffered in situ connections with various codes.
+> 
+> But the VisIt developers were not interested in R (preferring to roll their own), so that direction fizzled. Paraview is a competetive sibling of VisIt, so I don?t know if they would be interested. The packages we developed are viable for that purpose. There is a lot in R that could benefit Paraview (or VisIt).
+> 
+> George
+> 
+>> 
+>> Message: 1
+>> Date: Tue, 9 Jan 2024 14:20:17 +0000
+>> From: Mike Marchywka <marchywka at hotmail.com>
+>> To: R-devel <r-devel at r-project.org>
+>> Subject: [Rd] using Paraview "in-situ" with R?
+>> Message-ID:
+>>      <BL3PR11MB6338D814D9A3FF932D7E7F49BE6A2 at BL3PR11MB6338.namprd11.prod.outlook.com>
+>> 
+>> Content-Type: text/plain; charset="iso-8859-1"
+>> 
+>> I had previously asked about R interfaces to various "other" visualization
+>> tools specifically lightweights for monitoring progress of
+>> various codes. I was working on this,
+>> 
+>> https://github.com/mmarchywka/mjmdatascope
+>> 
+>> but in the meantime found out that Paraview has an "in-situ"
+>> capability for similar objectives.
+>> 
+>> https://discourse.paraview.org/t/does-or-can-paraview-support-streaming-input/13637/9
+>> 
+>> While R does have a lot of plotting features,
+>> it seems like an excellent tool to interface to R allowing visualization without
+>> a bunch of temp files or
+>> 
+>> Is anyone aware of anyone doing this interface or reasons its  a boondoggle?
+>> 
+>> Thanks.
+>> 
+>> 
+>> 
+>> Mike Marchywka
+>> 44 Crosscreek Trail
+>> Jasper GA 30143
+>> was 306 Charles Cox Drive  Canton, GA 30115
+>> 470-758-0799
+>> 404-788-1216
+>> 
+> 
+
+
