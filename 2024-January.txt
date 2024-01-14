@@ -930,3 +930,464 @@ George
 > 
 
 
+From d|pter|x@w@ng @end|ng |rom gm@||@com  Fri Jan 12 06:11:45 2024
+From: d|pter|x@w@ng @end|ng |rom gm@||@com (Dipterix Wang)
+Date: Fri, 12 Jan 2024 00:11:45 -0500
+Subject: [Rd] Choices to remove `srcref` (and its buddies) when serializing
+ objects
+Message-ID: <0FEDCC6B-B07A-48B1-8CF7-E130BEBB0A7D@gmail.com>
+
+Dear R devs,
+
+I was digging into a package issue today when I realized R serialize function not always generate the same results on equivalent objects when users choose to run differently. For example, the following code
+
+serialize(with(new.env(), { function(){} }), NULL, TRUE)
+
+generates different results when I copy-paste into console vs when I use ctrl+shift+enter to source the file in RStudio. 
+
+With a deeper inspect into the cause, I found that function and language get source reference when getOption("keep.source") is TRUE. This means the source reference will make the functions different while in most cases, whether keeping function source might not impact how a function behaves.
+
+While it's OK that function serialize generates different results, functions such as `rlang::hash` and `digest::digest`, which depend on `serialize` might eventually deliver false positives on same inputs. I've checked source code in digest package hoping to get around this issue (for example serialize(..., refhook = ...)). However, my workaround did not work. It seems that the markers to the objects are different even if I used `refhook` to force srcref to be the same. I also tried `removeSource` and `rlang::zap_srcref`. None of them works directly on nested environments with multiple functions. 
+
+I wonder how hard it would be to have options to discard source when serializing R objects? 
+
+Currently my analyses heavily depend on digest function to generate file caches and automatically schedule pipelines (to update cache) when changes are detected. The pipelines save the hashes of source code, inputs, and outputs together so other people can easily verify the calculation without accessing the original data (which could be sensitive), or running hour-long analyses, or having to buy servers. All of these require `serialize` to produce the same results regardless of how users choose to run the code.
+
+It would be great if this feature could be in the future R. Other pipeline packages such as `targets` and `drake` can also benefit from it.
+
+Thanks,
+
+- Dipterix
+	[[alternative HTML version deleted]]
+
+
+From |kry|ov @end|ng |rom d|@root@org  Fri Jan 12 09:42:33 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Fri, 12 Jan 2024 11:42:33 +0300
+Subject: [Rd] 
+ Choices to remove `srcref` (and its buddies) when serializing
+ objects
+In-Reply-To: <0FEDCC6B-B07A-48B1-8CF7-E130BEBB0A7D@gmail.com>
+References: <0FEDCC6B-B07A-48B1-8CF7-E130BEBB0A7D@gmail.com>
+Message-ID: <20240112114233.553a254e@Tarkus>
+
+? Fri, 12 Jan 2024 00:11:45 -0500
+Dipterix Wang <dipterix.wang at gmail.com> ?????:
+
+> I wonder how hard it would be to have options to discard source when
+> serializing R objects? 
+
+> Currently my analyses heavily depend on digest function to generate
+> file caches and automatically schedule pipelines (to update cache)
+> when changes are detected.
+
+Source references may be the main problem here, but not the only one.
+There are also string encodings and function bytecode (which may or may
+not be present and probably changes between R versions). I've been
+collecting the ways that the objects that are identical() to each other
+can serialize() differently in my package 'depcache'; I'm sure I missed
+a few.
+
+Admittedly, string encodings are less important nowadays (except on
+older Windows and weirdly set up Unix-like systems). Thankfully, the
+digest package already knows to skip the serialization header (which
+contains the current version of R).
+
+serialize() only knows about basic types [*], and source references are
+implemented on top of these as objects of class 'srcref'. Sometimes
+they are attached as attributes to other objects, other times (e.g. in
+quote(function(){}), [**]) just sitting there as arguments to a call.
+
+Sometimes you can hash the output of deparse(x) instead of serialize(x)
+[***]. Text representations aren't without their own problems (e.g.
+IEEE floating-point numbers not being representable as decimal
+fractions), but at least deparsing both ignores the source references
+and punts the encoding problem to the abstraction layer above it:
+deparse() is the same for both '\uff' and iconv('\uff', 'UTF-8',
+'latin1'): just "?".
+
+Unfortunately, this doesn't solve the environment problem. For these,
+you really need a way to canonicalize the reference-semantics objects
+before serializing them without changing the originals, even in cases
+like a <- new.env(); b <- new.env(); a$x <- b; b$x <- a. I'm not sure
+that reference hooks can help with that. In order to implement it
+properly, the fixup process will have to rely on global state and keep
+weak references to the environments it visits and creates shadow copies
+of.
+
+I think it's not impossible to implement
+serialize_to_canonical_representation() for an R package, but it will
+be a lot of work to decide which parts are canonical and which should
+be discarded.
+
+-- 
+Best regards,
+Ivan
+
+[*]
+https://cran.r-project.org/doc/manuals/R-ints.html#Serialization-Formats
+
+[**]
+https://bugs.r-project.org/show_bug.cgi?id=18638
+
+[***]
+https://stat.ethz.ch/pipermail/r-devel/2023-March/082505.html
+
+
+From |kry|ov @end|ng |rom d|@root@org  Fri Jan 12 16:11:25 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Fri, 12 Jan 2024 18:11:25 +0300
+Subject: [Rd] Sys.which() caching path to `which`
+In-Reply-To: <F5607414-92E9-4D46-AD93-8100D9ED6997@R-project.org>
+References: <20240110224331.24ee0edf@Tarkus>
+ <F5607414-92E9-4D46-AD93-8100D9ED6997@R-project.org>
+Message-ID: <20240112181125.7616fc6e@arachnoid>
+
+On Thu, 11 Jan 2024 09:30:55 +1300
+Simon Urbanek <simon.urbanek at R-project.org> wrote:
+
+> That said, WHICH is a mess - it may make sense to switch to the
+> command -v built-in which is part of POSIX (where available - which
+> is almost everywhere today) which would not require an external tool
+
+This is a bit tricky to implement. I've prepared the patch at the end
+of this e-mail, tested it on GNU/Linux and tried to test on OpenBSD [*]
+(I cannot test on a Mac), but then I realised one crucial detail:
+unlike `which`, `command -v` returns names of shell builtins if
+something is both an executable and a builtin. So for things like `[`,
+Sys.which would behave differently if changed to use command -v:
+
+$ sh -c 'which ['
+/usr/bin/[
+$ sh -c 'command -v ['
+[
+
+R checks the returned string with file.exists(), so the new
+Sys.which('[') returns an empty string instead of /usr/bin/[. That's
+probably undesirable, isn't it?
+
+Index: configure
+===================================================================
+--- configure	(revision 85802)
++++ configure	(working copy)
+@@ -949,7 +949,6 @@
+ PDFTEX
+ TEX
+ PAGER
+-WHICH
+ SED
+ INSTALL_DATA
+ INSTALL_SCRIPT
+@@ -5390,66 +5389,6 @@
+ done
+ test -n "$SED" || SED="/bin/sed"
+ 
+-
+-## 'which' is not POSIX, and might be a shell builtin or alias
+-##  (but should not be in 'sh')
+-for ac_prog in which
+-do
+-  # Extract the first word of "$ac_prog", so it can be a program name with args.
+-set dummy $ac_prog; ac_word=$2
+-{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for $ac_word" >&5
+-printf %s "checking for $ac_word... " >&6; }
+-if test ${ac_cv_path_WHICH+y}
+-then :
+-  printf %s "(cached) " >&6
+-else $as_nop
+-  case $WHICH in
+-  [\\/]* | ?:[\\/]*)
+-  ac_cv_path_WHICH="$WHICH" # Let the user override the test with a path.
+-  ;;
+-  *)
+-  as_save_IFS=$IFS; IFS=$PATH_SEPARATOR
+-for as_dir in $PATH
+-do
+-  IFS=$as_save_IFS
+-  case $as_dir in #(((
+-    '') as_dir=./ ;;
+-    */) ;;
+-    *) as_dir=$as_dir/ ;;
+-  esac
+-    for ac_exec_ext in '' $ac_executable_extensions; do
+-  if as_fn_executable_p "$as_dir$ac_word$ac_exec_ext"; then
+-    ac_cv_path_WHICH="$as_dir$ac_word$ac_exec_ext"
+-    printf "%s\n" "$as_me:${as_lineno-$LINENO}: found $as_dir$ac_word$ac_exec_ext" >&5
+-    break 2
+-  fi
+-done
+-  done
+-IFS=$as_save_IFS
+-
+-  ;;
+-esac
+-fi
+-WHICH=$ac_cv_path_WHICH
+-if test -n "$WHICH"; then
+-  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $WHICH" >&5
+-printf "%s\n" "$WHICH" >&6; }
+-else
+-  { printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+-printf "%s\n" "no" >&6; }
+-fi
+-
+-
+-  test -n "$WHICH" && break
+-done
+-test -n "$WHICH" || WHICH="which"
+-
+-if test "${WHICH}" = which ; then
+-  ## needed to build and run R
+-  ## ends up hard-coded in the utils package
+-  as_fn_error $? "which is required but missing" "$LINENO" 5
+-fi
+-
+ ## Make
+ : ${MAKE=make}
+ 
+Index: configure.ac
+===================================================================
+--- configure.ac	(revision 85802)
++++ configure.ac	(working copy)
+@@ -680,15 +680,6 @@
+ ## we would like a POSIX sed, and need one on Solaris
+ AC_PATH_PROGS(SED, sed, /bin/sed, [/usr/xpg4/bin:$PATH])
+ 
+-## 'which' is not POSIX, and might be a shell builtin or alias
+-##  (but should not be in 'sh')
+-AC_PATH_PROGS(WHICH, which, which)
+-if test "${WHICH}" = which ; then
+-  ## needed to build and run R
+-  ## ends up hard-coded in the utils package
+-  AC_MSG_ERROR([[which is required but missing]])
+-fi
+-
+ ## Make
+ : ${MAKE=make}
+ AC_SUBST(MAKE)
+Index: src/library/base/Makefile.in
+===================================================================
+--- src/library/base/Makefile.in	(revision 85802)
++++ src/library/base/Makefile.in	(working copy)
+@@ -28,7 +28,7 @@
+ all: Makefile DESCRIPTION
+ 	@$(ECHO) "building package '$(pkg)'"
+ 	@$(MKINSTALLDIRS) $(top_builddir)/library/$(pkg)
+-	@WHICH="@WHICH@" $(MAKE) mkRbase mkdesc2 mkdemos2
++	@$(MAKE) mkRbase mkdesc2 mkdemos2
+ 	@$(INSTALL_DATA) $(srcdir)/inst/CITATION $(top_builddir)/library/$(pkg)
+ 
+ include $(top_srcdir)/share/make/basepkg.mk
+@@ -45,12 +45,12 @@
+ mkR: mkRbase
+ 
+ Rsimple:
+-	@WHICH="@WHICH@" $(MAKE) mkRbase mkRsimple
++	@$(MAKE) mkRbase mkRsimple
+ 
+ ## Remove files to allow this to be done repeatedly
+ Rlazy:
+ 	- at rm -f  $(top_builddir)/library/$(pkg)/R/$(pkg)*
+-	@WHICH="@WHICH@" $(MAKE) mkRbase
++	@$(MAKE) mkRbase
+ 	@cat $(srcdir)/makebasedb.R | \
+ 	  R_DEFAULT_PACKAGES=NULL LC_ALL=C $(R_EXE) > /dev/null
+ 	@$(INSTALL_DATA) $(srcdir)/baseloader.R \
+@@ -57,4 +57,4 @@
+ 	  $(top_builddir)/library/$(pkg)/R/$(pkg)
+ 
+ Rlazycomp:
+-	@WHICH="@WHICH@" $(MAKE) mkRbase mklazycomp
++	@$(MAKE) mkRbase mklazycomp
+Index: src/library/base/R/unix/system.unix.R
+===================================================================
+--- src/library/base/R/unix/system.unix.R	(revision 85802)
++++ src/library/base/R/unix/system.unix.R	(working copy)
+@@ -114,23 +114,14 @@
+ Sys.which <- function(names)
+ {
+     res <- character(length(names)); names(res) <- names
+-    ## hopefully configure found [/usr]/bin/which
+-    which <- "@WHICH@"
+-    if (!nzchar(which)) {
+-        warning("'which' was not found on this platform")
+-        return(res)
+-    }
+     for(i in seq_along(names)) {
+         if(is.na(names[i])) {res[i] <- NA; next}
+         ## Quoting was added in 3.0.0
+-        ans <- suppressWarnings(system(paste(which, shQuote(names[i])),
+-                                       intern = TRUE, ignore.stderr = TRUE))
+-        ## Solaris' which gives 'no foo in ...' message on stdout,
+-        ## GNU which does it on stderr
+-        if(grepl("solaris", R.version$os)) {
+-            tmp <- strsplit(ans[1], " ", fixed = TRUE)[[1]]
+-            if(identical(tmp[1:3], c("no", i, "in"))) ans <- ""
+-        }
++        ans <- tryCatch(
++            suppressWarnings(system(paste("command -v", shQuote(names[i])),
++                                          intern = TRUE, ignore.stderr = TRUE)),
++            error = \(e) ""
++        )
+         res[i] <- if(length(ans)) ans[1] else ""
+         ## final check that this is a real path and not an error message
+         if(!file.exists(res[i])) res[i] <- ""
+
+
+-- 
+Best regards,
+Ivan
+
+[*] example(Sys.which()) works, but there are multiple problems
+elsewhere, e.g. tan(1+1000i) returns NaN+1i and Matrix doesn't install
+without gmake
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Fri Jan 12 17:33:30 2024
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Fri, 12 Jan 2024 17:33:30 +0100
+Subject: [Rd] 
+ Choices to remove `srcref` (and its buddies) when serializing
+ objects
+In-Reply-To: <0FEDCC6B-B07A-48B1-8CF7-E130BEBB0A7D@gmail.com>
+References: <0FEDCC6B-B07A-48B1-8CF7-E130BEBB0A7D@gmail.com>
+Message-ID: <577d4e34-7abc-4aa9-b850-09ed71c73bd5@gmail.com>
+
+
+On 1/12/24 06:11, Dipterix Wang wrote:
+> Dear R devs,
+>
+> I was digging into a package issue today when I realized R serialize function not always generate the same results on equivalent objects when users choose to run differently. For example, the following code
+>
+> serialize(with(new.env(), { function(){} }), NULL, TRUE)
+>
+> generates different results when I copy-paste into console vs when I use ctrl+shift+enter to source the file in RStudio.
+>
+> With a deeper inspect into the cause, I found that function and language get source reference when getOption("keep.source") is TRUE. This means the source reference will make the functions different while in most cases, whether keeping function source might not impact how a function behaves.
+>
+> While it's OK that function serialize generates different results, functions such as `rlang::hash` and `digest::digest`, which depend on `serialize` might eventually deliver false positives on same inputs. I've checked source code in digest package hoping to get around this issue (for example serialize(..., refhook = ...)). However, my workaround did not work. It seems that the markers to the objects are different even if I used `refhook` to force srcref to be the same. I also tried `removeSource` and `rlang::zap_srcref`. None of them works directly on nested environments with multiple functions.
+>
+> I wonder how hard it would be to have options to discard source when serializing R objects?
+>
+> Currently my analyses heavily depend on digest function to generate file caches and automatically schedule pipelines (to update cache) when changes are detected. The pipelines save the hashes of source code, inputs, and outputs together so other people can easily verify the calculation without accessing the original data (which could be sensitive), or running hour-long analyses, or having to buy servers. All of these require `serialize` to produce the same results regardless of how users choose to run the code.
+>
+> It would be great if this feature could be in the future R. Other pipeline packages such as `targets` and `drake` can also benefit from it.
+
+I don't think such functionality would belong to serialize(). This 
+function is not meant to produce stable results based on the input, the 
+serialized representation may even differ based on properties not seen 
+by users.
+
+I think an option to ignore source code would belong to a function that 
+computes the hash, as other options of identical().
+
+Tomas
+
+
+> Thanks,
+>
+> - Dipterix
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From z@yne@hunter @end|ng |rom b@u@edu  Fri Jan 12 20:50:29 2024
+From: z@yne@hunter @end|ng |rom b@u@edu (Hunter, Zayne)
+Date: Fri, 12 Jan 2024 19:50:29 +0000
+Subject: [Rd] ADA Compliance
+Message-ID: <D31D66EF-4057-4695-85F0-5EE61D47E100@bsu.edu>
+
+Hello,
+
+
+I am working with Ball State University to obtain a license of R. As part of our requirements for obtaining new software, we must review the VPAT for ADA compliance. Can you provide this information for me?
+
+Thanks,
+
+
+Zayne Hunter
+Technology Advisor & Vendor Relations Manager
+Ball State University
+zayne.hunter at bsu.edu
+(765)285-7853
+
+
+
+
+
+
+	[[alternative HTML version deleted]]
+
+
+From bbo|ker @end|ng |rom gm@||@com  Sat Jan 13 00:14:29 2024
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Fri, 12 Jan 2024 18:14:29 -0500
+Subject: [Rd] ADA Compliance
+In-Reply-To: <D31D66EF-4057-4695-85F0-5EE61D47E100@bsu.edu>
+References: <D31D66EF-4057-4695-85F0-5EE61D47E100@bsu.edu>
+Message-ID: <6c2e35fc-b868-40a6-967a-8fe08f9ec602@gmail.com>
+
+  I would be very surprised if anyone had written up a VPAT 
+<https://www.section508.gov/sell/vpat/> for R.
+
+   It won't help you with the bureaucratic requirements, but R is in 
+fact very accessible to visually impaired users: e.g. see
+
+ 
+https://community.rstudio.com/t/accessibility-of-r-rstudio-compared-to-excel-for-student-that-is-legally-blind/103849/3
+
+ From https://github.com/ajrgodfrey/BrailleR
+
+ > R is perhaps the most blind-friendly statistical software option 
+because all scripts can be written in plain text, using the text editor 
+a user prefers, and all output can be saved in a wide range of file 
+formats. The advent of R markdown and other reproducible research 
+techniques can offer the blind user a degree of efficiency that is not 
+offered in many other statistical software options. In addition, the 
+processed Rmd files are usually HTML which are the best supported files 
+in terms of screen reader development.
+
+   (And there is continued attention to making sure R stays accessible 
+in this way: 
+https://stat.ethz.ch/pipermail/r-devel/2022-December/082180.html; 
+https://stat.ethz.ch/pipermail/r-devel/2023-February/082313.html)
+
+   R is also easy to use without a mouse, which should improve 
+accessibility for users with neuromuscular conditions.
+
+    cheers
+     Ben Bolker
+
+
+
+
+On 2024-01-12 2:50 p.m., Hunter, Zayne via R-devel wrote:
+> Hello,
+> 
+> 
+> I am working with Ball State University to obtain a license of R. As part of our requirements for obtaining new software, we must review the VPAT for ADA compliance. Can you provide this information for me?
+> 
+> Thanks,
+> 
+> 
+> Zayne Hunter
+> Technology Advisor & Vendor Relations Manager
+> Ball State University
+> zayne.hunter at bsu.edu
+> (765)285-7853
+> 
+> 
+> 
+> 
+> 
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
