@@ -2369,3 +2369,676 @@ https://www.r-project.org/Licenses/#:~:text=R%20as%20a%20package%20is,%2C%20whic
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Wed Jan 17 10:31:40 2024
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Wed, 17 Jan 2024 10:31:40 +0100
+Subject: [Rd] 
+ Choices to remove `srcref` (and its buddies) when serializing
+ objects
+In-Reply-To: <03DDB869-9969-44DF-82FC-2A6675D0FE2C@gmail.com>
+References: <0FEDCC6B-B07A-48B1-8CF7-E130BEBB0A7D@gmail.com>
+ <577d4e34-7abc-4aa9-b850-09ed71c73bd5@gmail.com>
+ <03DDB869-9969-44DF-82FC-2A6675D0FE2C@gmail.com>
+Message-ID: <0314235b-d9a7-4f37-a14f-d365459a149a@gmail.com>
+
+On 1/16/24 20:16, Dipterix Wang wrote:
+> Could you recommend any packages/functions that compute hash such that 
+> the source references and sexpinfo_struct are ignored? Basically a 
+> version of `serialize` that convert R objects to raw without storing 
+> the ancillary source reference and sexpinfo.
+> I think most people would think of `digest` but that package uses 
+> `serialize` (see discussion 
+> https://github.com/eddelbuettel/digest/issues/200#issuecomment-1894289875)
+
+I think one could implement hashing on the fly without any 
+serialization, similarly to how identical works, but I am not aware of 
+any existing implementation. Again, if that wasn't clear: I don't think 
+trying to compute a hash of an object from its serialized representation 
+is a good idea - it is of course convenient, but has problems like the 
+one you have ran into.
+
+In some applications it may still be good enough: if by various tweaks, 
+such as ensuring source references are off in your case, you achieve a 
+state when false alarms are rare (identical objects have different 
+hashes), and hence say unnecessary re-computation is rare, maybe it is 
+good enough.
+
+Tomas
+
+>
+>> On Jan 12, 2024, at 11:33?AM, Tomas Kalibera 
+>> <tomas.kalibera at gmail.com> wrote:
+>>
+>>
+>> On 1/12/24 06:11, Dipterix Wang wrote:
+>>> Dear R devs,
+>>>
+>>> I was digging into a package issue today when I realized R serialize 
+>>> function not always generate the same results on equivalent objects 
+>>> when users choose to run differently. For example, the following code
+>>>
+>>> serialize(with(new.env(), { function(){} }), NULL, TRUE)
+>>>
+>>> generates different results when I copy-paste into console vs when I 
+>>> use ctrl+shift+enter to source the file in RStudio.
+>>>
+>>> With a deeper inspect into the cause, I found that function and 
+>>> language get source reference when getOption("keep.source") is TRUE. 
+>>> This means the source reference will make the functions different 
+>>> while in most cases, whether keeping function source might not 
+>>> impact how a function behaves.
+>>>
+>>> While it's OK that function serialize generates different results, 
+>>> functions such as `rlang::hash` and `digest::digest`, which depend 
+>>> on `serialize` might eventually deliver false positives on same 
+>>> inputs. I've checked source code in digest package hoping to get 
+>>> around this issue (for example serialize(..., refhook = ...)). 
+>>> However, my workaround did not work. It seems that the markers to 
+>>> the objects are different even if I used `refhook` to force srcref 
+>>> to be the same. I also tried `removeSource` and `rlang::zap_srcref`. 
+>>> None of them works directly on nested environments with multiple 
+>>> functions.
+>>>
+>>> I wonder how hard it would be to have options to discard source when 
+>>> serializing R objects?
+>>>
+>>> Currently my analyses heavily depend on digest function to generate 
+>>> file caches and automatically schedule pipelines (to update cache) 
+>>> when changes are detected. The pipelines save the hashes of source 
+>>> code, inputs, and outputs together so other people can easily verify 
+>>> the calculation without accessing the original data (which could be 
+>>> sensitive), or running hour-long analyses, or having to buy servers. 
+>>> All of these require `serialize` to produce the same results 
+>>> regardless of how users choose to run the code.
+>>>
+>>> It would be great if this feature could be in the future R. Other 
+>>> pipeline packages such as `targets` and `drake` can also benefit 
+>>> from it.
+>>
+>> I don't think such functionality would belong to serialize(). This 
+>> function is not meant to produce stable results based on the input, 
+>> the serialized representation may even differ based on properties not 
+>> seen by users.
+>>
+>> I think an option to ignore source code would belong to a function 
+>> that computes the hash, as other options of identical().
+>>
+>> Tomas
+>>
+>>
+>>> Thanks,
+>>>
+>>> - Dipterix
+>>> [[alternative HTML version deleted]]
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.orgmailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From ||one| @end|ng |rom po@|t@co  Wed Jan 17 11:32:59 2024
+From: ||one| @end|ng |rom po@|t@co (Lionel Henry)
+Date: Wed, 17 Jan 2024 11:32:59 +0100
+Subject: [Rd] 
+ Choices to remove `srcref` (and its buddies) when serializing
+ objects
+In-Reply-To: <0314235b-d9a7-4f37-a14f-d365459a149a@gmail.com>
+References: <0FEDCC6B-B07A-48B1-8CF7-E130BEBB0A7D@gmail.com>
+ <577d4e34-7abc-4aa9-b850-09ed71c73bd5@gmail.com>
+ <03DDB869-9969-44DF-82FC-2A6675D0FE2C@gmail.com>
+ <0314235b-d9a7-4f37-a14f-d365459a149a@gmail.com>
+Message-ID: <CAJf4E3pcHtdGKpVX5SPGOKMFGRxQ505ivToTQQuzKxtxZqmmXw@mail.gmail.com>
+
+> I think one could implement hashing on the fly without any
+> serialization, similarly to how identical works, but I am not aware of
+> any existing implementation
+
+We have one in vctrs but it's not exported:
+https://github.com/r-lib/vctrs/blob/main/src/hash.c
+
+The main use is vectorised hashing:
+
+```
+# Non-vectorised
+vctrs:::obj_hash(1:10)
+#> [1] 1e 77 ce 48
+
+# Vectorised
+vctrs:::vec_hash(1L)
+#> [1] 70 a2 85 ef
+vctrs:::vec_hash(1:2)
+#> [1] 70 a2 85 ef bf 3c 2c cf
+
+# vctrs semantics so dfs are vectors of rows
+length(vctrs:::vec_hash(mtcars)) / 4
+#> [1] 32
+nrow(mtcars)
+#> [1] 32
+```
+
+Best,
+Lionel
+
+On Wed, Jan 17, 2024 at 10:32?AM Tomas Kalibera
+<tomas.kalibera at gmail.com> wrote:
+>
+> On 1/16/24 20:16, Dipterix Wang wrote:
+> > Could you recommend any packages/functions that compute hash such that
+> > the source references and sexpinfo_struct are ignored? Basically a
+> > version of `serialize` that convert R objects to raw without storing
+> > the ancillary source reference and sexpinfo.
+> > I think most people would think of `digest` but that package uses
+> > `serialize` (see discussion
+> > https://github.com/eddelbuettel/digest/issues/200#issuecomment-1894289875)
+>
+> I think one could implement hashing on the fly without any
+> serialization, similarly to how identical works, but I am not aware of
+> any existing implementation. Again, if that wasn't clear: I don't think
+> trying to compute a hash of an object from its serialized representation
+> is a good idea - it is of course convenient, but has problems like the
+> one you have ran into.
+>
+> In some applications it may still be good enough: if by various tweaks,
+> such as ensuring source references are off in your case, you achieve a
+> state when false alarms are rare (identical objects have different
+> hashes), and hence say unnecessary re-computation is rare, maybe it is
+> good enough.
+>
+> Tomas
+>
+> >
+> >> On Jan 12, 2024, at 11:33?AM, Tomas Kalibera
+> >> <tomas.kalibera at gmail.com> wrote:
+> >>
+> >>
+> >> On 1/12/24 06:11, Dipterix Wang wrote:
+> >>> Dear R devs,
+> >>>
+> >>> I was digging into a package issue today when I realized R serialize
+> >>> function not always generate the same results on equivalent objects
+> >>> when users choose to run differently. For example, the following code
+> >>>
+> >>> serialize(with(new.env(), { function(){} }), NULL, TRUE)
+> >>>
+> >>> generates different results when I copy-paste into console vs when I
+> >>> use ctrl+shift+enter to source the file in RStudio.
+> >>>
+> >>> With a deeper inspect into the cause, I found that function and
+> >>> language get source reference when getOption("keep.source") is TRUE.
+> >>> This means the source reference will make the functions different
+> >>> while in most cases, whether keeping function source might not
+> >>> impact how a function behaves.
+> >>>
+> >>> While it's OK that function serialize generates different results,
+> >>> functions such as `rlang::hash` and `digest::digest`, which depend
+> >>> on `serialize` might eventually deliver false positives on same
+> >>> inputs. I've checked source code in digest package hoping to get
+> >>> around this issue (for example serialize(..., refhook = ...)).
+> >>> However, my workaround did not work. It seems that the markers to
+> >>> the objects are different even if I used `refhook` to force srcref
+> >>> to be the same. I also tried `removeSource` and `rlang::zap_srcref`.
+> >>> None of them works directly on nested environments with multiple
+> >>> functions.
+> >>>
+> >>> I wonder how hard it would be to have options to discard source when
+> >>> serializing R objects?
+> >>>
+> >>> Currently my analyses heavily depend on digest function to generate
+> >>> file caches and automatically schedule pipelines (to update cache)
+> >>> when changes are detected. The pipelines save the hashes of source
+> >>> code, inputs, and outputs together so other people can easily verify
+> >>> the calculation without accessing the original data (which could be
+> >>> sensitive), or running hour-long analyses, or having to buy servers.
+> >>> All of these require `serialize` to produce the same results
+> >>> regardless of how users choose to run the code.
+> >>>
+> >>> It would be great if this feature could be in the future R. Other
+> >>> pipeline packages such as `targets` and `drake` can also benefit
+> >>> from it.
+> >>
+> >> I don't think such functionality would belong to serialize(). This
+> >> function is not meant to produce stable results based on the input,
+> >> the serialized representation may even differ based on properties not
+> >> seen by users.
+> >>
+> >> I think an option to ignore source code would belong to a function
+> >> that computes the hash, as other options of identical().
+> >>
+> >> Tomas
+> >>
+> >>
+> >>> Thanks,
+> >>>
+> >>> - Dipterix
+> >>> [[alternative HTML version deleted]]
+> >>>
+> >>> ______________________________________________
+> >>> R-devel at r-project.orgmailing list
+> >>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @ndre@@@|oe|||er @end|ng |rom gm@||@com  Wed Jan 17 11:55:21 2024
+From: @ndre@@@|oe|||er @end|ng |rom gm@||@com (=?UTF-8?Q?Andreas_L=C3=B6ffler?=)
+Date: Wed, 17 Jan 2024 11:55:21 +0100
+Subject: [Rd] cwilcox - new version
+In-Reply-To: <B2822054-B1A2-4DE1-8E70-EAD0E341038C@pitt.edu>
+References: <CAJS5q+w40p-8KEAPBa1wqH8yo9=vuPxSJTSuQ+ajfh=J2ecqdQ@mail.gmail.com>
+ <09E1CF97-A9CA-4060-94C7-C892FA4754D0@pitt.edu>
+ <B2822054-B1A2-4DE1-8E70-EAD0E341038C@pitt.edu>
+Message-ID: <CAJS5q+z5RGikZTb_Zk8QZcCRU8WocNJuzXwvR+LY=-q4b+UcZQ@mail.gmail.com>
+
+>
+>
+> Performance statistics are interesting. If we assume the two populations
+> have a total of `m` members, then this implementation runs slightly slower
+> for m < 20, and much slower for 50 < m < 100. However, this implementation
+> works significantly *faster* for m > 200. The breakpoint is precisely when
+> each population has a size of 50; `qwilcox(0.5,50,50)` runs in 8
+> microseconds in the current version, but `qwilcox(0.5, 50, 51)` runs in 5
+> milliseconds. The new version runs in roughly 1 millisecond for both. This
+> is probably because of internal logic that requires many more `free/calloc`
+> calls if either population is larger than `WILCOX_MAX`, which is set to 50.
+>
+Also because cwilcox_sigma has to be evaluated, and this is slightly more
+demanding since it uses k%d.
+
+There is a tradeoff here between memory usage and time of execution. I am
+not a heavy user of the U test but I think the typical use case does not
+involve several hundreds of tests in a session so execution time (my 2
+cents) is less important. But if R crashes one execution is already
+problematic.
+
+But the takeaway is  probably: we should implement both approaches in the
+code and leave it to the user which one she prefers. If time is important
+and memory not an issue and if m, n are low go for the "traditional
+approach". Otherwise, use my formula?
+
+PS (@Aidan): I have applied for an bugzilla account two days ago and heard
+not back from them. Also Spam is empty. Is that ok or shall I do something?
+
+	[[alternative HTML version deleted]]
+
+
+From me @end|ng |rom h@rmen@toppe|@@n|  Tue Jan 16 20:02:48 2024
+From: me @end|ng |rom h@rmen@toppe|@@n| (Harmen Stoppels)
+Date: Tue, 16 Jan 2024 19:02:48 +0000
+Subject: [Rd] Sys.which() caching path to `which`
+In-Reply-To: <20240112181125.7616fc6e@arachnoid>
+References: <20240110224331.24ee0edf@Tarkus>
+ <F5607414-92E9-4D46-AD93-8100D9ED6997@R-project.org>
+ <20240112181125.7616fc6e@arachnoid>
+Message-ID: <HrQEEygLp_tv6eb1kK4Y7cBF2pUsbZCg1N1dUAgP3nER1bg5ebNG-I4p1ZjojRj-a-0rozKtNHHKQqvdJUm5pPfhPEnTYXhQXf4Jyp9VUK8=@harmenstoppels.nl>
+
+On Friday, January 12th, 2024 at 16:11, Ivan Krylov <ikrylov at disroot.org> wrote:
+
+> unlike `which`, `command -v` returns names of shell builtins if
+> something is both an executable and a builtin. So for things like `[`,
+> Sys.which would behave differently if changed to use command -v
+
+Then can we revisit my simple fix, which refers to `which` through a
+symlink instead of a hard-coded absolute in an R-source file:
+
+>From 3f2b1b6c94460fd4d3e9f03c9f17a25db2d2b473 Mon Sep 17 00:00:00 2001
+From: Harmen Stoppels <me at harmenstoppels.nl>
+Date: Wed, 10 Jan 2024 12:40:40 +0100
+Subject: [PATCH] base: use a symlink for which instead of hard-coded string
+
+---
+ share/make/basepkg.mk                 | 8 ++++----
+ src/library/base/R/unix/system.unix.R | 6 +++---
+ 2 files changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/share/make/basepkg.mk b/share/make/basepkg.mk
+index c0a69c8a0af..4cf63878709 100644
+--- a/share/make/basepkg.mk
++++ b/share/make/basepkg.mk
+@@ -72,16 +72,16 @@ mkRbase:
+ 	  else \
+ 	    cat $(RSRC) > "$${f}"; \
+ 	  fi; \
+-	  f2=$${TMPDIR:-/tmp}/R2$$$$; \
+-	  sed -e "s:@WHICH@:${WHICH}:" "$${f}" > "$${f2}"; \
+-	  rm -f "$${f}"; \
+-	  $(SHELL) $(top_srcdir)/tools/move-if-change "$${f2}" all.R)
++	  $(SHELL) $(top_srcdir)/tools/move-if-change "$${f}" all.R)
+ 	@if ! test -f $(top_builddir)/library/$(pkg)/R/$(pkg); then \
+ 	  $(INSTALL_DATA) all.R $(top_builddir)/library/$(pkg)/R/$(pkg); \
+ 	else if test all.R -nt $(top_builddir)/library/$(pkg)/R/$(pkg); then \
+ 	  $(INSTALL_DATA) all.R $(top_builddir)/library/$(pkg)/R/$(pkg); \
+ 	  fi \
+ 	fi
++	@if ! test -f $(top_builddir)/library/$(pkg)/R/which; then \
++	  cd $(top_builddir)/library/$(pkg)/R/ && $(LN_S) $(WHICH) which; \
++	fi
+ 
+ mkdesc:
+ 	@if test -f DESCRIPTION; then \
+diff --git a/src/library/base/R/unix/system.unix.R b/src/library/base/R/unix/system.unix.R
+index 3bb7d0cb27c..78271c8c12c 100644
+--- a/src/library/base/R/unix/system.unix.R
++++ b/src/library/base/R/unix/system.unix.R
+@@ -114,9 +114,9 @@ system2 <- function(command, args = character(),
+ Sys.which <- function(names)
+ {
+     res <- character(length(names)); names(res) <- names
+-    ## hopefully configure found [/usr]/bin/which
+-    which <- "@WHICH@"
+-    if (!nzchar(which)) {
++    which <- file.path(R.home(), "library", "base", "R", "which")
++    ## which should be a symlink to the system's which
++    if (!file.exists(which)) {
+         warning("'which' was not found on this platform")
+         return(res)
+     }
+
+
+From AHL27 @end|ng |rom p|tt@edu  Wed Jan 17 16:02:23 2024
+From: AHL27 @end|ng |rom p|tt@edu (Aidan Lakshman)
+Date: Wed, 17 Jan 2024 10:02:23 -0500
+Subject: [Rd] cwilcox - new version
+In-Reply-To: <CAJS5q+z5RGikZTb_Zk8QZcCRU8WocNJuzXwvR+LY=-q4b+UcZQ@mail.gmail.com>
+References: <CAJS5q+w40p-8KEAPBa1wqH8yo9=vuPxSJTSuQ+ajfh=J2ecqdQ@mail.gmail.com>
+ <09E1CF97-A9CA-4060-94C7-C892FA4754D0@pitt.edu>
+ <B2822054-B1A2-4DE1-8E70-EAD0E341038C@pitt.edu>
+ <CAJS5q+z5RGikZTb_Zk8QZcCRU8WocNJuzXwvR+LY=-q4b+UcZQ@mail.gmail.com>
+Message-ID: <CCE4D305-79D5-452F-B613-60958DB705B8@pitt.edu>
+
+Hi everyone,
+
+I?ve opened a Bugzilla report for Andreas with the most recent implementation here: https://bugs.r-project.org/show_bug.cgi?id=18655. Feedback would be greatly appreciated.
+
+
+The most straight forward approach is likely to implement both methods and determine which to use based on population sizes. The cutoff at n=50 is very sharp; it would be a large improvement to just call Andreas?s algorithm when either population is larger than 50, and use the current method otherwise.
+
+For the Bugzilla report I?ve only submitted the new version for benchmarking purposes. I think that if there is a way to improve this algorithm such that it matches the performance of the current version for population sizes under 50, then it would be significantly cleaner than to have two algorithms with an internal switch.
+
+As for remaining performance improvements:
+
+1. cwilcox_sigma is definitely a performance loss. It would improve performance to instead just loop from 1 to min(m, sqrt(k)) and from n+1 to min(m+n, sqrt(k)), since the formula just finds potential factors of k. Maybe there are other ways to improve this, but I think factorization is a notoriously intensive problem, so that further optimzation may be intractable.
+
+2. Calculation of the distribution values has quadratic scaling. Maybe there?s a way to optimize that further? See lines 91-103 in the most recent version.
+
+Regardless of runtime, memory is certainly improved. For calculation on population sizes m,n, the current version has memory complexity O((mn)^2), whereas Andreas?s version has complexity O(mn). Running `qwilcox(0.5,500,500)` crashes my R session with the old version, but runs successfully in about 10s with the new version.
+
+I?ve written up all the information so far on the Bugzilla report, and I?m sure Andreas will add more information if necessary when his account is approved. Thanks again to Andreas for introducing this algorithm?I?m hopeful that this is able to improve performance of the wilcox functions.
+
+-Aidan
+
+
+-----------------------
+Aidan Lakshman (he/him)
+PhD Candidate, Wright Lab
+University of Pittsburgh School of Medicine
+Department of Biomedical Informatics
+www.AHL27.com
+ahl27 at pitt.edu | (724) 612-9940
+
+On 17 Jan 2024, at 5:55, Andreas L?ffler wrote:
+
+>>
+>>
+>> Performance statistics are interesting. If we assume the two populations
+>> have a total of `m` members, then this implementation runs slightly slower
+>> for m < 20, and much slower for 50 < m < 100. However, this implementation
+>> works significantly *faster* for m > 200. The breakpoint is precisely when
+>> each population has a size of 50; `qwilcox(0.5,50,50)` runs in 8
+>> microseconds in the current version, but `qwilcox(0.5, 50, 51)` runs in 5
+>> milliseconds. The new version runs in roughly 1 millisecond for both. This
+>> is probably because of internal logic that requires many more `free/calloc`
+>> calls if either population is larger than `WILCOX_MAX`, which is set to 50.
+>>
+> Also because cwilcox_sigma has to be evaluated, and this is slightly more
+> demanding since it uses k%d.
+>
+> There is a tradeoff here between memory usage and time of execution. I am
+> not a heavy user of the U test but I think the typical use case does not
+> involve several hundreds of tests in a session so execution time (my 2
+> cents) is less important. But if R crashes one execution is already
+> problematic.
+>
+> But the takeaway is  probably: we should implement both approaches in the
+> code and leave it to the user which one she prefers. If time is important
+> and memory not an issue and if m, n are low go for the "traditional
+> approach". Otherwise, use my formula?
+>
+> PS (@Aidan): I have applied for an bugzilla account two days ago and heard
+> not back from them. Also Spam is empty. Is that ok or shall I do something?
+
+
+From @ndrew @end|ng |rom robb|n@@@me  Wed Jan 17 16:02:08 2024
+From: @ndrew @end|ng |rom robb|n@@@me (Andrew Robbins)
+Date: Wed, 17 Jan 2024 10:02:08 -0500
+Subject: [Rd] cwilcox - new version
+In-Reply-To: <CAJS5q+z5RGikZTb_Zk8QZcCRU8WocNJuzXwvR+LY=-q4b+UcZQ@mail.gmail.com>
+References: <CAJS5q+w40p-8KEAPBa1wqH8yo9=vuPxSJTSuQ+ajfh=J2ecqdQ@mail.gmail.com>
+ <09E1CF97-A9CA-4060-94C7-C892FA4754D0@pitt.edu>
+ <B2822054-B1A2-4DE1-8E70-EAD0E341038C@pitt.edu>
+ <CAJS5q+z5RGikZTb_Zk8QZcCRU8WocNJuzXwvR+LY=-q4b+UcZQ@mail.gmail.com>
+Message-ID: <1c4ea766-96bb-43b1-b89b-2e2b4805709f@robbinsa.me>
+
+Hi All,
+
+Figured I'd put my two cents in here as the welch-lab's LIGER package 
+currently uses mann-whitney on datasets much larger than m = 200. Our 
+current version uses a modified PRESTO 
+(https://github.com/immunogenomics/presto) implementation over the 
+inbuilt tests because of the lack of scaling. I stumbled into this 
+thread while working on some improvements for it and would like to make 
+it known that there is absolutely an audience for the high-member use-case.
+
+Best,
+
+-Andrew Robbins
+
+On 1/17/2024 5:55 AM, Andreas L?ffler wrote:
+>>
+>> Performance statistics are interesting. If we assume the two populations
+>> have a total of `m` members, then this implementation runs slightly slower
+>> for m < 20, and much slower for 50 < m < 100. However, this implementation
+>> works significantly *faster* for m > 200. The breakpoint is precisely when
+>> each population has a size of 50; `qwilcox(0.5,50,50)` runs in 8
+>> microseconds in the current version, but `qwilcox(0.5, 50, 51)` runs in 5
+>> milliseconds. The new version runs in roughly 1 millisecond for both. This
+>> is probably because of internal logic that requires many more `free/calloc`
+>> calls if either population is larger than `WILCOX_MAX`, which is set to 50.
+>>
+> Also because cwilcox_sigma has to be evaluated, and this is slightly more
+> demanding since it uses k%d.
+>
+> There is a tradeoff here between memory usage and time of execution. I am
+> not a heavy user of the U test but I think the typical use case does not
+> involve several hundreds of tests in a session so execution time (my 2
+> cents) is less important. But if R crashes one execution is already
+> problematic.
+>
+> But the takeaway is  probably: we should implement both approaches in the
+> code and leave it to the user which one she prefers. If time is important
+> and memory not an issue and if m, n are low go for the "traditional
+> approach". Otherwise, use my formula?
+>
+> PS (@Aidan): I have applied for an bugzilla account two days ago and heard
+> not back from them. Also Spam is empty. Is that ok or shall I do something?
+>
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Andrew Robbins
+Systems Analyst, Welch Lab<https://welch-lab.github.io>
+University of Michigan
+Department of Computational Medicine and Bioinformatics
+
+
+-------------- next part --------------
+A non-text attachment was scrubbed...
+Name: OpenPGP_signature.asc
+Type: application/pgp-signature
+Size: 840 bytes
+Desc: OpenPGP digital signature
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20240117/c18b12c1/attachment.sig>
+
+From d|pter|x@w@ng @end|ng |rom gm@||@com  Wed Jan 17 17:35:02 2024
+From: d|pter|x@w@ng @end|ng |rom gm@||@com (Dipterix Wang)
+Date: Wed, 17 Jan 2024 11:35:02 -0500
+Subject: [Rd] 
+ Choices to remove `srcref` (and its buddies) when serializing
+ objects
+In-Reply-To: <CAJf4E3pcHtdGKpVX5SPGOKMFGRxQ505ivToTQQuzKxtxZqmmXw@mail.gmail.com>
+References: <0FEDCC6B-B07A-48B1-8CF7-E130BEBB0A7D@gmail.com>
+ <577d4e34-7abc-4aa9-b850-09ed71c73bd5@gmail.com>
+ <03DDB869-9969-44DF-82FC-2A6675D0FE2C@gmail.com>
+ <0314235b-d9a7-4f37-a14f-d365459a149a@gmail.com>
+ <CAJf4E3pcHtdGKpVX5SPGOKMFGRxQ505ivToTQQuzKxtxZqmmXw@mail.gmail.com>
+Message-ID: <3CF4CA2D-9F72-4C7B-90AA-4D2E9F745430@gmail.com>
+
+
+> 
+> We have one in vctrs but it's not exported:
+> https://github.com/r-lib/vctrs/blob/main/src/hash.c
+> 
+> The main use is vectorised hashing:
+> 
+
+Thanks for showing me this function. I have read the source code. That's a great idea. 
+
+However, I think I might have missed something. When I tried vctrs::obj_hash, I couldn't get identical outputs.
+
+
+``` r
+options(keep.source = TRUE)
+a <- function(){}
+vctrs:::obj_hash(a)
+#> [1] 68 e8 5a 0c
+a <- function(){}
+vctrs:::obj_hash(a)
+#> [1] b2 6a 55 9c
+a <-   function(){}
+vctrs:::obj_hash(a)
+#> [1] 01 a9 bc 30
+options(keep.source = FALSE)
+a <- function(){}
+vctrs:::obj_hash(a)
+#> [1] 93 d7 f2 72
+a <- function(){}
+vctrs:::obj_hash(a)
+#> [1] f3 1d d2 f4
+```
+
+Created on 2024-01-17 with [reprex v2.1.0](https://reprex.tidyverse.org)
+
+> 
+> Best,
+> Lionel
+> 
+> On Wed, Jan 17, 2024 at 10:32?AM Tomas Kalibera
+> <tomas.kalibera at gmail.com> wrote:
+>> 
+>> I think one could implement hashing on the fly without any
+>> serialization, similarly to how identical works, but I am not aware of
+>> any existing implementation. Again, if that wasn't clear: I don't think
+>> trying to compute a hash of an object from its serialized representation
+>> is a good idea - it is of course convenient, but has problems like the
+>> one you have ran into.
+>> 
+>> In some applications it may still be good enough: if by various tweaks,
+>> such as ensuring source references are off in your case, you achieve a
+>> state when false alarms are rare (identical objects have different
+>> hashes), and hence say unnecessary re-computation is rare, maybe it is
+>> good enough.
+
+I really appreciate you answer my questions and solve my puzzles. I went back and read the R internal code for `serialize` and totally agree on this, that serialization is not a good idea for digesting R objects, especially on environments, expressions, and functions. 
+
+What I want is a function that can produce the same and stable hash for identical objects. However, there is no function (given our best knowledge) on the market that can do this. `digest::digest` and `rlang::hash` are the first functions that come into my mind. Both are widely used, but they use serialize. The author of `digest` said:
+	> "As you know,  digest takes and (ahem) "digests" what serialize gives it, so you would have to look into what serialize lets you do."
+
+vctrs:::obj_hash is probably the closest to the implementation of `identical`, but the above examples give different results for identical objects.
+
+The existence of digest:: digest and rlang::hash shows that there is a huge demand for this "ideal" hash function. However, I bet most people are using digest/hash "incorrectly".
+
+>> 
+>> Tomas
+>> 
+
+
+	[[alternative HTML version deleted]]
+
+
+From ||@t@ @end|ng |rom reve||e@net  Thu Jan 18 00:26:40 2024
+From: ||@t@ @end|ng |rom reve||e@net (William Revelle)
+Date: Wed, 17 Jan 2024 17:26:40 -0600
+Subject: [Rd] Determining the size of a package
+Message-ID: <C4838B2F-8839-48AF-8DE3-31909151DE2E@revelle.net>
+
+Dear fellow developers,
+
+Is there an easy way to determine how big my packages  (psych and psychTools)  will be on various versions of CRAN?
+
+I have been running into the dread 'you are bigger than 5 MB" message for some installations of R on CRAN but not others.  The particular problem seems to be some of the mac versions (specifically r-oldrel-macos-arm64 and r-release-macos-X64 )
+
+When I build it on my Mac M1 it is well within the limits, but when pushing to CRAN,  I run into the size message.
+
+Is there a way I can find what the size will be on these various implementations without bothering the nice people at CRAN.
+
+Thanks.
+
+William Revelle            personality-project.org/revelle.html
+Professor                    personality-project.org
+Department of Psychology         www.wcas.northwestern.edu/psych/
+Northwestern University            www.northwestern.edu/
+Use R for psychology                 personality-project.org/r
+It is 90 seconds to midnight    www.thebulletin.org
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Thu Jan 18 02:55:20 2024
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Thu, 18 Jan 2024 14:55:20 +1300
+Subject: [Rd] Determining the size of a package
+In-Reply-To: <C4838B2F-8839-48AF-8DE3-31909151DE2E@revelle.net>
+References: <C4838B2F-8839-48AF-8DE3-31909151DE2E@revelle.net>
+Message-ID: <7E355811-5273-4FDA-BA8F-A01B09427AA8@R-project.org>
+
+William,
+
+the check does not apply to binary installations (such as the Mac builds), because those depend heavily on the static libraries included in the package binary which can be quite big and generally cannot be reduced in size - for example:
+https://www.r-project.org/nosvn/R.check/r-release-macos-arm64/terra-00check.html
+
+Cheers,
+Simon
+
+
+> On Jan 18, 2024, at 12:26 PM, William Revelle <lists at revelle.net> wrote:
+> 
+> Dear fellow developers,
+> 
+> Is there an easy way to determine how big my packages  (psych and psychTools)  will be on various versions of CRAN?
+> 
+> I have been running into the dread 'you are bigger than 5 MB" message for some installations of R on CRAN but not others.  The particular problem seems to be some of the mac versions (specifically r-oldrel-macos-arm64 and r-release-macos-X64 )
+> 
+> When I build it on my Mac M1 it is well within the limits, but when pushing to CRAN,  I run into the size message.
+> 
+> Is there a way I can find what the size will be on these various implementations without bothering the nice people at CRAN.
+> 
+> Thanks.
+> 
+> William Revelle            personality-project.org/revelle.html
+> Professor                    personality-project.org
+> Department of Psychology         www.wcas.northwestern.edu/psych/
+> Northwestern University            www.northwestern.edu/
+> Use R for psychology                 personality-project.org/r
+> It is 90 seconds to midnight    www.thebulletin.org
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
