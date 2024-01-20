@@ -3042,3 +3042,463 @@ Simon
 > 
 
 
+From |kry|ov @end|ng |rom d|@root@org  Thu Jan 18 16:28:33 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Thu, 18 Jan 2024 18:28:33 +0300
+Subject: [Rd] 
+ Choices to remove `srcref` (and its buddies) when serializing
+ objects
+In-Reply-To: <03DDB869-9969-44DF-82FC-2A6675D0FE2C@gmail.com>
+References: <0FEDCC6B-B07A-48B1-8CF7-E130BEBB0A7D@gmail.com>
+ <577d4e34-7abc-4aa9-b850-09ed71c73bd5@gmail.com>
+ <03DDB869-9969-44DF-82FC-2A6675D0FE2C@gmail.com>
+Message-ID: <20240118182833.0dc0103d@arachnoid>
+
+? Tue, 16 Jan 2024 14:16:19 -0500
+Dipterix Wang <dipterix.wang at gmail.com> ?????:
+
+> Could you recommend any packages/functions that compute hash such
+> that the source references and sexpinfo_struct are ignored? Basically
+> a version of `serialize` that convert R objects to raw without
+> storing the ancillary source reference and sexpinfo.
+
+I can show how this can be done, but it's not currently on CRAN or even
+a well-defined package API. I have adapted a copy of R's serialize()
+[*] with the following changes:
+
+ * Function bytecode and flags are ignored:
+
+f <- function() invisible()
+depcache:::hash(f, 2) # This is plain FNV1a-64 of serialize() output
+# [1] "9b7a1af5468deba4"
+.Call(depcache:::C_hash2, f) # This is the new hash
+[1] 91 5f b8 a1 b0 6b cb 40
+f() # called once: function gets the MAYBEJIT_MASK flag
+depcache:::hash(f, 2)
+# [1] "7d30e05546e7a230"
+.Call(depcache:::C_hash2, f)
+# [1] 91 5f b8 a1 b0 6b cb 40
+f() # called twice: function now has bytecode
+depcache:::hash(f, 2)
+# [1] "2a2cba4150e722b8"
+.Call(depcache:::C_hash2, f)
+# [1] 91 5f b8 a1 b0 6b cb 40 # new hash stays the same
+
+ * Source references are ignored:
+
+.Call(depcache:::C_hash2, \( ) invisible( ))
+# [1] 91 5f b8 a1 b0 6b cb 40 # compare vs. above
+
+# For quoted function definitions, source references have to be handled
+# differently 
+.Call(depcache:::C_hash2, quote(function(){}))
+[1] 58 0d 44 8e d4 fd 37 6f
+.Call(depcache:::C_hash2, quote(\( ){      }))
+[1] 58 0d 44 8e d4 fd 37 6f
+
+ * ALTREP is ignored:
+
+identical(1:10, 1:10+0L)
+# [1] TRUE
+identical(serialize(1:10, NULL), serialize(1:10+0L, NULL))
+# [1] FALSE
+identical(
+ .Call(depcache:::C_hash2, 1:10),
+ .Call(depcache:::C_hash2, 1:10+0L)
+)
+# [1] TRUE
+
+ * Strings not marked as bytes are encoded into UTF-8:
+
+identical('\uff', iconv('\uff', 'UTF-8', 'latin1'))
+# [1] TRUE
+identical(
+ serialize('\uff', NULL),
+ serialize(iconv('\uff', 'UTF-8', 'latin1'), NULL)
+)
+# [1] FALSE
+identical(
+ .Call(depcache:::C_hash2, '\uff'),
+ .Call(depcache:::C_hash2, iconv('\uff', 'UTF-8', 'latin1'))
+)
+# [1] TRUE
+
+ * NaNs with different payloads (except NA_numeric_) are replaced by
+   R_NaN.
+
+One of the many downsides to the current approach is that we rely on
+the non-API entry point getPRIMNAME() in order to hash builtins.
+Looking at the source code for identical() is no help here, because it
+uses the private PRIMOFFSET macro.
+
+The bitstream being hashed is also, unfortunately, not exactly
+compatible with R serialization format version 2: I had to ignore the
+LEVELS of the language objects being hashed both because identical()
+seems to ignore those and because I was missing multiple private
+definitions (e.g. the MAYBEJIT flag) to handle them properly.
+
+Then there's also the problem of immediate bindings [**]: I've seen bits
+of vctrs, rstudio, rlang blow up when calling CAR() on SEXP objects that
+are not safe to handle this way, but R_expand_binding_value() (used by
+serialize()) is again a private function that is not accessible from
+packages. identical() won't help here, because it compares reference
+objects (which may or may not contain such immediate bindings) by their
+pointer values instead of digging down into them.
+
+Dropping the (already violated) requirement to be compatible with R
+serialization bitstream will make it possible to simplify the code
+further.
+
+Finally:
+
+a <- new.env()
+b <- new.env()
+a$x <- b$x <- 42
+identical(a, b)
+# [1] FALSE
+.Call(depcache:::C_hash2, a)
+# [1] 44 21 f1 36 5d 92 03 1b
+.Call(depcache:::C_hash2, b)
+# [1] 44 21 f1 36 5d 92 03 1b
+
+...but that's unavoidable when looking at frozen object contents
+instead of their live memory layout.
+
+If you're interested, here's the development version of the package:
+install.packages('depcache',contriburl='https://aitap.github.io/Rpackages')
+
+-- 
+Best regards,
+Ivan
+
+[*]
+https://github.com/aitap/depcache/blob/serialize_canonical/src/serialize.c
+
+[**]
+https://svn.r-project.org/R/trunk/doc/notes/immbnd.md
+
+
+From ch@r||e@g@o @end|ng |rom @h|kokuchuo@net  Thu Jan 18 16:39:36 2024
+From: ch@r||e@g@o @end|ng |rom @h|kokuchuo@net (Charlie Gao)
+Date: Thu, 18 Jan 2024 15:39:36 +0000
+Subject: [Rd] 
+ Choices to remove `srcref` (and its buddies) when serializing
+ objects
+In-Reply-To: <mailman.54008.3.1705575601.59959.r-devel@r-project.org>
+References: <mailman.54008.3.1705575601.59959.r-devel@r-project.org>
+Message-ID: <9dcf5c85b11d0b6fd704b0e1a191015fa7758430@shikokuchuo.net>
+
+> ------------------------------
+> 
+> Date: Wed, 17 Jan 2024 11:35:02 -0500
+> 
+> From: Dipterix Wang <dipterix.wang at gmail.com>
+> 
+> To: Lionel Henry <lionel at posit.co>, Tomas Kalibera
+> 
+>  <tomas.kalibera at gmail.com>
+> 
+> Cc: r-devel at r-project.org
+> 
+> Subject: Re: [Rd] Choices to remove `srcref` (and its buddies) when
+> 
+>  serializing objects
+> 
+> Message-ID: <3CF4CA2D-9F72-4C7B-90AA-4D2E9F745430 at gmail.com>
+> 
+> Content-Type: text/plain; charset="utf-8"
+> 
+> > 
+> > 
+> >  
+> > 
+> >  On Wed, Jan 17, 2024 at 10:32 AM Tomas Kalibera
+> > 
+> >  <tomas.kalibera at gmail.com> wrote:
+> > 
+> > > 
+> > > I think one could implement hashing on the fly without any
+> > > 
+> > >  serialization, similarly to how identical works, but I am not aware of
+> > > 
+> > >  any existing implementation. Again, if that wasn't clear: I don't think
+> > > 
+> > >  trying to compute a hash of an object from its serialized representation
+> > > 
+> > >  is a good idea - it is of course convenient, but has problems like the
+> > > 
+> > >  one you have ran into.
+> > > 
+> > >  
+> > > 
+> > >  In some applications it may still be good enough: if by various tweaks,
+> > > 
+> > >  such as ensuring source references are off in your case, you achieve a
+> > > 
+> > >  state when false alarms are rare (identical objects have different
+> > > 
+> > >  hashes), and hence say unnecessary re-computation is rare, maybe it is
+> > > 
+> > >  good enough.
+> > >
+> > 
+> 
+> I really appreciate you answer my questions and solve my puzzles. I went back and read the R internal code for `serialize` and totally agree on this, that serialization is not a good idea for digesting R objects, especially on environments, expressions, and functions. 
+> 
+> What I want is a function that can produce the same and stable hash for identical objects. However, there is no function (given our best knowledge) on the market that can do this. `digest::digest` and `rlang::hash` are the first functions that come into my mind. Both are widely used, but they use serialize. The author of `digest` said:
+> 
+>  > "As you know, digest takes and (ahem) "digests" what serialize gives it, so you would have to look into what serialize lets you do."
+> 
+> vctrs:::obj_hash is probably the closest to the implementation of `identical`, but the above examples give different results for identical objects.
+> 
+> The existence of digest:: digest and rlang::hash shows that there is a huge demand for this "ideal" hash function. However, I bet most people are using digest/hash "incorrectly".
+
+Please read the full discussion to this old bug report: https://bugs.r-project.org/show_bug.cgi?id=18178
+
+Quoting briefly: Serialization is not intended to be used this way. What serialization tries to provide is that x and unserialize(serialize(x, NULL)) will be identical() while preserving internal representation where possible. Two objects that are considered identical() can have very different internal representations, and their serializations will reflect this.
+
+You will see that it is not as simple as just removing the srcref or the bytecode to functions. The issue with the `identical()` function in that context was eventually patched, but the comment by R-Core that serialization is not intended to be used to produce a reliable hash stands. Use of `identical()` or `serialize()` is simply not designed to ensure the same hashable object (in terms of bytes).
+
+This is echoed by Tomas' comment above. But we note that it is 'good enough' in most cases.
+
+Fwiw `nanonext::sha256()` and family directly hashes character strings and raw objects, but uses the same approach as `digest::digest()` elsewhere. So if someone comes up with a canonical binary representation of R objects, it will be able to hash it reliably.
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Thu Jan 18 16:59:31 2024
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Thu, 18 Jan 2024 09:59:31 -0600 (CST)
+Subject: [Rd] 
+ [External] Re: Choices to remove `srcref` (and its buddies)
+ when serializing objects
+In-Reply-To: <20240118182833.0dc0103d@arachnoid>
+References: <0FEDCC6B-B07A-48B1-8CF7-E130BEBB0A7D@gmail.com>
+ <577d4e34-7abc-4aa9-b850-09ed71c73bd5@gmail.com>
+ <03DDB869-9969-44DF-82FC-2A6675D0FE2C@gmail.com>
+ <20240118182833.0dc0103d@arachnoid>
+Message-ID: <3f5f194d-5f16-b4e1-19a-612f9de495eb@uiowa.edu>
+
+On Thu, 18 Jan 2024, Ivan Krylov via R-devel wrote:
+
+> ? Tue, 16 Jan 2024 14:16:19 -0500
+> Dipterix Wang <dipterix.wang at gmail.com> ?????:
+>
+>> Could you recommend any packages/functions that compute hash such
+>> that the source references and sexpinfo_struct are ignored? Basically
+>> a version of `serialize` that convert R objects to raw without
+>> storing the ancillary source reference and sexpinfo.
+>
+> I can show how this can be done, but it's not currently on CRAN or even
+> a well-defined package API. I have adapted a copy of R's serialize()
+> [*] with the following changes:
+>
+> * Function bytecode and flags are ignored:
+>
+> f <- function() invisible()
+> depcache:::hash(f, 2) # This is plain FNV1a-64 of serialize() output
+> # [1] "9b7a1af5468deba4"
+> .Call(depcache:::C_hash2, f) # This is the new hash
+> [1] 91 5f b8 a1 b0 6b cb 40
+> f() # called once: function gets the MAYBEJIT_MASK flag
+> depcache:::hash(f, 2)
+> # [1] "7d30e05546e7a230"
+> .Call(depcache:::C_hash2, f)
+> # [1] 91 5f b8 a1 b0 6b cb 40
+> f() # called twice: function now has bytecode
+> depcache:::hash(f, 2)
+> # [1] "2a2cba4150e722b8"
+> .Call(depcache:::C_hash2, f)
+> # [1] 91 5f b8 a1 b0 6b cb 40 # new hash stays the same
+>
+> * Source references are ignored:
+>
+> .Call(depcache:::C_hash2, \( ) invisible( ))
+> # [1] 91 5f b8 a1 b0 6b cb 40 # compare vs. above
+>
+> # For quoted function definitions, source references have to be handled
+> # differently
+> .Call(depcache:::C_hash2, quote(function(){}))
+> [1] 58 0d 44 8e d4 fd 37 6f
+> .Call(depcache:::C_hash2, quote(\( ){      }))
+> [1] 58 0d 44 8e d4 fd 37 6f
+>
+> * ALTREP is ignored:
+>
+> identical(1:10, 1:10+0L)
+> # [1] TRUE
+> identical(serialize(1:10, NULL), serialize(1:10+0L, NULL))
+> # [1] FALSE
+> identical(
+> .Call(depcache:::C_hash2, 1:10),
+> .Call(depcache:::C_hash2, 1:10+0L)
+> )
+> # [1] TRUE
+>
+> * Strings not marked as bytes are encoded into UTF-8:
+>
+> identical('\uff', iconv('\uff', 'UTF-8', 'latin1'))
+> # [1] TRUE
+> identical(
+> serialize('\uff', NULL),
+> serialize(iconv('\uff', 'UTF-8', 'latin1'), NULL)
+> )
+> # [1] FALSE
+> identical(
+> .Call(depcache:::C_hash2, '\uff'),
+> .Call(depcache:::C_hash2, iconv('\uff', 'UTF-8', 'latin1'))
+> )
+> # [1] TRUE
+>
+> * NaNs with different payloads (except NA_numeric_) are replaced by
+>   R_NaN.
+>
+> One of the many downsides to the current approach is that we rely on
+> the non-API entry point getPRIMNAME() in order to hash builtins.
+> Looking at the source code for identical() is no help here, because it
+> uses the private PRIMOFFSET macro.
+>
+> The bitstream being hashed is also, unfortunately, not exactly
+> compatible with R serialization format version 2: I had to ignore the
+> LEVELS of the language objects being hashed both because identical()
+> seems to ignore those and because I was missing multiple private
+> definitions (e.g. the MAYBEJIT flag) to handle them properly.
+>
+> Then there's also the problem of immediate bindings [**]: I've seen bits
+> of vctrs, rstudio, rlang blow up when calling CAR() on SEXP objects that
+> are not safe to handle this way, but R_expand_binding_value() (used by
+> serialize()) is again a private function that is not accessible from
+> packages. identical() won't help here, because it compares reference
+> objects (which may or may not contain such immediate bindings) by their
+> pointer values instead of digging down into them.
+
+What does 'blow up' mean? If it is anything other than signal a "bad
+binding access" error then it would be good to have more details.
+
+Best,
+
+luke
+
+> Dropping the (already violated) requirement to be compatible with R
+> serialization bitstream will make it possible to simplify the code
+> further.
+>
+> Finally:
+>
+> a <- new.env()
+> b <- new.env()
+> a$x <- b$x <- 42
+> identical(a, b)
+> # [1] FALSE
+> .Call(depcache:::C_hash2, a)
+> # [1] 44 21 f1 36 5d 92 03 1b
+> .Call(depcache:::C_hash2, b)
+> # [1] 44 21 f1 36 5d 92 03 1b
+>
+> ...but that's unavoidable when looking at frozen object contents
+> instead of their live memory layout.
+>
+> If you're interested, here's the development version of the package:
+> install.packages('depcache',contriburl='https://aitap.github.io/Rpackages')
+>
+>
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+
+From |kry|ov @end|ng |rom d|@root@org  Thu Jan 18 20:34:49 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Thu, 18 Jan 2024 22:34:49 +0300
+Subject: [Rd] 
+ [External] Re: Choices to remove `srcref` (and its buddies)
+ when serializing objects
+In-Reply-To: <3f5f194d-5f16-b4e1-19a-612f9de495eb@uiowa.edu>
+References: <0FEDCC6B-B07A-48B1-8CF7-E130BEBB0A7D@gmail.com>
+ <577d4e34-7abc-4aa9-b850-09ed71c73bd5@gmail.com>
+ <03DDB869-9969-44DF-82FC-2A6675D0FE2C@gmail.com>
+ <20240118182833.0dc0103d@arachnoid>
+ <3f5f194d-5f16-b4e1-19a-612f9de495eb@uiowa.edu>
+Message-ID: <20240118223449.2c8e47cf@Tarkus>
+
+On Thu, 18 Jan 2024 09:59:31 -0600 (CST)
+luke-tierney at uiowa.edu wrote:
+
+> What does 'blow up' mean? If it is anything other than signal a "bad
+> binding access" error then it would be good to have more details.
+
+My apologies for not being precise enough. I meant the "bad binding
+access" error in all such cases.
+
+-- 
+Best regards,
+Ivan
+
+
+From j|r|@c@mor@vec @end|ng |rom gm@||@com  Thu Jan 18 20:51:02 2024
+From: j|r|@c@mor@vec @end|ng |rom gm@||@com (=?UTF-8?B?SmnFmcOtIE1vcmF2ZWM=?=)
+Date: Fri, 19 Jan 2024 08:51:02 +1300
+Subject: [Rd] Should subsetting named vector return named vector including
+ named unmatched elements?
+Message-ID: <9ec19b87-28f2-4de8-81ae-7075b78a6111@gmail.com>
+
+Subsetting vector (including lists) returns the same number of elements 
+as the subsetting vector, including unmatched elements which are 
+reported as `NA` or `NULL` (in case of lists).
+
+Consider:
+
+```
+menu = list(
+ ? "bacon" = "foo",
+ ? "eggs" = "bar",
+ ? "beans" = "baz"
+ ? )
+
+select = c("bacon", "eggs", "spam")
+
+menu[select]
+# $bacon
+# [1] "foo"
+#
+# $eggs
+# [1] "bar"
+#
+# $<NA>
+# NULL
+
+```
+
+Wouldn't it be more logical to return named vector/list including names 
+of unmatched elements when subsetting using names? After all, the 
+unmatched elements are already returned. I.e., the output would look 
+like this:
+
+```
+
+menu[select]
+# $bacon
+# [1] "foo"
+#
+# $eggs
+# [1] "bar"
+#
+# $spam
+# NULL
+
+```
+
+The simple fix `menu[select] |> setNames(select)` solves, but it feels 
+to me like something that could be a default behaviour.
+
+On slightly unrelated note, when I was asking if there is a better 
+solution, the `menu[select]` seems to allocate more memory than 
+`menu_env = list2env(menu); mget(select, envir = menu, ifnotfound = 
+list(NULL)`. Or the sapply solution. Is this a benchmarking artifact?
+
+https://stackoverflow.com/q/77828678/4868692
+
+
