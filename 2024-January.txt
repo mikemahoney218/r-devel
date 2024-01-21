@@ -3502,3 +3502,182 @@ list(NULL)`. Or the sapply solution. Is this a benchmarking artifact?
 https://stackoverflow.com/q/77828678/4868692
 
 
+From m@rbert@ @end|ng |rom protonm@||@com  Fri Jan 19 03:41:17 2024
+From: m@rbert@ @end|ng |rom protonm@||@com (Steve Martin)
+Date: Fri, 19 Jan 2024 02:41:17 +0000
+Subject: [Rd] 
+ Should subsetting named vector return named vector including
+ named unmatched elements?
+In-Reply-To: <9ec19b87-28f2-4de8-81ae-7075b78a6111@gmail.com>
+References: <9ec19b87-28f2-4de8-81ae-7075b78a6111@gmail.com>
+Message-ID: <ecfPGkO91zz809LB4x8V2jNFBxvHKo4pJA2PBU13HJBOJ6BSvK_nmxgUfd2ZV1476kFwXjTk1MA889H7cMgCmcqcUr98ZOUhdpN2iqN1JFg=@protonmail.com>
+
+Ji??,
+
+For your first question, the NA names make sense if you think of indexing with a character vector as the same as menu[match(select, names(menu))]. You're not indexing with "beans"; rather, "beans" becomes NA because it's not in the names of menu. (This is how it's documented in ?`[`: "Character vectors will be matched to the names of the object...")
+
+Steve
+
+
+On Thursday, January 18th, 2024 at 2:51 PM, Ji?? Moravec <jiri.c.moravec at gmail.com> wrote:
+
+
+> Subsetting vector (including lists) returns the same number of elements
+> as the subsetting vector, including unmatched elements which are
+> reported as `NA` or `NULL` (in case of lists).
+> 
+> Consider:
+> 
+> ```
+> menu = list(
+> "bacon" = "foo",
+> "eggs" = "bar",
+> "beans" = "baz"
+> )
+> 
+> select = c("bacon", "eggs", "spam")
+> 
+> menu[select]
+> # $bacon
+> # [1] "foo"
+> #
+> # $eggs
+> # [1] "bar"
+> #
+> # $<NA>
+> 
+> # NULL
+> 
+> `Wouldn't it be more logical to return named vector/list including names of unmatched elements when subsetting using names? After all, the unmatched elements are already returned. I.e., the output would look like this:`
+> 
+> menu[select]
+> # $bacon
+> # [1] "foo"
+> #
+> # $eggs
+> # [1] "bar"
+> #
+> # $spam
+> # NULL
+> 
+> ```
+> 
+> The simple fix `menu[select] |> setNames(select)` solves, but it feels
+> 
+> to me like something that could be a default behaviour.
+> 
+> On slightly unrelated note, when I was asking if there is a better
+> solution, the `menu[select]` seems to allocate more memory than
+> `menu_env = list2env(menu); mget(select, envir = menu, ifnotfound = list(NULL)`. Or the sapply solution. Is this a benchmarking artifact?
+> 
+> https://stackoverflow.com/q/77828678/4868692
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From hp@ge@@on@g|thub @end|ng |rom gm@||@com  Fri Jan 19 08:10:39 2024
+From: hp@ge@@on@g|thub @end|ng |rom gm@||@com (=?UTF-8?B?SGVydsOpIFBhZ8Oocw==?=)
+Date: Thu, 18 Jan 2024 23:10:39 -0800
+Subject: [Rd] 
+ Should subsetting named vector return named vector including
+ named unmatched elements?
+In-Reply-To: <9ec19b87-28f2-4de8-81ae-7075b78a6111@gmail.com>
+References: <9ec19b87-28f2-4de8-81ae-7075b78a6111@gmail.com>
+Message-ID: <4bf9573c-1507-452c-92f6-4078514e3fcd@gmail.com>
+
+Never been a big fan of this behavior either but maybe the intention was 
+to make it easier to distinguish between 2 types of NAs in the result: 
+those that were present in the original vector vs those that are 
+introduced by an unmatched subscript. Like in this example:
+
+ ??? x <- setNames(c(101:108, NA), letters[1:9])
+ ??? x
+ ??? # ? a?? b?? c?? d?? e?? f?? g?? h?? i
+ ??? # 101 102 103 104 105 106 107 108? NA
+
+ ??? x[c("g", "k", "a", "i")]
+ ??? #? ? g <NA>??? a??? i
+ ??? #? 107?? NA? 101?? NA
+
+The first NA is the result of an unmatched subscript, while the second 
+one comes from 'x'.
+
+This is of limited interest though. In most real world applications I've 
+worked on, we actually need to "fix" the names of the result.
+
+Best,
+
+H.
+
+On 1/18/24 11:51, Ji?? Moravec wrote:
+> Subsetting vector (including lists) returns the same number of 
+> elements as the subsetting vector, including unmatched elements which 
+> are reported as `NA` or `NULL` (in case of lists).
+>
+> Consider:
+>
+> ```
+> menu = list(
+> ? "bacon" = "foo",
+> ? "eggs" = "bar",
+> ? "beans" = "baz"
+> ? )
+>
+> select = c("bacon", "eggs", "spam")
+>
+> menu[select]
+> # $bacon
+> # [1] "foo"
+> #
+> # $eggs
+> # [1] "bar"
+> #
+> # $<NA>
+> # NULL
+>
+> ```
+>
+> Wouldn't it be more logical to return named vector/list including 
+> names of unmatched elements when subsetting using names? After all, 
+> the unmatched elements are already returned. I.e., the output would 
+> look like this:
+>
+> ```
+>
+> menu[select]
+> # $bacon
+> # [1] "foo"
+> #
+> # $eggs
+> # [1] "bar"
+> #
+> # $spam
+> # NULL
+>
+> ```
+>
+> The simple fix `menu[select] |> setNames(select)` solves, but it feels 
+> to me like something that could be a default behaviour.
+>
+> On slightly unrelated note, when I was asking if there is a better 
+> solution, the `menu[select]` seems to allocate more memory than 
+> `menu_env = list2env(menu); mget(select, envir = menu, ifnotfound = 
+> list(NULL)`. Or the sapply solution. Is this a benchmarking artifact?
+>
+> https://stackoverflow.com/q/77828678/4868692
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Herv? Pag?s
+
+Bioconductor Core Team
+hpages.on.github at gmail.com
+
+	[[alternative HTML version deleted]]
+
+
