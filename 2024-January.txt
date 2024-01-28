@@ -3681,3 +3681,120 @@ hpages.on.github at gmail.com
 	[[alternative HTML version deleted]]
 
 
+From m|ch@e|ch|r|co4 @end|ng |rom gm@||@com  Fri Jan 26 18:36:24 2024
+From: m|ch@e|ch|r|co4 @end|ng |rom gm@||@com (Michael Chirico)
+Date: Fri, 26 Jan 2024 09:36:24 -0800
+Subject: [Rd] readChar() could read the whole file by default?
+Message-ID: <CAPRVBcyG92q3KYEP7LtdvZ3isOaxCpCxChX9EHp4twURbWa+TQ@mail.gmail.com>
+
+I am curious why readLines() has a default (n=-1L) to read the full
+file while readChar() has no default for nchars= (i.e., readChar(file)
+is an error). Is there a technical reason for this?
+
+I often[1] see code like paste(readLines(f), collapse="\n") which
+would be better served by readChar(), especially given issues with the
+global string cache I've come across[2]. But lacking the default, the
+replacement might come across less clean.
+
+For my own purposes the incantation readChar(file, file.size(file)) is
+ubiquitous. Taking CRAN code[3] as a sample[4], 41% of readChar()
+calls use either readChar(f, file.info(f)$size) or readChar(f,
+file.size(f))[5].
+
+Thanks for the consideration and feedback,
+Mike C
+
+[1] e.g. a quick search shows O(100) usages in CRAN packages:
+https://github.com/search?q=org%3Acran+%2Fpaste%5B%28%5D%5Cs*readLines%5B%28%5D.*%5B%29%5D%2C%5Cs*collapse%5Cs*%3D%5Cs*%5B%27%22%5D%5B%5C%5C%5D%2F+lang%3AR&type=code,
+and O(1000) usages generally on GitHub:
+https://github.com/search?q=lang%3AR+%2Fpaste%5B%28%5D%5Cs*readLines%5B%28%5D.*%5B%29%5D%2C%5Cs*collapse%5Cs*%3D%5Cs*%5B%27%22%5D%5B%5C%5C%5D%2F+lang%3AR&type=code
+[2] AIUI the readLines() approach "pollutes" the global string cache
+with potentially 1000s/10000s of strings for each line, only to get
+them gc()'d after combining everything with paste(collapse="\n")
+[3] The mirror on GitHub, which includes archived packages as well as
+current (well, eventually-consistent) versions.
+[4] Note that usage in packages is likely not representative of usage
+in scripts, e.g. I often saw readChar(f, 1), or eol-finders like
+readChar(f, 500) + grep("[\n\r]"), which makes more sense to me as
+something to find in package internals than in analysis scripts. FWIW
+I searched an internal codebase (scripts and packages) and found 70%
+of usages reading the full file.
+[5] repro: https://gist.github.com/MichaelChirico/247ea9500460dca239f031e74bdcf76b
+requires GitHub PAT in env GITHUB_PAT for API permissions.
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Fri Jan 26 22:05:02 2024
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Fri, 26 Jan 2024 15:05:02 -0600 (CST)
+Subject: [Rd] 
+ [External]  readChar() could read the whole file by default?
+In-Reply-To: <CAPRVBcyG92q3KYEP7LtdvZ3isOaxCpCxChX9EHp4twURbWa+TQ@mail.gmail.com>
+References: <CAPRVBcyG92q3KYEP7LtdvZ3isOaxCpCxChX9EHp4twURbWa+TQ@mail.gmail.com>
+Message-ID: <d3f157fa-bbd8-d751-641f-2d38ba635e3b@uiowa.edu>
+
+On Fri, 26 Jan 2024, Michael Chirico wrote:
+
+> I am curious why readLines() has a default (n=-1L) to read the full
+> file while readChar() has no default for nchars= (i.e., readChar(file)
+> is an error). Is there a technical reason for this?
+>
+> I often[1] see code like paste(readLines(f), collapse="\n") which
+> would be better served by readChar(), especially given issues with the
+> global string cache I've come across[2]. But lacking the default, the
+> replacement might come across less clean.
+
+The string cache seems like a very dark pink herring to me. The fact
+that the lines are allocated on the heap might create an issue; the
+cache isn't likely to add much to that. In any case I would need to
+see a realistic example to convince me this is worth addressing on
+performance grounds.
+
+I don't see any reason in principle not to have readChar and readBin
+read the entire file if n = -1 (others might) but someone would need
+to write a patch to implement that.
+
+Best,
+
+luke
+
+> For my own purposes the incantation readChar(file, file.size(file)) is
+> ubiquitous. Taking CRAN code[3] as a sample[4], 41% of readChar()
+> calls use either readChar(f, file.info(f)$size) or readChar(f,
+> file.size(f))[5].
+>
+> Thanks for the consideration and feedback,
+> Mike C
+>
+> [1] e.g. a quick search shows O(100) usages in CRAN packages:
+> https://github.com/search?q=org%3Acran+%2Fpaste%5B%28%5D%5Cs*readLines%5B%28%5D.*%5B%29%5D%2C%5Cs*collapse%5Cs*%3D%5Cs*%5B%27%22%5D%5B%5C%5C%5D%2F+lang%3AR&type=code,
+> and O(1000) usages generally on GitHub:
+> https://github.com/search?q=lang%3AR+%2Fpaste%5B%28%5D%5Cs*readLines%5B%28%5D.*%5B%29%5D%2C%5Cs*collapse%5Cs*%3D%5Cs*%5B%27%22%5D%5B%5C%5C%5D%2F+lang%3AR&type=code
+> [2] AIUI the readLines() approach "pollutes" the global string cache
+> with potentially 1000s/10000s of strings for each line, only to get
+> them gc()'d after combining everything with paste(collapse="\n")
+> [3] The mirror on GitHub, which includes archived packages as well as
+> current (well, eventually-consistent) versions.
+> [4] Note that usage in packages is likely not representative of usage
+> in scripts, e.g. I often saw readChar(f, 1), or eol-finders like
+> readChar(f, 500) + grep("[\n\r]"), which makes more sense to me as
+> something to find in package internals than in analysis scripts. FWIW
+> I searched an internal codebase (scripts and packages) and found 70%
+> of usages reading the full file.
+> [5] repro: https://gist.github.com/MichaelChirico/247ea9500460dca239f031e74bdcf76b
+> requires GitHub PAT in env GITHUB_PAT for API permissions.
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+
+
