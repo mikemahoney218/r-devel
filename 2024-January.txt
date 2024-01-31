@@ -3798,3 +3798,328 @@ Department of Statistics and        Fax:               319-335-3017
 Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
 
 
+From t|m@t@y|or @end|ng |rom h|ddene|eph@nt@@co@uk  Mon Jan 29 15:04:16 2024
+From: t|m@t@y|or @end|ng |rom h|ddene|eph@nt@@co@uk (Tim Taylor)
+Date: Mon, 29 Jan 2024 14:04:16 +0000
+Subject: [Rd] strcapture performance when perl = TRUE
+Message-ID: <8b027c67-106e-49c8-8ae1-f77d9d177105@app.fastmail.com>
+
+I wanted to raise the possibility of improving strcapture performance in
+cases where perl = TRUE. I believe we can do this in a non-breaking way
+by calling regexpr instead of regexec (conditionally when perl = TRUE).
+To illustrate this I've put together a 'proof of concept' function called
+strcapture2 that utilises output from regexpr directly (following a very
+nice substring approach that I've seen implemented by Toby Hocking
+in the nc package - nc::capture_first_vec).
+
+strcapture2 <- function(pattern, x, proto, perl = FALSE, useBytes = FALSE) {
+    if (isTRUE(perl)) {
+        m <- regexpr(pattern = pattern, text = x, perl = TRUE, useBytes = useBytes)
+        nomatch <- is.na(m) | m == -1L
+        ntokens <- length(proto)
+        if (any(!nomatch)) {
+            length <- attr(m, "match.length")
+            start <- attr(m, "capture.start")
+            length <- attr(m, "capture.length")
+            end <- start + length - 1L
+            end[nomatch, ] <- start[nomatch, ] <- NA
+            res <- substring(x, start, end)
+            out <- matrix(res, length(m))
+            if (ncol(out) != ntokens) {
+                stop("The number of captures in 'pattern' != 'length(proto)'")
+            }
+        } else {
+            out <- matrix(NA_character_, length(m), ntokens)
+        }
+        utils:::conformToProto(out,proto)
+    } else {
+        strcapture(pattern,x,proto,perl,useBytes)
+    }
+}
+
+Now comparing with strcapture we can expand the named capture example
+from the grep documentation:
+
+notables <- c(
+    "  Ben Franklin and Jefferson Davis",
+    "\tMillard Fillmore",
+    "Bob",
+    NA_character_
+)
+
+regex <- "(?<first>[[:upper:]][[:lower:]]+) (?<last>[[:upper:]][[:lower:]]+)"
+proto = data.frame("", "")
+
+(strcapture(regex, notables, proto, perl = TRUE))
+      X..    X...1
+1     Ben Franklin
+2 Millard Fillmore
+3    <NA>     <NA>
+4    <NA>     <NA>
+
+(strcapture2(regex, notables, proto, perl = TRUE))
+      X..    X...1
+1     Ben Franklin
+2 Millard Fillmore
+3    <NA>     <NA>
+4    <NA>     <NA>
+
+Now to compare timings over multiple reps:
+
+lengths <- sort(outer(c(1, 2, 5), 10^(1:4)))
+reps <- 20 
+
+time_strcapture <- function(text, length, regex, proto, reps) {
+    text <- rep_len(text, length)
+    str <- system.time(for (i in seq_len(reps)) strcapture(regex, text, proto, perl = TRUE))
+    str2 <- system.time(for (i in seq_len(reps)) strcapture2(regex, text, proto, perl = TRUE))
+    c(strcapture = str[["user.self"]], strcapture2 = str2[["user.self"]])
+}
+timings <- sapply(
+    lengths,
+    time_strcapture,
+    text = notables, regex = regex, reps = reps, proto = proto
+)
+cbind(lengths, t(timings))
+      lengths strcapture strcapture2
+ [1,]      10      0.005       0.003
+ [2,]      20      0.005       0.002
+ [3,]      50      0.008       0.003
+ [4,]     100      0.012       0.002
+ [5,]     200      0.021       0.003
+ [6,]     500      0.051       0.003
+ [7,]    1000      0.097       0.004
+ [8,]    2000      0.171       0.005
+ [9,]    5000      0.517       0.011
+[10,]   10000      1.203       0.018
+[11,]   20000      2.563       0.037
+[12,]   50000      7.276       0.090
+
+I've attached a plot of these timings in case helpful.
+
+I appreciate that changing strcapture in this way does make it more
+complicated but I think the performance improvements make it worth
+considering. Note that I've not thoroughly tested the above implementation
+as wanted to get feedback from the list before proceeding further.
+
+Hope all this make sense. Cheers
+
+Tim
+
+
+-------------- next part --------------
+A non-text attachment was scrubbed...
+Name: strcapture.png
+Type: image/png
+Size: 28123 bytes
+Desc: not available
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20240129/261d61e7/attachment.png>
+
+From tdhock5 @end|ng |rom gm@||@com  Mon Jan 29 19:09:12 2024
+From: tdhock5 @end|ng |rom gm@||@com (Toby Hocking)
+Date: Mon, 29 Jan 2024 11:09:12 -0700
+Subject: [Rd] 
+ [External] readChar() could read the whole file by default?
+In-Reply-To: <d3f157fa-bbd8-d751-641f-2d38ba635e3b@uiowa.edu>
+References: <CAPRVBcyG92q3KYEP7LtdvZ3isOaxCpCxChX9EHp4twURbWa+TQ@mail.gmail.com>
+ <d3f157fa-bbd8-d751-641f-2d38ba635e3b@uiowa.edu>
+Message-ID: <CALK03d3_kUhKCeKD5V0CQN8KY3-aApq77=WjO3WB592-aHvTFw@mail.gmail.com>
+
+My opinion is that the proposed feature would be greatly appreciated by users.
+I had always wondered if I was the only one doing paste(readLines(f),
+collapse="\n") all the time.
+It would be great to have the proposed, more straightforward way to
+read the whole file as a string: readChar("my_file.txt", -1) or even
+better readChar("my_file.txt")
+Thanks for your detailed analysis Michael.
+
+On Fri, Jan 26, 2024 at 2:05?PM luke-tierney--- via R-devel
+<r-devel at r-project.org> wrote:
+>
+> On Fri, 26 Jan 2024, Michael Chirico wrote:
+>
+> > I am curious why readLines() has a default (n=-1L) to read the full
+> > file while readChar() has no default for nchars= (i.e., readChar(file)
+> > is an error). Is there a technical reason for this?
+> >
+> > I often[1] see code like paste(readLines(f), collapse="\n") which
+> > would be better served by readChar(), especially given issues with the
+> > global string cache I've come across[2]. But lacking the default, the
+> > replacement might come across less clean.
+>
+> The string cache seems like a very dark pink herring to me. The fact
+> that the lines are allocated on the heap might create an issue; the
+> cache isn't likely to add much to that. In any case I would need to
+> see a realistic example to convince me this is worth addressing on
+> performance grounds.
+>
+> I don't see any reason in principle not to have readChar and readBin
+> read the entire file if n = -1 (others might) but someone would need
+> to write a patch to implement that.
+>
+> Best,
+>
+> luke
+>
+> > For my own purposes the incantation readChar(file, file.size(file)) is
+> > ubiquitous. Taking CRAN code[3] as a sample[4], 41% of readChar()
+> > calls use either readChar(f, file.info(f)$size) or readChar(f,
+> > file.size(f))[5].
+> >
+> > Thanks for the consideration and feedback,
+> > Mike C
+> >
+> > [1] e.g. a quick search shows O(100) usages in CRAN packages:
+> > https://github.com/search?q=org%3Acran+%2Fpaste%5B%28%5D%5Cs*readLines%5B%28%5D.*%5B%29%5D%2C%5Cs*collapse%5Cs*%3D%5Cs*%5B%27%22%5D%5B%5C%5C%5D%2F+lang%3AR&type=code,
+> > and O(1000) usages generally on GitHub:
+> > https://github.com/search?q=lang%3AR+%2Fpaste%5B%28%5D%5Cs*readLines%5B%28%5D.*%5B%29%5D%2C%5Cs*collapse%5Cs*%3D%5Cs*%5B%27%22%5D%5B%5C%5C%5D%2F+lang%3AR&type=code
+> > [2] AIUI the readLines() approach "pollutes" the global string cache
+> > with potentially 1000s/10000s of strings for each line, only to get
+> > them gc()'d after combining everything with paste(collapse="\n")
+> > [3] The mirror on GitHub, which includes archived packages as well as
+> > current (well, eventually-consistent) versions.
+> > [4] Note that usage in packages is likely not representative of usage
+> > in scripts, e.g. I often saw readChar(f, 1), or eol-finders like
+> > readChar(f, 500) + grep("[\n\r]"), which makes more sense to me as
+> > something to find in package internals than in analysis scripts. FWIW
+> > I searched an internal codebase (scripts and packages) and found 70%
+> > of usages reading the full file.
+> > [5] repro: https://gist.github.com/MichaelChirico/247ea9500460dca239f031e74bdcf76b
+> > requires GitHub PAT in env GITHUB_PAT for API permissions.
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+>
+> --
+> Luke Tierney
+> Ralph E. Wareham Professor of Mathematical Sciences
+> University of Iowa                  Phone:             319-335-3386
+> Department of Statistics and        Fax:               319-335-3017
+>     Actuarial Science
+> 241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+> Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Mon Jan 29 19:23:41 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Mon, 29 Jan 2024 13:23:41 -0500
+Subject: [Rd] 
+ [External] readChar() could read the whole file by default?
+In-Reply-To: <CALK03d3_kUhKCeKD5V0CQN8KY3-aApq77=WjO3WB592-aHvTFw@mail.gmail.com>
+References: <CAPRVBcyG92q3KYEP7LtdvZ3isOaxCpCxChX9EHp4twURbWa+TQ@mail.gmail.com>
+ <d3f157fa-bbd8-d751-641f-2d38ba635e3b@uiowa.edu>
+ <CALK03d3_kUhKCeKD5V0CQN8KY3-aApq77=WjO3WB592-aHvTFw@mail.gmail.com>
+Message-ID: <4181b926-67c0-44fd-be73-31b022af15d8@gmail.com>
+
+On 29/01/2024 1:09 p.m., Toby Hocking wrote:
+> My opinion is that the proposed feature would be greatly appreciated by users.
+> I had always wondered if I was the only one doing paste(readLines(f),
+> collapse="\n") all the time.
+> It would be great to have the proposed, more straightforward way to
+> read the whole file as a string: readChar("my_file.txt", -1) or even
+> better readChar("my_file.txt")
+> Thanks for your detailed analysis Michael.
+
+These two things aren't the same:
+
+   paste(readLines(f), collapse = "\n")
+
+is not the same as
+
+   readChar(f, file.size(f))
+
+in cases where the file has Windows-style newlines and you're reading it 
+on Unix, because the first one converts the CR LF newlines into \n, 
+while the second would give \r\n.  I think they would match for reading 
+Unix-style files on Windows.)
+
+Does this ever matter?  I don't know, but I think usually people would 
+want the behaviour of paste(readLines(f), collapse = "\n").
+
+Duncan Murdoch
+
+
+> 
+> On Fri, Jan 26, 2024 at 2:05?PM luke-tierney--- via R-devel
+> <r-devel at r-project.org> wrote:
+>>
+>> On Fri, 26 Jan 2024, Michael Chirico wrote:
+>>
+>>> I am curious why readLines() has a default (n=-1L) to read the full
+>>> file while readChar() has no default for nchars= (i.e., readChar(file)
+>>> is an error). Is there a technical reason for this?
+>>>
+>>> I often[1] see code like paste(readLines(f), collapse="\n") which
+>>> would be better served by readChar(), especially given issues with the
+>>> global string cache I've come across[2]. But lacking the default, the
+>>> replacement might come across less clean.
+>>
+>> The string cache seems like a very dark pink herring to me. The fact
+>> that the lines are allocated on the heap might create an issue; the
+>> cache isn't likely to add much to that. In any case I would need to
+>> see a realistic example to convince me this is worth addressing on
+>> performance grounds.
+>>
+>> I don't see any reason in principle not to have readChar and readBin
+>> read the entire file if n = -1 (others might) but someone would need
+>> to write a patch to implement that.
+>>
+>> Best,
+>>
+>> luke
+>>
+>>> For my own purposes the incantation readChar(file, file.size(file)) is
+>>> ubiquitous. Taking CRAN code[3] as a sample[4], 41% of readChar()
+>>> calls use either readChar(f, file.info(f)$size) or readChar(f,
+>>> file.size(f))[5].
+>>>
+>>> Thanks for the consideration and feedback,
+>>> Mike C
+>>>
+>>> [1] e.g. a quick search shows O(100) usages in CRAN packages:
+>>> https://github.com/search?q=org%3Acran+%2Fpaste%5B%28%5D%5Cs*readLines%5B%28%5D.*%5B%29%5D%2C%5Cs*collapse%5Cs*%3D%5Cs*%5B%27%22%5D%5B%5C%5C%5D%2F+lang%3AR&type=code,
+>>> and O(1000) usages generally on GitHub:
+>>> https://github.com/search?q=lang%3AR+%2Fpaste%5B%28%5D%5Cs*readLines%5B%28%5D.*%5B%29%5D%2C%5Cs*collapse%5Cs*%3D%5Cs*%5B%27%22%5D%5B%5C%5C%5D%2F+lang%3AR&type=code
+>>> [2] AIUI the readLines() approach "pollutes" the global string cache
+>>> with potentially 1000s/10000s of strings for each line, only to get
+>>> them gc()'d after combining everything with paste(collapse="\n")
+>>> [3] The mirror on GitHub, which includes archived packages as well as
+>>> current (well, eventually-consistent) versions.
+>>> [4] Note that usage in packages is likely not representative of usage
+>>> in scripts, e.g. I often saw readChar(f, 1), or eol-finders like
+>>> readChar(f, 500) + grep("[\n\r]"), which makes more sense to me as
+>>> something to find in package internals than in analysis scripts. FWIW
+>>> I searched an internal codebase (scripts and packages) and found 70%
+>>> of usages reading the full file.
+>>> [5] repro: https://gist.github.com/MichaelChirico/247ea9500460dca239f031e74bdcf76b
+>>> requires GitHub PAT in env GITHUB_PAT for API permissions.
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>
+>>
+>> --
+>> Luke Tierney
+>> Ralph E. Wareham Professor of Mathematical Sciences
+>> University of Iowa                  Phone:             319-335-3386
+>> Department of Statistics and        Fax:               319-335-3017
+>>      Actuarial Science
+>> 241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+>> Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
