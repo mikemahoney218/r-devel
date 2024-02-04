@@ -1,0 +1,181 @@
+From x|ny|@xu97 @end|ng |rom gm@||@com  Thu Feb  1 17:28:57 2024
+From: x|ny|@xu97 @end|ng |rom gm@||@com (Xinyi)
+Date: Thu, 1 Feb 2024 16:28:57 +0000
+Subject: [Rd] [Feature Request] Hide API Key in download.file() / R's libcurl
+Message-ID: <CAOmDYzZe2ODCqgK+9sOtAAh1dVpAKK=PT7h7bs12cAFzk+ckMg@mail.gmail.com>
+
+Hi all,
+
+When trying to install a package from R using install.packages(), it will
+print out the full url address (of the remote repository) it was trying to
+access. A bit further digging shows it is from the in_do_curlDownload
+method from R's libcurl
+<https://github.com/wch/r-source/blob/trunk/src/modules/internet/libcurl.c>:
+install.packages() calls download.packages(), and download.packages() calls
+download.file(), which uses "libcurl" as its default method.
+
+This line from R mirror
+<https://github.com/wch/r-source/blob/trunk/src/modules/internet/libcurl.c#L772>
+("if (!quiet) REprintf(_("trying URL '%s'\n"), url);")  prints the full url
+it is trying to access.
+
+This is totally fine for public urls without credentials, but in the case
+that a given url contains an API key, it poses security issues. For
+example, if the getOption("repos") has been overridden to a
+customized repository (protected by API keys), then
+> install.packages("zoo")
+Installing packages into '--removed local directory path--'
+trying URL 'https://--removed userid--:--removed
+api-key-- at repository-addresss.com:4443/.../src/contrib/zoo_1.8-12.tar.gz  '
+Content type 'application/x-gzip' length 782344 bytes (764 KB)
+===================================
+downloaded 764 KB
+
+* installing *source* package 'zoo' ...
+-- further logs removed --
+>
+
+I also tried several other options:
+
+1. quite=1
+> install.packages("zoo", quite=1)
+It did hide the url, but it also hid all other useful information.
+2. method="curl"
+> install.packages("zoo", method="curl")
+This does not print the url when the download is successful, but if there
+were any errors, it still prints the url with API key in it.
+3. method="wget"
+> install.packages("zoo", method="wget")
+This hides API key by *password*, but I wasn't able to install packages
+with this method even with public repos, with the error "Warning: unable to
+access index for repository https://cloud.r-project.org/src/contrib/4.3:
+'wget' call had nonzero exit status"
+
+
+In other dynamic languages' package managers like Python's pip, API keys
+are hidden by default since pip 18.x in 2018, and masked by "****" from pip
+19.x in 2019, see below examples. Can we get a similar default behaviour in
+R?
+
+1. with pip 10.x
+$ pip install numpy -v # API key was not hided
+Looking in indexes:  https://--removed userid--:--removed
+api-key-- at repository-addresss.com:4443/.../pypi/simple
+2. with pip 18.x # All credentials are removed by pip
+$ pip install numpy -v
+Looking in indexes:  https://repository-addresss.com:4443/
+.../pypi/simple
+3. with pip 19.x onwards # userid is kept, API key is replaced by ****
+$ pip install numpy -v
+Looking in indexes:  https://userid:****@
+repository-addresss.com:4443/.../pypi/simple
+
+
+I was instructed by https://www.r-project.org/bugs.html that I should get
+some discussion on r-devel before filing a feature request. So looking
+forward to comments/suggestions.
+
+Thanks,
+Xinyi
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Thu Feb  1 18:37:15 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Thu, 1 Feb 2024 12:37:15 -0500
+Subject: [Rd] [Feature Request] Hide API Key in download.file() / R's
+ libcurl
+In-Reply-To: <CAOmDYzZe2ODCqgK+9sOtAAh1dVpAKK=PT7h7bs12cAFzk+ckMg@mail.gmail.com>
+References: <CAOmDYzZe2ODCqgK+9sOtAAh1dVpAKK=PT7h7bs12cAFzk+ckMg@mail.gmail.com>
+Message-ID: <63240c58-da4e-4d38-902c-d1588e2acb63@gmail.com>
+
+I've just been reading 
+https://developer.mozilla.org/en-US/docs/Web/HTTP/Authentication, and it 
+states that putting userid:password in the URL is deprecated, but it 
+does make sense that R should protect users who still use that scheme.
+
+Duncan Murdoch
+
+On 01/02/2024 11:28 a.m., Xinyi wrote:
+> Hi all,
+> 
+> When trying to install a package from R using install.packages(), it will
+> print out the full url address (of the remote repository) it was trying to
+> access. A bit further digging shows it is from the in_do_curlDownload
+> method from R's libcurl
+> <https://github.com/wch/r-source/blob/trunk/src/modules/internet/libcurl.c>:
+> install.packages() calls download.packages(), and download.packages() calls
+> download.file(), which uses "libcurl" as its default method.
+> 
+> This line from R mirror
+> <https://github.com/wch/r-source/blob/trunk/src/modules/internet/libcurl.c#L772>
+> ("if (!quiet) REprintf(_("trying URL '%s'\n"), url);")  prints the full url
+> it is trying to access.
+> 
+> This is totally fine for public urls without credentials, but in the case
+> that a given url contains an API key, it poses security issues. For
+> example, if the getOption("repos") has been overridden to a
+> customized repository (protected by API keys), then
+>> install.packages("zoo")
+> Installing packages into '--removed local directory path--'
+> trying URL 'https://--removed userid--:--removed
+> api-key-- at repository-addresss.com:4443/.../src/contrib/zoo_1.8-12.tar.gz  '
+> Content type 'application/x-gzip' length 782344 bytes (764 KB)
+> ===================================
+> downloaded 764 KB
+> 
+> * installing *source* package 'zoo' ...
+> -- further logs removed --
+>>
+> 
+> I also tried several other options:
+> 
+> 1. quite=1
+>> install.packages("zoo", quite=1)
+> It did hide the url, but it also hid all other useful information.
+> 2. method="curl"
+>> install.packages("zoo", method="curl")
+> This does not print the url when the download is successful, but if there
+> were any errors, it still prints the url with API key in it.
+> 3. method="wget"
+>> install.packages("zoo", method="wget")
+> This hides API key by *password*, but I wasn't able to install packages
+> with this method even with public repos, with the error "Warning: unable to
+> access index for repository https://cloud.r-project.org/src/contrib/4.3:
+> 'wget' call had nonzero exit status"
+> 
+> 
+> In other dynamic languages' package managers like Python's pip, API keys
+> are hidden by default since pip 18.x in 2018, and masked by "****" from pip
+> 19.x in 2019, see below examples. Can we get a similar default behaviour in
+> R?
+> 
+> 1. with pip 10.x
+> $ pip install numpy -v # API key was not hided
+> Looking in indexes:  https://--removed userid--:--removed
+> api-key-- at repository-addresss.com:4443/.../pypi/simple
+> 2. with pip 18.x # All credentials are removed by pip
+> $ pip install numpy -v
+> Looking in indexes:  https://repository-addresss.com:4443/
+> .../pypi/simple
+> 3. with pip 19.x onwards # userid is kept, API key is replaced by ****
+> $ pip install numpy -v
+> Looking in indexes:  https://userid:****@
+> repository-addresss.com:4443/.../pypi/simple
+> 
+> 
+> I was instructed by https://www.r-project.org/bugs.html that I should get
+> some discussion on r-devel before filing a feature request. So looking
+> forward to comments/suggestions.
+> 
+> Thanks,
+> Xinyi
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
