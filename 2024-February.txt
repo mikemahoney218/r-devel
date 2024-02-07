@@ -1060,3 +1060,318 @@ On 2024-02-04 16:46, Simon Urbanek wrote:
 > R-devel at r-project.org mailing list
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Mon Feb  5 13:17:41 2024
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Mon, 5 Feb 2024 13:17:41 +0100
+Subject: [Rd] [Feature Request] Hide API Key in download.file() / R's
+ libcurl
+In-Reply-To: <4A2FF313-9285-43C9-9179-6A4C93342D48@R-project.org>
+References: <CAOmDYzZe2ODCqgK+9sOtAAh1dVpAKK=PT7h7bs12cAFzk+ckMg@mail.gmail.com>
+ <4A2FF313-9285-43C9-9179-6A4C93342D48@R-project.org>
+Message-ID: <26048.53733.550786.251117@stat.math.ethz.ch>
+
+>>>>> Simon Urbanek 
+>>>>>     on Sun, 4 Feb 2024 10:33:34 +1300 writes:
+
+    > Any reason why you didn't use quiet=TRUE to suppress that
+    > output?  
+
+He wrote 'quite' instead of 'quiet' {see cited below '1. quite=1'}
+and probably never tried the correct spelling ...
+
+    > There is no official API structure for
+    > credentials in R repositories, so R has no way of knowing
+    > which part of the URL are credentials as it is not under
+    > R's purview - it could be part of the path or anything, so
+    > there is no way R can reliably mask it. Hence it makes
+    > more sense for the user to suppress the output if they
+    > think it may contain sensitive information - and R
+    > supports that.
+
+    > If that's still not enough, then please make a concrete
+    > proposal that defines exactly what kind processing you'd
+    > like to see under what conditions - and how you think that
+    > will solve the problem.
+
+    > Cheers, Simon
+
+
+
+    >> On Feb 2, 2024, at 5:28 AM, Xinyi <xinyi.xu97 at gmail.com>
+    >> wrote:
+    >> 
+    >> Hi all,
+    >> 
+    >> When trying to install a package from R using
+    >> install.packages(), it will print out the full url
+    >> address (of the remote repository) it was trying to
+    >> access. A bit further digging shows it is from the
+    >> in_do_curlDownload method from R's libcurl
+    >> <https://github.com/wch/r-source/blob/trunk/src/modules/internet/libcurl.c>:
+    >> install.packages() calls download.packages(), and
+    >> download.packages() calls download.file(), which uses
+    >> "libcurl" as its default method.
+    >> 
+    >> This line from R mirror
+    >> <https://github.com/wch/r-source/blob/trunk/src/modules/internet/libcurl.c#L772>
+    >> ("if (!quiet) REprintf(_("trying URL '%s'\n"), url);")
+    >> prints the full url it is trying to access.
+    >> 
+    >> This is totally fine for public urls without credentials,
+    >> but in the case that a given url contains an API key, it
+    >> poses security issues. For example, if the
+    >> getOption("repos") has been overridden to a customized
+    >> repository (protected by API keys), then
+    >>> install.packages("zoo")
+    >> Installing packages into '--removed local directory
+    >> path--' trying URL 'https://--removed userid--:--removed
+    >> api-key-- at repository-addresss.com:4443/.../src/contrib/zoo_1.8-12.tar.gz
+    >> ' Content type 'application/x-gzip' length 782344 bytes
+    >> (764 KB) =================================== downloaded
+    >> 764 KB
+    >> 
+    >> * installing *source* package 'zoo' ...  -- further logs
+    >> removed --
+    >>> 
+    >> 
+    >> I also tried several other options:
+    >> 
+    >> 1. quite=1
+    >>> install.packages("zoo", quite=1)
+    >> It did hide the url, but it also hid all other useful
+    >> information.  2. method="curl"
+    >>> install.packages("zoo", method="curl")
+    >> This does not print the url when the download is
+    >> successful, but if there were any errors, it still prints
+    >> the url with API key in it.  3. method="wget"
+    >>> install.packages("zoo", method="wget")
+    >> This hides API key by *password*, but I wasn't able to
+    >> install packages with this method even with public repos,
+    >> with the error "Warning: unable to access index for
+    >> repository https://cloud.r-project.org/src/contrib/4.3:
+    >> 'wget' call had nonzero exit status"
+    >> 
+    >> 
+    >> In other dynamic languages' package managers like
+    >> Python's pip, API keys are hidden by default since pip
+    >> 18.x in 2018, and masked by "****" from pip 19.x in 2019,
+    >> see below examples. Can we get a similar default
+    >> behaviour in R?
+    >> 
+    >> 1. with pip 10.x $ pip install numpy -v # API key was not
+    >> hided Looking in indexes: https://--removed
+    >> userid--:--removed
+    >> api-key-- at repository-addresss.com:4443/.../pypi/simple
+    >> 2. with pip 18.x # All credentials are removed by pip $
+    >> pip install numpy -v Looking in indexes:
+    >> https://repository-addresss.com:4443/ .../pypi/simple
+    >> 3. with pip 19.x onwards # userid is kept, API key is
+    >> replaced by **** $ pip install numpy -v Looking in
+    >> indexes: https://userid:****@
+    >> repository-addresss.com:4443/.../pypi/simple
+    >> 
+    >> 
+    >> I was instructed by https://www.r-project.org/bugs.html
+    >> that I should get some discussion on r-devel before
+    >> filing a feature request. So looking forward to
+    >> comments/suggestions.
+    >> 
+
+    > ______________________________________________
+    > R-devel at r-project.org mailing list
+    > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From x|ny|@xu97 @end|ng |rom gm@||@com  Mon Feb  5 14:09:55 2024
+From: x|ny|@xu97 @end|ng |rom gm@||@com (Xinyi)
+Date: Mon, 5 Feb 2024 13:09:55 +0000
+Subject: [Rd] [Feature Request] Hide API Key in download.file() / R's
+ libcurl
+In-Reply-To: <26048.53733.550786.251117@stat.math.ethz.ch>
+References: <CAOmDYzZe2ODCqgK+9sOtAAh1dVpAKK=PT7h7bs12cAFzk+ckMg@mail.gmail.com>
+ <4A2FF313-9285-43C9-9179-6A4C93342D48@R-project.org>
+ <26048.53733.550786.251117@stat.math.ethz.ch>
+Message-ID: <CAOmDYzYnyBy4=4jAOgBdvoBaibgbAr_yHoc3zkXajSpe7+cOcg@mail.gmail.com>
+
+Apologies for the typo in my original email. I meant ?quiet=1? and it was
+working. The log was typed but not copied so that was why there was a typo.
+
+But as stated in the reasoning - it hides all the output, so also other
+useful information like where the lib is installed, compile details etc.
+which will be useful for debugging. I.e. quiet=1 can be a workaround but
+not a real solution.
+
+I would know it was typo if I have only tried quite? As it would print
+error telling me ?quite? is not recognised ;)
+
+Cheers,
+Xinyi
+
+
+
+On Mon, Feb 5, 2024 at 12:17 Martin Maechler <maechler at stat.math.ethz.ch>
+wrote:
+
+> >>>>> Simon Urbanek
+> >>>>>     on Sun, 4 Feb 2024 10:33:34 +1300 writes:
+>
+>     > Any reason why you didn't use quiet=TRUE to suppress that
+>     > output?
+>
+> He wrote 'quite' instead of 'quiet' {see cited below '1. quite=1'}
+> and probably never tried the correct spelling ...
+>
+>     > There is no official API structure for
+>     > credentials in R repositories, so R has no way of knowing
+>     > which part of the URL are credentials as it is not under
+>     > R's purview - it could be part of the path or anything, so
+>     > there is no way R can reliably mask it. Hence it makes
+>     > more sense for the user to suppress the output if they
+>     > think it may contain sensitive information - and R
+>     > supports that.
+>
+>     > If that's still not enough, then please make a concrete
+>     > proposal that defines exactly what kind processing you'd
+>     > like to see under what conditions - and how you think that
+>     > will solve the problem.
+>
+>     > Cheers, Simon
+>
+>
+>
+>     >> On Feb 2, 2024, at 5:28 AM, Xinyi <xinyi.xu97 at gmail.com>
+>     >> wrote:
+>     >>
+>     >> Hi all,
+>     >>
+>     >> When trying to install a package from R using
+>     >> install.packages(), it will print out the full url
+>     >> address (of the remote repository) it was trying to
+>     >> access. A bit further digging shows it is from the
+>     >> in_do_curlDownload method from R's libcurl
+>     >> <
+> https://github.com/wch/r-source/blob/trunk/src/modules/internet/libcurl.c
+> >:
+>     >> install.packages() calls download.packages(), and
+>     >> download.packages() calls download.file(), which uses
+>     >> "libcurl" as its default method.
+>     >>
+>     >> This line from R mirror
+>     >> <
+> https://github.com/wch/r-source/blob/trunk/src/modules/internet/libcurl.c#L772
+> >
+>     >> ("if (!quiet) REprintf(_("trying URL '%s'\n"), url);")
+>     >> prints the full url it is trying to access.
+>     >>
+>     >> This is totally fine for public urls without credentials,
+>     >> but in the case that a given url contains an API key, it
+>     >> poses security issues. For example, if the
+>     >> getOption("repos") has been overridden to a customized
+>     >> repository (protected by API keys), then
+>     >>> install.packages("zoo")
+>     >> Installing packages into '--removed local directory
+>     >> path--' trying URL 'https://--removed userid--:--removed
+>     >>
+> api-key-- at repository-addresss.com:4443/.../src/contrib/zoo_1.8-12.tar.gz
+>     >> ' Content type 'application/x-gzip' length 782344 bytes
+>     >> (764 KB) =================================== downloaded
+>     >> 764 KB
+>     >>
+>     >> * installing *source* package 'zoo' ...  -- further logs
+>     >> removed --
+>     >>>
+>     >>
+>     >> I also tried several other options:
+>     >>
+>     >> 1. quite=1
+>     >>> install.packages("zoo", quite=1)
+>     >> It did hide the url, but it also hid all other useful
+>     >> information.  2. method="curl"
+>     >>> install.packages("zoo", method="curl")
+>     >> This does not print the url when the download is
+>     >> successful, but if there were any errors, it still prints
+>     >> the url with API key in it.  3. method="wget"
+>     >>> install.packages("zoo", method="wget")
+>     >> This hides API key by *password*, but I wasn't able to
+>     >> install packages with this method even with public repos,
+>     >> with the error "Warning: unable to access index for
+>     >> repository https://cloud.r-project.org/src/contrib/4.3:
+>     >> 'wget' call had nonzero exit status"
+>     >>
+>     >>
+>     >> In other dynamic languages' package managers like
+>     >> Python's pip, API keys are hidden by default since pip
+>     >> 18.x in 2018, and masked by "****" from pip 19.x in 2019,
+>     >> see below examples. Can we get a similar default
+>     >> behaviour in R?
+>     >>
+>     >> 1. with pip 10.x $ pip install numpy -v # API key was not
+>     >> hided Looking in indexes: https://--removed
+>     >> userid--:--removed
+>     >> api-key-- at repository-addresss.com:4443/.../pypi/simple
+>     >> 2. with pip 18.x # All credentials are removed by pip $
+>     >> pip install numpy -v Looking in indexes:
+>     >> https://repository-addresss.com:4443/ .../pypi/simple
+>     >> 3. with pip 19.x onwards # userid is kept, API key is
+>     >> replaced by **** $ pip install numpy -v Looking in
+>     >> indexes: https://userid:****@
+>     >> repository-addresss.com:4443/.../pypi/simple
+>     >>
+>     >>
+>     >> I was instructed by https://www.r-project.org/bugs.html
+>     >> that I should get some discussion on r-devel before
+>     >> filing a feature request. So looking forward to
+>     >> comments/suggestions.
+>     >>
+>
+>     > ______________________________________________
+>     > R-devel at r-project.org mailing list
+>     > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From |kry|ov @end|ng |rom d|@root@org  Mon Feb  5 22:01:11 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Tue, 6 Feb 2024 00:01:11 +0300
+Subject: [Rd] Advice debugging M1Mac check errors
+In-Reply-To: <CAFDswJu2aDQzCZHJT7RqyBP-J8DLcj6PLzRBHbcStfxBJvw5Mg@mail.gmail.com>
+References: <CAFDswJu2aDQzCZHJT7RqyBP-J8DLcj6PLzRBHbcStfxBJvw5Mg@mail.gmail.com>
+Message-ID: <20240206000111.07ada026@Tarkus>
+
+On Sun, 4 Feb 2024 20:41:51 +0100
+Holger Hoefling <hhoeflin at gmail.com> wrote:
+
+> I wanted to ask if people have good advice on how to debug M1Mac
+> package check errors when you don?t have a Mac?
+
+Apologies for not answering the question you asked, but is this about
+hdf5r and problems printing R_xlen_t [*] that appeared in 1.3.8 and you
+tried to solve in 1.3.9?
+
+We had a thread about this last November:
+https://stat.ethz.ch/pipermail/r-package-devel/2023q4/010123.html
+
+To summarise, there is no single standard C format specifier that can be
+used to print R_xlen_t. As an implementation detail, it can be defined
+as int or ptrdiff_t (or something completely different in the future),
+and ptrdiff_t itself is usually defined as long or long long (or, also,
+something completely different on a weirder platform). All three basic
+types can have different widths and cause painful stack-related
+problems when a mismatch happens.
+
+In R-4.4, there will be a macro R_PRIdXLEN_T defining a compatible
+printf specifier. Until then (and for compatibility with R-4.3 and
+lower), it's relatively safe to cast to (long long) or (ptrdiff_t) and
+then use the corresponding specifier, but that's not 100% future-proof.
+Also, mind the warnings that mingw compilers sometimes emit for "new"
+printf specifiers despite UCRT is documented to support them.
+
+-- 
+Best regards,
+Ivan
+
+[*] https://www.stats.ox.ac.uk/pub/bdr/M1mac/hdf5r.out
+
+
