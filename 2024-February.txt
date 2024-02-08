@@ -1375,3 +1375,1197 @@ Ivan
 [*] https://www.stats.ox.ac.uk/pub/bdr/M1mac/hdf5r.out
 
 
+From @g|@nner|n| @end|ng |rom gm@||@com  Tue Feb  6 15:25:03 2024
+From: @g|@nner|n| @end|ng |rom gm@||@com (Simone Giannerini)
+Date: Tue, 6 Feb 2024 15:25:03 +0100
+Subject: [Rd] NROW and NCOL on NULL
+In-Reply-To: <CANcXGizv3sD3kiE__EUkuaESn44mvtQMrtpO_k=FjUwFQDGnVQ@mail.gmail.com>
+References: <CANcXGizv3sD3kiE__EUkuaESn44mvtQMrtpO_k=FjUwFQDGnVQ@mail.gmail.com>
+Message-ID: <CANcXGiyF-2hPtYKKyMJn015EK55uS02U52wPmiW7HuxERa6ncg@mail.gmail.com>
+
+I just saw this
+------------------------------------------------------------------------
+r85704 | hornik | 2023-12-19 00:33:07 -0600 (Tue, 19 Dec 2023) | 1 line
+Changed paths:
+   M /trunk/doc/NEWS.Rd
+   M /trunk/src/library/base/R/matrix.R
+   M /trunk/src/library/base/man/nrow.Rd
+   M /trunk/src/library/profile/Common.R
+
+Have NCOL(NULL) return 0 instead of 1.
+------------------------------------------------------------------------
+
+Many thanks to Kurt and the whole R-core team!
+
+Simone
+
+On Sat, Sep 23, 2023 at 7:43?PM Simone Giannerini <sgiannerini at gmail.com> wrote:
+>
+> Dear list,
+>
+> I do not know what would be the 'correct' answer to the following but
+> I think that they should return the same value to avoid potential
+> problems and hard to debug errors.
+>
+> Regards,
+>
+> Simone
+> ---------------------------------------
+>
+> > NCOL(NULL)
+> [1] 1
+>
+> > NROW(NULL)
+> [1] 0
+>
+> > sessionInfo()
+> R version 4.3.1 RC (2023-06-08 r84523 ucrt)
+> Platform: x86_64-w64-mingw32/x64 (64-bit)
+> Running under: Windows 11 x64 (build 22621)
+>
+> Matrix products: default
+>
+>
+> locale:
+> [1] LC_COLLATE=Italian_Italy.utf8  LC_CTYPE=Italian_Italy.utf8
+> [3] LC_MONETARY=Italian_Italy.utf8 LC_NUMERIC=C
+> [5] LC_TIME=Italian_Italy.utf8
+>
+> time zone: Europe/Rome
+> tzcode source: internal
+>
+> attached base packages:
+> [1] stats     graphics  grDevices utils     datasets  methods   base
+>
+> loaded via a namespace (and not attached):
+> [1] compiler_4.3.1
+>
+> --
+> ___________________________________________________
+>
+> Simone Giannerini
+> Dipartimento di Scienze Statistiche "Paolo Fortunati"
+> Universita' di Bologna
+> Via delle belle arti 41 - 40126  Bologna,  ITALY
+> Tel: +39 051 2098262  Fax: +39 051 232153
+> https://simonegiannerini.net/
+> ___________________________________________________
+
+
+
+-- 
+___________________________________________________
+
+Simone Giannerini
+Dipartimento di Scienze Statistiche "Paolo Fortunati"
+Universita' di Bologna
+Via delle belle arti 41 - 40126  Bologna,  ITALY
+Tel: +39 051 2098262  Fax: +39 051 232153
+https://simonegiannerini.net/
+
+
+From r|p|ey @end|ng |rom @t@t@@ox@@c@uk  Tue Feb  6 17:06:46 2024
+From: r|p|ey @end|ng |rom @t@t@@ox@@c@uk (Prof Brian Ripley)
+Date: Tue, 6 Feb 2024 16:06:46 +0000
+Subject: [Rd] Advice debugging M1Mac check errors
+In-Reply-To: <CAFDswJu2aDQzCZHJT7RqyBP-J8DLcj6PLzRBHbcStfxBJvw5Mg@mail.gmail.com>
+References: <CAFDswJu2aDQzCZHJT7RqyBP-J8DLcj6PLzRBHbcStfxBJvw5Mg@mail.gmail.com>
+Message-ID: <90026864-f81c-4663-8cfe-6ae99d23307b@stats.ox.ac.uk>
+
+On 04/02/2024 19:41, Holger Hoefling wrote:
+> Hi,
+> 
+> I wanted to ask if people have good advice on how to debug M1Mac package
+> check errors when you don?t have a Mac? Is a cloud machine the best option
+> or is there something else?
+
+I presumed this was about a CRAN package, possibly hdf5r which has a 
+R-devel-only warning from the Apple clang compiler.  And that is not a 
+'check error' and not something to 'debug'.
+
+The original poster had errors for his package flsa until yesterday on 
+fedora-clang and M1mac, which were compilation errors with recent LLVM 
+and Apple compilers.  Again, not really something to 'debug' -- the 
+compiler messages were clear and the CRAN notification contained advice 
+on where in our manual to look this up.
+
+The mac-builder service offers checks for R 4.3.0, the 'development' 
+option being (last time I tried) the same as the 'release' option. (When 
+I asked, Simon said that 'development' checks were only available in the 
+run up to a x.y.0 when he starts package building and checks for R-devel.)
+
+
+We were left to guess, but I doubt this has to do with the lack of 
+'extended precision' nor long doubles longer than doubles on arm64 
+macOS.  And issues with that are rather rare (much rarer than numerical 
+issues for non-reference x86_64 BLAS/LAPACKs).  Of the 20,300 CRAN 
+packages just 18 have M1mac-specific errors, none obviously from 
+numerical inaccuracy.  A quick look back suggests we get about 20 a year 
+with M1mac numerical issues, about half of which were mirrored on the 
+x86_64 'noLD' checks.
+
+-- 
+Brian D. Ripley,                  ripley at stats.ox.ac.uk
+Emeritus Professor of Applied Statistics, University of Oxford
+
+
+From pro|jcn@@h @end|ng |rom gm@||@com  Tue Feb  6 17:37:26 2024
+From: pro|jcn@@h @end|ng |rom gm@||@com (J C Nash)
+Date: Tue, 6 Feb 2024 08:37:26 -0800
+Subject: [Rd] Advice debugging M1Mac check errors
+In-Reply-To: <90026864-f81c-4663-8cfe-6ae99d23307b@stats.ox.ac.uk>
+References: <CAFDswJu2aDQzCZHJT7RqyBP-J8DLcj6PLzRBHbcStfxBJvw5Mg@mail.gmail.com>
+ <90026864-f81c-4663-8cfe-6ae99d23307b@stats.ox.ac.uk>
+Message-ID: <f46816fb-12fc-4763-b4e2-08c7d312fccc@gmail.com>
+
+M1mac numerical issues should be rare, but when they do pop up they can be disconcerting.
+
+The following little script reveals what happens with no extended precision. A few months
+ago I built this into a "package" and used https://mac.r-project.org/macbuilder/submit.html
+to run it, getting the indicated result of 0 for (sum(vv1) - 1.0e0), with non-zero on my
+Ryzen 7 laptop.
+
+JN
+
+# FPExtendedTest.R   J C Nash
+loopsum <- function(vec){
+    n <- length(vec)
+    vsum<-0.0
+    for (i in 1:n) { vsum <- vsum + vec[i]}
+    vsum
+}
+small<-.Machine$double.eps/4 # 1/4 of the machine precision
+vsmall <- rep(small, 1e4) # a long vector of small numbers
+vv1 <- c(1.0, vsmall) # 1 at the front of this vector
+vv2 <- c(vsmall, 1.0) # 1 at the end
+(sum(vv1) - 1.0e0) # Should be > 0 for extended precision, 0 otherwise
+(sum(vv2) - 1.0e0) # Should be > 0
+(loopsum(vv1) - 1.0e0) # should be zero
+(loopsum(vv2) - 1.0e0) # should be greater than zero
+
+
+
+On 2024-02-06 08:06, Prof Brian Ripley via R-devel wrote:
+
+> 
+> We were left to guess, but I doubt this has to do with the lack of 'extended precision' nor long doubles longer than 
+> doubles on arm64 macOS.? And issues with that are rather rare (much rarer than numerical issues for non-reference x86_64 
+> BLAS/LAPACKs).? Of the 20,300 CRAN packages just 18 have M1mac-specific errors, none obviously from numerical 
+> inaccuracy.? A quick look back suggests we get about 20 a year with M1mac numerical issues, about half of which were 
+> mirrored on the x86_64 'noLD' checks.
+>
+
+
+From hp@ge@@on@g|thub @end|ng |rom gm@||@com  Tue Feb  6 20:17:20 2024
+From: hp@ge@@on@g|thub @end|ng |rom gm@||@com (=?UTF-8?B?SGVydsOpIFBhZ8Oocw==?=)
+Date: Tue, 6 Feb 2024 11:17:20 -0800
+Subject: [Rd] NOTE: multiple local function definitions for ?fun? with
+ different formal arguments
+In-Reply-To: <5cb29a06-5b73-4fe4-b8dc-7aa9db6a2cff@gmail.com>
+References: <5jst8ric3j9fg55fkwuhhlyk.1707061436584@email.android.com>
+ <CA+jjkEbwGe-W-gSfds1=4Vzrf=LOitwiE=4Vx0+NCj4t2t09JA@mail.gmail.com>
+ <lo01v1qa61gmseab9ma660ts.1707061568394@email.android.com>
+ <5cb29a06-5b73-4fe4-b8dc-7aa9db6a2cff@gmail.com>
+Message-ID: <15c10f0d-2c05-4b84-a3f0-0c02fdbb15e2@gmail.com>
+
+Thanks. Workarounds are interesting but... what's the point of the NOTE 
+in the first place?
+
+H.
+
+On 2/4/24 09:07, Duncan Murdoch wrote:
+> On 04/02/2024 10:55 a.m., Izmirlian, Grant (NIH/NCI) [E] via R-devel 
+> wrote:
+>> Well you can see that yeast is exactly weekday you have.? The way out 
+>> is to just not name the result
+>
+> I think something happened to your explanation...
+>
+>>
+>> toto <- function(mode)
+>> {
+>> ???? ifelse(mode == 1,
+>> ???????? function(a,b) a*b,
+>> ???????? function(u, v, w) (u + v) / w)
+>> }
+>
+> It's a bad idea to use ifelse() when you really want if() ... else ... 
+> . ?In this case it works, but it doesn't always.? So the workaround 
+> should be
+>
+>
+> toto <- function(mode)
+> {
+> ??? if(mode == 1)
+> ??????? function(a,b) a*b
+> ??? else
+> ??????? function(u, v, w) (u + v) / w
+> }
+>
+>
+>>
+>>
+>> ________________________________
+>> From: Grant Izmirlian <izmirlidroid at gmail.com>
+>> Date: Sun, Feb 4, 2024, 10:44 AM
+>> To: "Izmirlian, Grant (NIH/NCI) [E]" <izmirlig at mail.nih.gov>
+>> Subject: Fwd: [EXTERNAL] R-devel Digest, Vol 252, Issue 2
+>>
+>> Hi,
+>>
+>> I just ran into this 'R CMD check' NOTE for the first time:
+>>
+>> * checking R code for possible problems ... NOTE
+>> toto: multiple local function definitions for ?fun? with different
+>> ?? formal arguments
+>>
+>> The "offending" code is something like this (simplified from the real 
+>> code):
+>>
+>> toto <- function(mode)
+>> {
+>> ???? if (mode == 1)
+>> ???????? fun <- function(a, b) a*b
+>> ???? else
+>> ???????? fun <- function(u, v, w) (u + v) / w
+>> ???? fun
+>> }
+>>
+>> Is that NOTE really intended? Hard to see why this code would be
+>> considered "wrong".
+>>
+>> I know it's just a NOTE but still...
+>
+> I agree it's a false positive, but the issue is that you have a 
+> function object in your function which can't be called 
+> unconditionally.? The workaround doesn't create such an object.
+>
+> Recognizing that your function never tries to call fun requires global 
+> inspection of toto(), and most of the checks are based on local 
+> inspection.
+>
+> Duncan Murdoch
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Herv? Pag?s
+
+Bioconductor Core Team
+hpages.on.github at gmail.com
+
+	[[alternative HTML version deleted]]
+
+
+From |zm|r||g @end|ng |rom m@||@n|h@gov  Tue Feb  6 20:19:55 2024
+From: |zm|r||g @end|ng |rom m@||@n|h@gov (Izmirlian, Grant (NIH/NCI) [E])
+Date: Tue, 6 Feb 2024 19:19:55 +0000
+Subject: [Rd] 
+ [EXTERNAL] Re: NOTE: multiple local function definitions for
+ ?fun? with different formal arguments
+In-Reply-To: <15c10f0d-2c05-4b84-a3f0-0c02fdbb15e2@gmail.com>
+References: <5jst8ric3j9fg55fkwuhhlyk.1707061436584@email.android.com>
+ <CA+jjkEbwGe-W-gSfds1=4Vzrf=LOitwiE=4Vx0+NCj4t2t09JA@mail.gmail.com>
+ <lo01v1qa61gmseab9ma660ts.1707061568394@email.android.com>
+ <5cb29a06-5b73-4fe4-b8dc-7aa9db6a2cff@gmail.com>
+ <15c10f0d-2c05-4b84-a3f0-0c02fdbb15e2@gmail.com>
+Message-ID: <SA0PR09MB6955A7EF8CD84520F2FA6D8AE5462@SA0PR09MB6955.namprd09.prod.outlook.com>
+
+The note refers to the fact that the function named ?fun? appears to be defined in two different ways.
+
+From: Herv? Pag?s <hpages.on.github at gmail.com>
+Sent: Tuesday, February 6, 2024 2:17 PM
+To: Duncan Murdoch <murdoch.duncan at gmail.com>; Izmirlian, Grant (NIH/NCI) [E] <izmirlig at mail.nih.gov>; r-devel at r-project.org
+Subject: [EXTERNAL] Re: [Rd] NOTE: multiple local function definitions for ?fun? with different formal arguments
+
+
+Thanks. Workarounds are interesting but... what's the point of the NOTE in the first place?
+
+H.
+On 2/4/24 09:07, Duncan Murdoch wrote:
+On 04/02/2024 10:55 a.m., Izmirlian, Grant (NIH/NCI) [E] via R-devel wrote:
+
+Well you can see that yeast is exactly weekday you have.  The way out is to just not name the result
+
+I think something happened to your explanation...
+
+
+
+toto <- function(mode)
+{
+     ifelse(mode == 1,
+         function(a,b) a*b,
+         function(u, v, w) (u + v) / w)
+}
+
+It's a bad idea to use ifelse() when you really want if() ... else ... .  In this case it works, but it doesn't always.  So the workaround should be
+
+
+toto <- function(mode)
+{
+    if(mode == 1)
+        function(a,b) a*b
+    else
+        function(u, v, w) (u + v) / w
+}
+
+
+
+
+
+________________________________
+From: Grant Izmirlian <izmirlidroid at gmail.com><mailto:izmirlidroid at gmail.com>
+Date: Sun, Feb 4, 2024, 10:44 AM
+To: "Izmirlian, Grant (NIH/NCI) [E]" <izmirlig at mail.nih.gov><mailto:izmirlig at mail.nih.gov>
+Subject: Fwd: [EXTERNAL] R-devel Digest, Vol 252, Issue 2
+
+Hi,
+
+I just ran into this 'R CMD check' NOTE for the first time:
+
+* checking R code for possible problems ... NOTE
+toto: multiple local function definitions for ?fun? with different
+   formal arguments
+
+The "offending" code is something like this (simplified from the real code):
+
+toto <- function(mode)
+{
+     if (mode == 1)
+         fun <- function(a, b) a*b
+     else
+         fun <- function(u, v, w) (u + v) / w
+     fun
+}
+
+Is that NOTE really intended? Hard to see why this code would be
+considered "wrong".
+
+I know it's just a NOTE but still...
+
+I agree it's a false positive, but the issue is that you have a function object in your function which can't be called unconditionally.  The workaround doesn't create such an object.
+
+Recognizing that your function never tries to call fun requires global inspection of toto(), and most of the checks are based on local inspection.
+
+Duncan Murdoch
+
+______________________________________________
+R-devel at r-project.org<mailto:R-devel at r-project.org> mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+--
+
+Herv? Pag?s
+
+
+
+Bioconductor Core Team
+
+hpages.on.github at gmail.com<mailto:hpages.on.github at gmail.com>
+CAUTION: This email originated from outside of the organization. Do not click links or open attachments unless you recognize the sender and are confident the content is safe.
+
+
+	[[alternative HTML version deleted]]
+
+
+From |zm|r||g @end|ng |rom m@||@n|h@gov  Tue Feb  6 22:14:29 2024
+From: |zm|r||g @end|ng |rom m@||@n|h@gov (Izmirlian, Grant (NIH/NCI) [E])
+Date: Tue, 6 Feb 2024 21:14:29 +0000
+Subject: [Rd] 
+ [EXTERNAL] Re: NOTE: multiple local function definitions for
+ ?fun? with different formal arguments
+In-Reply-To: <33b6ee55-1caa-461b-a132-42e22f41dd1a@gmail.com>
+References: <5jst8ric3j9fg55fkwuhhlyk.1707061436584@email.android.com>
+ <CA+jjkEbwGe-W-gSfds1=4Vzrf=LOitwiE=4Vx0+NCj4t2t09JA@mail.gmail.com>
+ <lo01v1qa61gmseab9ma660ts.1707061568394@email.android.com>
+ <5cb29a06-5b73-4fe4-b8dc-7aa9db6a2cff@gmail.com>
+ <15c10f0d-2c05-4b84-a3f0-0c02fdbb15e2@gmail.com>
+ <SA0PR09MB6955A7EF8CD84520F2FA6D8AE5462@SA0PR09MB6955.namprd09.prod.outlook.com>
+ <33b6ee55-1caa-461b-a132-42e22f41dd1a@gmail.com>
+Message-ID: <SA0PR09MB69552A24686B60186A86BEC3E5462@SA0PR09MB6955.namprd09.prod.outlook.com>
+
+Because functions get called and therefore, the calling sequence matters. It?s just protecting you from yourself, but as someone pointed out, there?s a way to silence such notes.
+G
+
+
+From: Herv? Pag?s <hpages.on.github at gmail.com>
+Sent: Tuesday, February 6, 2024 2:40 PM
+To: Izmirlian, Grant (NIH/NCI) [E] <izmirlig at mail.nih.gov>; Duncan Murdoch <murdoch.duncan at gmail.com>; r-devel at r-project.org
+Subject: Re: [EXTERNAL] Re: [Rd] NOTE: multiple local function definitions for ?fun? with different formal arguments
+
+
+On 2/6/24 11:19, Izmirlian, Grant (NIH/NCI) [E] wrote:
+The note refers to the fact that the function named ?fun? appears to be defined in two different ways.
+
+Sure I get that. But how is that any different from a variable being defined in two different ways like in
+
+    if (mode == 1)
+        x <- -8
+    else
+        x <- 55
+
+This is such a common and perfectly fine pattern. Why would this be considered a potential hazard when the variable is a function?
+
+H.
+
+From: Herv? Pag?s <hpages.on.github at gmail.com><mailto:hpages.on.github at gmail.com>
+Sent: Tuesday, February 6, 2024 2:17 PM
+To: Duncan Murdoch <murdoch.duncan at gmail.com><mailto:murdoch.duncan at gmail.com>; Izmirlian, Grant (NIH/NCI) [E] <izmirlig at mail.nih.gov><mailto:izmirlig at mail.nih.gov>; r-devel at r-project.org<mailto:r-devel at r-project.org>
+Subject: [EXTERNAL] Re: [Rd] NOTE: multiple local function definitions for ?fun? with different formal arguments
+
+
+Thanks. Workarounds are interesting but... what's the point of the NOTE in the first place?
+
+H.
+On 2/4/24 09:07, Duncan Murdoch wrote:
+On 04/02/2024 10:55 a.m., Izmirlian, Grant (NIH/NCI) [E] via R-devel wrote:
+
+
+Well you can see that yeast is exactly weekday you have.  The way out is to just not name the result
+
+I think something happened to your explanation...
+
+
+
+
+toto <- function(mode)
+{
+     ifelse(mode == 1,
+         function(a,b) a*b,
+         function(u, v, w) (u + v) / w)
+}
+
+It's a bad idea to use ifelse() when you really want if() ... else ... .  In this case it works, but it doesn't always.  So the workaround should be
+
+
+toto <- function(mode)
+{
+    if(mode == 1)
+        function(a,b) a*b
+    else
+        function(u, v, w) (u + v) / w
+}
+
+
+
+
+
+
+________________________________
+From: Grant Izmirlian <izmirlidroid at gmail.com><mailto:izmirlidroid at gmail.com>
+Date: Sun, Feb 4, 2024, 10:44 AM
+To: "Izmirlian, Grant (NIH/NCI) [E]" <izmirlig at mail.nih.gov><mailto:izmirlig at mail.nih.gov>
+Subject: Fwd: [EXTERNAL] R-devel Digest, Vol 252, Issue 2
+
+Hi,
+
+I just ran into this 'R CMD check' NOTE for the first time:
+
+* checking R code for possible problems ... NOTE
+toto: multiple local function definitions for ?fun? with different
+   formal arguments
+
+The "offending" code is something like this (simplified from the real code):
+
+toto <- function(mode)
+{
+     if (mode == 1)
+         fun <- function(a, b) a*b
+     else
+         fun <- function(u, v, w) (u + v) / w
+     fun
+}
+
+Is that NOTE really intended? Hard to see why this code would be
+considered "wrong".
+
+I know it's just a NOTE but still...
+
+I agree it's a false positive, but the issue is that you have a function object in your function which can't be called unconditionally.  The workaround doesn't create such an object.
+
+Recognizing that your function never tries to call fun requires global inspection of toto(), and most of the checks are based on local inspection.
+
+Duncan Murdoch
+
+______________________________________________
+R-devel at r-project.org<mailto:R-devel at r-project.org> mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+--
+
+Herv? Pag?s
+
+
+
+Bioconductor Core Team
+
+hpages.on.github at gmail.com<mailto:hpages.on.github at gmail.com>
+CAUTION: This email originated from outside of the organization. Do not click links or open attachments unless you recognize the sender and are confident the content is safe.
+
+
+--
+
+Herv? Pag?s
+
+
+
+Bioconductor Core Team
+
+hpages.on.github at gmail.com<mailto:hpages.on.github at gmail.com>
+CAUTION: This email originated from outside of the organization. Do not click links or open attachments unless you recognize the sender and are confident the content is safe.
+
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Tue Feb  6 22:20:33 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 6 Feb 2024 16:20:33 -0500
+Subject: [Rd] NOTE: multiple local function definitions for ?fun? with
+ different formal arguments
+In-Reply-To: <15c10f0d-2c05-4b84-a3f0-0c02fdbb15e2@gmail.com>
+References: <5jst8ric3j9fg55fkwuhhlyk.1707061436584@email.android.com>
+ <CA+jjkEbwGe-W-gSfds1=4Vzrf=LOitwiE=4Vx0+NCj4t2t09JA@mail.gmail.com>
+ <lo01v1qa61gmseab9ma660ts.1707061568394@email.android.com>
+ <5cb29a06-5b73-4fe4-b8dc-7aa9db6a2cff@gmail.com>
+ <15c10f0d-2c05-4b84-a3f0-0c02fdbb15e2@gmail.com>
+Message-ID: <6be852da-f101-4e0f-85f9-23679583f64a@gmail.com>
+
+On 06/02/2024 2:17 p.m., Herv? Pag?s wrote:
+> Thanks. Workarounds are interesting but... what's the point of the NOTE 
+> in the first place?
+
+Creating a function that can't be called could be an error.  Presumably 
+you are careful and never try to call it with the wrong signature, but 
+the check code isn't smart enough to follow every code path, so it gives 
+the note to warn you that you might have something wrong.
+
+You still have the same issue with my workaround, but the check code 
+isn't smart enough to notice that.
+
+Duncan Murdoch
+
+> 
+> H.
+> 
+> On 2/4/24 09:07, Duncan Murdoch wrote:
+>> On 04/02/2024 10:55 a.m., Izmirlian, Grant (NIH/NCI) [E] via R-devel 
+>> wrote:
+>>> Well you can see that yeast is exactly weekday you have.? The way out 
+>>> is to just not name the result
+>>
+>> I think something happened to your explanation...
+>>
+>>>
+>>> toto <- function(mode)
+>>> {
+>>> ???? ifelse(mode == 1,
+>>> ???????? function(a,b) a*b,
+>>> ???????? function(u, v, w) (u + v) / w)
+>>> }
+>>
+>> It's a bad idea to use ifelse() when you really want if() ... else ... 
+>> . ?In this case it works, but it doesn't always.? So the workaround 
+>> should be
+>>
+>>
+>> toto <- function(mode)
+>> {
+>> ??? if(mode == 1)
+>> ??????? function(a,b) a*b
+>> ??? else
+>> ??????? function(u, v, w) (u + v) / w
+>> }
+>>
+>>
+>>>
+>>>
+>>> ________________________________
+>>> From: Grant Izmirlian <izmirlidroid at gmail.com>
+>>> Date: Sun, Feb 4, 2024, 10:44 AM
+>>> To: "Izmirlian, Grant (NIH/NCI) [E]" <izmirlig at mail.nih.gov>
+>>> Subject: Fwd: [EXTERNAL] R-devel Digest, Vol 252, Issue 2
+>>>
+>>> Hi,
+>>>
+>>> I just ran into this 'R CMD check' NOTE for the first time:
+>>>
+>>> * checking R code for possible problems ... NOTE
+>>> toto: multiple local function definitions for ?fun? with different
+>>> ?? formal arguments
+>>>
+>>> The "offending" code is something like this (simplified from the real 
+>>> code):
+>>>
+>>> toto <- function(mode)
+>>> {
+>>> ???? if (mode == 1)
+>>> ???????? fun <- function(a, b) a*b
+>>> ???? else
+>>> ???????? fun <- function(u, v, w) (u + v) / w
+>>> ???? fun
+>>> }
+>>>
+>>> Is that NOTE really intended? Hard to see why this code would be
+>>> considered "wrong".
+>>>
+>>> I know it's just a NOTE but still...
+>>
+>> I agree it's a false positive, but the issue is that you have a 
+>> function object in your function which can't be called 
+>> unconditionally.? The workaround doesn't create such an object.
+>>
+>> Recognizing that your function never tries to call fun requires global 
+>> inspection of toto(), and most of the checks are based on local 
+>> inspection.
+>>
+>> Duncan Murdoch
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> -- 
+> Herv? Pag?s
+> 
+> Bioconductor Core Team
+> hpages.on.github at gmail.com
+>
+
+
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Tue Feb  6 22:29:49 2024
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Tue, 6 Feb 2024 13:29:49 -0800
+Subject: [Rd] 
+ [EXTERNAL] Re: NOTE: multiple local function definitions for
+ ?fun? with different formal arguments
+In-Reply-To: <SA0PR09MB69552A24686B60186A86BEC3E5462@SA0PR09MB6955.namprd09.prod.outlook.com>
+References: <5jst8ric3j9fg55fkwuhhlyk.1707061436584@email.android.com>
+ <CA+jjkEbwGe-W-gSfds1=4Vzrf=LOitwiE=4Vx0+NCj4t2t09JA@mail.gmail.com>
+ <lo01v1qa61gmseab9ma660ts.1707061568394@email.android.com>
+ <5cb29a06-5b73-4fe4-b8dc-7aa9db6a2cff@gmail.com>
+ <15c10f0d-2c05-4b84-a3f0-0c02fdbb15e2@gmail.com>
+ <SA0PR09MB6955A7EF8CD84520F2FA6D8AE5462@SA0PR09MB6955.namprd09.prod.outlook.com>
+ <33b6ee55-1caa-461b-a132-42e22f41dd1a@gmail.com>
+ <SA0PR09MB69552A24686B60186A86BEC3E5462@SA0PR09MB6955.namprd09.prod.outlook.com>
+Message-ID: <CAFDcVCTsEMwRhR6qFw1m7g0852XdeeNKALXhGNd2ZVzaMutoVA@mail.gmail.com>
+
+Here's a dummy example that I think illustrates the problem:
+
+toto <- function() {
+  if (runif(1) < 0.5)
+    function(a) a
+  else
+    function(a,b) a+b
+}
+
+> fcn <- toto()
+> fcn(1,2)
+[1] 3
+> fcn <- toto()
+> fcn(1,2)
+[1] 3
+> fcn <- toto()
+> fcn(1,2)
+Error in fcn(1, 2) : unused argument (2)
+
+How can you use the returned function, if you get different arguments?
+
+In your example, you cannot use the returned function without knowing
+'mode', or by inspecting the returned function.  So, the warning is
+there to alert you to a potential bug.  Anecdotally, I'm pretty sure
+this R CMD check NOTE has caught at least one such bug in one of
+my/our packages.
+
+If you want to keep the current design pattern, one approach could be
+to add ... to your function definitions:
+
+toto <- function(mode)
+{
+     if (mode == 1)
+         fun <- function(a, b, ...) a*b
+     else
+         fun <- function(u, v, w) (u + v) / w
+     fun
+}
+
+to make sure that toto() returns functions that accept the same
+minimal number of arguments.
+
+/Henrik
+
+On Tue, Feb 6, 2024 at 1:15?PM Izmirlian, Grant (NIH/NCI) [E] via
+R-devel <r-devel at r-project.org> wrote:
+>
+> Because functions get called and therefore, the calling sequence matters. It?s just protecting you from yourself, but as someone pointed out, there?s a way to silence such notes.
+> G
+>
+>
+> From: Herv? Pag?s <hpages.on.github at gmail.com>
+> Sent: Tuesday, February 6, 2024 2:40 PM
+> To: Izmirlian, Grant (NIH/NCI) [E] <izmirlig at mail.nih.gov>; Duncan Murdoch <murdoch.duncan at gmail.com>; r-devel at r-project.org
+> Subject: Re: [EXTERNAL] Re: [Rd] NOTE: multiple local function definitions for ?fun? with different formal arguments
+>
+>
+> On 2/6/24 11:19, Izmirlian, Grant (NIH/NCI) [E] wrote:
+> The note refers to the fact that the function named ?fun? appears to be defined in two different ways.
+>
+> Sure I get that. But how is that any different from a variable being defined in two different ways like in
+>
+>     if (mode == 1)
+>         x <- -8
+>     else
+>         x <- 55
+>
+> This is such a common and perfectly fine pattern. Why would this be considered a potential hazard when the variable is a function?
+>
+> H.
+>
+> From: Herv? Pag?s <hpages.on.github at gmail.com><mailto:hpages.on.github at gmail.com>
+> Sent: Tuesday, February 6, 2024 2:17 PM
+> To: Duncan Murdoch <murdoch.duncan at gmail.com><mailto:murdoch.duncan at gmail.com>; Izmirlian, Grant (NIH/NCI) [E] <izmirlig at mail.nih.gov><mailto:izmirlig at mail.nih.gov>; r-devel at r-project.org<mailto:r-devel at r-project.org>
+> Subject: [EXTERNAL] Re: [Rd] NOTE: multiple local function definitions for ?fun? with different formal arguments
+>
+>
+> Thanks. Workarounds are interesting but... what's the point of the NOTE in the first place?
+>
+> H.
+> On 2/4/24 09:07, Duncan Murdoch wrote:
+> On 04/02/2024 10:55 a.m., Izmirlian, Grant (NIH/NCI) [E] via R-devel wrote:
+>
+>
+> Well you can see that yeast is exactly weekday you have.  The way out is to just not name the result
+>
+> I think something happened to your explanation...
+>
+>
+>
+>
+> toto <- function(mode)
+> {
+>      ifelse(mode == 1,
+>          function(a,b) a*b,
+>          function(u, v, w) (u + v) / w)
+> }
+>
+> It's a bad idea to use ifelse() when you really want if() ... else ... .  In this case it works, but it doesn't always.  So the workaround should be
+>
+>
+> toto <- function(mode)
+> {
+>     if(mode == 1)
+>         function(a,b) a*b
+>     else
+>         function(u, v, w) (u + v) / w
+> }
+>
+>
+>
+>
+>
+>
+> ________________________________
+> From: Grant Izmirlian <izmirlidroid at gmail.com><mailto:izmirlidroid at gmail.com>
+> Date: Sun, Feb 4, 2024, 10:44 AM
+> To: "Izmirlian, Grant (NIH/NCI) [E]" <izmirlig at mail.nih.gov><mailto:izmirlig at mail.nih.gov>
+> Subject: Fwd: [EXTERNAL] R-devel Digest, Vol 252, Issue 2
+>
+> Hi,
+>
+> I just ran into this 'R CMD check' NOTE for the first time:
+>
+> * checking R code for possible problems ... NOTE
+> toto: multiple local function definitions for ?fun? with different
+>    formal arguments
+>
+> The "offending" code is something like this (simplified from the real code):
+>
+> toto <- function(mode)
+> {
+>      if (mode == 1)
+>          fun <- function(a, b) a*b
+>      else
+>          fun <- function(u, v, w) (u + v) / w
+>      fun
+> }
+>
+> Is that NOTE really intended? Hard to see why this code would be
+> considered "wrong".
+>
+> I know it's just a NOTE but still...
+>
+> I agree it's a false positive, but the issue is that you have a function object in your function which can't be called unconditionally.  The workaround doesn't create such an object.
+>
+> Recognizing that your function never tries to call fun requires global inspection of toto(), and most of the checks are based on local inspection.
+>
+> Duncan Murdoch
+>
+> ______________________________________________
+> R-devel at r-project.org<mailto:R-devel at r-project.org> mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> --
+>
+> Herv? Pag?s
+>
+>
+>
+> Bioconductor Core Team
+>
+> hpages.on.github at gmail.com<mailto:hpages.on.github at gmail.com>
+> CAUTION: This email originated from outside of the organization. Do not click links or open attachments unless you recognize the sender and are confident the content is safe.
+>
+>
+> --
+>
+> Herv? Pag?s
+>
+>
+>
+> Bioconductor Core Team
+>
+> hpages.on.github at gmail.com<mailto:hpages.on.github at gmail.com>
+> CAUTION: This email originated from outside of the organization. Do not click links or open attachments unless you recognize the sender and are confident the content is safe.
+>
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Tue Feb  6 22:31:10 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 6 Feb 2024 16:31:10 -0500
+Subject: [Rd] Get list of active calling handlers?
+Message-ID: <e5f12cfa-7efa-41e8-b152-6e9ef8af39b9@gmail.com>
+
+The SO post https://stackoverflow.com/q/77943180 tried to call 
+globalCallingHandlers() from a function, and it failed with the error 
+message "should not be called with handlers on the stack".  A much 
+simpler illustration of the same error comes from this line:
+
+   try(globalCallingHandlers(warning = function(e) e))
+
+The problem here is that try() sets an error handler, and 
+globalCallingHandlers() sees it and aborts.
+
+If I call globalCallingHandlers() with no arguments, I get a list of 
+currently active global handlers.  Is there also a way to get a list of 
+active handlers, including non-global ones (like the one try() added in 
+the line above)?
+
+Duncan Murdoch
+
+
+From mtmorg@n@xyz @end|ng |rom gm@||@com  Wed Feb  7 00:17:03 2024
+From: mtmorg@n@xyz @end|ng |rom gm@||@com (Martin Morgan)
+Date: Tue, 6 Feb 2024 23:17:03 +0000
+Subject: [Rd] 
+ [EXTERNAL] Re: NOTE: multiple local function definitions for
+ ?fun? with different formal arguments
+In-Reply-To: <CAFDcVCTsEMwRhR6qFw1m7g0852XdeeNKALXhGNd2ZVzaMutoVA@mail.gmail.com>
+References: <5jst8ric3j9fg55fkwuhhlyk.1707061436584@email.android.com>
+ <CA+jjkEbwGe-W-gSfds1=4Vzrf=LOitwiE=4Vx0+NCj4t2t09JA@mail.gmail.com>
+ <lo01v1qa61gmseab9ma660ts.1707061568394@email.android.com>
+ <5cb29a06-5b73-4fe4-b8dc-7aa9db6a2cff@gmail.com>
+ <15c10f0d-2c05-4b84-a3f0-0c02fdbb15e2@gmail.com>
+ <SA0PR09MB6955A7EF8CD84520F2FA6D8AE5462@SA0PR09MB6955.namprd09.prod.outlook.com>
+ <33b6ee55-1caa-461b-a132-42e22f41dd1a@gmail.com>
+ <SA0PR09MB69552A24686B60186A86BEC3E5462@SA0PR09MB6955.namprd09.prod.outlook.com>
+ <CAFDcVCTsEMwRhR6qFw1m7g0852XdeeNKALXhGNd2ZVzaMutoVA@mail.gmail.com>
+Message-ID: <DS7PR10MB727772ADF2D69B769FC88A1BFA462@DS7PR10MB7277.namprd10.prod.outlook.com>
+
+I went looking and found this in codetools, where it's been for 20 years
+
+https://gitlab.com/luke-tierney/codetools/-/blame/master/R/codetools.R?ref_type=heads#L951
+
+I think the call stack in codetools is checkUsagePackage -> checkUsageEnv -> checkUsage, and these are similarly established. The call from the tools package https://github.com/wch/r-source/blame/95146f0f366a36899e4277a6a722964a51b93603/src/library/tools/R/QC.R#L4585 is also quite old.
+
+I'm not sure this had been said explicitly, but perhaps the original intent was to protect against accidentally redefining a local function. Obviously one could do this with a local variable too, though that might less often be an error?
+
+toto <- function(mode) {
+    tata <- function(a, b) a * b  # intended
+    tata <- function(a, b) a / b  # oops
+    ?
+}
+
+Another workaround is to actually name the local functions
+
+toto <- function(mode) {
+    tata <- function(a, b) a * b
+    titi <- function(u, v, w) (u + v) / w
+    if (mode == 1)
+        tata
+    else
+        titi
+}
+
+? or to use a switch statement
+
+toto <- function(mode) {
+    ## fun <- switch(?) for use of `fun()` in toto
+    switch(
+        mode,
+        tata = function(a, b) a * b,
+        titi = function(u, v, w) (u + v) / w,
+        stop("unknown `mode = '", mode, "'`")
+    )
+}
+
+? or similarly to write `fun <- if ? else ?`, assigning the result of the `if` to `fun`. I guess this last formulation points to the fact that a more careful analysis of Herv?'s original code means that `fun` can only take one value (only one branch of the `if` can be taken) so there can only be one version of `fun` in any invocation of `toto()`.
+
+Perhaps the local names (and string-valued 'mode') are suggestive of special case, so serve as implicit documentation?
+
+Adding `?` to `tata` doesn't seem like a good idea; toto(1)(3, 5, 7) no longer signals an error.
+
+There seems to be a lot in common with S3 and S4 methods, where `toto` corresponds to the generic, `tata` and `titi` to methods. This 'dispatch' is brought out by using `switch()`. There is plenty of opportunity for thinking that you're invoking one method but actually you're invoking the other. For instance with dplyr, I like that I can tbl |> print(n = 2) so much that I find myself doing this with data.frame df |> print(n = 2), which is an error (`n` partially matches `na.print`, and 2 is not a valid value); both methods silently ignore the typo print(m = 2).
+
+Martin Morgan
+
+From: R-devel <r-devel-bounces at r-project.org> on behalf of Henrik Bengtsson <henrik.bengtsson at gmail.com>
+Date: Tuesday, February 6, 2024 at 4:34?PM
+To: Izmirlian, Grant (NIH/NCI) [E] <izmirlig at mail.nih.gov>
+Cc: r-devel at r-project.org <r-devel at r-project.org>
+Subject: Re: [Rd] [EXTERNAL] Re: NOTE: multiple local function definitions for ?fun? with different formal arguments
+Here's a dummy example that I think illustrates the problem:
+
+toto <- function() {
+  if (runif(1) < 0.5)
+    function(a) a
+  else
+    function(a,b) a+b
+}
+
+> fcn <- toto()
+> fcn(1,2)
+[1] 3
+> fcn <- toto()
+> fcn(1,2)
+[1] 3
+> fcn <- toto()
+> fcn(1,2)
+Error in fcn(1, 2) : unused argument (2)
+
+How can you use the returned function, if you get different arguments?
+
+In your example, you cannot use the returned function without knowing
+'mode', or by inspecting the returned function.  So, the warning is
+there to alert you to a potential bug.  Anecdotally, I'm pretty sure
+this R CMD check NOTE has caught at least one such bug in one of
+my/our packages.
+
+If you want to keep the current design pattern, one approach could be
+to add ... to your function definitions:
+
+toto <- function(mode)
+{
+     if (mode == 1)
+         fun <- function(a, b, ...) a*b
+     else
+         fun <- function(u, v, w) (u + v) / w
+     fun
+}
+
+to make sure that toto() returns functions that accept the same
+minimal number of arguments.
+
+/Henrik
+
+On Tue, Feb 6, 2024 at 1:15?PM Izmirlian, Grant (NIH/NCI) [E] via
+R-devel <r-devel at r-project.org> wrote:
+>
+> Because functions get called and therefore, the calling sequence matters. It?s just protecting you from yourself, but as someone pointed out, there?s a way to silence such notes.
+> G
+>
+>
+> From: Herv? Pag?s <hpages.on.github at gmail.com>
+> Sent: Tuesday, February 6, 2024 2:40 PM
+> To: Izmirlian, Grant (NIH/NCI) [E] <izmirlig at mail.nih.gov>; Duncan Murdoch <murdoch.duncan at gmail.com>; r-devel at r-project.org
+> Subject: Re: [EXTERNAL] Re: [Rd] NOTE: multiple local function definitions for ?fun? with different formal arguments
+>
+>
+> On 2/6/24 11:19, Izmirlian, Grant (NIH/NCI) [E] wrote:
+> The note refers to the fact that the function named ?fun? appears to be defined in two different ways.
+>
+> Sure I get that. But how is that any different from a variable being defined in two different ways like in
+>
+>     if (mode == 1)
+>         x <- -8
+>     else
+>         x <- 55
+>
+> This is such a common and perfectly fine pattern. Why would this be considered a potential hazard when the variable is a function?
+>
+> H.
+>
+> From: Herv? Pag?s <hpages.on.github at gmail.com><mailto:hpages.on.github at gmail.com>
+> Sent: Tuesday, February 6, 2024 2:17 PM
+> To: Duncan Murdoch <murdoch.duncan at gmail.com><mailto:murdoch.duncan at gmail.com>; Izmirlian, Grant (NIH/NCI) [E] <izmirlig at mail.nih.gov><mailto:izmirlig at mail.nih.gov>; r-devel at r-project.org<mailto:r-devel at r-project.org>
+> Subject: [EXTERNAL] Re: [Rd] NOTE: multiple local function definitions for ?fun? with different formal arguments
+>
+>
+> Thanks. Workarounds are interesting but... what's the point of the NOTE in the first place?
+>
+> H.
+> On 2/4/24 09:07, Duncan Murdoch wrote:
+> On 04/02/2024 10:55 a.m., Izmirlian, Grant (NIH/NCI) [E] via R-devel wrote:
+>
+>
+> Well you can see that yeast is exactly weekday you have.  The way out is to just not name the result
+>
+> I think something happened to your explanation...
+>
+>
+>
+>
+> toto <- function(mode)
+> {
+>      ifelse(mode == 1,
+>          function(a,b) a*b,
+>          function(u, v, w) (u + v) / w)
+> }
+>
+> It's a bad idea to use ifelse() when you really want if() ... else ... .  In this case it works, but it doesn't always.  So the workaround should be
+>
+>
+> toto <- function(mode)
+> {
+>     if(mode == 1)
+>         function(a,b) a*b
+>     else
+>         function(u, v, w) (u + v) / w
+> }
+>
+>
+>
+>
+>
+>
+> ________________________________
+> From: Grant Izmirlian <izmirlidroid at gmail.com><mailto:izmirlidroid at gmail.com>
+> Date: Sun, Feb 4, 2024, 10:44 AM
+> To: "Izmirlian, Grant (NIH/NCI) [E]" <izmirlig at mail.nih.gov><mailto:izmirlig at mail.nih.gov>
+> Subject: Fwd: [EXTERNAL] R-devel Digest, Vol 252, Issue 2
+>
+> Hi,
+>
+> I just ran into this 'R CMD check' NOTE for the first time:
+>
+> * checking R code for possible problems ... NOTE
+> toto: multiple local function definitions for ?fun? with different
+>    formal arguments
+>
+> The "offending" code is something like this (simplified from the real code):
+>
+> toto <- function(mode)
+> {
+>      if (mode == 1)
+>          fun <- function(a, b) a*b
+>      else
+>          fun <- function(u, v, w) (u + v) / w
+>      fun
+> }
+>
+> Is that NOTE really intended? Hard to see why this code would be
+> considered "wrong".
+>
+> I know it's just a NOTE but still...
+>
+> I agree it's a false positive, but the issue is that you have a function object in your function which can't be called unconditionally.  The workaround doesn't create such an object.
+>
+> Recognizing that your function never tries to call fun requires global inspection of toto(), and most of the checks are based on local inspection.
+>
+> Duncan Murdoch
+>
+> ______________________________________________
+> R-devel at r-project.org<mailto:R-devel at r-project.org> mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> --
+>
+> Herv? Pag?s
+>
+>
+>
+> Bioconductor Core Team
+>
+> hpages.on.github at gmail.com<mailto:hpages.on.github at gmail.com>
+> CAUTION: This email originated from outside of the organization. Do not click links or open attachments unless you recognize the sender and are confident the content is safe.
+>
+>
+> --
+>
+> Herv? Pag?s
+>
+>
+>
+> Bioconductor Core Team
+>
+> hpages.on.github at gmail.com<mailto:hpages.on.github at gmail.com>
+> CAUTION: This email originated from outside of the organization. Do not click links or open attachments unless you recognize the sender and are confident the content is safe.
+>
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+	[[alternative HTML version deleted]]
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Wed Feb  7 01:34:09 2024
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Wed, 7 Feb 2024 13:34:09 +1300
+Subject: [Rd] Advice debugging M1Mac check errors
+In-Reply-To: <90026864-f81c-4663-8cfe-6ae99d23307b@stats.ox.ac.uk>
+References: <CAFDswJu2aDQzCZHJT7RqyBP-J8DLcj6PLzRBHbcStfxBJvw5Mg@mail.gmail.com>
+ <90026864-f81c-4663-8cfe-6ae99d23307b@stats.ox.ac.uk>
+Message-ID: <60EB5C3D-794E-4583-A838-0827EA357A94@R-project.org>
+
+
+
+> On 7/02/2024, at 5:06 AM, Prof Brian Ripley via R-devel <r-devel at r-project.org> wrote:
+> 
+> On 04/02/2024 19:41, Holger Hoefling wrote:
+>> Hi,
+>> I wanted to ask if people have good advice on how to debug M1Mac package
+>> check errors when you don?t have a Mac? Is a cloud machine the best option
+>> or is there something else?
+> 
+> I presumed this was about a CRAN package, possibly hdf5r which has a R-devel-only warning from the Apple clang compiler.  And that is not a 'check error' and not something to 'debug'.
+> 
+> The original poster had errors for his package flsa until yesterday on fedora-clang and M1mac, which were compilation errors with recent LLVM and Apple compilers.  Again, not really something to 'debug' -- the compiler messages were clear and the CRAN notification contained advice on where in our manual to look this up.
+> 
+> The mac-builder service offers checks for R 4.3.0, the 'development' option being (last time I tried) the same as the 'release' option. (When I asked, Simon said that 'development' checks were only available in the run up to a x.y.0 when he starts package building and checks for R-devel.)
+> 
+
+
+Just to clarify, the above is outdated information - ever since the R-devel packages binaries are on CRAN the "development" option in the mac-builder is available.
+
+Cheers,
+Simon
+
+
+
+> 
+> We were left to guess, but I doubt this has to do with the lack of 'extended precision' nor long doubles longer than doubles on arm64 macOS.  And issues with that are rather rare (much rarer than numerical issues for non-reference x86_64 BLAS/LAPACKs).  Of the 20,300 CRAN packages just 18 have M1mac-specific errors, none obviously from numerical inaccuracy.  A quick look back suggests we get about 20 a year with M1mac numerical issues, about half of which were mirrored on the x86_64 'noLD' checks.
+> 
+> -- 
+> Brian D. Ripley,                  ripley at stats.ox.ac.uk
+> Emeritus Professor of Applied Statistics, University of Oxford
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
