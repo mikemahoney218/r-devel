@@ -2569,3 +2569,1726 @@ Simon
 > 
 
 
+From j|r|@c@mor@vec @end|ng |rom gm@||@com  Tue Feb  6 22:23:15 2024
+From: j|r|@c@mor@vec @end|ng |rom gm@||@com (=?UTF-8?B?SmnFmcOtIE1vcmF2ZWM=?=)
+Date: Wed, 7 Feb 2024 10:23:15 +1300
+Subject: [Rd] round.Date and trunc.Date not working / implemented
+Message-ID: <ab3376ac-5694-4a53-9606-c11bd97a4f0a@gmail.com>
+
+This is my first time working with dates, so if the answer is "Duh, work 
+with POSIXt", please ignore it.
+
+Why is not `round.Date` and `trunc.Date` "implemented" for `Date`?
+
+Is this because `Date` is (mostly) a virtual class setup for a better 
+inheritance or is that something that is just missing? (like 
+`sort.data.frame`). Would R core welcome a patch?
+
+I decided to convert some dates to date using `as.Date` function, which 
+converts to a plain `Date` class, because that felt natural.
+
+But then when trying to round to closest year, I have realized that the 
+`round` and `trunc` for `Date` do not behave as for `POSIXt`.
+
+I would assume that these will have equivalent output:
+
+Sys.time() |> round("years") # 2024-01-01 NZDT
+
+Sys.Date() |> round("years") # Error in round.default(...): non-numeric 
+argument to mathematical function
+
+
+Looking at the code (and reading the documentation more carefully) shows 
+the issue, but this looks like an omission that should be patched.
+
+-- Jirka
+
+
+From chr|@ @end|ng |rom ckb|@ck@org  Wed Feb  7 02:09:14 2024
+From: chr|@ @end|ng |rom ckb|@ck@org (Chris Black)
+Date: Tue, 6 Feb 2024 17:09:14 -0800
+Subject: [Rd] 
+ [EXTERNAL] Re: NOTE: multiple local function definitions for
+ ?fun? with different formal arguments
+In-Reply-To: <DS7PR10MB727772ADF2D69B769FC88A1BFA462@DS7PR10MB7277.namprd10.prod.outlook.com>
+References: <5jst8ric3j9fg55fkwuhhlyk.1707061436584@email.android.com>
+ <CA+jjkEbwGe-W-gSfds1=4Vzrf=LOitwiE=4Vx0+NCj4t2t09JA@mail.gmail.com>
+ <lo01v1qa61gmseab9ma660ts.1707061568394@email.android.com>
+ <5cb29a06-5b73-4fe4-b8dc-7aa9db6a2cff@gmail.com>
+ <15c10f0d-2c05-4b84-a3f0-0c02fdbb15e2@gmail.com>
+ <SA0PR09MB6955A7EF8CD84520F2FA6D8AE5462@SA0PR09MB6955.namprd09.prod.outlook.com>
+ <33b6ee55-1caa-461b-a132-42e22f41dd1a@gmail.com>
+ <SA0PR09MB69552A24686B60186A86BEC3E5462@SA0PR09MB6955.namprd09.prod.outlook.com>
+ <CAFDcVCTsEMwRhR6qFw1m7g0852XdeeNKALXhGNd2ZVzaMutoVA@mail.gmail.com>
+ <DS7PR10MB727772ADF2D69B769FC88A1BFA462@DS7PR10MB7277.namprd10.prod.outlook.com>
+Message-ID: <CE0833FD-CE89-4F59-91C7-68C7F3C788FA@ckblack.org>
+
+Hopefully to too much of a tangent: A related problem this check doesn?t catch is accidental top-level redefinitions in package code, such as
+
+## a.R:
+helper <- function() 1
+
+f <- function() {
+helper()
+}
+# ?cool, f() must return 1"
+
+## b.R:
+helper <- function(x) 2
+
+g <- function() {
+helper()
+}
+# ?cool, g() must return 2"
+
+## Runtime: 
+# > c(pkg::f(), pkg::g())
+# [1] 2 2
+# ?oh right, only the last definition of helper() is used?
+ 
+I?ve seen several variants of this issue in code from folks who are new to package development, especially if they're naively refactoring something that started out as an interactively-run analysis. Collaborators who are puzzled by it get my ?packages are collections of objects not sequences of expressions, yes that needs to be in your mental model, here?s the link to RWE again? talk, but I would be happy to be able to point them to a check result to go along with it.
+
+I don?t think this is grounds on its own to change a 20-year precedent, but in case anyone is collecting wishlist reasons to make the check look harder...
+
+Thanks,
+Chris
+
+> On Feb 6, 2024, at 3:17 PM, Martin Morgan <mtmorgan.xyz at gmail.com> wrote:
+> 
+> I went looking and found this in codetools, where it's been for 20 years
+> 
+> https://gitlab.com/luke-tierney/codetools/-/blame/master/R/codetools.R?ref_type=heads#L951
+> 
+> I think the call stack in codetools is checkUsagePackage -> checkUsageEnv -> checkUsage, and these are similarly established. The call from the tools package https://github.com/wch/r-source/blame/95146f0f366a36899e4277a6a722964a51b93603/src/library/tools/R/QC.R#L4585 is also quite old.
+> 
+> I'm not sure this had been said explicitly, but perhaps the original intent was to protect against accidentally redefining a local function. Obviously one could do this with a local variable too, though that might less often be an error?
+> 
+> toto <- function(mode) {
+>    tata <- function(a, b) a * b  # intended
+>    tata <- function(a, b) a / b  # oops
+>    ?
+> }
+> 
+> Another workaround is to actually name the local functions
+> 
+> toto <- function(mode) {
+>    tata <- function(a, b) a * b
+>    titi <- function(u, v, w) (u + v) / w
+>    if (mode == 1)
+>        tata
+>    else
+>        titi
+> }
+> 
+> ? or to use a switch statement
+> 
+> toto <- function(mode) {
+>    ## fun <- switch(?) for use of `fun()` in toto
+>    switch(
+>        mode,
+>        tata = function(a, b) a * b,
+>        titi = function(u, v, w) (u + v) / w,
+>        stop("unknown `mode = '", mode, "'`")
+>    )
+> }
+> 
+> ? or similarly to write `fun <- if ? else ?`, assigning the result of the `if` to `fun`. I guess this last formulation points to the fact that a more careful analysis of Herv?'s original code means that `fun` can only take one value (only one branch of the `if` can be taken) so there can only be one version of `fun` in any invocation of `toto()`.
+> 
+> Perhaps the local names (and string-valued 'mode') are suggestive of special case, so serve as implicit documentation?
+> 
+> Adding `?` to `tata` doesn't seem like a good idea; toto(1)(3, 5, 7) no longer signals an error.
+> 
+> There seems to be a lot in common with S3 and S4 methods, where `toto` corresponds to the generic, `tata` and `titi` to methods. This 'dispatch' is brought out by using `switch()`. There is plenty of opportunity for thinking that you're invoking one method but actually you're invoking the other. For instance with dplyr, I like that I can tbl |> print(n = 2) so much that I find myself doing this with data.frame df |> print(n = 2), which is an error (`n` partially matches `na.print`, and 2 is not a valid value); both methods silently ignore the typo print(m = 2).
+> 
+> Martin Morgan
+> 
+> From: R-devel <r-devel-bounces at r-project.org> on behalf of Henrik Bengtsson <henrik.bengtsson at gmail.com>
+> Date: Tuesday, February 6, 2024 at 4:34?PM
+> To: Izmirlian, Grant (NIH/NCI) [E] <izmirlig at mail.nih.gov>
+> Cc: r-devel at r-project.org <r-devel at r-project.org>
+> Subject: Re: [Rd] [EXTERNAL] Re: NOTE: multiple local function definitions for ?fun? with different formal arguments
+> Here's a dummy example that I think illustrates the problem:
+> 
+> toto <- function() {
+>  if (runif(1) < 0.5)
+>    function(a) a
+>  else
+>    function(a,b) a+b
+> }
+> 
+>> fcn <- toto()
+>> fcn(1,2)
+> [1] 3
+>> fcn <- toto()
+>> fcn(1,2)
+> [1] 3
+>> fcn <- toto()
+>> fcn(1,2)
+> Error in fcn(1, 2) : unused argument (2)
+> 
+> How can you use the returned function, if you get different arguments?
+> 
+> In your example, you cannot use the returned function without knowing
+> 'mode', or by inspecting the returned function.  So, the warning is
+> there to alert you to a potential bug.  Anecdotally, I'm pretty sure
+> this R CMD check NOTE has caught at least one such bug in one of
+> my/our packages.
+> 
+> If you want to keep the current design pattern, one approach could be
+> to add ... to your function definitions:
+> 
+> toto <- function(mode)
+> {
+>     if (mode == 1)
+>         fun <- function(a, b, ...) a*b
+>     else
+>         fun <- function(u, v, w) (u + v) / w
+>     fun
+> }
+> 
+> to make sure that toto() returns functions that accept the same
+> minimal number of arguments.
+> 
+> /Henrik
+> 
+> On Tue, Feb 6, 2024 at 1:15?PM Izmirlian, Grant (NIH/NCI) [E] via
+> R-devel <r-devel at r-project.org> wrote:
+>> 
+>> Because functions get called and therefore, the calling sequence matters. It?s just protecting you from yourself, but as someone pointed out, there?s a way to silence such notes.
+>> G
+>> 
+>> 
+>> From: Herv? Pag?s <hpages.on.github at gmail.com>
+>> Sent: Tuesday, February 6, 2024 2:40 PM
+>> To: Izmirlian, Grant (NIH/NCI) [E] <izmirlig at mail.nih.gov>; Duncan Murdoch <murdoch.duncan at gmail.com>; r-devel at r-project.org
+>> Subject: Re: [EXTERNAL] Re: [Rd] NOTE: multiple local function definitions for ?fun? with different formal arguments
+>> 
+>> 
+>> On 2/6/24 11:19, Izmirlian, Grant (NIH/NCI) [E] wrote:
+>> The note refers to the fact that the function named ?fun? appears to be defined in two different ways.
+>> 
+>> Sure I get that. But how is that any different from a variable being defined in two different ways like in
+>> 
+>>    if (mode == 1)
+>>        x <- -8
+>>    else
+>>        x <- 55
+>> 
+>> This is such a common and perfectly fine pattern. Why would this be considered a potential hazard when the variable is a function?
+>> 
+>> H.
+>> 
+>> From: Herv? Pag?s <hpages.on.github at gmail.com><mailto:hpages.on.github at gmail.com>
+>> Sent: Tuesday, February 6, 2024 2:17 PM
+>> To: Duncan Murdoch <murdoch.duncan at gmail.com><mailto:murdoch.duncan at gmail.com>; Izmirlian, Grant (NIH/NCI) [E] <izmirlig at mail.nih.gov><mailto:izmirlig at mail.nih.gov>; r-devel at r-project.org<mailto:r-devel at r-project.org>
+>> Subject: [EXTERNAL] Re: [Rd] NOTE: multiple local function definitions for ?fun? with different formal arguments
+>> 
+>> 
+>> Thanks. Workarounds are interesting but... what's the point of the NOTE in the first place?
+>> 
+>> H.
+>> On 2/4/24 09:07, Duncan Murdoch wrote:
+>> On 04/02/2024 10:55 a.m., Izmirlian, Grant (NIH/NCI) [E] via R-devel wrote:
+>> 
+>> 
+>> Well you can see that yeast is exactly weekday you have.  The way out is to just not name the result
+>> 
+>> I think something happened to your explanation...
+>> 
+>> 
+>> 
+>> 
+>> toto <- function(mode)
+>> {
+>>     ifelse(mode == 1,
+>>         function(a,b) a*b,
+>>         function(u, v, w) (u + v) / w)
+>> }
+>> 
+>> It's a bad idea to use ifelse() when you really want if() ... else ... .  In this case it works, but it doesn't always.  So the workaround should be
+>> 
+>> 
+>> toto <- function(mode)
+>> {
+>>    if(mode == 1)
+>>        function(a,b) a*b
+>>    else
+>>        function(u, v, w) (u + v) / w
+>> }
+>> 
+>> 
+>> 
+>> 
+>> 
+>> 
+>> ________________________________
+>> From: Grant Izmirlian <izmirlidroid at gmail.com><mailto:izmirlidroid at gmail.com>
+>> Date: Sun, Feb 4, 2024, 10:44 AM
+>> To: "Izmirlian, Grant (NIH/NCI) [E]" <izmirlig at mail.nih.gov><mailto:izmirlig at mail.nih.gov>
+>> Subject: Fwd: [EXTERNAL] R-devel Digest, Vol 252, Issue 2
+>> 
+>> Hi,
+>> 
+>> I just ran into this 'R CMD check' NOTE for the first time:
+>> 
+>> * checking R code for possible problems ... NOTE
+>> toto: multiple local function definitions for ?fun? with different
+>>   formal arguments
+>> 
+>> The "offending" code is something like this (simplified from the real code):
+>> 
+>> toto <- function(mode)
+>> {
+>>     if (mode == 1)
+>>         fun <- function(a, b) a*b
+>>     else
+>>         fun <- function(u, v, w) (u + v) / w
+>>     fun
+>> }
+>> 
+>> Is that NOTE really intended? Hard to see why this code would be
+>> considered "wrong".
+>> 
+>> I know it's just a NOTE but still...
+>> 
+>> I agree it's a false positive, but the issue is that you have a function object in your function which can't be called unconditionally.  The workaround doesn't create such an object.
+>> 
+>> Recognizing that your function never tries to call fun requires global inspection of toto(), and most of the checks are based on local inspection.
+>> 
+>> Duncan Murdoch
+>> 
+>> ______________________________________________
+>> R-devel at r-project.org<mailto:R-devel at r-project.org> mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>> 
+>> --
+>> 
+>> Herv? Pag?s
+>> 
+>> 
+>> 
+>> Bioconductor Core Team
+>> 
+>> hpages.on.github at gmail.com<mailto:hpages.on.github at gmail.com>
+>> CAUTION: This email originated from outside of the organization. Do not click links or open attachments unless you recognize the sender and are confident the content is safe.
+>> 
+>> 
+>> --
+>> 
+>> Herv? Pag?s
+>> 
+>> 
+>> 
+>> Bioconductor Core Team
+>> 
+>> hpages.on.github at gmail.com<mailto:hpages.on.github at gmail.com>
+>> CAUTION: This email originated from outside of the organization. Do not click links or open attachments unless you recognize the sender and are confident the content is safe.
+>> 
+>> 
+>>        [[alternative HTML version deleted]]
+>> 
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> [[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Wed Feb  7 14:36:32 2024
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Wed, 7 Feb 2024 07:36:32 -0600 (CST)
+Subject: [Rd] [External]  Get list of active calling handlers?
+In-Reply-To: <e5f12cfa-7efa-41e8-b152-6e9ef8af39b9@gmail.com>
+References: <e5f12cfa-7efa-41e8-b152-6e9ef8af39b9@gmail.com>
+Message-ID: <164561a1-1acb-e69-cad-7a831e23b0ea@uiowa.edu>
+
+On Tue, 6 Feb 2024, Duncan Murdoch wrote:
+
+> The SO post https://stackoverflow.com/q/77943180 tried to call 
+> globalCallingHandlers() from a function, and it failed with the error message 
+> "should not be called with handlers on the stack".  A much simpler 
+> illustration of the same error comes from this line:
+>
+>  try(globalCallingHandlers(warning = function(e) e))
+>
+> The problem here is that try() sets an error handler, and 
+> globalCallingHandlers() sees it and aborts.
+>
+> If I call globalCallingHandlers() with no arguments, I get a list of 
+> currently active global handlers.  Is there also a way to get a list of 
+> active handlers, including non-global ones (like the one try() added in the 
+> line above)?
+
+There is not. The internal stack is not safe to allow to escape to the
+R level.  It would be possible to write a reflection function to
+provide some information, but it would be a fair bit of work to design
+and I don't think would be of enough value to justify that.
+
+The original SO question would be better addressed to
+Posit/RStudio. Someone with enough motivation might also be able to
+figure out an answer by looking at the source code at
+https://github.com/rstudio/rstudio.
+
+Best,
+
+luke
+
+
+>
+> Duncan Murdoch
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Wed Feb  7 15:05:24 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Wed, 7 Feb 2024 09:05:24 -0500
+Subject: [Rd] 
+ [EXTERNAL] Re: NOTE: multiple local function definitions for
+ ?fun? with different formal arguments
+In-Reply-To: <CE0833FD-CE89-4F59-91C7-68C7F3C788FA@ckblack.org>
+References: <5jst8ric3j9fg55fkwuhhlyk.1707061436584@email.android.com>
+ <CA+jjkEbwGe-W-gSfds1=4Vzrf=LOitwiE=4Vx0+NCj4t2t09JA@mail.gmail.com>
+ <lo01v1qa61gmseab9ma660ts.1707061568394@email.android.com>
+ <5cb29a06-5b73-4fe4-b8dc-7aa9db6a2cff@gmail.com>
+ <15c10f0d-2c05-4b84-a3f0-0c02fdbb15e2@gmail.com>
+ <SA0PR09MB6955A7EF8CD84520F2FA6D8AE5462@SA0PR09MB6955.namprd09.prod.outlook.com>
+ <33b6ee55-1caa-461b-a132-42e22f41dd1a@gmail.com>
+ <SA0PR09MB69552A24686B60186A86BEC3E5462@SA0PR09MB6955.namprd09.prod.outlook.com>
+ <CAFDcVCTsEMwRhR6qFw1m7g0852XdeeNKALXhGNd2ZVzaMutoVA@mail.gmail.com>
+ <DS7PR10MB727772ADF2D69B769FC88A1BFA462@DS7PR10MB7277.namprd10.prod.outlook.com>
+ <CE0833FD-CE89-4F59-91C7-68C7F3C788FA@ckblack.org>
+Message-ID: <abc59a72-a38b-4d73-b858-2efc150e62f3@gmail.com>
+
+I agree a note about this sort of change might be good.
+
+I think it wouldn't be too hard to write such a check to detect simple 
+assignments using <- or =.  If you also wanted to detect method 
+redefinitions, or redefinitions of functions stored in lists, etc., it 
+would be harder.
+
+There's unexported code in the pkgload package that will get you the 
+list of R files in the correct collation order:  pkgload:::find_code . 
+I don't know of such a function exported by some other package, but 
+there might be one.  Once you have that list, you could parse each file 
+and look for top level assignments to a name, then look for duplicates 
+in the vector of names.
+
+Here's a little script that finds cases where an R source file makes an 
+assignment to a variable with the same name as one that was used earlier:
+
+# Assume we are in the top level directory of a package.
+Rfiles <- pkgload:::find_code()
+
+allnames <- character()
+for (f in Rfiles) {
+   exprs <- parse(f)
+   names <- character(length(exprs))
+   for (i in seq_along(exprs)) {
+     expr <- exprs[[i]]
+     if (is.name(expr[[1]]) &&
+         deparse(expr[[1]]) %in% c("<-", "=") &&
+         is.name(expr[[2]])) {
+       names[i] <- deparse(expr[[2]])
+     }
+   }
+   names <- names[names != ""]
+   prev <- length(allnames)
+   allnames <- c(allnames, names)
+   dups <- which(duplicated(allnames))
+   dups <- dups[dups > prev]
+   if (any(dups)) {
+     cat("Duplicated names in ", basename(f), ":\n")
+     cat(paste(allnames[dups], collapse = ", "), "\n")
+   }
+}
+
+It could be made more fancy to report the locations of both the original 
+and the dup if you feel motivated.
+
+Duncan Murdoch
+
+On 06/02/2024 8:09 p.m., Chris Black wrote:
+> Hopefully to too much of a tangent: A related problem this check doesn?t catch is accidental top-level redefinitions in package code, such as
+> 
+> ## a.R:
+> helper <- function() 1
+> 
+> f <- function() {
+> helper()
+> }
+> # ?cool, f() must return 1"
+> 
+> ## b.R:
+> helper <- function(x) 2
+> 
+> g <- function() {
+> helper()
+> }
+> # ?cool, g() must return 2"
+> 
+> ## Runtime:
+> # > c(pkg::f(), pkg::g())
+> # [1] 2 2
+> # ?oh right, only the last definition of helper() is used?
+>   
+> I?ve seen several variants of this issue in code from folks who are new to package development, especially if they're naively refactoring something that started out as an interactively-run analysis. Collaborators who are puzzled by it get my ?packages are collections of objects not sequences of expressions, yes that needs to be in your mental model, here?s the link to RWE again? talk, but I would be happy to be able to point them to a check result to go along with it.
+> 
+> I don?t think this is grounds on its own to change a 20-year precedent, but in case anyone is collecting wishlist reasons to make the check look harder...
+> 
+> Thanks,
+> Chris
+> 
+>> On Feb 6, 2024, at 3:17 PM, Martin Morgan <mtmorgan.xyz at gmail.com> wrote:
+>>
+>> I went looking and found this in codetools, where it's been for 20 years
+>>
+>> https://gitlab.com/luke-tierney/codetools/-/blame/master/R/codetools.R?ref_type=heads#L951
+>>
+>> I think the call stack in codetools is checkUsagePackage -> checkUsageEnv -> checkUsage, and these are similarly established. The call from the tools package https://github.com/wch/r-source/blame/95146f0f366a36899e4277a6a722964a51b93603/src/library/tools/R/QC.R#L4585 is also quite old.
+>>
+>> I'm not sure this had been said explicitly, but perhaps the original intent was to protect against accidentally redefining a local function. Obviously one could do this with a local variable too, though that might less often be an error?
+>>
+>> toto <- function(mode) {
+>>     tata <- function(a, b) a * b  # intended
+>>     tata <- function(a, b) a / b  # oops
+>>     ?
+>> }
+>>
+>> Another workaround is to actually name the local functions
+>>
+>> toto <- function(mode) {
+>>     tata <- function(a, b) a * b
+>>     titi <- function(u, v, w) (u + v) / w
+>>     if (mode == 1)
+>>         tata
+>>     else
+>>         titi
+>> }
+>>
+>> ? or to use a switch statement
+>>
+>> toto <- function(mode) {
+>>     ## fun <- switch(?) for use of `fun()` in toto
+>>     switch(
+>>         mode,
+>>         tata = function(a, b) a * b,
+>>         titi = function(u, v, w) (u + v) / w,
+>>         stop("unknown `mode = '", mode, "'`")
+>>     )
+>> }
+>>
+>> ? or similarly to write `fun <- if ? else ?`, assigning the result of the `if` to `fun`. I guess this last formulation points to the fact that a more careful analysis of Herv?'s original code means that `fun` can only take one value (only one branch of the `if` can be taken) so there can only be one version of `fun` in any invocation of `toto()`.
+>>
+>> Perhaps the local names (and string-valued 'mode') are suggestive of special case, so serve as implicit documentation?
+>>
+>> Adding `?` to `tata` doesn't seem like a good idea; toto(1)(3, 5, 7) no longer signals an error.
+>>
+>> There seems to be a lot in common with S3 and S4 methods, where `toto` corresponds to the generic, `tata` and `titi` to methods. This 'dispatch' is brought out by using `switch()`. There is plenty of opportunity for thinking that you're invoking one method but actually you're invoking the other. For instance with dplyr, I like that I can tbl |> print(n = 2) so much that I find myself doing this with data.frame df |> print(n = 2), which is an error (`n` partially matches `na.print`, and 2 is not a valid value); both methods silently ignore the typo print(m = 2).
+>>
+>> Martin Morgan
+>>
+>> From: R-devel <r-devel-bounces at r-project.org> on behalf of Henrik Bengtsson <henrik.bengtsson at gmail.com>
+>> Date: Tuesday, February 6, 2024 at 4:34?PM
+>> To: Izmirlian, Grant (NIH/NCI) [E] <izmirlig at mail.nih.gov>
+>> Cc: r-devel at r-project.org <r-devel at r-project.org>
+>> Subject: Re: [Rd] [EXTERNAL] Re: NOTE: multiple local function definitions for ?fun? with different formal arguments
+>> Here's a dummy example that I think illustrates the problem:
+>>
+>> toto <- function() {
+>>   if (runif(1) < 0.5)
+>>     function(a) a
+>>   else
+>>     function(a,b) a+b
+>> }
+>>
+>>> fcn <- toto()
+>>> fcn(1,2)
+>> [1] 3
+>>> fcn <- toto()
+>>> fcn(1,2)
+>> [1] 3
+>>> fcn <- toto()
+>>> fcn(1,2)
+>> Error in fcn(1, 2) : unused argument (2)
+>>
+>> How can you use the returned function, if you get different arguments?
+>>
+>> In your example, you cannot use the returned function without knowing
+>> 'mode', or by inspecting the returned function.  So, the warning is
+>> there to alert you to a potential bug.  Anecdotally, I'm pretty sure
+>> this R CMD check NOTE has caught at least one such bug in one of
+>> my/our packages.
+>>
+>> If you want to keep the current design pattern, one approach could be
+>> to add ... to your function definitions:
+>>
+>> toto <- function(mode)
+>> {
+>>      if (mode == 1)
+>>          fun <- function(a, b, ...) a*b
+>>      else
+>>          fun <- function(u, v, w) (u + v) / w
+>>      fun
+>> }
+>>
+>> to make sure that toto() returns functions that accept the same
+>> minimal number of arguments.
+>>
+>> /Henrik
+>>
+>> On Tue, Feb 6, 2024 at 1:15?PM Izmirlian, Grant (NIH/NCI) [E] via
+>> R-devel <r-devel at r-project.org> wrote:
+>>>
+>>> Because functions get called and therefore, the calling sequence matters. It?s just protecting you from yourself, but as someone pointed out, there?s a way to silence such notes.
+>>> G
+>>>
+>>>
+>>> From: Herv? Pag?s <hpages.on.github at gmail.com>
+>>> Sent: Tuesday, February 6, 2024 2:40 PM
+>>> To: Izmirlian, Grant (NIH/NCI) [E] <izmirlig at mail.nih.gov>; Duncan Murdoch <murdoch.duncan at gmail.com>; r-devel at r-project.org
+>>> Subject: Re: [EXTERNAL] Re: [Rd] NOTE: multiple local function definitions for ?fun? with different formal arguments
+>>>
+>>>
+>>> On 2/6/24 11:19, Izmirlian, Grant (NIH/NCI) [E] wrote:
+>>> The note refers to the fact that the function named ?fun? appears to be defined in two different ways.
+>>>
+>>> Sure I get that. But how is that any different from a variable being defined in two different ways like in
+>>>
+>>>     if (mode == 1)
+>>>         x <- -8
+>>>     else
+>>>         x <- 55
+>>>
+>>> This is such a common and perfectly fine pattern. Why would this be considered a potential hazard when the variable is a function?
+>>>
+>>> H.
+>>>
+>>> From: Herv? Pag?s <hpages.on.github at gmail.com><mailto:hpages.on.github at gmail.com>
+>>> Sent: Tuesday, February 6, 2024 2:17 PM
+>>> To: Duncan Murdoch <murdoch.duncan at gmail.com><mailto:murdoch.duncan at gmail.com>; Izmirlian, Grant (NIH/NCI) [E] <izmirlig at mail.nih.gov><mailto:izmirlig at mail.nih.gov>; r-devel at r-project.org<mailto:r-devel at r-project.org>
+>>> Subject: [EXTERNAL] Re: [Rd] NOTE: multiple local function definitions for ?fun? with different formal arguments
+>>>
+>>>
+>>> Thanks. Workarounds are interesting but... what's the point of the NOTE in the first place?
+>>>
+>>> H.
+>>> On 2/4/24 09:07, Duncan Murdoch wrote:
+>>> On 04/02/2024 10:55 a.m., Izmirlian, Grant (NIH/NCI) [E] via R-devel wrote:
+>>>
+>>>
+>>> Well you can see that yeast is exactly weekday you have.  The way out is to just not name the result
+>>>
+>>> I think something happened to your explanation...
+>>>
+>>>
+>>>
+>>>
+>>> toto <- function(mode)
+>>> {
+>>>      ifelse(mode == 1,
+>>>          function(a,b) a*b,
+>>>          function(u, v, w) (u + v) / w)
+>>> }
+>>>
+>>> It's a bad idea to use ifelse() when you really want if() ... else ... .  In this case it works, but it doesn't always.  So the workaround should be
+>>>
+>>>
+>>> toto <- function(mode)
+>>> {
+>>>     if(mode == 1)
+>>>         function(a,b) a*b
+>>>     else
+>>>         function(u, v, w) (u + v) / w
+>>> }
+>>>
+>>>
+>>>
+>>>
+>>>
+>>>
+>>> ________________________________
+>>> From: Grant Izmirlian <izmirlidroid at gmail.com><mailto:izmirlidroid at gmail.com>
+>>> Date: Sun, Feb 4, 2024, 10:44 AM
+>>> To: "Izmirlian, Grant (NIH/NCI) [E]" <izmirlig at mail.nih.gov><mailto:izmirlig at mail.nih.gov>
+>>> Subject: Fwd: [EXTERNAL] R-devel Digest, Vol 252, Issue 2
+>>>
+>>> Hi,
+>>>
+>>> I just ran into this 'R CMD check' NOTE for the first time:
+>>>
+>>> * checking R code for possible problems ... NOTE
+>>> toto: multiple local function definitions for ?fun? with different
+>>>    formal arguments
+>>>
+>>> The "offending" code is something like this (simplified from the real code):
+>>>
+>>> toto <- function(mode)
+>>> {
+>>>      if (mode == 1)
+>>>          fun <- function(a, b) a*b
+>>>      else
+>>>          fun <- function(u, v, w) (u + v) / w
+>>>      fun
+>>> }
+>>>
+>>> Is that NOTE really intended? Hard to see why this code would be
+>>> considered "wrong".
+>>>
+>>> I know it's just a NOTE but still...
+>>>
+>>> I agree it's a false positive, but the issue is that you have a function object in your function which can't be called unconditionally.  The workaround doesn't create such an object.
+>>>
+>>> Recognizing that your function never tries to call fun requires global inspection of toto(), and most of the checks are based on local inspection.
+>>>
+>>> Duncan Murdoch
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org<mailto:R-devel at r-project.org> mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>
+>>> --
+>>>
+>>> Herv? Pag?s
+>>>
+>>>
+>>>
+>>> Bioconductor Core Team
+>>>
+>>> hpages.on.github at gmail.com<mailto:hpages.on.github at gmail.com>
+>>> CAUTION: This email originated from outside of the organization. Do not click links or open attachments unless you recognize the sender and are confident the content is safe.
+>>>
+>>>
+>>> --
+>>>
+>>> Herv? Pag?s
+>>>
+>>>
+>>>
+>>> Bioconductor Core Team
+>>>
+>>> hpages.on.github at gmail.com<mailto:hpages.on.github at gmail.com>
+>>> CAUTION: This email originated from outside of the organization. Do not click links or open attachments unless you recognize the sender and are confident the content is safe.
+>>>
+>>>
+>>>         [[alternative HTML version deleted]]
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>> [[alternative HTML version deleted]]
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Wed Feb  7 15:08:05 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Wed, 7 Feb 2024 09:08:05 -0500
+Subject: [Rd] [External]  Get list of active calling handlers?
+In-Reply-To: <164561a1-1acb-e69-cad-7a831e23b0ea@uiowa.edu>
+References: <e5f12cfa-7efa-41e8-b152-6e9ef8af39b9@gmail.com>
+ <164561a1-1acb-e69-cad-7a831e23b0ea@uiowa.edu>
+Message-ID: <5884a0b1-7316-4444-bda0-cbf82f2eb72f@gmail.com>
+
+On 07/02/2024 8:36 a.m., luke-tierney at uiowa.edu wrote:
+> On Tue, 6 Feb 2024, Duncan Murdoch wrote:
+> 
+>> The SO post https://stackoverflow.com/q/77943180 tried to call
+>> globalCallingHandlers() from a function, and it failed with the error message
+>> "should not be called with handlers on the stack".  A much simpler
+>> illustration of the same error comes from this line:
+>>
+>>   try(globalCallingHandlers(warning = function(e) e))
+>>
+>> The problem here is that try() sets an error handler, and
+>> globalCallingHandlers() sees it and aborts.
+>>
+>> If I call globalCallingHandlers() with no arguments, I get a list of
+>> currently active global handlers.  Is there also a way to get a list of
+>> active handlers, including non-global ones (like the one try() added in the
+>> line above)?
+> 
+> There is not. The internal stack is not safe to allow to escape to the
+> R level.  It would be possible to write a reflection function to
+> provide some information, but it would be a fair bit of work to design
+> and I don't think would be of enough value to justify that.
+> 
+> The original SO question would be better addressed to
+> Posit/RStudio. Someone with enough motivation might also be able to
+> figure out an answer by looking at the source code at
+> https://github.com/rstudio/rstudio.
+
+Thanks!
+
+Duncan
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Wed Feb  7 20:53:31 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Wed, 7 Feb 2024 14:53:31 -0500
+Subject: [Rd] 
+ [EXTERNAL] Re: NOTE: multiple local function definitions for
+ ?fun? with different formal arguments
+In-Reply-To: <abc59a72-a38b-4d73-b858-2efc150e62f3@gmail.com>
+References: <5jst8ric3j9fg55fkwuhhlyk.1707061436584@email.android.com>
+ <CA+jjkEbwGe-W-gSfds1=4Vzrf=LOitwiE=4Vx0+NCj4t2t09JA@mail.gmail.com>
+ <lo01v1qa61gmseab9ma660ts.1707061568394@email.android.com>
+ <5cb29a06-5b73-4fe4-b8dc-7aa9db6a2cff@gmail.com>
+ <15c10f0d-2c05-4b84-a3f0-0c02fdbb15e2@gmail.com>
+ <SA0PR09MB6955A7EF8CD84520F2FA6D8AE5462@SA0PR09MB6955.namprd09.prod.outlook.com>
+ <33b6ee55-1caa-461b-a132-42e22f41dd1a@gmail.com>
+ <SA0PR09MB69552A24686B60186A86BEC3E5462@SA0PR09MB6955.namprd09.prod.outlook.com>
+ <CAFDcVCTsEMwRhR6qFw1m7g0852XdeeNKALXhGNd2ZVzaMutoVA@mail.gmail.com>
+ <DS7PR10MB727772ADF2D69B769FC88A1BFA462@DS7PR10MB7277.namprd10.prod.outlook.com>
+ <CE0833FD-CE89-4F59-91C7-68C7F3C788FA@ckblack.org>
+ <abc59a72-a38b-4d73-b858-2efc150e62f3@gmail.com>
+Message-ID: <69df184a-96e5-4d26-9999-fef5dad280c4@gmail.com>
+
+I put the idea below into a function that gives nicer looking results. 
+Here's the new code:
+
+dupnames <- function(path = ".") {
+
+   Rfiles <- pkgload:::find_code(path)
+   allnames <- data.frame(names=character(), filename=character(), line 
+= numeric())
+   result <- NULL
+   for (f in Rfiles) {
+     exprs <- parse(f, keep.source = TRUE)
+     locs <- getSrcLocation(exprs)
+     names <- character(length(exprs))
+     lines <- numeric(length(exprs))
+     for (i in seq_along(exprs)) {
+       expr <- exprs[[i]]
+       if (is.name(expr[[1]]) &&
+           deparse(expr[[1]]) %in% c("<-", "=") &&
+           is.name(expr[[2]])) {
+         names[i] <- deparse(expr[[2]])
+         lines[i] <- locs[i]
+       }
+     }
+     keep <- names != ""
+     if (any(keep)) {
+       names <- names[keep]
+       lines <- lines[keep]
+
+       prev <- nrow(allnames)
+       allnames <- rbind(allnames, data.frame(name = names, filename = 
+basename(f), line = lines))
+       dups <- which(duplicated(allnames$name))
+       dups <- dups[dups > prev]
+       if (any(dups)) {
+         origfile <- character(length(dups))
+         origline <- numeric(length(dups))
+         for (i in seq_along(dups)) {
+           prev <- which(allnames$name == allnames$name[dups[i]])[1]
+           origfile[i] <- allnames$filename[prev]
+           origline[i] <- allnames$line[prev]
+         }
+
+         result <- rbind(result,
+                         data.frame(name = allnames$name[dups],
+                                    first = paste(origfile, origline, 
+sep=":"),
+                                    dup = paste(allnames$filename[dups], 
+allnames$line[dups], sep = ":")))
+       }
+     }
+   }
+   result
+}
+
+
+And here's what I get when I run it on rgl:
+
+dupnames("rgl")
+   name      first          dup
+1  fns knitr.R:12  knitr.R:165
+2  fns knitr.R:12 pkgdown.R:14
+3  fns knitr.R:12    shiny.R:8
+
+Those are okay; the fns object is a temporary that is later removed in 
+each case.
+
+Duncan Murdoch
+
+
+On 07/02/2024 9:05 a.m., Duncan Murdoch wrote:
+> I agree a note about this sort of change might be good.
+> 
+> I think it wouldn't be too hard to write such a check to detect simple
+> assignments using <- or =.  If you also wanted to detect method
+> redefinitions, or redefinitions of functions stored in lists, etc., it
+> would be harder.
+> 
+> There's unexported code in the pkgload package that will get you the
+> list of R files in the correct collation order:  pkgload:::find_code .
+> I don't know of such a function exported by some other package, but
+> there might be one.  Once you have that list, you could parse each file
+> and look for top level assignments to a name, then look for duplicates
+> in the vector of names.
+> 
+> Here's a little script that finds cases where an R source file makes an
+> assignment to a variable with the same name as one that was used earlier:
+> 
+> # Assume we are in the top level directory of a package.
+> Rfiles <- pkgload:::find_code()
+> 
+> allnames <- character()
+> for (f in Rfiles) {
+>     exprs <- parse(f)
+>     names <- character(length(exprs))
+>     for (i in seq_along(exprs)) {
+>       expr <- exprs[[i]]
+>       if (is.name(expr[[1]]) &&
+>           deparse(expr[[1]]) %in% c("<-", "=") &&
+>           is.name(expr[[2]])) {
+>         names[i] <- deparse(expr[[2]])
+>       }
+>     }
+>     names <- names[names != ""]
+>     prev <- length(allnames)
+>     allnames <- c(allnames, names)
+>     dups <- which(duplicated(allnames))
+>     dups <- dups[dups > prev]
+>     if (any(dups)) {
+>       cat("Duplicated names in ", basename(f), ":\n")
+>       cat(paste(allnames[dups], collapse = ", "), "\n")
+>     }
+> }
+> 
+> It could be made more fancy to report the locations of both the original
+> and the dup if you feel motivated.
+> 
+> Duncan Murdoch
+> 
+> On 06/02/2024 8:09 p.m., Chris Black wrote:
+>> Hopefully to too much of a tangent: A related problem this check doesn?t catch is accidental top-level redefinitions in package code, such as
+>>
+>> ## a.R:
+>> helper <- function() 1
+>>
+>> f <- function() {
+>> helper()
+>> }
+>> # ?cool, f() must return 1"
+>>
+>> ## b.R:
+>> helper <- function(x) 2
+>>
+>> g <- function() {
+>> helper()
+>> }
+>> # ?cool, g() must return 2"
+>>
+>> ## Runtime:
+>> # > c(pkg::f(), pkg::g())
+>> # [1] 2 2
+>> # ?oh right, only the last definition of helper() is used?
+>>    
+>> I?ve seen several variants of this issue in code from folks who are new to package development, especially if they're naively refactoring something that started out as an interactively-run analysis. Collaborators who are puzzled by it get my ?packages are collections of objects not sequences of expressions, yes that needs to be in your mental model, here?s the link to RWE again? talk, but I would be happy to be able to point them to a check result to go along with it.
+>>
+>> I don?t think this is grounds on its own to change a 20-year precedent, but in case anyone is collecting wishlist reasons to make the check look harder...
+>>
+>> Thanks,
+>> Chris
+>>
+>>> On Feb 6, 2024, at 3:17 PM, Martin Morgan <mtmorgan.xyz at gmail.com> wrote:
+>>>
+>>> I went looking and found this in codetools, where it's been for 20 years
+>>>
+>>> https://gitlab.com/luke-tierney/codetools/-/blame/master/R/codetools.R?ref_type=heads#L951
+>>>
+>>> I think the call stack in codetools is checkUsagePackage -> checkUsageEnv -> checkUsage, and these are similarly established. The call from the tools package https://github.com/wch/r-source/blame/95146f0f366a36899e4277a6a722964a51b93603/src/library/tools/R/QC.R#L4585 is also quite old.
+>>>
+>>> I'm not sure this had been said explicitly, but perhaps the original intent was to protect against accidentally redefining a local function. Obviously one could do this with a local variable too, though that might less often be an error?
+>>>
+>>> toto <- function(mode) {
+>>>      tata <- function(a, b) a * b  # intended
+>>>      tata <- function(a, b) a / b  # oops
+>>>      ?
+>>> }
+>>>
+>>> Another workaround is to actually name the local functions
+>>>
+>>> toto <- function(mode) {
+>>>      tata <- function(a, b) a * b
+>>>      titi <- function(u, v, w) (u + v) / w
+>>>      if (mode == 1)
+>>>          tata
+>>>      else
+>>>          titi
+>>> }
+>>>
+>>> ? or to use a switch statement
+>>>
+>>> toto <- function(mode) {
+>>>      ## fun <- switch(?) for use of `fun()` in toto
+>>>      switch(
+>>>          mode,
+>>>          tata = function(a, b) a * b,
+>>>          titi = function(u, v, w) (u + v) / w,
+>>>          stop("unknown `mode = '", mode, "'`")
+>>>      )
+>>> }
+>>>
+>>> ? or similarly to write `fun <- if ? else ?`, assigning the result of the `if` to `fun`. I guess this last formulation points to the fact that a more careful analysis of Herv?'s original code means that `fun` can only take one value (only one branch of the `if` can be taken) so there can only be one version of `fun` in any invocation of `toto()`.
+>>>
+>>> Perhaps the local names (and string-valued 'mode') are suggestive of special case, so serve as implicit documentation?
+>>>
+>>> Adding `?` to `tata` doesn't seem like a good idea; toto(1)(3, 5, 7) no longer signals an error.
+>>>
+>>> There seems to be a lot in common with S3 and S4 methods, where `toto` corresponds to the generic, `tata` and `titi` to methods. This 'dispatch' is brought out by using `switch()`. There is plenty of opportunity for thinking that you're invoking one method but actually you're invoking the other. For instance with dplyr, I like that I can tbl |> print(n = 2) so much that I find myself doing this with data.frame df |> print(n = 2), which is an error (`n` partially matches `na.print`, and 2 is not a valid value); both methods silently ignore the typo print(m = 2).
+>>>
+>>> Martin Morgan
+>>>
+>>> From: R-devel <r-devel-bounces at r-project.org> on behalf of Henrik Bengtsson <henrik.bengtsson at gmail.com>
+>>> Date: Tuesday, February 6, 2024 at 4:34?PM
+>>> To: Izmirlian, Grant (NIH/NCI) [E] <izmirlig at mail.nih.gov>
+>>> Cc: r-devel at r-project.org <r-devel at r-project.org>
+>>> Subject: Re: [Rd] [EXTERNAL] Re: NOTE: multiple local function definitions for ?fun? with different formal arguments
+>>> Here's a dummy example that I think illustrates the problem:
+>>>
+>>> toto <- function() {
+>>>    if (runif(1) < 0.5)
+>>>      function(a) a
+>>>    else
+>>>      function(a,b) a+b
+>>> }
+>>>
+>>>> fcn <- toto()
+>>>> fcn(1,2)
+>>> [1] 3
+>>>> fcn <- toto()
+>>>> fcn(1,2)
+>>> [1] 3
+>>>> fcn <- toto()
+>>>> fcn(1,2)
+>>> Error in fcn(1, 2) : unused argument (2)
+>>>
+>>> How can you use the returned function, if you get different arguments?
+>>>
+>>> In your example, you cannot use the returned function without knowing
+>>> 'mode', or by inspecting the returned function.  So, the warning is
+>>> there to alert you to a potential bug.  Anecdotally, I'm pretty sure
+>>> this R CMD check NOTE has caught at least one such bug in one of
+>>> my/our packages.
+>>>
+>>> If you want to keep the current design pattern, one approach could be
+>>> to add ... to your function definitions:
+>>>
+>>> toto <- function(mode)
+>>> {
+>>>       if (mode == 1)
+>>>           fun <- function(a, b, ...) a*b
+>>>       else
+>>>           fun <- function(u, v, w) (u + v) / w
+>>>       fun
+>>> }
+>>>
+>>> to make sure that toto() returns functions that accept the same
+>>> minimal number of arguments.
+>>>
+>>> /Henrik
+>>>
+>>> On Tue, Feb 6, 2024 at 1:15?PM Izmirlian, Grant (NIH/NCI) [E] via
+>>> R-devel <r-devel at r-project.org> wrote:
+>>>>
+>>>> Because functions get called and therefore, the calling sequence matters. It?s just protecting you from yourself, but as someone pointed out, there?s a way to silence such notes.
+>>>> G
+>>>>
+>>>>
+>>>> From: Herv? Pag?s <hpages.on.github at gmail.com>
+>>>> Sent: Tuesday, February 6, 2024 2:40 PM
+>>>> To: Izmirlian, Grant (NIH/NCI) [E] <izmirlig at mail.nih.gov>; Duncan Murdoch <murdoch.duncan at gmail.com>; r-devel at r-project.org
+>>>> Subject: Re: [EXTERNAL] Re: [Rd] NOTE: multiple local function definitions for ?fun? with different formal arguments
+>>>>
+>>>>
+>>>> On 2/6/24 11:19, Izmirlian, Grant (NIH/NCI) [E] wrote:
+>>>> The note refers to the fact that the function named ?fun? appears to be defined in two different ways.
+>>>>
+>>>> Sure I get that. But how is that any different from a variable being defined in two different ways like in
+>>>>
+>>>>      if (mode == 1)
+>>>>          x <- -8
+>>>>      else
+>>>>          x <- 55
+>>>>
+>>>> This is such a common and perfectly fine pattern. Why would this be considered a potential hazard when the variable is a function?
+>>>>
+>>>> H.
+>>>>
+>>>> From: Herv? Pag?s <hpages.on.github at gmail.com><mailto:hpages.on.github at gmail.com>
+>>>> Sent: Tuesday, February 6, 2024 2:17 PM
+>>>> To: Duncan Murdoch <murdoch.duncan at gmail.com><mailto:murdoch.duncan at gmail.com>; Izmirlian, Grant (NIH/NCI) [E] <izmirlig at mail.nih.gov><mailto:izmirlig at mail.nih.gov>; r-devel at r-project.org<mailto:r-devel at r-project.org>
+>>>> Subject: [EXTERNAL] Re: [Rd] NOTE: multiple local function definitions for ?fun? with different formal arguments
+>>>>
+>>>>
+>>>> Thanks. Workarounds are interesting but... what's the point of the NOTE in the first place?
+>>>>
+>>>> H.
+>>>> On 2/4/24 09:07, Duncan Murdoch wrote:
+>>>> On 04/02/2024 10:55 a.m., Izmirlian, Grant (NIH/NCI) [E] via R-devel wrote:
+>>>>
+>>>>
+>>>> Well you can see that yeast is exactly weekday you have.  The way out is to just not name the result
+>>>>
+>>>> I think something happened to your explanation...
+>>>>
+>>>>
+>>>>
+>>>>
+>>>> toto <- function(mode)
+>>>> {
+>>>>       ifelse(mode == 1,
+>>>>           function(a,b) a*b,
+>>>>           function(u, v, w) (u + v) / w)
+>>>> }
+>>>>
+>>>> It's a bad idea to use ifelse() when you really want if() ... else ... .  In this case it works, but it doesn't always.  So the workaround should be
+>>>>
+>>>>
+>>>> toto <- function(mode)
+>>>> {
+>>>>      if(mode == 1)
+>>>>          function(a,b) a*b
+>>>>      else
+>>>>          function(u, v, w) (u + v) / w
+>>>> }
+>>>>
+>>>>
+>>>>
+>>>>
+>>>>
+>>>>
+>>>> ________________________________
+>>>> From: Grant Izmirlian <izmirlidroid at gmail.com><mailto:izmirlidroid at gmail.com>
+>>>> Date: Sun, Feb 4, 2024, 10:44 AM
+>>>> To: "Izmirlian, Grant (NIH/NCI) [E]" <izmirlig at mail.nih.gov><mailto:izmirlig at mail.nih.gov>
+>>>> Subject: Fwd: [EXTERNAL] R-devel Digest, Vol 252, Issue 2
+>>>>
+>>>> Hi,
+>>>>
+>>>> I just ran into this 'R CMD check' NOTE for the first time:
+>>>>
+>>>> * checking R code for possible problems ... NOTE
+>>>> toto: multiple local function definitions for ?fun? with different
+>>>>     formal arguments
+>>>>
+>>>> The "offending" code is something like this (simplified from the real code):
+>>>>
+>>>> toto <- function(mode)
+>>>> {
+>>>>       if (mode == 1)
+>>>>           fun <- function(a, b) a*b
+>>>>       else
+>>>>           fun <- function(u, v, w) (u + v) / w
+>>>>       fun
+>>>> }
+>>>>
+>>>> Is that NOTE really intended? Hard to see why this code would be
+>>>> considered "wrong".
+>>>>
+>>>> I know it's just a NOTE but still...
+>>>>
+>>>> I agree it's a false positive, but the issue is that you have a function object in your function which can't be called unconditionally.  The workaround doesn't create such an object.
+>>>>
+>>>> Recognizing that your function never tries to call fun requires global inspection of toto(), and most of the checks are based on local inspection.
+>>>>
+>>>> Duncan Murdoch
+>>>>
+>>>> ______________________________________________
+>>>> R-devel at r-project.org<mailto:R-devel at r-project.org> mailing list
+>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>>
+>>>> --
+>>>>
+>>>> Herv? Pag?s
+>>>>
+>>>>
+>>>>
+>>>> Bioconductor Core Team
+>>>>
+>>>> hpages.on.github at gmail.com<mailto:hpages.on.github at gmail.com>
+>>>> CAUTION: This email originated from outside of the organization. Do not click links or open attachments unless you recognize the sender and are confident the content is safe.
+>>>>
+>>>>
+>>>> --
+>>>>
+>>>> Herv? Pag?s
+>>>>
+>>>>
+>>>>
+>>>> Bioconductor Core Team
+>>>>
+>>>> hpages.on.github at gmail.com<mailto:hpages.on.github at gmail.com>
+>>>> CAUTION: This email originated from outside of the organization. Do not click links or open attachments unless you recognize the sender and are confident the content is safe.
+>>>>
+>>>>
+>>>>          [[alternative HTML version deleted]]
+>>>>
+>>>> ______________________________________________
+>>>> R-devel at r-project.org mailing list
+>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>
+>>> [[alternative HTML version deleted]]
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From therne@u @end|ng |rom m@yo@edu  Wed Feb  7 21:01:44 2024
+From: therne@u @end|ng |rom m@yo@edu (Therneau, Terry M., Ph.D.)
+Date: Wed, 07 Feb 2024 14:01:44 -0600
+Subject: [Rd] Difficult debug
+Message-ID: <d2a753$lf9ru7@ironport10.mayo.edu>
+
+ ?I've hit a roadblock debugging a new update to the survival package.?? I do debugging in 
+a developement envinment, i.e. I don't create and load a package but rather? source all 
+the .R files and dyn.load an .so file, which makes things a bit easier.
+
+ ? Running with R -d "valgrind --tool=memcheck --leak-check=full" one of my test files 
+crashes in simple R code a dozen lines after the? likely culprit has been called, i.e, the 
+survfit function for an Aalen-Johansen, containing a .Call to the new C code.???? The 
+valgrind approach had already allowed me to find a few other (mostly dumb) errors that led 
+to an out of bounds access, e.g., the wrong endpoint variable in a for( ) loop.??? What 
+would others advise as a next step?
+
+Here is the last part of the screen
+ > fit2 <- coxph(list(Surv(tstart, tstop, bstat) ~ 1,
++??????????????????? c(1:4):5 ~ age / common + shared), id= id, istate=bili4,
++?????????????? data=pbc2, ties='breslow', x=TRUE)
+ > surv2 <- survfit(fit2, newdata=list(age=50), p0=c(.4, .3, .2, .1, 0))
+ > test2 <- mysurv(fit2, pbc2$bili4, p0= 4:0/10, fit2, x0 =50)
+==31730== Invalid read of size 8
+==31730==??? at 0x298A07: Rf_allocVector3 (memory.c:2861)
+==31730==??? by 0x299B2C: Rf_allocVector (Rinlinedfuns.h:595)
+==31730==??? by 0x299B2C: R_alloc (memory.c:2330)
+==31730==??? by 0x3243C6: do_which (summary.c:1152)
+==31730==??? by 0x23D8EF: bcEval (eval.c:7724)
+==31730==??? by 0x25731F: Rf_eval (eval.c:1152)
+==31730==??? by 0x25927D: R_execClosure (eval.c:2362)
+==31730==??? by 0x25A35A: R_execMethod (eval.c:2535)
+==31730==??? by 0x887E93F: R_dispatchGeneric (methods_list_dispatch.c:1151)
+==31730==??? by 0x2A0E72: do_standardGeneric (objects.c:1344)
+==31730==??? by 0x2577E7: Rf_eval (eval.c:1254)
+==31730==??? by 0x25927D: R_execClosure (eval.c:2362)
+==31730==??? by 0x25A01C: applyClosure_core (eval.c:2250)
+==31730==? Address 0x10 is not stack'd, malloc'd or (recently) free'd
+==31730==
+
+ ?*** caught segfault ***
+address 0x10, cause 'memory not mapped'
+
+Traceback:
+ ?1: which(smap == j)
+ ?2: which(smap == j)
+ ?3: mysurv(fit2, pbc2$bili4, p0 = 4:0/10, fit2, x0 = 50)
+
+The offending call is amost certainly the one to survfit; mysurv() is a local function 
+that caculates some things 'by hand'. ? It does nothing complex: counts, loops, etc, the 
+only non-base action is a call to Matrix::exp near the end, but the which() failure is 
+well before that.
+
+The session info just before the offending material:
+
+ > sessionInfo()
+R Under development (unstable) (2024-02-07 r85873)
+Platform: x86_64-pc-linux-gnu
+Running under: Ubuntu 22.04.3 LTS
+
+Matrix products: default
+BLAS:?? /usr/local/src/R-devel/lib/libRblas.so
+LAPACK: /usr/lib/x86_64-linux-gnu/lapack/liblapack.so.3.10.0
+
+locale:
+ ?[1] LC_CTYPE=en_US.UTF-8?????? LC_NUMERIC=C
+ ?[3] LC_TIME=en_US.UTF-8??????? LC_COLLATE=C
+ ?[5] LC_MONETARY=en_US.UTF-8??? LC_MESSAGES=en_US.UTF-8
+ ?[7] LC_PAPER=en_US.UTF-8?????? LC_NAME=C
+ ?[9] LC_ADDRESS=C?????????????? LC_TELEPHONE=C
+[11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C
+
+time zone: America/Chicago
+tzcode source: system (glibc)
+
+attached base packages:
+[1] splines?? stats???? graphics? grDevices utils???? datasets methods
+[8] base
+
+other attached packages:
+[1] Matrix_1.6-0
+
+loaded via a namespace (and not attached):
+[1] compiler_4.4.0 tools_4.4.0??? grid_4.4.0???? lattice_0.22-5
+
+
+---
+Footnote.? The impetus for this is realizing that the robust variance for an 
+Aalen-Johansen was incorrect when there are case weights for a subject that vary over 
+time;? a rare case but will occur with time dependent IPC weights.? Carefully figuring 
+this out has been all I did for the last week, leading to a new routine survfitaj.c and 
+approx 14 pages of derivation and explanation in the methods.Rnw vignette.?? Subjects who 
+"change horses in midstream", i.e., swap from one curve to another mid-followup make the 
+code more complex.?? This arises out of the "extended Kaplan-Meier"; I am not a fan of 
+this statistically, but some will use it and expect my code to work.
+
+-- 
+Terry M Therneau, PhD
+Department of Quantitative Health Sciences
+Mayo Clinic
+therneau at mayo.edu
+
+"TERR-ree THUR-noh"
+
+	[[alternative HTML version deleted]]
+
+
+From |kry|ov @end|ng |rom d|@root@org  Wed Feb  7 22:30:38 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Thu, 8 Feb 2024 00:30:38 +0300
+Subject: [Rd] Difficult debug
+In-Reply-To: <d2a753$lf9ru7@ironport10.mayo.edu>
+References: <d2a753$lf9ru7@ironport10.mayo.edu>
+Message-ID: <20240208003038.68216c31@Tarkus>
+
+On Wed, 07 Feb 2024 14:01:44 -0600
+"Therneau, Terry M., Ph.D. via R-devel" <r-devel at r-project.org> wrote:
+
+>  > test2 <- mysurv(fit2, pbc2$bili4, p0= 4:0/10, fit2, x0 =50)  
+> ==31730== Invalid read of size 8
+> ==31730==??? at 0x298A07: Rf_allocVector3 (memory.c:2861)
+> ==31730==??? by 0x299B2C: Rf_allocVector (Rinlinedfuns.h:595)
+> ==31730==??? by 0x299B2C: R_alloc (memory.c:2330)
+> ==31730==??? by 0x3243C6: do_which (summary.c:1152)
+<...>
+> ==31730==? Address 0x10 is not stack'd, malloc'd or (recently) free'd
+<...>
+>  ?*** caught segfault ***
+> address 0x10, cause 'memory not mapped'
+
+An unrelated allocation function suddenly dereferencing a null pointer
+is likely indication of heap corruption. Valgrind may be silent about
+it because the C heap (that it knows how to override and track) is still
+intact, but the R memory management metadata got corrupted (which looks
+like a valid memory access to Valgrind).
+
+An easy solution could be brought by more instrumentation.
+
+R can tell Valgrind to consider some memory accesses invalid if you
+configure it using --with-valgrind-instrumentation [*], but I'm not
+sure it will be able to trap overwriting GC metadata, so let's set it
+aside for now.
+
+If you compile your own R, you can configure it with -fsanitize=address
+added to the compiler and linker flags [**]. I'm not sure whether the
+bounds checks performed by AddressSanitizer would be sufficient to
+catch the problem, but it's worth a try. Instead of compiling R with
+sanitizers, it should be also possible to use the container image
+docker.io/rocker/r-devel-san.
+
+The hard option is left if no instrumentation lets you pinpoint the
+error. Since the first (as far as Valgrind is concerned) memory error
+already happens to result in a SIGSEGV, you can run R in a regular
+debugger and try to work backwards from the local variables at the
+location of the crash. Maybe there's a way to identify the block
+containing the pointer that gets overwritten and set a watchpoint on
+it for the next run of R. Maybe you can read the overwritten value as
+double and guess where the number came from. If your processor is
+sufficiently new, you can try `rr`, the time-travelling debugger [***],
+to rewind the process execution back to the point where the pointer gets
+overwritten.
+
+-- 
+Best regards,
+Ivan
+
+[*]
+https://cran.r-project.org/doc/manuals/R-exts.html#Using-valgrind
+
+[**]
+https://cran.r-project.org/doc/manuals/R-exts.html#Using-Address-Sanitizer
+
+[***]
+https://rr-project.org
+Judging by the domain name, it's practically designed to fix troublesome
+bugs in R packages!
+
+
+From w||||@mwdun|@p @end|ng |rom gm@||@com  Thu Feb  8 00:46:47 2024
+From: w||||@mwdun|@p @end|ng |rom gm@||@com (Bill Dunlap)
+Date: Wed, 7 Feb 2024 15:46:47 -0800
+Subject: [Rd] Difficult debug
+In-Reply-To: <d2a753$lf9ru7@ironport10.mayo.edu>
+References: <d2a753$lf9ru7@ironport10.mayo.edu>
+Message-ID: <CAHqSRuRyJywYas+Kr6_4fzp9JE0_NzWSx+WH6ZaVQKdbV0_qcA@mail.gmail.com>
+
+I haven't done any R memory debugging lately, but
+
+https://www.mail-archive.com/rcpp-devel at lists.r-forge.r-project.org/msg10289.html
+shows how I used to have gdb break where valgrind finds a problem so you
+could examine the details.
+
+Also, running your code after running gctorture(TRUE) can help track down
+memory problems.
+
+-Bill
+
+
+On Wed, Feb 7, 2024 at 12:03?PM Therneau, Terry M., Ph.D. via R-devel <
+r-devel at r-project.org> wrote:
+
+>   I've hit a roadblock debugging a new update to the survival package.   I
+> do debugging in
+> a developement envinment, i.e. I don't create and load a package but
+> rather  source all
+> the .R files and dyn.load an .so file, which makes things a bit easier.
+>
+>    Running with R -d "valgrind --tool=memcheck --leak-check=full" one of
+> my test files
+> crashes in simple R code a dozen lines after the  likely culprit has been
+> called, i.e, the
+> survfit function for an Aalen-Johansen, containing a .Call to the new C
+> code.     The
+> valgrind approach had already allowed me to find a few other (mostly dumb)
+> errors that led
+> to an out of bounds access, e.g., the wrong endpoint variable in a for( )
+> loop.    What
+> would others advise as a next step?
+>
+> Here is the last part of the screen
+>  > fit2 <- coxph(list(Surv(tstart, tstop, bstat) ~ 1,
+> +                    c(1:4):5 ~ age / common + shared), id= id,
+> istate=bili4,
+> +               data=pbc2, ties='breslow', x=TRUE)
+>  > surv2 <- survfit(fit2, newdata=list(age=50), p0=c(.4, .3, .2, .1, 0))
+>  > test2 <- mysurv(fit2, pbc2$bili4, p0= 4:0/10, fit2, x0 =50)
+> ==31730== Invalid read of size 8
+> ==31730==    at 0x298A07: Rf_allocVector3 (memory.c:2861)
+> ==31730==    by 0x299B2C: Rf_allocVector (Rinlinedfuns.h:595)
+> ==31730==    by 0x299B2C: R_alloc (memory.c:2330)
+> ==31730==    by 0x3243C6: do_which (summary.c:1152)
+> ==31730==    by 0x23D8EF: bcEval (eval.c:7724)
+> ==31730==    by 0x25731F: Rf_eval (eval.c:1152)
+> ==31730==    by 0x25927D: R_execClosure (eval.c:2362)
+> ==31730==    by 0x25A35A: R_execMethod (eval.c:2535)
+> ==31730==    by 0x887E93F: R_dispatchGeneric (methods_list_dispatch.c:1151)
+> ==31730==    by 0x2A0E72: do_standardGeneric (objects.c:1344)
+> ==31730==    by 0x2577E7: Rf_eval (eval.c:1254)
+> ==31730==    by 0x25927D: R_execClosure (eval.c:2362)
+> ==31730==    by 0x25A01C: applyClosure_core (eval.c:2250)
+> ==31730==  Address 0x10 is not stack'd, malloc'd or (recently) free'd
+> ==31730==
+>
+>   *** caught segfault ***
+> address 0x10, cause 'memory not mapped'
+>
+> Traceback:
+>   1: which(smap == j)
+>   2: which(smap == j)
+>   3: mysurv(fit2, pbc2$bili4, p0 = 4:0/10, fit2, x0 = 50)
+>
+> The offending call is amost certainly the one to survfit; mysurv() is a
+> local function
+> that caculates some things 'by hand'.   It does nothing complex: counts,
+> loops, etc, the
+> only non-base action is a call to Matrix::exp near the end, but the
+> which() failure is
+> well before that.
+>
+> The session info just before the offending material:
+>
+>  > sessionInfo()
+> R Under development (unstable) (2024-02-07 r85873)
+> Platform: x86_64-pc-linux-gnu
+> Running under: Ubuntu 22.04.3 LTS
+>
+> Matrix products: default
+> BLAS:   /usr/local/src/R-devel/lib/libRblas.so
+> LAPACK: /usr/lib/x86_64-linux-gnu/lapack/liblapack.so.3.10.0
+>
+> locale:
+>   [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C
+>   [3] LC_TIME=en_US.UTF-8        LC_COLLATE=C
+>   [5] LC_MONETARY=en_US.UTF-8    LC_MESSAGES=en_US.UTF-8
+>   [7] LC_PAPER=en_US.UTF-8       LC_NAME=C
+>   [9] LC_ADDRESS=C               LC_TELEPHONE=C
+> [11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C
+>
+> time zone: America/Chicago
+> tzcode source: system (glibc)
+>
+> attached base packages:
+> [1] splines   stats     graphics  grDevices utils     datasets methods
+> [8] base
+>
+> other attached packages:
+> [1] Matrix_1.6-0
+>
+> loaded via a namespace (and not attached):
+> [1] compiler_4.4.0 tools_4.4.0    grid_4.4.0     lattice_0.22-5
+>
+>
+> ---
+> Footnote.  The impetus for this is realizing that the robust variance for
+> an
+> Aalen-Johansen was incorrect when there are case weights for a subject
+> that vary over
+> time;  a rare case but will occur with time dependent IPC weights.
+> Carefully figuring
+> this out has been all I did for the last week, leading to a new routine
+> survfitaj.c and
+> approx 14 pages of derivation and explanation in the methods.Rnw
+> vignette.   Subjects who
+> "change horses in midstream", i.e., swap from one curve to another
+> mid-followup make the
+> code more complex.   This arises out of the "extended Kaplan-Meier"; I am
+> not a fan of
+> this statistically, but some will use it and expect my code to work.
+>
+> --
+> Terry M Therneau, PhD
+> Department of Quantitative Health Sciences
+> Mayo Clinic
+> therneau at mayo.edu
+>
+> "TERR-ree THUR-noh"
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From w||||@mwdun|@p @end|ng |rom gm@||@com  Thu Feb  8 01:40:02 2024
+From: w||||@mwdun|@p @end|ng |rom gm@||@com (Bill Dunlap)
+Date: Wed, 7 Feb 2024 16:40:02 -0800
+Subject: [Rd] Difficult debug
+In-Reply-To: <CAHqSRuRyJywYas+Kr6_4fzp9JE0_NzWSx+WH6ZaVQKdbV0_qcA@mail.gmail.com>
+References: <d2a753$lf9ru7@ironport10.mayo.edu>
+ <CAHqSRuRyJywYas+Kr6_4fzp9JE0_NzWSx+WH6ZaVQKdbV0_qcA@mail.gmail.com>
+Message-ID: <CAHqSRuT24vV=L+R=CaTqWVRgSNP+ZDVtyQ+jF77V438481LUqg@mail.gmail.com>
+
+| >>> I often run R under valgrind with the command line:
+| >>>   $ R --quiet --no-save --debugger=valgrind
+| >>> --debugger-args="--track-origins=yes --vgdb=full --vgdb-error=0"
+| >>> then in another window start a debugger process with
+| >>>   $ gdb RHOME/bin/exec/R
+| >>>   ...
+| >>>    (gdb) target remote | vgdb
+| >>>    (gdb) cont
+| >>> You may need to supply a complete path to vgdb, valgrind's interface to
+| >>> gdb.
+| >>> Then gdb will set breakpoints where valgrind reports memory misuse and
+| >>> you can inspect variables, etc., where an error occurs.
+| >>> You can check for memory leaks from gdb with
+| >>>    (gdb) monitor leak_check full
+| >>>
+| >>> -Bill
+
+
+You can use ^C to get the gdb prompt, to, say, set a breakpoint on
+Rf_error or something in your code, and 'cont' or 'continue' to resume
+running R.
+
+
+You can get information about the status and history of a memory
+location, say 0x12345678, with
+
+
+(gdb) monitor vinfo location 0x12345678
+
+
+More information is in https://valgrind.org/docs/manual/manual-core-adv.html.
+
+
+On Wed, Feb 7, 2024 at 3:46?PM Bill Dunlap <williamwdunlap at gmail.com> wrote:
+
+> I haven't done any R memory debugging lately, but
+>
+> https://www.mail-archive.com/rcpp-devel at lists.r-forge.r-project.org/msg10289.html
+> shows how I used to have gdb break where valgrind finds a problem so you
+> could examine the details.
+>
+> Also, running your code after running gctorture(TRUE) can help track down
+> memory problems.
+>
+> -Bill
+>
+>
+> On Wed, Feb 7, 2024 at 12:03?PM Therneau, Terry M., Ph.D. via R-devel <
+> r-devel at r-project.org> wrote:
+>
+>>   I've hit a roadblock debugging a new update to the survival package.
+>> I do debugging in
+>> a developement envinment, i.e. I don't create and load a package but
+>> rather  source all
+>> the .R files and dyn.load an .so file, which makes things a bit easier.
+>>
+>>    Running with R -d "valgrind --tool=memcheck --leak-check=full" one of
+>> my test files
+>> crashes in simple R code a dozen lines after the  likely culprit has been
+>> called, i.e, the
+>> survfit function for an Aalen-Johansen, containing a .Call to the new C
+>> code.     The
+>> valgrind approach had already allowed me to find a few other (mostly
+>> dumb) errors that led
+>> to an out of bounds access, e.g., the wrong endpoint variable in a for( )
+>> loop.    What
+>> would others advise as a next step?
+>>
+>> Here is the last part of the screen
+>>  > fit2 <- coxph(list(Surv(tstart, tstop, bstat) ~ 1,
+>> +                    c(1:4):5 ~ age / common + shared), id= id,
+>> istate=bili4,
+>> +               data=pbc2, ties='breslow', x=TRUE)
+>>  > surv2 <- survfit(fit2, newdata=list(age=50), p0=c(.4, .3, .2, .1, 0))
+>>  > test2 <- mysurv(fit2, pbc2$bili4, p0= 4:0/10, fit2, x0 =50)
+>> ==31730== Invalid read of size 8
+>> ==31730==    at 0x298A07: Rf_allocVector3 (memory.c:2861)
+>> ==31730==    by 0x299B2C: Rf_allocVector (Rinlinedfuns.h:595)
+>> ==31730==    by 0x299B2C: R_alloc (memory.c:2330)
+>> ==31730==    by 0x3243C6: do_which (summary.c:1152)
+>> ==31730==    by 0x23D8EF: bcEval (eval.c:7724)
+>> ==31730==    by 0x25731F: Rf_eval (eval.c:1152)
+>> ==31730==    by 0x25927D: R_execClosure (eval.c:2362)
+>> ==31730==    by 0x25A35A: R_execMethod (eval.c:2535)
+>> ==31730==    by 0x887E93F: R_dispatchGeneric
+>> (methods_list_dispatch.c:1151)
+>> ==31730==    by 0x2A0E72: do_standardGeneric (objects.c:1344)
+>> ==31730==    by 0x2577E7: Rf_eval (eval.c:1254)
+>> ==31730==    by 0x25927D: R_execClosure (eval.c:2362)
+>> ==31730==    by 0x25A01C: applyClosure_core (eval.c:2250)
+>> ==31730==  Address 0x10 is not stack'd, malloc'd or (recently) free'd
+>> ==31730==
+>>
+>>   *** caught segfault ***
+>> address 0x10, cause 'memory not mapped'
+>>
+>> Traceback:
+>>   1: which(smap == j)
+>>   2: which(smap == j)
+>>   3: mysurv(fit2, pbc2$bili4, p0 = 4:0/10, fit2, x0 = 50)
+>>
+>> The offending call is amost certainly the one to survfit; mysurv() is a
+>> local function
+>> that caculates some things 'by hand'.   It does nothing complex: counts,
+>> loops, etc, the
+>> only non-base action is a call to Matrix::exp near the end, but the
+>> which() failure is
+>> well before that.
+>>
+>> The session info just before the offending material:
+>>
+>>  > sessionInfo()
+>> R Under development (unstable) (2024-02-07 r85873)
+>> Platform: x86_64-pc-linux-gnu
+>> Running under: Ubuntu 22.04.3 LTS
+>>
+>> Matrix products: default
+>> BLAS:   /usr/local/src/R-devel/lib/libRblas.so
+>> LAPACK: /usr/lib/x86_64-linux-gnu/lapack/liblapack.so.3.10.0
+>>
+>> locale:
+>>   [1] LC_CTYPE=en_US.UTF-8       LC_NUMERIC=C
+>>   [3] LC_TIME=en_US.UTF-8        LC_COLLATE=C
+>>   [5] LC_MONETARY=en_US.UTF-8    LC_MESSAGES=en_US.UTF-8
+>>   [7] LC_PAPER=en_US.UTF-8       LC_NAME=C
+>>   [9] LC_ADDRESS=C               LC_TELEPHONE=C
+>> [11] LC_MEASUREMENT=en_US.UTF-8 LC_IDENTIFICATION=C
+>>
+>> time zone: America/Chicago
+>> tzcode source: system (glibc)
+>>
+>> attached base packages:
+>> [1] splines   stats     graphics  grDevices utils     datasets methods
+>> [8] base
+>>
+>> other attached packages:
+>> [1] Matrix_1.6-0
+>>
+>> loaded via a namespace (and not attached):
+>> [1] compiler_4.4.0 tools_4.4.0    grid_4.4.0     lattice_0.22-5
+>>
+>>
+>> ---
+>> Footnote.  The impetus for this is realizing that the robust variance for
+>> an
+>> Aalen-Johansen was incorrect when there are case weights for a subject
+>> that vary over
+>> time;  a rare case but will occur with time dependent IPC weights.
+>> Carefully figuring
+>> this out has been all I did for the last week, leading to a new routine
+>> survfitaj.c and
+>> approx 14 pages of derivation and explanation in the methods.Rnw
+>> vignette.   Subjects who
+>> "change horses in midstream", i.e., swap from one curve to another
+>> mid-followup make the
+>> code more complex.   This arises out of the "extended Kaplan-Meier"; I am
+>> not a fan of
+>> this statistically, but some will use it and expect my code to work.
+>>
+>> --
+>> Terry M Therneau, PhD
+>> Department of Quantitative Health Sciences
+>> Mayo Clinic
+>> therneau at mayo.edu
+>>
+>> "TERR-ree THUR-noh"
+>>
+>>         [[alternative HTML version deleted]]
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+
+	[[alternative HTML version deleted]]
+
+
