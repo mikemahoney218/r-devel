@@ -5224,3 +5224,228 @@ On 08/02/2024 12:23 p.m., Henrik Bengtsson wrote:
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From j|r|@c@mor@vec @end|ng |rom gm@||@com  Thu Feb  8 22:54:30 2024
+From: j|r|@c@mor@vec @end|ng |rom gm@||@com (=?UTF-8?B?SmnFmcOtIE1vcmF2ZWM=?=)
+Date: Fri, 9 Feb 2024 10:54:30 +1300
+Subject: [Rd] round.Date and trunc.Date not working / implemented
+In-Reply-To: <26052.57850.412172.408639@stat.math.ethz.ch>
+References: <ab3376ac-5694-4a53-9606-c11bd97a4f0a@gmail.com>
+ <26052.57850.412172.408639@stat.math.ethz.ch>
+Message-ID: <46e57576-faff-468f-915d-410ee7b45855@gmail.com>
+
+Apologies then. I was using R version 4.1.2 (Bird Hippie) and looks like 
+someone implemented a better trunc.Date version in the meantime.
+
+# v4.1.2
+ > trunc.Date
+function (x, ...)
+round(x - 0.4999999)
+<bytecode: 0x56138c284de0>
+<environment: namespace:base>
+
+# Unstable (2024-02-07 r85873)
+ > trunc.Date
+function (x, units = c("secs", "mins", "hours", "days", "months",
+ ??? "years"), ...)
+{
+ ??? units <- match.arg(units)
+ ??? if (units == "months" || units == "years")
+ ??????? as.Date(trunc.POSIXt(x, units, ...))
+ ??? else round(x - 0.4999999)
+}
+<bytecode: 0x565254ea8398>
+<environment: namespace:base>
+
+
+And I was looking towards my first contribution. :(
+Well, its on me for not checking the dev version before writing email 
+and using something that is 3 years out of date.
+
+Look like the change did not affected `round.Date`. In both versions it 
+is still not accepting `units` and instead treating `Date(...)` as numeric.
+
+Would similar treatment for `round.Date` be desirable? And perhaps 
+`floor` and `ceiling` (rounding up)? I found it useful when plotting 
+(although axis.Date and prettyDate did solved some issues). Although
+
+-- Jirka
+
+
+On 9/02/24 03:15, Martin Maechler wrote:
+>>>>>> Ji?? Moravec
+>>>>>>      on Wed, 7 Feb 2024 10:23:15 +1300 writes:
+>      > This is my first time working with dates, so if the answer is "Duh, work
+>      > with POSIXt", please ignore it.
+>
+>      > Why is not `round.Date` and `trunc.Date` "implemented" for `Date`?
+>
+>      > Is this because `Date` is (mostly) a virtual class setup for a better
+>      > inheritance or is that something that is just missing? (like
+>      > `sort.data.frame`). Would R core welcome a patch?
+>
+>      > I decided to convert some dates to date using `as.Date` function, which
+>      > converts to a plain `Date` class, because that felt natural.
+>
+>      > But then when trying to round to closest year, I have realized that the
+>      > `round` and `trunc` for `Date` do not behave as for `POSIXt`.
+>
+>      > I would assume that these will have equivalent output:
+>
+>      > Sys.time() |> round("years") # 2024-01-01 NZDT
+>
+>      > Sys.Date() |> round("years") # Error in round.default(...): non-numeric
+>      > argument to mathematical function
+>
+>
+>      > Looking at the code (and reading the documentation more carefully) shows
+>      > the issue, but this looks like an omission that should be patched.
+>
+>      > -- Jirka
+>
+> You are wrong:  They *are* implemented,
+> both even visible since they are in the 'base' package!
+>
+> ==> they have help pages you can read ....
+>
+> Here are examples:
+>
+>> trunc(Sys.Date())
+> [1] "2024-02-08"
+>> trunc(Sys.Date(), "month")
+> [1] "2024-02-01"
+>> trunc(Sys.Date(), "year")
+> [1] "2024-01-01"
+
+
+From j|r|@c@mor@vec @end|ng |rom gm@||@com  Fri Feb  9 01:58:00 2024
+From: j|r|@c@mor@vec @end|ng |rom gm@||@com (=?UTF-8?B?SmnFmcOtIE1vcmF2ZWM=?=)
+Date: Fri, 9 Feb 2024 13:58:00 +1300
+Subject: [Rd] round.Date and trunc.Date not working / implemented
+In-Reply-To: <41265ce9-5a0c-4e38-af69-461e065ab81f@gmail.com>
+References: <41265ce9-5a0c-4e38-af69-461e065ab81f@gmail.com>
+Message-ID: <8de0995f-dc5c-4788-8a8b-959bf79ee71c@gmail.com>
+
+ > This is a workaround, and could be the basis for a round.Date 
+improvement:
+ >?? date <- Sys.Date()
+ >?? as.Date(round(as.POSIXct(date), "years"))
+ >?? as.Date(round(as.POSIXct(Sys.Date() + 180), "years"))
+ > Duncan Murdoch
+
+That would work, perhaps structured similarly as `trunc.Date` is.
+The only issue might be that `trunc.Date` is currently using `round.Date`
+in its numeric form likely to prevent ?expensive? conversion to POSIXt 
+when it is not required.
+
+ > trunc.Date
+ > function (x, units = c("secs", "mins", "hours", "days", "months",
+ >? ?? "years"), ...)
+ > {
+ >??? units <- match.arg(units)
+ >??? if (units == "months" || units == "years")
+ >??????? as.Date(trunc.POSIXt(x, units, ...))
+ >??? else round(x - 0.4999999)
+ > }
+
+Perhaps the working version of `round.Date` could be:
+
+ ? round.Date = function(x, units = c("secs", "mins", "hours", "days", 
+"months", "years")){
+ ??? units = match.arg(units)
+
+ ??? if (units == "months" || units == "years")
+ ??? ? as.Date(round.POSIXt(x, units, ...))
+ ??? else .Date(round(as.numeric(x)))
+ ? }
+
+Or perhaps `unclass` instead of `as.numeric`. Since the default `units` 
+for round(x) evaluates
+to `sec`, this should correctly skip the first condition in `round` and 
+get to the correct numeric
+rounding.
+
+Perhaps the `trunc.Date` should be modified as well so that the call to 
+`round.Date` is skipped in favour of internal `round.numeric`, saving 
+few cycles.
+
+-- Jirka
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Fri Feb  9 14:36:23 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Fri, 9 Feb 2024 08:36:23 -0500
+Subject: [Rd] round.Date and trunc.Date not working / implemented
+In-Reply-To: <8de0995f-dc5c-4788-8a8b-959bf79ee71c@gmail.com>
+References: <41265ce9-5a0c-4e38-af69-461e065ab81f@gmail.com>
+ <8de0995f-dc5c-4788-8a8b-959bf79ee71c@gmail.com>
+Message-ID: <c32e4bd2-d425-44f1-b1c3-892762af1337@gmail.com>
+
+On 08/02/2024 7:58 p.m., Ji?? Moravec wrote:
+>   > This is a workaround, and could be the basis for a round.Date
+> improvement:
+>   >?? date <- Sys.Date()
+>   >?? as.Date(round(as.POSIXct(date), "years"))
+>   >?? as.Date(round(as.POSIXct(Sys.Date() + 180), "years"))
+>   > Duncan Murdoch
+> 
+> That would work, perhaps structured similarly as `trunc.Date` is.
+> The only issue might be that `trunc.Date` is currently using `round.Date`
+> in its numeric form likely to prevent ?expensive? conversion to POSIXt
+> when it is not required.
+> 
+>   > trunc.Date
+>   > function (x, units = c("secs", "mins", "hours", "days", "months",
+>   >? ?? "years"), ...)
+>   > {
+>   >??? units <- match.arg(units)
+>   >??? if (units == "months" || units == "years")
+>   >??????? as.Date(trunc.POSIXt(x, units, ...))
+>   >??? else round(x - 0.4999999)
+>   > }
+> 
+> Perhaps the working version of `round.Date` could be:
+> 
+>   ? round.Date = function(x, units = c("secs", "mins", "hours", "days",
+> "months", "years")){
+>   ??? units = match.arg(units)
+> 
+>   ??? if (units == "months" || units == "years")
+>   ??? ? as.Date(round.POSIXt(x, units, ...))
+>   ??? else .Date(round(as.numeric(x)))
+>   ? }
+
+If I were writing round.Date, I wouldn't offer the user an explicit 
+option to round to seconds, minutes or hours.  So the header could be
+
+     round.Date = function(x, units = c("days", "months", "years"))
+
+Whether the function would complain if given other units like "secs" 
+would need to be decided.
+
+Like Henrik, I don't really like direct calls to methods such as your 
+round.POSIXt call.  Those make assumptions that may not be true for 
+weird corner cases where the class is not just "Date", but something 
+more complicated that happens to have "Date" as one of the components of 
+the class.  However, the related functions use that writing style, so I 
+shouldn't complain too much.
+
+Duncan Murdoch
+
+> 
+> Or perhaps `unclass` instead of `as.numeric`. Since the default `units`
+> for round(x) evaluates
+> to `sec`, this should correctly skip the first condition in `round` and
+> get to the correct numeric
+> rounding.
+> 
+> Perhaps the `trunc.Date` should be modified as well so that the call to
+> `round.Date` is skipped in favour of internal `round.numeric`, saving
+> few cycles.
+> 
+> -- Jirka
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
