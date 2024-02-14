@@ -5449,3 +5449,51 @@ Duncan Murdoch
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From AHL27 @end|ng |rom p|tt@edu  Mon Feb 12 22:15:24 2024
+From: AHL27 @end|ng |rom p|tt@edu (Aidan Lakshman)
+Date: Mon, 12 Feb 2024 16:15:24 -0500
+Subject: [Rd] Errors in wilcox family functions
+Message-ID: <C83515E8-FC8D-4226-9447-195BE83A41D6@pitt.edu>
+
+Hi Everyone,
+
+Following the previous discussion on optimizing *wilcox functions, Andreas Loeffler brought to my attention a few other bugs in `wilcox` family functions. It seems like these issues have been discussed online in the past few months, but I haven?t seen discussion on R-devel...unless I missed an email, it seems like discussion never made it to the mailing list. I haven?t seen any bug reports on Bugzilla to this effect either, so I?m emailing the list to start discussion with both Andreas and Andrey cc?d so they can provide additional detail.
+
+Most of these issues have been raised by Andrey Akinshin on his blog, which I will link throughout for reproducible examples and code rather than making this email even longer than it already is. Of the following points, (1-2) could be considered bugs, and (3-4) enhancements. I wanted to reach out to determine if R-devel was already aware of these, and if so, if people have already been working on them.
+
+The current issues are the following:
+
+1. `wilcox.test` returns very distorted p-values when `exact=FALSE`, especially at the tails of the distribution. These errors are due to inaccuracy in the normal approximation. While there will obviously be errors using any approximation, it is possible to use an Edgeworth Expansion correction to uniformly decreases the error in p-value approximation without substantially rewriting the internals. An example patch and benchmarks are available at https://github.com/ahl27/R_Patches/tree/94e8e0bcf5076841637f1031ea9cf456ad18d7ef/EdgeworthExpansion.
+
+More verbose details, examples, and benchmarks:
+- https://aakinshin.net/posts/r-mann-whitney-incorrect-p-value/
+- https://aakinshin.net/posts/mw-edgeworth/
+
+2. The built-in Hodges-Lehmann estimator has some edge cases that result in incorrect answers without suitable warnings. These are detailed extensively at the links below. In short, the following cases result in an incorrect value for `wilcox.test(..., conf.int=TRUE)$estimate`:
+- `x` has zero values: these are trimmed before the median is calculated, so `x=c(0,1,2)` returns a median of 1.5.
+- tied values in either one- or two-sample tests: these can force R to use a normal approximation even in low-sample cases.
+- degenerate two-sample tests (`max(x)==min(x)` and `max(y)==min(y)`): this produces an error due to an unhandled edge case.
+
+This particular issue has caused problems for the DescTools package, which recently reimplemented HodgesLehmann due to inaccurate results in base R. At the very least, warnings should probably be added so that users don?t misinterpret these results. Better still would be to just fix these cases, but I haven?t dug super deep into the codebase yet, so I?m not completely sure how difficult that would be.
+
+Details and examples:
+- https://aakinshin.net/posts/r-hodges-lehmann-problems/
+- Discussion in DescTools (https://github.com/AndriSignorell/DescTools/issues/97)
+
+3. `*signrank` functions hang for large values of `n`. The exact value varies, but tends to be around `n>=1000`. `wilcox.test` supports an `exact` argument?should an inexact approximation be implemented for *signrank functions with `n>=1000`? An Edgeworth approximation could be similarly leveraged here to return results in a reasonable manner.
+
+Full writeup: https://aakinshin.net/posts/signrank-limitations/
+
+4. Suggestions for updating tie correction in Mann-Whitney U tests. Andrey has a very extensive writeup of the cases that make tie correction sometimes unintuitive, and I?m just going to link it here: https://aakinshin.net/posts/mw-confusing-tie-correction/.
+
+If these seem like they?d be welcome improvements to R, I?ll work with Andrey on putting some patches up on Bugzilla this week. If people have already known about these and discussed them and I just somehow missed it, then I?m very sorry for the verbose email.
+
+Thanks again to Andrey for the writeup, and Andreas for pointing me to it.
+
+-Aidan
+
+-----------------------
+Aidan Lakshman (he/him)
+www.AHL27.com
+
+
