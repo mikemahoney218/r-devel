@@ -5497,3 +5497,63 @@ Aidan Lakshman (he/him)
 www.AHL27.com
 
 
+From jono @end|ng |rom jc@rro||@com@@u  Wed Feb 14 03:03:42 2024
+From: jono @end|ng |rom jc@rro||@com@@u (Jonathan Carroll)
+Date: Wed, 14 Feb 2024 12:33:42 +1030
+Subject: [Rd] as.roman upper limit
+Message-ID: <CAAjDRiiEfWwvrjPHY6xYed7qktfjXyVmBGQ8JAZwAZzp9REtVg@mail.gmail.com>
+
+I was recently participating in a coding challenge which involved
+converting integers to Roman numerals. I knew R offers this
+functionality already via as.roman() and hoped to leverage that for a
+quick solution, but was surprised that one of the challenge's tests
+failed; conversion of the number 3999, which should result in
+"MMMCMXCIX". In R, that produces NA.
+
+I looked into the source and documentation and it's clear that an
+upper limit of 3899 is enforced in several places, and documented as
+such. I detailed some of these explorations on my blog [0]. Ben Bolker
+traced the first implementation (or at the least the creation of
+src/library/utils/R/roman.R) in the (GitHub cloned) source [1] dating
+back to 2006 and this uses the 3899 hard limit.
+
+Wikipedia [2] claims the largest uniquely representable Roman numeral is 3999.
+
+Other languages appear to use 3999 as the largest input value, e.g.
+the python-cookbook [3].
+
+Common lisp's "~@r" format errors with values larger than 3999
+
+```
+(print (format nil "~@r" 4000))
+*** - The ~@R format directive requires an integer in the range 1 -
+3999, not 4000
+```
+
+Is 3899 enforced as the largest valid input in R for some other
+reason, or is this a long-standing oversight?
+
+Perhaps tangentially... while exploring I did notice the unexported
+utils:::.as.roman() takes a check.range argument that is not available
+from as.roman (which is simply an exported wrapper without that
+argument) but setting this to FALSE does not enable circumvention of
+enforcement of the upper limit (which appears to occur during the
+setting of the "roman" class), it simply performs an earlier
+conversion to NA when set (potentially for simplification when used in
+Ops dispatch). Enforcement of the limit of 3899 happens deeper within
+the code, e.g. within the unexported utils:::.numeric2roman which
+implements the conversion, but without a way to avoid setting the
+result to NA for larger values. Given that other languages strictly
+limit the input to an upper bound, perhaps this is not unexpected
+behaviour.
+
+Regards,
+
+- Jonathan.
+
+[0]: https://jcarroll.xyz/2024/02/10/friends-romans-countrymen.html
+[1]: https://github.com/r-devel/r-svn/commit/ba30f3dc716effe22489bf88511bd1d60272f6de
+[2]: https://en.wikipedia.org/wiki/Roman_numerals
+[3]: https://www.oreilly.com/library/view/python-cookbook/0596001673/ch03s24.html
+
+
