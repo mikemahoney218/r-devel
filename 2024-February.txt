@@ -5557,3 +5557,193 @@ Regards,
 [3]: https://www.oreilly.com/library/view/python-cookbook/0596001673/ch03s24.html
 
 
+From tdhock5 @end|ng |rom gm@||@com  Wed Feb 14 04:51:37 2024
+From: tdhock5 @end|ng |rom gm@||@com (Toby Hocking)
+Date: Tue, 13 Feb 2024 20:51:37 -0700
+Subject: [Rd] strcapture performance when perl = TRUE
+In-Reply-To: <8b027c67-106e-49c8-8ae1-f77d9d177105@app.fastmail.com>
+References: <8b027c67-106e-49c8-8ae1-f77d9d177105@app.fastmail.com>
+Message-ID: <CALK03d3FpP-s0sRFmob4fGY8UvMfCEBPmWB=F9H67VTCgVvQ=g@mail.gmail.com>
+
+Thanks Tim.
+I confirm the proposed solution is over 10x faster, see
+https://github.com/tdhock/atime/issues/29#issuecomment-1943037753 for
+figure and source code.
+
+On Mon, Jan 29, 2024 at 7:05?AM Tim Taylor
+<tim.taylor at hiddenelephants.co.uk> wrote:
+>
+> I wanted to raise the possibility of improving strcapture performance in
+> cases where perl = TRUE. I believe we can do this in a non-breaking way
+> by calling regexpr instead of regexec (conditionally when perl = TRUE).
+> To illustrate this I've put together a 'proof of concept' function called
+> strcapture2 that utilises output from regexpr directly (following a very
+> nice substring approach that I've seen implemented by Toby Hocking
+> in the nc package - nc::capture_first_vec).
+>
+> strcapture2 <- function(pattern, x, proto, perl = FALSE, useBytes = FALSE) {
+>     if (isTRUE(perl)) {
+>         m <- regexpr(pattern = pattern, text = x, perl = TRUE, useBytes = useBytes)
+>         nomatch <- is.na(m) | m == -1L
+>         ntokens <- length(proto)
+>         if (any(!nomatch)) {
+>             length <- attr(m, "match.length")
+>             start <- attr(m, "capture.start")
+>             length <- attr(m, "capture.length")
+>             end <- start + length - 1L
+>             end[nomatch, ] <- start[nomatch, ] <- NA
+>             res <- substring(x, start, end)
+>             out <- matrix(res, length(m))
+>             if (ncol(out) != ntokens) {
+>                 stop("The number of captures in 'pattern' != 'length(proto)'")
+>             }
+>         } else {
+>             out <- matrix(NA_character_, length(m), ntokens)
+>         }
+>         utils:::conformToProto(out,proto)
+>     } else {
+>         strcapture(pattern,x,proto,perl,useBytes)
+>     }
+> }
+>
+> Now comparing with strcapture we can expand the named capture example
+> from the grep documentation:
+>
+> notables <- c(
+>     "  Ben Franklin and Jefferson Davis",
+>     "\tMillard Fillmore",
+>     "Bob",
+>     NA_character_
+> )
+>
+> regex <- "(?<first>[[:upper:]][[:lower:]]+) (?<last>[[:upper:]][[:lower:]]+)"
+> proto = data.frame("", "")
+>
+> (strcapture(regex, notables, proto, perl = TRUE))
+>       X..    X...1
+> 1     Ben Franklin
+> 2 Millard Fillmore
+> 3    <NA>     <NA>
+> 4    <NA>     <NA>
+>
+> (strcapture2(regex, notables, proto, perl = TRUE))
+>       X..    X...1
+> 1     Ben Franklin
+> 2 Millard Fillmore
+> 3    <NA>     <NA>
+> 4    <NA>     <NA>
+>
+> Now to compare timings over multiple reps:
+>
+> lengths <- sort(outer(c(1, 2, 5), 10^(1:4)))
+> reps <- 20
+>
+> time_strcapture <- function(text, length, regex, proto, reps) {
+>     text <- rep_len(text, length)
+>     str <- system.time(for (i in seq_len(reps)) strcapture(regex, text, proto, perl = TRUE))
+>     str2 <- system.time(for (i in seq_len(reps)) strcapture2(regex, text, proto, perl = TRUE))
+>     c(strcapture = str[["user.self"]], strcapture2 = str2[["user.self"]])
+> }
+> timings <- sapply(
+>     lengths,
+>     time_strcapture,
+>     text = notables, regex = regex, reps = reps, proto = proto
+> )
+> cbind(lengths, t(timings))
+>       lengths strcapture strcapture2
+>  [1,]      10      0.005       0.003
+>  [2,]      20      0.005       0.002
+>  [3,]      50      0.008       0.003
+>  [4,]     100      0.012       0.002
+>  [5,]     200      0.021       0.003
+>  [6,]     500      0.051       0.003
+>  [7,]    1000      0.097       0.004
+>  [8,]    2000      0.171       0.005
+>  [9,]    5000      0.517       0.011
+> [10,]   10000      1.203       0.018
+> [11,]   20000      2.563       0.037
+> [12,]   50000      7.276       0.090
+>
+> I've attached a plot of these timings in case helpful.
+>
+> I appreciate that changing strcapture in this way does make it more
+> complicated but I think the performance improvements make it worth
+> considering. Note that I've not thoroughly tested the above implementation
+> as wanted to get feedback from the list before proceeding further.
+>
+> Hope all this make sense. Cheers
+>
+> Tim
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From jenny@|@bry@n @end|ng |rom gm@||@com  Wed Feb 14 23:43:12 2024
+From: jenny@|@bry@n @end|ng |rom gm@||@com (Jennifer Bryan)
+Date: Wed, 14 Feb 2024 14:43:12 -0800
+Subject: [Rd] certain pipe() use cases not working in r-devel
+Message-ID: <CANe9BHFGs4Mo+QO5PYhpcmY9AAx30dbaTmAZNo-TLuzbztZvwA@mail.gmail.com>
+
+Hello,
+
+I've noticed a specific type of pipe() usage that works in released R, but
+not in r-devel.
+
+In 4.3.2 on macOS, I can write to a connection returned by pipe(), i.e.
+"hello, world" prints here:
+
+> R.version.string
+[1] "R version 4.3.2 (2023-10-31)"
+> con <- pipe("cat")
+> writeLines("hello, world", con)
+hello, world
+
+But in r-devel on macOS, this is silent no-op, i.e. "hello, world" does not
+print:
+
+> R.version.string
+[1] "R Under development (unstable) (2024-02-13 r85895)"
+> con <- pipe("cat")
+> writeLines("hello, world", con)
+
+My colleague Lionel Henry confirms he sees the same results on linux.
+This particular example with cat doesn't work on Windows, so I don't have
+any useful observations for that OS.
+
+You might say this is a weird example or use case. The actual usage where I
+discovered this is the way folks read/write the clipboard on macOS using
+pbcopy/pbpaste (and, in very similar ways, on linux using xsel or xclip).
+This is mentioned in the "Clipboard" section of the connections help topic.
+
+In 4.3.2 on macOS, I can successfully roundtrip with the clipboard:
+
+> pb_write <- pipe("pbcopy")
+> writeChar("hello clipboard!", pb_write, eos = NULL)
+> pb_read <- pipe("pbpaste")
+> readChar(pb_read, 16)
+[1] "hello clipboard!"
+
+In r-devel, it appears that the write operation silently does nothing:
+
+> pb_write <- pipe("pbcopy")
+> writeChar("hello clipboard!", pb_write, eos = NULL)
+> pb_read <- pipe("pbpaste")
+> readChar(pb_read, 16)
+character(0)
+
+If the clipboard is populated through other means, I can
+use readChar(pipe("pbpaste"), ...) to read the clipboard even in r-devel.
+So this seems to be specific to writing to the connection.
+
+Is this change in behaviour intentional and will it be present in the next
+release of R? FWIW, I did a crude search of the source of all CRAN packages
+and there are quite a few currently using pipe() for clipboard access on
+*nix.
+
+-- Jenny
+
+	[[alternative HTML version deleted]]
+
+
