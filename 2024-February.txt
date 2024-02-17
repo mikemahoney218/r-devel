@@ -5747,3 +5747,294 @@ and there are quite a few currently using pipe() for clipboard access on
 	[[alternative HTML version deleted]]
 
 
+From |kry|ov @end|ng |rom d|@root@org  Thu Feb 15 14:09:08 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Thu, 15 Feb 2024 16:09:08 +0300
+Subject: [Rd] certain pipe() use cases not working in r-devel
+In-Reply-To: <CANe9BHFGs4Mo+QO5PYhpcmY9AAx30dbaTmAZNo-TLuzbztZvwA@mail.gmail.com>
+References: <CANe9BHFGs4Mo+QO5PYhpcmY9AAx30dbaTmAZNo-TLuzbztZvwA@mail.gmail.com>
+Message-ID: <20240215160908.67392478@arachnoid>
+
+? Wed, 14 Feb 2024 14:43:12 -0800
+Jennifer Bryan <jenny.f.bryan at gmail.com> ?????:
+
+> But in r-devel on macOS, this is silent no-op, i.e. "hello, world"
+> does not print:
+> 
+> > R.version.string  
+> [1] "R Under development (unstable) (2024-02-13 r85895)"
+> > con <- pipe("cat")
+> > writeLines("hello, world", con)  
+
+I can reproduce this on 64-bit Linux.
+
+I think that this boils down to problems with cleanup in R_pclose_pg
+[*]. The FILE* fp corresponding to the child process pipe is created
+using fdopen() in R_popen_pg(), but R_pclose_pg() only performs close()
+on the file descriptor returned by fileno(). The FILE* itself is
+leaked, and any buffered content waiting to be written out is lost.
+
+One of the last few lines in the strace output before the process
+terminates is the standard C library cleaning up the FILE* object and
+trying to flush the buffer:
+
+$ strace -f bin/R -q -s \
+ -e 'writeLines("hello", x <- pipe("cat")); close(x)'
+...skip...
+write(5, "hello\n", 6)                  = -1 EBADF (Bad file descriptor)
+exit_group(0)                           = ?
++++ exited with 0 +++
+
+There is a comment saying "see timeout_wait for why not to use fclose",
+which I think references a different function, R_pclose_timeout():
+
+>> Do not use fclose, because on Solaris it sets errno to "Invalid
+>> seek" when the pipe is already closed (e.g. because of timeout).
+>> fclose would not return an error, but it would set errno and the
+>> non-zero errno would then be reported by R's "system" function.
+
+(There are no comments about fclose() in timeout_wait() itself.)
+
+Is there a way to work around the errno problem without letting the
+FILE* leak?
+
+-- 
+Best regards,
+Ivan
+
+[*] Introduced in https://bugs.r-project.org/show_bug.cgi?id=17764#c6
+to run child processes in a separate process group, safe from
+interrupts aimed at R.
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Thu Feb 15 14:47:16 2024
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Thu, 15 Feb 2024 14:47:16 +0100
+Subject: [Rd] certain pipe() use cases not working in r-devel
+In-Reply-To: <20240215160908.67392478@arachnoid>
+References: <CANe9BHFGs4Mo+QO5PYhpcmY9AAx30dbaTmAZNo-TLuzbztZvwA@mail.gmail.com>
+ <20240215160908.67392478@arachnoid>
+Message-ID: <d77c3e89-28b4-40fd-8143-c1e3f009ddf1@gmail.com>
+
+
+On 2/15/24 14:09, Ivan Krylov via R-devel wrote:
+> ? Wed, 14 Feb 2024 14:43:12 -0800
+> Jennifer Bryan <jenny.f.bryan at gmail.com> ?????:
+>
+>> But in r-devel on macOS, this is silent no-op, i.e. "hello, world"
+>> does not print:
+>>
+>>> R.version.string
+>> [1] "R Under development (unstable) (2024-02-13 r85895)"
+>>> con <- pipe("cat")
+>>> writeLines("hello, world", con)
+> I can reproduce this on 64-bit Linux.
+>
+> I think that this boils down to problems with cleanup in R_pclose_pg
+> [*]. The FILE* fp corresponding to the child process pipe is created
+> using fdopen() in R_popen_pg(), but R_pclose_pg() only performs close()
+> on the file descriptor returned by fileno(). The FILE* itself is
+> leaked, and any buffered content waiting to be written out is lost.
+>
+> One of the last few lines in the strace output before the process
+> terminates is the standard C library cleaning up the FILE* object and
+> trying to flush the buffer:
+>
+> $ strace -f bin/R -q -s \
+>   -e 'writeLines("hello", x <- pipe("cat")); close(x)'
+> ...skip...
+> write(5, "hello\n", 6)                  = -1 EBADF (Bad file descriptor)
+> exit_group(0)                           = ?
+> +++ exited with 0 +++
+>
+> There is a comment saying "see timeout_wait for why not to use fclose",
+> which I think references a different function, R_pclose_timeout():
+>
+>>> Do not use fclose, because on Solaris it sets errno to "Invalid
+>>> seek" when the pipe is already closed (e.g. because of timeout).
+>>> fclose would not return an error, but it would set errno and the
+>>> non-zero errno would then be reported by R's "system" function.
+> (There are no comments about fclose() in timeout_wait() itself.)
+>
+> Is there a way to work around the errno problem without letting the
+> FILE* leak?
+Thanks for the analysis, I will look into that.
+
+Tomas
+
+
+>
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Thu Feb 15 17:02:02 2024
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Thu, 15 Feb 2024 17:02:02 +0100
+Subject: [Rd] certain pipe() use cases not working in r-devel
+In-Reply-To: <CANe9BHFGs4Mo+QO5PYhpcmY9AAx30dbaTmAZNo-TLuzbztZvwA@mail.gmail.com>
+References: <CANe9BHFGs4Mo+QO5PYhpcmY9AAx30dbaTmAZNo-TLuzbztZvwA@mail.gmail.com>
+Message-ID: <e5968d69-804f-45c1-849f-d2adda45ebd3@gmail.com>
+
+
+On 2/14/24 23:43, Jennifer Bryan wrote:
+> Hello,
+>
+> I've noticed a specific type of pipe() usage that works in released R, but
+> not in r-devel.
+>
+> In 4.3.2 on macOS, I can write to a connection returned by pipe(), i.e.
+> "hello, world" prints here:
+>
+>> R.version.string
+> [1] "R version 4.3.2 (2023-10-31)"
+>> con <- pipe("cat")
+>> writeLines("hello, world", con)
+> hello, world
+>
+> But in r-devel on macOS, this is silent no-op, i.e. "hello, world" does not
+> print:
+>
+>> R.version.string
+> [1] "R Under development (unstable) (2024-02-13 r85895)"
+>> con <- pipe("cat")
+>> writeLines("hello, world", con)
+> My colleague Lionel Henry confirms he sees the same results on linux.
+> This particular example with cat doesn't work on Windows, so I don't have
+> any useful observations for that OS.
+>
+> You might say this is a weird example or use case. The actual usage where I
+> discovered this is the way folks read/write the clipboard on macOS using
+> pbcopy/pbpaste (and, in very similar ways, on linux using xsel or xclip).
+> This is mentioned in the "Clipboard" section of the connections help topic.
+>
+> In 4.3.2 on macOS, I can successfully roundtrip with the clipboard:
+>
+>> pb_write <- pipe("pbcopy")
+>> writeChar("hello clipboard!", pb_write, eos = NULL)
+>> pb_read <- pipe("pbpaste")
+>> readChar(pb_read, 16)
+> [1] "hello clipboard!"
+>
+> In r-devel, it appears that the write operation silently does nothing:
+>
+>> pb_write <- pipe("pbcopy")
+>> writeChar("hello clipboard!", pb_write, eos = NULL)
+>> pb_read <- pipe("pbpaste")
+>> readChar(pb_read, 16)
+> character(0)
+>
+> If the clipboard is populated through other means, I can
+> use readChar(pipe("pbpaste"), ...) to read the clipboard even in r-devel.
+> So this seems to be specific to writing to the connection.
+>
+> Is this change in behaviour intentional and will it be present in the next
+> release of R? FWIW, I did a crude search of the source of all CRAN packages
+> and there are quite a few currently using pipe() for clipboard access on
+> *nix.
+
+This should be fixed now in R-devel. Thanks for the report and thanks to 
+Ivan for the debugging. It would be great if you could test on your end 
+with different examples and report any other issues.
+
+Thanks
+Tomas
+
+>
+> -- Jenny
+>
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From z@ch@ry@benner @end|ng |rom m@|ne@edu  Thu Feb 15 18:23:08 2024
+From: z@ch@ry@benner @end|ng |rom m@|ne@edu (Zachary Benner)
+Date: Thu, 15 Feb 2024 12:23:08 -0500
+Subject: [Rd] VPAT OR Accessibility Conformance Report Request
+Message-ID: <CAAYDE5qWpU1mcuPqt5uT-+s6DeA+4Z=-UyF2D3OzjHiaoEJP1A@mail.gmail.com>
+
+To Whom It May Concern,
+My name is Zach Benner and I am the Accessibility (A.D.A.-Americans with
+Disabilities Act) Coordinator here at University of Maine at Machias.  I am
+reaching out on the behalf of our science professors here at UMM. The
+professor is looking to utilize your software to implement within his
+courses however, due to possible accessibility concerns our IT department
+will not download the software onto school computers unless we have a copy
+of a VPAT or Accessibility Conformance Information Report. I was wondering
+if I could obtain this information to provide to the IT department?
+Thank you for your time on this matter and I look forward to hearing from
+you soon. Please let me know if you have any questions or concerns.
+Sincerely,
+Zach Benner
+Accessibility Coordinator & Student Success Liaison
+University of Maine Machias
+Office: 229A  Torrey Hall
+116 O'Brien Ave
+Machias, ME, 04654
+Office Number: 207-255-1228
+
+Confidentiality Notice:  This e-mail and any attachments...{{dropped:12}}
+
+
+From bbo|ker @end|ng |rom gm@||@com  Fri Feb 16 01:55:24 2024
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Thu, 15 Feb 2024 19:55:24 -0500
+Subject: [Rd] VPAT OR Accessibility Conformance Report Request
+In-Reply-To: <CAAYDE5qWpU1mcuPqt5uT-+s6DeA+4Z=-UyF2D3OzjHiaoEJP1A@mail.gmail.com>
+References: <CAAYDE5qWpU1mcuPqt5uT-+s6DeA+4Z=-UyF2D3OzjHiaoEJP1A@mail.gmail.com>
+Message-ID: <54359a5b-24a1-4db5-afa3-2e79b960a6fa@gmail.com>
+
+   There was a recent thread here started by someone asking a similar 
+question.
+
+https://stat.ethz.ch/pipermail/r-devel/2024-January/083120.html
+
+   You should probably start by going through all of that thread, but 
+the bottom line is that:
+
+  * R is in fact very accessible to people with a wide range of challenges
+  * unfortunately you are very unlikely to be able to get such a report, 
+unless someone volunteers to do one, as R is a volunteer-run project 
+(and the developers are generally more interested in maintaining and 
+improving the software than satisfying bureaucrats)
+
+   A google search
+
+https://www.google.com/search?q=R+CRAN+VPAT
+
+   suggests that VPATs are available for various third-party 
+extensions/packaging of R (Oracle R, RStudio desktop).
+
+   This article is old, but if someone in your IT department read it, 
+hopefully they would agree to download the software: 
+https://journal.r-project.org/archive/2013-1/godfrey.pdf
+
+On 2024-02-15 12:23 p.m., Zachary Benner wrote:
+> To Whom It May Concern,
+> My name is Zach Benner and I am the Accessibility (A.D.A.-Americans with
+> Disabilities Act) Coordinator here at University of Maine at Machias.  I am
+> reaching out on the behalf of our science professors here at UMM. The
+> professor is looking to utilize your software to implement within his
+> courses however, due to possible accessibility concerns our IT department
+> will not download the software onto school computers unless we have a copy
+> of a VPAT or Accessibility Conformance Information Report. I was wondering
+> if I could obtain this information to provide to the IT department?
+> Thank you for your time on this matter and I look forward to hearing from
+> you soon. Please let me know if you have any questions or concerns.
+> Sincerely,
+> Zach Benner
+> Accessibility Coordinator & Student Success Liaison
+> University of Maine Machias
+> Office: 229A  Torrey Hall
+> 116 O'Brien Ave
+> Machias, ME, 04654
+> Office Number: 207-255-1228
+> 
+> Confidentiality Notice:  This e-mail and any attachments...{{dropped:12}}
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
