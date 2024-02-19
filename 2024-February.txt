@@ -6055,3 +6055,192 @@ Office: A 4.23
 Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
 
 
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Sat Feb 17 09:37:02 2024
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Sat, 17 Feb 2024 09:37:02 +0100
+Subject: [Rd] as.roman upper limit
+In-Reply-To: <CAAjDRiiEfWwvrjPHY6xYed7qktfjXyVmBGQ8JAZwAZzp9REtVg@mail.gmail.com>
+References: <CAAjDRiiEfWwvrjPHY6xYed7qktfjXyVmBGQ8JAZwAZzp9REtVg@mail.gmail.com>
+Message-ID: <26064.28718.276974.640231@hornik.net>
+
+>>>>> Jonathan Carroll writes:
+
+Thanks.
+
+Fascinating ... I strongly suspect that when I wrote the code in 2006
+the docs said the largest possible number was 3899.  Of course, I should
+have added a comment on this with a pointer to the docs ...
+
+In any case, clearly <https://en.wikipedia.org/wiki/Roman_numerals> etc
+say that we can do up to 3999, so this should be looked into.
+
+Can you please file a PR so that this does not get forgotten?
+
+Ideally perhaps also with a patch? :-)
+
+Best
+-k
+
+> I was recently participating in a coding challenge which involved
+> converting integers to Roman numerals. I knew R offers this
+> functionality already via as.roman() and hoped to leverage that for a
+> quick solution, but was surprised that one of the challenge's tests
+> failed; conversion of the number 3999, which should result in
+> "MMMCMXCIX". In R, that produces NA.
+
+> I looked into the source and documentation and it's clear that an
+> upper limit of 3899 is enforced in several places, and documented as
+> such. I detailed some of these explorations on my blog [0]. Ben Bolker
+> traced the first implementation (or at the least the creation of
+> src/library/utils/R/roman.R) in the (GitHub cloned) source [1] dating
+> back to 2006 and this uses the 3899 hard limit.
+
+> Wikipedia [2] claims the largest uniquely representable Roman numeral is 3999.
+
+> Other languages appear to use 3999 as the largest input value, e.g.
+> the python-cookbook [3].
+
+> Common lisp's "~@r" format errors with values larger than 3999
+
+> ```
+> (print (format nil "~@r" 4000))
+> *** - The ~@R format directive requires an integer in the range 1 -
+> 3999, not 4000
+> ```
+
+> Is 3899 enforced as the largest valid input in R for some other
+> reason, or is this a long-standing oversight?
+
+> Perhaps tangentially... while exploring I did notice the unexported
+> utils:::.as.roman() takes a check.range argument that is not available
+> from as.roman (which is simply an exported wrapper without that
+> argument) but setting this to FALSE does not enable circumvention of
+> enforcement of the upper limit (which appears to occur during the
+> setting of the "roman" class), it simply performs an earlier
+> conversion to NA when set (potentially for simplification when used in
+> Ops dispatch). Enforcement of the limit of 3899 happens deeper within
+> the code, e.g. within the unexported utils:::.numeric2roman which
+> implements the conversion, but without a way to avoid setting the
+> result to NA for larger values. Given that other languages strictly
+> limit the input to an upper bound, perhaps this is not unexpected
+> behaviour.
+
+> Regards,
+
+> - Jonathan.
+
+> [0]: https://jcarroll.xyz/2024/02/10/friends-romans-countrymen.html
+> [1]: https://github.com/r-devel/r-svn/commit/ba30f3dc716effe22489bf88511bd1d60272f6de
+> [2]: https://en.wikipedia.org/wiki/Roman_numerals
+> [3]: https://www.oreilly.com/library/view/python-cookbook/0596001673/ch03s24.html
+
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From jenny@|@bry@n @end|ng |rom gm@||@com  Sun Feb 18 00:23:23 2024
+From: jenny@|@bry@n @end|ng |rom gm@||@com (Jennifer Bryan)
+Date: Sat, 17 Feb 2024 15:23:23 -0800
+Subject: [Rd] certain pipe() use cases not working in r-devel
+In-Reply-To: <e5968d69-804f-45c1-849f-d2adda45ebd3@gmail.com>
+References: <CANe9BHFGs4Mo+QO5PYhpcmY9AAx30dbaTmAZNo-TLuzbztZvwA@mail.gmail.com>
+ <e5968d69-804f-45c1-849f-d2adda45ebd3@gmail.com>
+Message-ID: <CANe9BHEjC2QMp+9s2tsv_QdYwGj16U4rysVoQ3xM89U7_RYt_Q@mail.gmail.com>
+
+I've now tested with:
+
+> R.version.string
+[1] "R Under development (unstable) (2024-02-16 r85931)"
+
+and all of the previously mentioned examples now work as expected on macOS.
+
+Thanks for the quick fix,
+Jenny
+
+On Thu, Feb 15, 2024 at 8:02?AM Tomas Kalibera <tomas.kalibera at gmail.com>
+wrote:
+
+>
+> On 2/14/24 23:43, Jennifer Bryan wrote:
+> > Hello,
+> >
+> > I've noticed a specific type of pipe() usage that works in released R,
+> but
+> > not in r-devel.
+> >
+> > In 4.3.2 on macOS, I can write to a connection returned by pipe(), i.e.
+> > "hello, world" prints here:
+> >
+> >> R.version.string
+> > [1] "R version 4.3.2 (2023-10-31)"
+> >> con <- pipe("cat")
+> >> writeLines("hello, world", con)
+> > hello, world
+> >
+> > But in r-devel on macOS, this is silent no-op, i.e. "hello, world" does
+> not
+> > print:
+> >
+> >> R.version.string
+> > [1] "R Under development (unstable) (2024-02-13 r85895)"
+> >> con <- pipe("cat")
+> >> writeLines("hello, world", con)
+> > My colleague Lionel Henry confirms he sees the same results on linux.
+> > This particular example with cat doesn't work on Windows, so I don't have
+> > any useful observations for that OS.
+> >
+> > You might say this is a weird example or use case. The actual usage
+> where I
+> > discovered this is the way folks read/write the clipboard on macOS using
+> > pbcopy/pbpaste (and, in very similar ways, on linux using xsel or xclip).
+> > This is mentioned in the "Clipboard" section of the connections help
+> topic.
+> >
+> > In 4.3.2 on macOS, I can successfully roundtrip with the clipboard:
+> >
+> >> pb_write <- pipe("pbcopy")
+> >> writeChar("hello clipboard!", pb_write, eos = NULL)
+> >> pb_read <- pipe("pbpaste")
+> >> readChar(pb_read, 16)
+> > [1] "hello clipboard!"
+> >
+> > In r-devel, it appears that the write operation silently does nothing:
+> >
+> >> pb_write <- pipe("pbcopy")
+> >> writeChar("hello clipboard!", pb_write, eos = NULL)
+> >> pb_read <- pipe("pbpaste")
+> >> readChar(pb_read, 16)
+> > character(0)
+> >
+> > If the clipboard is populated through other means, I can
+> > use readChar(pipe("pbpaste"), ...) to read the clipboard even in r-devel.
+> > So this seems to be specific to writing to the connection.
+> >
+> > Is this change in behaviour intentional and will it be present in the
+> next
+> > release of R? FWIW, I did a crude search of the source of all CRAN
+> packages
+> > and there are quite a few currently using pipe() for clipboard access on
+> > *nix.
+>
+> This should be fixed now in R-devel. Thanks for the report and thanks to
+> Ivan for the debugging. It would be great if you could test on your end
+> with different examples and report any other issues.
+>
+> Thanks
+> Tomas
+>
+> >
+> > -- Jenny
+> >
+> >       [[alternative HTML version deleted]]
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
