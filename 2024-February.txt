@@ -6311,3 +6311,509 @@ Terry T.
 	[[alternative HTML version deleted]]
 
 
+From phgro@je@n @end|ng |rom @c|v|ew@@org  Tue Feb 20 12:27:35 2024
+From: phgro@je@n @end|ng |rom @c|v|ew@@org (webmail.gandi.net)
+Date: Tue, 20 Feb 2024 12:27:35 +0100
+Subject: [Rd] Tcl socket server (tcltk) does not work any more on R 4.3.2
+Message-ID: <7AC73027-0511-4C98-A760-82099E192CDB@sciviews.org>
+
+Dear list,
+
+It seems that something changed between R 4.2.3 and R 4.3 (tested with 4.3.2) that broke the Tcl socket server. Here is a reproducible example:
+
+- R process #1 (Tcl socket server):
+
+library(tcltk)
+cmd <- r"(
+ proc accept {chan addr port} {         ;# Make a proc to accept connections
+   puts "$addr:$port says [gets $chan]" ;# Receive a string
+   puts $chan goodbye                   ;# Send a string
+   close $chan                          ;# Close the socket (automatically flushes)
+}                                       ;#
+socket -server accept 12345             ;# Create a server socket)"
+.Tcl(cmd)
+
+- R process #2 (socket client):
+
+con <- socketConnection(host = "localhost", port = 12345, blocking = FALSE)
+writeLines("Hello, world!", con) # Should print something in R #1 stdout
+readLines(con) # Should receive "goodbye"
+close(con)
+
+When R process #1 is R 4.2.3, it works as expected (whatever version of R #2). When R process #1 is R 4.3.2, nothing is sent or received through the socket apparently, but no error is issued and process #2 seems to be able to connect to the socket.
+
+I am stuck with this. Thanks in advance for help.
+
+Regards,
+
+Philippe
+
+> .Tcl("puts [info patchlevel]")
+8.6.13
+<Tcl>  
+
+> sessionInfo()
+R version 4.3.2 (2023-10-31)
+Platform: aarch64-apple-darwin20 (64-bit)
+Running under: macOS Sonoma 14.2.1
+
+Matrix products: default
+BLAS:   /System/Library/Frameworks/Accelerate.framework/Versions/A/Frameworks/vecLib.framework/Versions/A/libBLAS.dylib 
+LAPACK: /Library/Frameworks/R.framework/Versions/4.3-arm64/Resources/lib/libRlapack.dylib;  LAPACK version 3.11.0
+
+locale:
+[1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+
+time zone: Europe/Brussels
+tzcode source: internal
+
+attached base packages:
+[1] tcltk     stats     graphics  grDevices utils     datasets  methods   base     
+
+loaded via a namespace (and not attached):
+[1] compiler_4.3.2 tools_4.3.2    glue_1.7.0  
+
+From edd @end|ng |rom deb|@n@org  Tue Feb 20 13:15:28 2024
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Tue, 20 Feb 2024 06:15:28 -0600
+Subject: [Rd] 
+ Tcl socket server (tcltk) does not work any more on R 4.3.2
+In-Reply-To: <7AC73027-0511-4C98-A760-82099E192CDB@sciviews.org>
+References: <7AC73027-0511-4C98-A760-82099E192CDB@sciviews.org>
+Message-ID: <26068.38880.949409.802583@rob.eddelbuettel.com>
+
+
+On 20 February 2024 at 12:27, webmail.gandi.net wrote:
+| Dear list,
+| 
+| It seems that something changed between R 4.2.3 and R 4.3 (tested with 4.3.2) that broke the Tcl socket server. Here is a reproducible example:
+| 
+| - R process #1 (Tcl socket server):
+| 
+| library(tcltk)
+| cmd <- r"(
+|  proc accept {chan addr port} {         ;# Make a proc to accept connections
+|    puts "$addr:$port says [gets $chan]" ;# Receive a string
+|    puts $chan goodbye                   ;# Send a string
+|    close $chan                          ;# Close the socket (automatically flushes)
+| }                                       ;#
+| socket -server accept 12345             ;# Create a server socket)"
+| .Tcl(cmd)
+| 
+| - R process #2 (socket client):
+| 
+| con <- socketConnection(host = "localhost", port = 12345, blocking = FALSE)
+| writeLines("Hello, world!", con) # Should print something in R #1 stdout
+| readLines(con) # Should receive "goodbye"
+| close(con)
+| 
+| When R process #1 is R 4.2.3, it works as expected (whatever version of R #2). When R process #1 is R 4.3.2, nothing is sent or received through the socket apparently, but no error is issued and process #2 seems to be able to connect to the socket.
+| 
+| I am stuck with this. Thanks in advance for help.
+
+>From a quick check this issue seems to persist in the (current) R-devel
+2024-02-20 r85951 too.
+
+Dirk
+
+| Regards,
+| 
+| Philippe
+| 
+| > .Tcl("puts [info patchlevel]")
+| 8.6.13
+| <Tcl>  
+| 
+| > sessionInfo()
+| R version 4.3.2 (2023-10-31)
+| Platform: aarch64-apple-darwin20 (64-bit)
+| Running under: macOS Sonoma 14.2.1
+| 
+| Matrix products: default
+| BLAS:   /System/Library/Frameworks/Accelerate.framework/Versions/A/Frameworks/vecLib.framework/Versions/A/libBLAS.dylib 
+| LAPACK: /Library/Frameworks/R.framework/Versions/4.3-arm64/Resources/lib/libRlapack.dylib;  LAPACK version 3.11.0
+| 
+| locale:
+| [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+| 
+| time zone: Europe/Brussels
+| tzcode source: internal
+| 
+| attached base packages:
+| [1] tcltk     stats     graphics  grDevices utils     datasets  methods   base     
+| 
+| loaded via a namespace (and not attached):
+| [1] compiler_4.3.2 tools_4.3.2    glue_1.7.0  
+| ______________________________________________
+| R-devel at r-project.org mailing list
+| https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From ||ndenb@um-p @end|ng |rom un|v-n@nte@@|r  Tue Feb 20 10:33:43 2024
+From: ||ndenb@um-p @end|ng |rom un|v-n@nte@@|r (Pierre Lindenbaum)
+Date: Tue, 20 Feb 2024 10:33:43 +0100
+Subject: [Rd] Compiling libR as a standalone C library for java+jni (-fPIC)
+Message-ID: <4ce435c3-87b9-4220-dc9e-4434b6682cab@univ-nantes.fr>
+
+(cross-posted on SO: https://stackoverflow.com/questions/78022766)
+
+Hi all,
+
+I'm trying to compile R as a static library with the -fPIC flag so I can use it within java+JNI (is it only possible ?), but I cannot find the right flags in '.configure' to compile R this way.
+
+I tested various flags but I cannot find the correct syntax.
+
+for now, my latest attempt was
+
+```
+rm -rvf? "TMP/R-4.3.2" TMP/tmp.tar.gz
+mkdir -p TMP/R-4.3.2/lib/
+wget -O TMP/tmp.tar.gz "https://pbil.univ-lyon1.fr/CRAN/src/base/R-4/R-4.3.2.tar.gz"
+cd TMP && tar xfz tmp.tar.gz && rm tmp.tar.gz &&? cd R-4.3.2 && \
+ ??? CPICFLAGS=fpic FPICFLAGS=fpic CXXPICFLAGS=fpic SHLIB_LDFLAGS=shared? SHLIB_CXXLDFLAGS=shared? ./configure --enable-R-static-lib --prefix=/path/to/TMP --with-x=no --disable-BLAS-shlib && make
+
+```
+
+witch gives the following error during configure:
+
+
+```
+configure: WARNING: you cannot build info or HTML versions of the R manuals
+configure: WARNING: you cannot build PDF versions of the R manuals
+configure: WARNING: you cannot build PDF versions of vignettes and help pages
+make[1]: Entering directory 'R-4.3.2'
+configure.ac:278: error: possibly undefined macro: AM_CONDITIONAL
+ ????? If this token and others are legitimate, please use m4_pattern_allow.
+ ????? See the Autoconf documentation.
+configure.ac:870: error: possibly undefined macro: AC_DISABLE_STATIC
+configure.ac:2226: error: possibly undefined macro: AM_LANGINFO_CODESET
+configure.ac:2876: error: possibly undefined macro: AM_NLS
+configure.ac:2880: error: possibly undefined macro: AM_GNU_GETTEXT_VERSION
+configure.ac:2881: error: possibly undefined macro: AM_GNU_GETTEXT
+make[1]: *** [Makefile:49: configure] Error 1
+
+```
+removing the XXXFLAGS=YYY and --prefix (?) allows R to be compiled but It's not loaded into java.
+
+```
+gcc? -ITMP -I${JAVA_HOME}/include/ -I${JAVA_HOME}/include/linux \
+ ??? -LTMP/R-4.3.2/lib `TMP/R-4.3.2/bin/R CMD config --cppflags` -shared -fPIC -o TMP/libRSession.so? -g RSession.c TMP/R-4.3.2/lib/libR.a
+/usr/bin/ld: TMP/R-4.3.2/lib/libR.a(objects.o): warning: relocation against `R_dot_Method' in read-only section `.text'
+/usr/bin/ld: TMP/R-4.3.2/lib/libR.a(altrep.o): relocation R_X86_64_PC32 against symbol `R_NilValue' can not be used when making a shared object; recompile with -fPIC
+/usr/bin/ld: final link failed: bad value
+```
+
+Any idea ? Thanks
+
+Pierre
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Tue Feb 20 14:03:58 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 20 Feb 2024 08:03:58 -0500
+Subject: [Rd] Bug in comparison of language objects?
+Message-ID: <c05fcfd3-bec7-4d5a-ad5c-06e470b5501a@gmail.com>
+
+I noticed the following odd behaviour today:
+
+   exprs <- expression( mean(a), mean(b), { a }, { b } )
+
+   exprs[[1]] == exprs[[2]]
+   #> [1] FALSE
+
+   exprs[[3]] == exprs[[4]]
+   #> [1] TRUE
+
+Does it make sense to anyone that the argument passed to `mean` matters, 
+but the expression contained in braces doesn't?
+
+Duncan Murdoch
+
+
+From edd @end|ng |rom deb|@n@org  Tue Feb 20 14:12:16 2024
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Tue, 20 Feb 2024 07:12:16 -0600
+Subject: [Rd] 
+ Compiling libR as a standalone C library for java+jni (-fPIC)
+In-Reply-To: <4ce435c3-87b9-4220-dc9e-4434b6682cab@univ-nantes.fr>
+References: <4ce435c3-87b9-4220-dc9e-4434b6682cab@univ-nantes.fr>
+Message-ID: <26068.42288.175815.777943@rob.eddelbuettel.com>
+
+
+Salut Pierre,
+
+On 20 February 2024 at 10:33, Pierre Lindenbaum wrote:
+| (cross-posted on SO: https://stackoverflow.com/questions/78022766)
+| 
+| Hi all,
+| 
+| I'm trying to compile R as a static library with the -fPIC flag so I can use it within java+JNI (is it only possible ?), but I cannot find the right flags in '.configure' to compile R this way.
+| 
+| I tested various flags but I cannot find the correct syntax.
+| 
+| for now, my latest attempt was
+| 
+| ```
+| rm -rvf? "TMP/R-4.3.2" TMP/tmp.tar.gz
+| mkdir -p TMP/R-4.3.2/lib/
+| wget -O TMP/tmp.tar.gz "https://pbil.univ-lyon1.fr/CRAN/src/base/R-4/R-4.3.2.tar.gz"
+| cd TMP && tar xfz tmp.tar.gz && rm tmp.tar.gz &&? cd R-4.3.2 && \
+|  ??? CPICFLAGS=fpic FPICFLAGS=fpic CXXPICFLAGS=fpic SHLIB_LDFLAGS=shared? SHLIB_CXXLDFLAGS=shared? ./configure --enable-R-static-lib --prefix=/path/to/TMP --with-x=no --disable-BLAS-shlib && make
+| 
+| ```
+
+Looks like you consistenly dropped the '-' from '-fPIC'.
+
+FWIW the Debian (and hence Ubuntu and other derivatives) binaries contain a
+libR you can embed. And littler and RInside have done so for maybe 15 years.
+
+Cannot help with JNI but note that the history of the headless (and generally
+excellent) Rserve (and its clients) started on Java. Might be worth a try.
+
+Good luck, Dirk
+
+| witch gives the following error during configure:
+| 
+| 
+| ```
+| configure: WARNING: you cannot build info or HTML versions of the R manuals
+| configure: WARNING: you cannot build PDF versions of the R manuals
+| configure: WARNING: you cannot build PDF versions of vignettes and help pages
+| make[1]: Entering directory 'R-4.3.2'
+| configure.ac:278: error: possibly undefined macro: AM_CONDITIONAL
+|  ????? If this token and others are legitimate, please use m4_pattern_allow.
+|  ????? See the Autoconf documentation.
+| configure.ac:870: error: possibly undefined macro: AC_DISABLE_STATIC
+| configure.ac:2226: error: possibly undefined macro: AM_LANGINFO_CODESET
+| configure.ac:2876: error: possibly undefined macro: AM_NLS
+| configure.ac:2880: error: possibly undefined macro: AM_GNU_GETTEXT_VERSION
+| configure.ac:2881: error: possibly undefined macro: AM_GNU_GETTEXT
+| make[1]: *** [Makefile:49: configure] Error 1
+| 
+| ```
+| removing the XXXFLAGS=YYY and --prefix (?) allows R to be compiled but It's not loaded into java.
+| 
+| ```
+| gcc? -ITMP -I${JAVA_HOME}/include/ -I${JAVA_HOME}/include/linux \
+|  ??? -LTMP/R-4.3.2/lib `TMP/R-4.3.2/bin/R CMD config --cppflags` -shared -fPIC -o TMP/libRSession.so? -g RSession.c TMP/R-4.3.2/lib/libR.a
+| /usr/bin/ld: TMP/R-4.3.2/lib/libR.a(objects.o): warning: relocation against `R_dot_Method' in read-only section `.text'
+| /usr/bin/ld: TMP/R-4.3.2/lib/libR.a(altrep.o): relocation R_X86_64_PC32 against symbol `R_NilValue' can not be used when making a shared object; recompile with -fPIC
+| /usr/bin/ld: final link failed: bad value
+| ```
+| 
+| Any idea ? Thanks
+| 
+| Pierre
+| 
+| ______________________________________________
+| R-devel at r-project.org mailing list
+| https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Tue Feb 20 14:47:30 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 20 Feb 2024 08:47:30 -0500
+Subject: [Rd] Bug in comparison of language objects?
+In-Reply-To: <c05fcfd3-bec7-4d5a-ad5c-06e470b5501a@gmail.com>
+References: <c05fcfd3-bec7-4d5a-ad5c-06e470b5501a@gmail.com>
+Message-ID: <2a903e98-b039-42d0-b254-fd5c90a5ae05@gmail.com>
+
+On 20/02/2024 8:03 a.m., Duncan Murdoch wrote:
+> I noticed the following odd behaviour today:
+> 
+>     exprs <- expression( mean(a), mean(b), { a }, { b } )
+> 
+>     exprs[[1]] == exprs[[2]]
+>     #> [1] FALSE
+> 
+>     exprs[[3]] == exprs[[4]]
+>     #> [1] TRUE
+> 
+> Does it make sense to anyone that the argument passed to `mean` matters,
+> but the expression contained in braces doesn't?
+
+I have done some debugging, and found the cause:  for the comparison of 
+language objects, R deparses them to strings using C function 
+deparse1(), and looks at only the first line.  "mean(a)" deparses as is, 
+but "{ a }" deparses to 3 lines
+
+{
+   a
+}
+
+and the first line is the same as for "{ b }", so they compare equal.
+
+I think it would make more sense to deparse them to one long string, and 
+compare those, i.e. to replace deparse1() with deparse1line() (which may 
+have been the intention).
+
+Duncan Murdoch
+
+
+From |kry|ov @end|ng |rom d|@root@org  Tue Feb 20 17:13:58 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Tue, 20 Feb 2024 19:13:58 +0300
+Subject: [Rd] 
+ Tcl socket server (tcltk) does not work any more on R 4.3.2
+In-Reply-To: <7AC73027-0511-4C98-A760-82099E192CDB@sciviews.org>
+References: <7AC73027-0511-4C98-A760-82099E192CDB@sciviews.org>
+Message-ID: <20240220191358.746eb776@arachnoid>
+
+? Tue, 20 Feb 2024 12:27:35 +0100
+"webmail.gandi.net" <phgrosjean at sciviews.org> ?????:
+
+> When R process #1 is R 4.2.3, it works as expected (whatever version
+> of R #2). When R process #1 is R 4.3.2, nothing is sent or received
+> through the socket apparently, but no error is issued and process #2
+> seems to be able to connect to the socket.
+
+The difference is related to the change in
+src/library/tcltk/src/tcltk_unix.c.
+
+In R-4.2.1, the function static void TclSpinLoop(void *data) says:
+
+    int max_ev = 100;
+    /* Tcl_ServiceAll is not enough here, for reasons that escape me */
+    while (Tcl_DoOneEvent(TCL_DONT_WAIT) && max_ev) max_ev--;
+
+In R-devel, the function instead says:
+
+    int i = R_TCL_SPIN_MAX;	
+    while (i-- && Tcl_ServiceAll())
+        ;
+
+Manually calling Tcl_DoOneEvent(0) from the debugger at this point
+makes the Tcl code respond to the connection. Tcl_ServiceAll() seems to
+be still not enough. I'll try reading Tcl documentation to investigate
+this further.
+
+-- 
+Best regards,
+Ivan
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue Feb 20 19:18:33 2024
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 20 Feb 2024 19:18:33 +0100
+Subject: [Rd] certain pipe() use cases not working in r-devel
+In-Reply-To: <CANe9BHEjC2QMp+9s2tsv_QdYwGj16U4rysVoQ3xM89U7_RYt_Q@mail.gmail.com>
+References: <CANe9BHFGs4Mo+QO5PYhpcmY9AAx30dbaTmAZNo-TLuzbztZvwA@mail.gmail.com>
+ <e5968d69-804f-45c1-849f-d2adda45ebd3@gmail.com>
+ <CANe9BHEjC2QMp+9s2tsv_QdYwGj16U4rysVoQ3xM89U7_RYt_Q@mail.gmail.com>
+Message-ID: <31af80ab-555d-46db-8f1b-d60c3a8b35e6@gmail.com>
+
+On 2/18/24 00:23, Jennifer Bryan wrote:
+> I've now tested with:
+>
+> > R.version.string
+> [1] "R Under development (unstable) (2024-02-16 r85931)"
+> and all of the previously mentioned examples now work as expected on 
+> macOS.
+>
+> Thanks for the quick fix,
+
+Thanks for the testing,
+Tomas
+
+> Jenny
+>
+> On Thu, Feb 15, 2024 at 8:02?AM Tomas Kalibera 
+> <tomas.kalibera at gmail.com> wrote:
+>
+>
+>     On 2/14/24 23:43, Jennifer Bryan wrote:
+>     > Hello,
+>     >
+>     > I've noticed a specific type of pipe() usage that works in
+>     released R, but
+>     > not in r-devel.
+>     >
+>     > In 4.3.2 on macOS, I can write to a connection returned by
+>     pipe(), i.e.
+>     > "hello, world" prints here:
+>     >
+>     >> R.version.string
+>     > [1] "R version 4.3.2 (2023-10-31)"
+>     >> con <- pipe("cat")
+>     >> writeLines("hello, world", con)
+>     > hello, world
+>     >
+>     > But in r-devel on macOS, this is silent no-op, i.e. "hello,
+>     world" does not
+>     > print:
+>     >
+>     >> R.version.string
+>     > [1] "R Under development (unstable) (2024-02-13 r85895)"
+>     >> con <- pipe("cat")
+>     >> writeLines("hello, world", con)
+>     > My colleague Lionel Henry confirms he sees the same results on
+>     linux.
+>     > This particular example with cat doesn't work on Windows, so I
+>     don't have
+>     > any useful observations for that OS.
+>     >
+>     > You might say this is a weird example or use case. The actual
+>     usage where I
+>     > discovered this is the way folks read/write the clipboard on
+>     macOS using
+>     > pbcopy/pbpaste (and, in very similar ways, on linux using xsel
+>     or xclip).
+>     > This is mentioned in the "Clipboard" section of the connections
+>     help topic.
+>     >
+>     > In 4.3.2 on macOS, I can successfully roundtrip with the clipboard:
+>     >
+>     >> pb_write <- pipe("pbcopy")
+>     >> writeChar("hello clipboard!", pb_write, eos = NULL)
+>     >> pb_read <- pipe("pbpaste")
+>     >> readChar(pb_read, 16)
+>     > [1] "hello clipboard!"
+>     >
+>     > In r-devel, it appears that the write operation silently does
+>     nothing:
+>     >
+>     >> pb_write <- pipe("pbcopy")
+>     >> writeChar("hello clipboard!", pb_write, eos = NULL)
+>     >> pb_read <- pipe("pbpaste")
+>     >> readChar(pb_read, 16)
+>     > character(0)
+>     >
+>     > If the clipboard is populated through other means, I can
+>     > use readChar(pipe("pbpaste"), ...) to read the clipboard even in
+>     r-devel.
+>     > So this seems to be specific to writing to the connection.
+>     >
+>     > Is this change in behaviour intentional and will it be present
+>     in the next
+>     > release of R? FWIW, I did a crude search of the source of all
+>     CRAN packages
+>     > and there are quite a few currently using pipe() for clipboard
+>     access on
+>     > *nix.
+>
+>     This should be fixed now in R-devel. Thanks for the report and
+>     thanks to
+>     Ivan for the debugging. It would be great if you could test on
+>     your end
+>     with different examples and report any other issues.
+>
+>     Thanks
+>     Tomas
+>
+>     >
+>     > -- Jenny
+>     >
+>     >? ? ? ?[[alternative HTML version deleted]]
+>     >
+>     > ______________________________________________
+>     > R-devel at r-project.org mailing list
+>     > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
