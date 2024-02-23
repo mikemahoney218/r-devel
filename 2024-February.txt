@@ -6817,3 +6817,547 @@ Tomas
 >
 
 
+From phgro@je@n @end|ng |rom @c|v|ew@@org  Wed Feb 21 08:01:16 2024
+From: phgro@je@n @end|ng |rom @c|v|ew@@org (webmail.gandi.net)
+Date: Wed, 21 Feb 2024 08:01:16 +0100
+Subject: [Rd] 
+ Tcl socket server (tcltk) does not work any more on R 4.3.2
+In-Reply-To: <20240220191358.746eb776@arachnoid>
+References: <7AC73027-0511-4C98-A760-82099E192CDB@sciviews.org>
+ <20240220191358.746eb776@arachnoid>
+Message-ID: <499E3BAA-89C4-4A4F-8EEE-E98AFA2EE3C6@sciviews.org>
+
+Thank you, Ivan for this investigation. I inspected the R changes file (https://cran.r-project.org/doc/manuals/r-devel/NEWS.html) and found nothing about this. I should inspect the sources too!
+
+It could possibly break other Tcl/Tk related stuff. The doc about Tcl_ServiceAll and Tcl_DoOneEvent is confusing. On one hand, it says when Tcl is used from an external program, Tcl_ServiceAll should be used in its event loop instead of Tcl_DoOneEvent (and the change in the latest R versions goes in that direction). But in the other hand, it is indicated that Tcl_ServiceAll does not always handle all Tcl events and extra Tcl_DoOneEvent should be called in this case. I think we spotted one case where Tcl_ServiceAll is not doing its job correctly. There may be others.
+
+Since the {tcltk} package was working fine with  "while (Tcl_DoOneEvent(TCL_DONT_WAIT) && max_ev) max_ev?;", unless there is a clear performance enhancement with "while (i-- && Tcl_ServiceAll())", it would perhaps be wise to revert this back.
+
+Indeed, when I use this on the server side with R 4.3.2:
+
+library(tcltk)
+cmd <- r"(
+ proc accept {chan addr port} {         ;# Make a proc to accept connections
+   puts "$addr:$port says [gets $chan]" ;# Receive a string
+   puts $chan goodbye                   ;# Send a string
+   close $chan                          ;# Close the socket (automatically flushes)
+}                                       ;#
+socket -server accept 12345             ;# Create a server socket)"
+.Tcl(cmd)
+.Tcl("vwait myvar")
+
+It works again as expected. And vwait is known to call Tcl_DoOneEvent. Of course, in this case, R is blocked and waits for the `myvar` variable on the Tcl side. Anyway, the problem seems to be really in Tcl_ServiceAll not catching all Tcl events.
+
+All the best,
+
+Philippe
+
+..............................................<?}))><........
+ ) ) ) ) )
+( ( ( ( (    Prof. Philippe Grosjean
+ ) ) ) ) )
+( ( ( ( (    Numerical Ecology
+ ) ) ) ) )   Mons University, Belgium
+( ( ( ( (
+..............................................................
+
+> Le 20 f?vr. 2024 ? 17:13, Ivan Krylov via R-devel <r-devel at r-project.org> a ?crit :
+> 
+> ? Tue, 20 Feb 2024 12:27:35 +0100
+> "webmail.gandi.net" <phgrosjean at sciviews.org> ?????:
+> 
+>> When R process #1 is R 4.2.3, it works as expected (whatever version
+>> of R #2). When R process #1 is R 4.3.2, nothing is sent or received
+>> through the socket apparently, but no error is issued and process #2
+>> seems to be able to connect to the socket.
+> 
+> The difference is related to the change in
+> src/library/tcltk/src/tcltk_unix.c.
+> 
+> In R-4.2.1, the function static void TclSpinLoop(void *data) says:
+> 
+>    int max_ev = 100;
+>    /* Tcl_ServiceAll is not enough here, for reasons that escape me */
+>    while (Tcl_DoOneEvent(TCL_DONT_WAIT) && max_ev) max_ev--;
+> 
+> In R-devel, the function instead says:
+> 
+>    int i = R_TCL_SPIN_MAX;	
+>    while (i-- && Tcl_ServiceAll())
+>        ;
+> 
+> Manually calling Tcl_DoOneEvent(0) from the debugger at this point
+> makes the Tcl code respond to the connection. Tcl_ServiceAll() seems to
+> be still not enough. I'll try reading Tcl documentation to investigate
+> this further.
+> 
+> -- 
+> Best regards,
+> Ivan
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+	[[alternative HTML version deleted]]
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Wed Feb 21 10:48:09 2024
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Wed, 21 Feb 2024 10:48:09 +0100
+Subject: [Rd] Bug in comparison of language objects?
+In-Reply-To: <2a903e98-b039-42d0-b254-fd5c90a5ae05@gmail.com>
+References: <c05fcfd3-bec7-4d5a-ad5c-06e470b5501a@gmail.com>
+ <2a903e98-b039-42d0-b254-fd5c90a5ae05@gmail.com>
+Message-ID: <26069.50905.976518.569916@stat.math.ethz.ch>
+
+>>>>> Duncan Murdoch 
+>>>>>     on Tue, 20 Feb 2024 08:47:30 -0500 writes:
+
+    > On 20/02/2024 8:03 a.m., Duncan Murdoch wrote:
+    >> I noticed the following odd behaviour today:
+    >> 
+    >> exprs <- expression( mean(a), mean(b), { a }, { b } )
+    >> 
+    >> exprs[[1]] == exprs[[2]] #> [1] FALSE
+    >> 
+    >> exprs[[3]] == exprs[[4]] #> [1] TRUE
+    >> 
+    >> Does it make sense to anyone that the argument passed to
+    >> `mean` matters, but the expression contained in braces
+    >> doesn't?
+
+    > I have done some debugging, and found the cause: for the
+    > comparison of language objects, R deparses them to strings
+    > using C function deparse1(), and looks at only the first
+    > line.  "mean(a)" deparses as is, but "{ a }" deparses to 3
+    > lines
+
+    > { a }
+
+    > and the first line is the same as for "{ b }", so they
+    > compare equal.
+
+    > I think it would make more sense to deparse them to one
+    > long string, and compare those, i.e. to replace deparse1()
+    > with deparse1line() (which may have been the intention).
+
+    > Duncan Murdoch
+
+I agree ... (and more do).
+Thank you for  adding it as formal report to R's bugzilla,
+https://bugs.r-project.org/show_bug.cgi?id=18676
+
+Unfortunately, it triggers something in the (byte) compiler test
+suite, and (also/hence) will probably be too late for R 4.3.3.
+
+Martin
+
+Martin Maechler
+
+
+From |kry|ov @end|ng |rom d|@root@org  Wed Feb 21 13:51:58 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Wed, 21 Feb 2024 15:51:58 +0300
+Subject: [Rd] 
+ Tcl socket server (tcltk) does not work any more on R 4.3.2
+In-Reply-To: <499E3BAA-89C4-4A4F-8EEE-E98AFA2EE3C6@sciviews.org>
+References: <7AC73027-0511-4C98-A760-82099E192CDB@sciviews.org>
+ <20240220191358.746eb776@arachnoid>
+ <499E3BAA-89C4-4A4F-8EEE-E98AFA2EE3C6@sciviews.org>
+Message-ID: <20240221155158.3c10b8b5@arachnoid>
+
+? Wed, 21 Feb 2024 08:01:16 +0100
+"webmail.gandi.net" <phgrosjean at sciviews.org> ?????:
+
+> Since the {tcltk} package was working fine with  "while
+> (Tcl_DoOneEvent(TCL_DONT_WAIT) && max_ev) max_ev?;", unless there is
+> a clear performance enhancement with "while (i-- &&
+> Tcl_ServiceAll())", it would perhaps be wise to revert this back.
+
+I forgot to mention the comment in the new version of the function
+explaining the switch:
+
+>> [Tcl_DoOneEvent(TCL_DONT_WAIT)] <...> causes infinite recursion with
+>> R handlers that have a re-entrancy guard, when TclSpinLoop is
+>> invoked from such a handler (seen with Rhttp server)
+
+The difference between Tcl_ServiceAll() and Tcl_DoOneEvent() is that
+the latter calls Tcl_WaitForEvent(). The comments say that it is called
+for the side effect of queuing the events detected by select(). The
+function can indeed be observed to access the fileHandlers via the
+thread-specific data pointer, which contain the file descriptors and
+the instructions saying what to do with them.
+
+Without Tcl_WaitForEvent, the only event sources known to Tcl are
+RTcl_{setup,check}Proc (which only checks file descriptors owned by R),
+Display{Setup,Check}Proc (which seems to be owned by Tk), and
+Timer{Setup,Check}Proc (for which there doesn't seem to be any timers
+by default).
+
+As far as I understand the problem, while the function
+worker_input_handler() from src/modules/internet/Rhttpd.c is running,
+TclHandler() might be invoked, causing Tcl_DoOneEvent() to call
+RTcl_checkProc() and therefore trying to run worker_input_handler()
+again. The Rhttpd handler prevents this and doesn't clear the
+condition, which causes the event loop to keep calling it. Is that
+correct? Are there easy ways to reproduce the problem?
+
+-- 
+Best regards,
+Ivan
+
+
+From pd@|gd @end|ng |rom gm@||@com  Wed Feb 21 14:10:24 2024
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Wed, 21 Feb 2024 14:10:24 +0100
+Subject: [Rd] 
+ Tcl socket server (tcltk) does not work any more on R 4.3.2
+In-Reply-To: <499E3BAA-89C4-4A4F-8EEE-E98AFA2EE3C6@sciviews.org>
+References: <7AC73027-0511-4C98-A760-82099E192CDB@sciviews.org>
+ <20240220191358.746eb776@arachnoid>
+ <499E3BAA-89C4-4A4F-8EEE-E98AFA2EE3C6@sciviews.org>
+Message-ID: <98DC21B4-9301-446A-90AF-CA35F846AE00@gmail.com>
+
+
+I don't think we're going to fix this before 4.3.3. Given that it has gone unnoticed since June 2022 (yes '22) and that tampering in this area has a history of popping up complications in other areas, I think we should leave it alone until 4.4.0. 
+
+(I see that Ivan and Tomas has been on the issue since I started writing, but the above probably still holds true.)
+
+- Peter D.
+
+> On 21 Feb 2024, at 08:01 , webmail.gandi.net <phgrosjean at sciviews.org> wrote:
+> 
+> Thank you, Ivan for this investigation. I inspected the R changes file (https://cran.r-project.org/doc/manuals/r-devel/NEWS.html) and found nothing about this. I should inspect the sources too!
+> 
+> It could possibly break other Tcl/Tk related stuff. The doc about Tcl_ServiceAll and Tcl_DoOneEvent is confusing. On one hand, it says when Tcl is used from an external program, Tcl_ServiceAll should be used in its event loop instead of Tcl_DoOneEvent (and the change in the latest R versions goes in that direction). But in the other hand, it is indicated that Tcl_ServiceAll does not always handle all Tcl events and extra Tcl_DoOneEvent should be called in this case. I think we spotted one case where Tcl_ServiceAll is not doing its job correctly. There may be others.
+> 
+> Since the {tcltk} package was working fine with  "while (Tcl_DoOneEvent(TCL_DONT_WAIT) && max_ev) max_ev?;", unless there is a clear performance enhancement with "while (i-- && Tcl_ServiceAll())", it would perhaps be wise to revert this back.
+> 
+> Indeed, when I use this on the server side with R 4.3.2:
+> 
+> library(tcltk)
+> cmd <- r"(
+> proc accept {chan addr port} {         ;# Make a proc to accept connections
+>   puts "$addr:$port says [gets $chan]" ;# Receive a string
+>   puts $chan goodbye                   ;# Send a string
+>   close $chan                          ;# Close the socket (automatically flushes)
+> }                                       ;#
+> socket -server accept 12345             ;# Create a server socket)"
+> .Tcl(cmd)
+> .Tcl("vwait myvar")
+> 
+> It works again as expected. And vwait is known to call Tcl_DoOneEvent. Of course, in this case, R is blocked and waits for the `myvar` variable on the Tcl side. Anyway, the problem seems to be really in Tcl_ServiceAll not catching all Tcl events.
+> 
+> All the best,
+> 
+> Philippe
+> 
+> ..............................................<?}))><........
+> ) ) ) ) )
+> ( ( ( ( (    Prof. Philippe Grosjean
+> ) ) ) ) )
+> ( ( ( ( (    Numerical Ecology
+> ) ) ) ) )   Mons University, Belgium
+> ( ( ( ( (
+> ..............................................................
+> 
+>> Le 20 f?vr. 2024 ? 17:13, Ivan Krylov via R-devel <r-devel at r-project.org> a ?crit :
+>> 
+>> ? Tue, 20 Feb 2024 12:27:35 +0100
+>> "webmail.gandi.net" <phgrosjean at sciviews.org> ?????:
+>> 
+>>> When R process #1 is R 4.2.3, it works as expected (whatever version
+>>> of R #2). When R process #1 is R 4.3.2, nothing is sent or received
+>>> through the socket apparently, but no error is issued and process #2
+>>> seems to be able to connect to the socket.
+>> 
+>> The difference is related to the change in
+>> src/library/tcltk/src/tcltk_unix.c.
+>> 
+>> In R-4.2.1, the function static void TclSpinLoop(void *data) says:
+>> 
+>>   int max_ev = 100;
+>>   /* Tcl_ServiceAll is not enough here, for reasons that escape me */
+>>   while (Tcl_DoOneEvent(TCL_DONT_WAIT) && max_ev) max_ev--;
+>> 
+>> In R-devel, the function instead says:
+>> 
+>>   int i = R_TCL_SPIN_MAX;	
+>>   while (i-- && Tcl_ServiceAll())
+>>       ;
+>> 
+>> Manually calling Tcl_DoOneEvent(0) from the debugger at this point
+>> makes the Tcl code respond to the connection. Tcl_ServiceAll() seems to
+>> be still not enough. I'll try reading Tcl documentation to investigate
+>> this further.
+>> 
+>> -- 
+>> Best regards,
+>> Ivan
+>> 
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Wed Feb 21 17:04:15 2024
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Wed, 21 Feb 2024 17:04:15 +0100
+Subject: [Rd] 
+ Tcl socket server (tcltk) does not work any more on R 4.3.2
+In-Reply-To: <499E3BAA-89C4-4A4F-8EEE-E98AFA2EE3C6@sciviews.org>
+References: <7AC73027-0511-4C98-A760-82099E192CDB@sciviews.org>
+ <20240220191358.746eb776@arachnoid>
+ <499E3BAA-89C4-4A4F-8EEE-E98AFA2EE3C6@sciviews.org>
+Message-ID: <39e1c89c-0b89-4c65-85fa-582d5e69e3c7@gmail.com>
+
+
+On 2/21/24 08:01, webmail.gandi.net wrote:
+> Thank you, Ivan for this investigation. I inspected the R changes file (https://cran.r-project.org/doc/manuals/r-devel/NEWS.html) and found nothing about this. I should inspect the sources too!
+>
+> It could possibly break other Tcl/Tk related stuff. The doc about Tcl_ServiceAll and Tcl_DoOneEvent is confusing. On one hand, it says when Tcl is used from an external program, Tcl_ServiceAll should be used in its event loop instead of Tcl_DoOneEvent (and the change in the latest R versions goes in that direction). But in the other hand, it is indicated that Tcl_ServiceAll does not always handle all Tcl events and extra Tcl_DoOneEvent should be called in this case. I think we spotted one case where Tcl_ServiceAll is not doing its job correctly. There may be others.
+>
+> Since the {tcltk} package was working fine with  "while (Tcl_DoOneEvent(TCL_DONT_WAIT) && max_ev) max_ev?;", unless there is a clear performance enhancement with "while (i-- && Tcl_ServiceAll())", it would perhaps be wise to revert this back.
+
+Yes, for now I've done that in R-devel. The Tcl documentation is really 
+hard to follow, but debugging reveals that Tcl_ServiceAll() doesn't 
+queue new events, as also Ivan reports.
+
+Tomas
+
+>
+> Indeed, when I use this on the server side with R 4.3.2:
+>
+> library(tcltk)
+> cmd <- r"(
+>   proc accept {chan addr port} {         ;# Make a proc to accept connections
+>     puts "$addr:$port says [gets $chan]" ;# Receive a string
+>     puts $chan goodbye                   ;# Send a string
+>     close $chan                          ;# Close the socket (automatically flushes)
+> }                                       ;#
+> socket -server accept 12345             ;# Create a server socket)"
+> .Tcl(cmd)
+> .Tcl("vwait myvar")
+>
+> It works again as expected. And vwait is known to call Tcl_DoOneEvent. Of course, in this case, R is blocked and waits for the `myvar` variable on the Tcl side. Anyway, the problem seems to be really in Tcl_ServiceAll not catching all Tcl events.
+>
+> All the best,
+>
+> Philippe
+>
+> ..............................................<?}))><........
+>   ) ) ) ) )
+> ( ( ( ( (    Prof. Philippe Grosjean
+>   ) ) ) ) )
+> ( ( ( ( (    Numerical Ecology
+>   ) ) ) ) )   Mons University, Belgium
+> ( ( ( ( (
+> ..............................................................
+>
+>> Le 20 f?vr. 2024 ? 17:13, Ivan Krylov via R-devel <r-devel at r-project.org> a ?crit :
+>>
+>> ? Tue, 20 Feb 2024 12:27:35 +0100
+>> "webmail.gandi.net" <phgrosjean at sciviews.org> ?????:
+>>
+>>> When R process #1 is R 4.2.3, it works as expected (whatever version
+>>> of R #2). When R process #1 is R 4.3.2, nothing is sent or received
+>>> through the socket apparently, but no error is issued and process #2
+>>> seems to be able to connect to the socket.
+>> The difference is related to the change in
+>> src/library/tcltk/src/tcltk_unix.c.
+>>
+>> In R-4.2.1, the function static void TclSpinLoop(void *data) says:
+>>
+>>     int max_ev = 100;
+>>     /* Tcl_ServiceAll is not enough here, for reasons that escape me */
+>>     while (Tcl_DoOneEvent(TCL_DONT_WAIT) && max_ev) max_ev--;
+>>
+>> In R-devel, the function instead says:
+>>
+>>     int i = R_TCL_SPIN_MAX;	
+>>     while (i-- && Tcl_ServiceAll())
+>>         ;
+>>
+>> Manually calling Tcl_DoOneEvent(0) from the debugger at this point
+>> makes the Tcl code respond to the connection. Tcl_ServiceAll() seems to
+>> be still not enough. I'll try reading Tcl documentation to investigate
+>> this further.
+>>
+>> -- 
+>> Best regards,
+>> Ivan
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From pd@|gd @end|ng |rom gm@||@com  Wed Feb 21 17:49:41 2024
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Wed, 21 Feb 2024 17:49:41 +0100
+Subject: [Rd] 
+ Tcl socket server (tcltk) does not work any more on R 4.3.2
+In-Reply-To: <39e1c89c-0b89-4c65-85fa-582d5e69e3c7@gmail.com>
+References: <7AC73027-0511-4C98-A760-82099E192CDB@sciviews.org>
+ <20240220191358.746eb776@arachnoid>
+ <499E3BAA-89C4-4A4F-8EEE-E98AFA2EE3C6@sciviews.org>
+ <39e1c89c-0b89-4c65-85fa-582d5e69e3c7@gmail.com>
+Message-ID: <EBC37CBE-6969-4339-8CE4-1078D333320E@gmail.com>
+
+The obvious problem with
+
+while (Tcl_DoOneEvent(TCL_DONT_WAIT) && max_ev) max_ev?;
+
+is that once something does the http server thing, you'll be running Tcl_DoOneEvent max_ev times, _every_ time you hit TclSpinLoop.
+
+I wonder it we could some sort of hybrid between this and Tcl_ServiceAll()? Like, calling Tcl_DoOneEvent once before/after Tcl_ServiceAll().
+
+- Peter
+
+> On 21 Feb 2024, at 17:04 , Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+> 
+> 
+> On 2/21/24 08:01, webmail.gandi.net wrote:
+>> Thank you, Ivan for this investigation. I inspected the R changes file (https://cran.r-project.org/doc/manuals/r-devel/NEWS.html) and found nothing about this. I should inspect the sources too!
+>> 
+>> It could possibly break other Tcl/Tk related stuff. The doc about Tcl_ServiceAll and Tcl_DoOneEvent is confusing. On one hand, it says when Tcl is used from an external program, Tcl_ServiceAll should be used in its event loop instead of Tcl_DoOneEvent (and the change in the latest R versions goes in that direction). But in the other hand, it is indicated that Tcl_ServiceAll does not always handle all Tcl events and extra Tcl_DoOneEvent should be called in this case. I think we spotted one case where Tcl_ServiceAll is not doing its job correctly. There may be others.
+>> 
+>> Since the {tcltk} package was working fine with  "while (Tcl_DoOneEvent(TCL_DONT_WAIT) && max_ev) max_ev?;", unless there is a clear performance enhancement with "while (i-- && Tcl_ServiceAll())", it would perhaps be wise to revert this back.
+> 
+> Yes, for now I've done that in R-devel. The Tcl documentation is really hard to follow, but debugging reveals that Tcl_ServiceAll() doesn't queue new events, as also Ivan reports.
+> 
+> Tomas
+> 
+>> 
+>> Indeed, when I use this on the server side with R 4.3.2:
+>> 
+>> library(tcltk)
+>> cmd <- r"(
+>>  proc accept {chan addr port} {         ;# Make a proc to accept connections
+>>    puts "$addr:$port says [gets $chan]" ;# Receive a string
+>>    puts $chan goodbye                   ;# Send a string
+>>    close $chan                          ;# Close the socket (automatically flushes)
+>> }                                       ;#
+>> socket -server accept 12345             ;# Create a server socket)"
+>> .Tcl(cmd)
+>> .Tcl("vwait myvar")
+>> 
+>> It works again as expected. And vwait is known to call Tcl_DoOneEvent. Of course, in this case, R is blocked and waits for the `myvar` variable on the Tcl side. Anyway, the problem seems to be really in Tcl_ServiceAll not catching all Tcl events.
+>> 
+>> All the best,
+>> 
+>> Philippe
+>> 
+>> ..............................................<?}))><........
+>>  ) ) ) ) )
+>> ( ( ( ( (    Prof. Philippe Grosjean
+>>  ) ) ) ) )
+>> ( ( ( ( (    Numerical Ecology
+>>  ) ) ) ) )   Mons University, Belgium
+>> ( ( ( ( (
+>> ..............................................................
+>> 
+>>> Le 20 f?vr. 2024 ? 17:13, Ivan Krylov via R-devel <r-devel at r-project.org> a ?crit :
+>>> 
+>>> ? Tue, 20 Feb 2024 12:27:35 +0100
+>>> "webmail.gandi.net" <phgrosjean at sciviews.org> ?????:
+>>> 
+>>>> When R process #1 is R 4.2.3, it works as expected (whatever version
+>>>> of R #2). When R process #1 is R 4.3.2, nothing is sent or received
+>>>> through the socket apparently, but no error is issued and process #2
+>>>> seems to be able to connect to the socket.
+>>> The difference is related to the change in
+>>> src/library/tcltk/src/tcltk_unix.c.
+>>> 
+>>> In R-4.2.1, the function static void TclSpinLoop(void *data) says:
+>>> 
+>>>    int max_ev = 100;
+>>>    /* Tcl_ServiceAll is not enough here, for reasons that escape me */
+>>>    while (Tcl_DoOneEvent(TCL_DONT_WAIT) && max_ev) max_ev--;
+>>> 
+>>> In R-devel, the function instead says:
+>>> 
+>>>    int i = R_TCL_SPIN_MAX;	
+>>>    while (i-- && Tcl_ServiceAll())
+>>>        ;
+>>> 
+>>> Manually calling Tcl_DoOneEvent(0) from the debugger at this point
+>>> makes the Tcl code respond to the connection. Tcl_ServiceAll() seems to
+>>> be still not enough. I'll try reading Tcl documentation to investigate
+>>> this further.
+>>> 
+>>> -- 
+>>> Best regards,
+>>> Ivan
+>>> 
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>> 
+>> 	[[alternative HTML version deleted]]
+>> 
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From AHL27 @end|ng |rom p|tt@edu  Wed Feb 21 21:10:35 2024
+From: AHL27 @end|ng |rom p|tt@edu (Aidan Lakshman)
+Date: Wed, 21 Feb 2024 15:10:35 -0500
+Subject: [Rd] `sort` hanging without R_CheckUserInterrupt()
+Message-ID: <E5A85AB7-23B2-4A8F-AE13-A8864246D6FB@pitt.edu>
+
+Hi everyone,
+
+Just a quick question/problem I encountered, wanted to make sure this is known behavior. Running `sort` on a long vector can take quite a bit of time, and I found today that there don?t seem to be any calls to `R_CheckUserInterrupt()` during execution. Calling something like `sort((2^31):1)` takes good bit of time to run on my machine and is uninterruptable without force-terminating the entire R session.
+
+There doesn?t seem to be any mention in the help files that this method is uninterruptable. All the methods called from `sortVector` in `src/main/sort.c` lack checks for user interrupts as well.
+
+My main question is, is this known behavior? Is it worth including a warning in the help file? I don?t doubt that including a bunch of `R_CheckUserInterrupt()` calls would really hurt performance, but it may be possible to add an occasional call if `sort` is called on a long vector.
+
+This may not even be a problem that affects people, which is my main reason for inquiring.
+
+-Aidan
+
+
+
+-----------------------
+Aidan Lakshman (he/him)
+www.AHL27.com
+
+
