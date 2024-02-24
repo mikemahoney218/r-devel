@@ -7361,3 +7361,279 @@ Aidan Lakshman (he/him)
 www.AHL27.com
 
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Feb 22 16:09:59 2024
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 22 Feb 2024 16:09:59 +0100
+Subject: [Rd] `sort` hanging without R_CheckUserInterrupt()
+In-Reply-To: <E5A85AB7-23B2-4A8F-AE13-A8864246D6FB@pitt.edu>
+References: <E5A85AB7-23B2-4A8F-AE13-A8864246D6FB@pitt.edu>
+Message-ID: <26071.25543.494288.220722@stat.math.ethz.ch>
+
+>>>>> Aidan Lakshman 
+>>>>>     on Wed, 21 Feb 2024 15:10:35 -0500 writes:
+
+    > Hi everyone,
+    > Just a quick question/problem I encountered, wanted to make sure this is known behavior. Running `sort` on a long vector can take quite a bit of time, and I found today that there don?t seem to be any calls to `R_CheckUserInterrupt()` during execution. Calling something like `sort((2^31):1)` takes good bit of time to run on my machine and is uninterruptable without force-terminating the entire R session.
+
+    > There doesn?t seem to be any mention in the help files that this method is uninterruptable. All the methods called from `sortVector` in `src/main/sort.c` lack checks for user interrupts as well.
+
+    > My main question is, is this known behavior? Is it worth including a warning in the help file? I don?t doubt that including a bunch of `R_CheckUserInterrupt()` calls would really hurt performance, but it may be possible to add an occasional call if `sort` is called on a long vector.
+
+    > This may not even be a problem that affects people, which is my main reason for inquiring.
+
+What you claim is partly incorrect.
+It depends very much on the platform you are using, and this
+case is depends quite a bit on the amount of RAM it has,
+but sort() is definitely interruptable {read on, see later}:
+
+The reason that your interrupt does not happen for a while is
+that you are working with huge objects. For such objects, even
+   v <- v + 1
+
+typically takes several seconds... also depending on the
+platform *and* R would be terribly slow if it allowed
+interruption everywhere.
+Also with such huge objects *and* when you are close to the RAM boundary,
+the computer starts swapping {easy to observe with a system
+monitor, e.g. `htop` on Linux} and such processes belong to the
+OS, not to R, so are typically *not* interruptable by just
+telling R to stop working: R is *not* working at all at the
+point in time, it's waiting for the OS to feed memory space to R.
+
+
+If I use my personal computer with 16 GB RAM, my process is even
+*killed* by the OS when I do   v <- v+1
+because my OS is Fedora Linux and it uses an OOM Daemon process
+(OOM = Out Of Memory) which kills processes if they start to eat
+most of the computer RAM ... because the whole computer becomes
+unusable in such situations [yes, one can tweak the OOMD or
+disable it].  I assume your computer also has 16 GB RAM because
+that is really the critical size for *numeric* vectors of length 2^31:
+(numeric = double prec = 8 = 2^3 bytes).
+
+  > 2^34
+  [1] 17'179'869'184  # (the "'" added by MM) i.e. 17 billion
+
+  16 GB is roughly 16 billion bytes
+
+As soon as I switch to one of our powerful "compute clients"
+with several hundred giga bytes of RAM, everything behaves
+normally ... well if you are aware that 2^31 *is* large and
+hence slow by necessity, and almost *every* operation takes a
+few seconds.
+
+Here's a log on such a computer {using my package's
+sfsmisc::Sys.memGB() , not crucially} :
+
+---------------------------------------------------------------------------
+
+R version 4.3.3 RC (2024-02-21 r85967) -- "Angel Food Cake"
+Copyright (C) 2024 The R Foundation for Statistical Computing
+Platform: x86_64-pc-linux-gnu (64-bit)
+
+R is free software and comes with ABSOLUTELY NO WARRANTY.
+You are welcome to redistribute it under certain conditions.
+Type 'license()' or 'licence()' for distribution details.
+
+  Natural language support but running in an English locale
+
+R is a collaborative project with many contributors.
+Type 'contributors()' for more information and
+'citation()' on how to cite R or R packages in publications.
+
+Type 'demo()' for some demos, 'help()' for on-line help, or
+'help.start()' for an HTML browser interface to help.
+Type 'q()' to quit R.
+
+> options(pager='cat')
+> options(width=81, length=99999)
+> 
+> n <- 2^30; iv <- n:1; .Internal(inspect(iv))
+@5eb6b20 13 INTSXP g0c0 [REF(65535)]  1073741824 : 1 (compact)
+> n/1e9
+[1] 1.073742
+> system.time(sv <- sort(iv))   ## no problem to stop :
+  C-c C-c
+Timing stopped at: 4.319 4.204 8.547
+> str(sv) # indeed, sv has not been produced:
+Error: object 'sv' not found
+
+> Sys.memGB() # from package 'sfsmisc'; probably fails to work on non-Linux
+[1] 515.8418
+
+> ## i.e., I have  *LOTS* of memory on this (special!) machine [ ada-21 @ ETH ]
+> n <- 2^31; iv <- n:1; .Internal(inspect(iv))
+@25b9ee8 14 REALSXP g0c0 [REF(65535)]  2147483648 : 1 (compact)
+> system.time(sv <- sort(iv))
+  C-c C-c ##--- I pressed   [Ctrl] C   twice (because I use ESS) ==> it works:
+Timing stopped at: 15.08 4.286 19.42
+> str(sv) # indeed, sv has not been produced:
+Error: object 'sv' not found
+
+ 
+> system.time(sv <- sort(iv)) # no interrupt etc, just noticing how long..
+   user  system elapsed 
+139.931  13.061 153.533 
+> str(sv)
+ num [1:2147483648] 1 2 3 4 5 6 7 8 9 10 ...
+> 
+---------------------------------------------------------------------------
+
+Note the relatively large 'system' times: As a non-expert I
+guess that this  is from R waiting for the OS to allocate
+the huge memory chunks  R  is asking it for.
+
+
+From AHL27 @end|ng |rom p|tt@edu  Thu Feb 22 16:40:22 2024
+From: AHL27 @end|ng |rom p|tt@edu (Aidan Lakshman)
+Date: Thu, 22 Feb 2024 10:40:22 -0500
+Subject: [Rd] `sort` hanging without R_CheckUserInterrupt()
+In-Reply-To: <26071.25543.494288.220722@stat.math.ethz.ch>
+References: <E5A85AB7-23B2-4A8F-AE13-A8864246D6FB@pitt.edu>
+ <26071.25543.494288.220722@stat.math.ethz.ch>
+Message-ID: <A36CB2E2-136A-46CD-8DDB-789857F89976@pitt.edu>
+
+Hi Martin,
+
+Thanks for the quick response. I had observed the machine-dependent
+behavior?my advisor initially asked me about this because this code
+would be killed by the OS on his machine, and I wasn?t able to
+replicate it on mine.
+
+> R is *not* working at all at the
+> point in time, it's waiting for the OS to feed memory space to R.
+
+Ah, I should have suspected as such. That makes sense, of course there
+can be long lag times when asking the CPU to allocate many gigs of
+space all at once.
+
+> R would be terribly slow if it allowed interruption everywhere.
+
+Yep, agreed.
+
+Thank you for the detailed answer, I appreciate it!
+
+-Aidan
+
+
+-----------------------
+Aidan Lakshman (he/him)
+www.AHL27.com
+
+On 22 Feb 2024, at 10:09, Martin Maechler wrote:
+
+>>>>>> Aidan Lakshman
+>>>>>>     on Wed, 21 Feb 2024 15:10:35 -0500 writes:
+>
+>     > Hi everyone,
+>     > Just a quick question/problem I encountered, wanted to make sure this is known behavior. Running `sort` on a long vector can take quite a bit of time, and I found today that there don?t seem to be any calls to `R_CheckUserInterrupt()` during execution. Calling something like `sort((2^31):1)` takes good bit of time to run on my machine and is uninterruptable without force-terminating the entire R session.
+>
+>     > There doesn?t seem to be any mention in the help files that this method is uninterruptable. All the methods called from `sortVector` in `src/main/sort.c` lack checks for user interrupts as well.
+>
+>     > My main question is, is this known behavior? Is it worth including a warning in the help file? I don?t doubt that including a bunch of `R_CheckUserInterrupt()` calls would really hurt performance, but it may be possible to add an occasional call if `sort` is called on a long vector.
+>
+>     > This may not even be a problem that affects people, which is my main reason for inquiring.
+>
+> What you claim is partly incorrect.
+> It depends very much on the platform you are using, and this
+> case is depends quite a bit on the amount of RAM it has,
+> but sort() is definitely interruptable {read on, see later}:
+>
+> The reason that your interrupt does not happen for a while is
+> that you are working with huge objects. For such objects, even
+>    v <- v + 1
+>
+> typically takes several seconds... also depending on the
+> platform *and* R would be terribly slow if it allowed
+> interruption everywhere.
+> Also with such huge objects *and* when you are close to the RAM boundary,
+> the computer starts swapping {easy to observe with a system
+> monitor, e.g. `htop` on Linux} and such processes belong to the
+> OS, not to R, so are typically *not* interruptable by just
+> telling R to stop working: R is *not* working at all at the
+> point in time, it's waiting for the OS to feed memory space to R.
+>
+>
+> If I use my personal computer with 16 GB RAM, my process is even
+> *killed* by the OS when I do   v <- v+1
+> because my OS is Fedora Linux and it uses an OOM Daemon process
+> (OOM = Out Of Memory) which kills processes if they start to eat
+> most of the computer RAM ... because the whole computer becomes
+> unusable in such situations [yes, one can tweak the OOMD or
+> disable it].  I assume your computer also has 16 GB RAM because
+> that is really the critical size for *numeric* vectors of length 2^31:
+> (numeric = double prec = 8 = 2^3 bytes).
+>
+>   > 2^34
+>   [1] 17'179'869'184  # (the "'" added by MM) i.e. 17 billion
+>
+>   16 GB is roughly 16 billion bytes
+>
+> As soon as I switch to one of our powerful "compute clients"
+> with several hundred giga bytes of RAM, everything behaves
+> normally ... well if you are aware that 2^31 *is* large and
+> hence slow by necessity, and almost *every* operation takes a
+> few seconds.
+>
+> Here's a log on such a computer {using my package's
+> sfsmisc::Sys.memGB() , not crucially} :
+>
+> ---------------------------------------------------------------------------
+>
+> R version 4.3.3 RC (2024-02-21 r85967) -- "Angel Food Cake"
+> Copyright (C) 2024 The R Foundation for Statistical Computing
+> Platform: x86_64-pc-linux-gnu (64-bit)
+>
+> R is free software and comes with ABSOLUTELY NO WARRANTY.
+> You are welcome to redistribute it under certain conditions.
+> Type 'license()' or 'licence()' for distribution details.
+>
+>   Natural language support but running in an English locale
+>
+> R is a collaborative project with many contributors.
+> Type 'contributors()' for more information and
+> 'citation()' on how to cite R or R packages in publications.
+>
+> Type 'demo()' for some demos, 'help()' for on-line help, or
+> 'help.start()' for an HTML browser interface to help.
+> Type 'q()' to quit R.
+>
+>> options(pager='cat')
+>> options(width=81, length=99999)
+>>
+>> n <- 2^30; iv <- n:1; .Internal(inspect(iv))
+> @5eb6b20 13 INTSXP g0c0 [REF(65535)]  1073741824 : 1 (compact)
+>> n/1e9
+> [1] 1.073742
+>> system.time(sv <- sort(iv))   ## no problem to stop :
+>   C-c C-c
+> Timing stopped at: 4.319 4.204 8.547
+>> str(sv) # indeed, sv has not been produced:
+> Error: object 'sv' not found
+>
+>> Sys.memGB() # from package 'sfsmisc'; probably fails to work on non-Linux
+> [1] 515.8418
+>
+>> ## i.e., I have  *LOTS* of memory on this (special!) machine [ ada-21 @ ETH ]
+>> n <- 2^31; iv <- n:1; .Internal(inspect(iv))
+> @25b9ee8 14 REALSXP g0c0 [REF(65535)]  2147483648 : 1 (compact)
+>> system.time(sv <- sort(iv))
+>   C-c C-c ##--- I pressed   [Ctrl] C   twice (because I use ESS) ==> it works:
+> Timing stopped at: 15.08 4.286 19.42
+>> str(sv) # indeed, sv has not been produced:
+> Error: object 'sv' not found
+>
+>
+>> system.time(sv <- sort(iv)) # no interrupt etc, just noticing how long..
+>    user  system elapsed
+> 139.931  13.061 153.533
+>> str(sv)
+>  num [1:2147483648] 1 2 3 4 5 6 7 8 9 10 ...
+>>
+> ---------------------------------------------------------------------------
+>
+> Note the relatively large 'system' times: As a non-expert I
+> guess that this  is from R waiting for the OS to allocate
+> the huge memory chunks  R  is asking it for.
+
+
