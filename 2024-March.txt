@@ -1,0 +1,605 @@
+From dm|tr|@pop@venko @end|ng |rom gm@||@com  Fri Mar  1 10:17:34 2024
+From: dm|tr|@pop@venko @end|ng |rom gm@||@com (Dmitri Popavenko)
+Date: Fri, 1 Mar 2024 11:17:34 +0200
+Subject: [Rd] capture "->"
+Message-ID: <CAJL_pojF-Qc8YA0_eB+Ab9w3qD5sgMkjm0C3b0ooOmoOUy769w@mail.gmail.com>
+
+Hi everyone,
+
+I am aware this is a parser issue, but is there any possibility to capture
+the use of the inverse assignment operator into a formula?
+
+Something like:
+
+> foo <- function(x) substitute(x)
+
+gives:
+
+> foo(A -> B)
+B <- A
+
+I wonder if there is any possibility whatsoever to signal the use of ->
+instead of <-
+
+Thank you,
+Dmitri
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Fri Mar  1 10:30:37 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Fri, 1 Mar 2024 04:30:37 -0500
+Subject: [Rd] capture "->"
+In-Reply-To: <CAJL_pojF-Qc8YA0_eB+Ab9w3qD5sgMkjm0C3b0ooOmoOUy769w@mail.gmail.com>
+References: <CAJL_pojF-Qc8YA0_eB+Ab9w3qD5sgMkjm0C3b0ooOmoOUy769w@mail.gmail.com>
+Message-ID: <ff87b48a-ccad-40ec-b79e-3fb4c945d3a9@gmail.com>
+
+On 01/03/2024 4:17 a.m., Dmitri Popavenko wrote:
+> Hi everyone,
+> 
+> I am aware this is a parser issue, but is there any possibility to capture
+> the use of the inverse assignment operator into a formula?
+> 
+> Something like:
+> 
+>> foo <- function(x) substitute(x)
+> 
+> gives:
+> 
+>> foo(A -> B)
+> B <- A
+> 
+> I wonder if there is any possibility whatsoever to signal the use of ->
+> instead of <-
+
+If you parse it with srcrefs, you could look at the source.  The parser 
+doesn't record whether it was A -> B or B <- A anywhere else.
+
+Duncan Murdoch
+
+
+From dm|tr|@pop@venko @end|ng |rom gm@||@com  Fri Mar  1 11:25:09 2024
+From: dm|tr|@pop@venko @end|ng |rom gm@||@com (Dmitri Popavenko)
+Date: Fri, 1 Mar 2024 12:25:09 +0200
+Subject: [Rd] capture "->"
+In-Reply-To: <ff87b48a-ccad-40ec-b79e-3fb4c945d3a9@gmail.com>
+References: <CAJL_pojF-Qc8YA0_eB+Ab9w3qD5sgMkjm0C3b0ooOmoOUy769w@mail.gmail.com>
+ <ff87b48a-ccad-40ec-b79e-3fb4c945d3a9@gmail.com>
+Message-ID: <CAJL_pogbYhhLxsXQN0jjm83sZybh1nO1wE6F+CwNV18F9EkYUA@mail.gmail.com>
+
+Dear Duncan,
+
+On Fri, Mar 1, 2024 at 11:30?AM Duncan Murdoch <murdoch.duncan at gmail.com>
+wrote:
+
+> ...
+> If you parse it with srcrefs, you could look at the source.  The parser
+> doesn't record whether it was A -> B or B <- A anywhere else.
+>
+
+Thank you, this gets me closer but it still needs a little push:
+
+> foo <- function(x) {
+  x <- substitute(x)
+  return(attr(x, "srcref")[[2]])
+}
+
+> foo(A -> B)
+NULL
+
+This seems to work, however:
+> foo({A -> B})
+A -> B
+
+Is there a way to treat the formula as if it was enclosed between the curly
+brackets?
+Dmitri
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Fri Mar  1 12:00:42 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Fri, 1 Mar 2024 06:00:42 -0500
+Subject: [Rd] capture "->"
+In-Reply-To: <CAJL_pogbYhhLxsXQN0jjm83sZybh1nO1wE6F+CwNV18F9EkYUA@mail.gmail.com>
+References: <CAJL_pojF-Qc8YA0_eB+Ab9w3qD5sgMkjm0C3b0ooOmoOUy769w@mail.gmail.com>
+ <ff87b48a-ccad-40ec-b79e-3fb4c945d3a9@gmail.com>
+ <CAJL_pogbYhhLxsXQN0jjm83sZybh1nO1wE6F+CwNV18F9EkYUA@mail.gmail.com>
+Message-ID: <79f6c330-e5bf-4ad4-9ccc-ed47ab8dcb69@gmail.com>
+
+On 01/03/2024 5:25 a.m., Dmitri Popavenko wrote:
+> Dear?Duncan,
+> 
+> On Fri, Mar 1, 2024 at 11:30?AM Duncan Murdoch <murdoch.duncan at gmail.com 
+> <mailto:murdoch.duncan at gmail.com>> wrote:
+> 
+>     ...
+>     If you parse it with srcrefs, you could look at the source.? The parser
+>     doesn't record whether it was A -> B or B <- A anywhere else.
+> 
+> 
+> Thank you, this gets me closer but it still needs a little push:
+> 
+>  > foo <- function(x) {
+>  ? x <- substitute(x)
+>  ? return(attr(x, "srcref")[[2]])
+> }
+> 
+>  > foo(A -> B)
+> NULL
+> 
+> This seems to work, however:
+>  > foo({A -> B})
+> A -> B
+> 
+> Is there a way to treat the formula as if it was enclosed between the 
+> curly brackets?
+> Dmitri
+
+I was thinking more of you doing something like
+
+  parse(text = "A -> B", keep.source = TRUE)
+
+I forget what the exact rules are for attaching srcrefs to arguments of 
+functions, but I do remember they are a little strange, because not 
+every possible argument can accept a srcref attribute.  For example, you 
+can't attach one to NULL, or to a name.
+
+Srcrefs are also fairly big and building them is slow, so I think we 
+tried to limit them to where they were needed, we didn't try to attach 
+them to every subexpression, just one per statement.  Each expression 
+within {} is a separate statement, so we get srcrefs attached to the {. 
+But in "foo(A -> B)" probably you only get one on the foo call.
+
+In some circumstances you could get the srcref on that call by looking 
+at sys.call().  But then things are complicated again, because R doesn't 
+attach srcrefs to things typed at the console, only to things that are 
+sourced from files or text strings (and parsed with keep.source=TRUE).
+
+So I think you should probably require input from a string or a file, or 
+not expect foo(A -> B) to work without some decoration.
+
+Duncan Murdoch
+
+
+From dm|tr|@pop@venko @end|ng |rom gm@||@com  Fri Mar  1 14:51:42 2024
+From: dm|tr|@pop@venko @end|ng |rom gm@||@com (Dmitri Popavenko)
+Date: Fri, 1 Mar 2024 15:51:42 +0200
+Subject: [Rd] capture "->"
+In-Reply-To: <79f6c330-e5bf-4ad4-9ccc-ed47ab8dcb69@gmail.com>
+References: <CAJL_pojF-Qc8YA0_eB+Ab9w3qD5sgMkjm0C3b0ooOmoOUy769w@mail.gmail.com>
+ <ff87b48a-ccad-40ec-b79e-3fb4c945d3a9@gmail.com>
+ <CAJL_pogbYhhLxsXQN0jjm83sZybh1nO1wE6F+CwNV18F9EkYUA@mail.gmail.com>
+ <79f6c330-e5bf-4ad4-9ccc-ed47ab8dcb69@gmail.com>
+Message-ID: <CAJL_poiOUuBfPLqa3uTswA=1LG=1CZeBR9XudSaFQYbesQG+cA@mail.gmail.com>
+
+On Fri, Mar 1, 2024 at 1:00?PM Duncan Murdoch <murdoch.duncan at gmail.com>
+wrote:
+
+> ...
+> I was thinking more of you doing something like
+>
+>   parse(text = "A -> B", keep.source = TRUE)
+>
+> I forget what the exact rules are for attaching srcrefs to arguments of
+> functions, but I do remember they are a little strange, because not
+> every possible argument can accept a srcref attribute.  For example, you
+> can't attach one to NULL, or to a name.
+>
+> Srcrefs are also fairly big and building them is slow, so I think we
+> tried to limit them to where they were needed, we didn't try to attach
+> them to every subexpression, just one per statement.  Each expression
+> within {} is a separate statement, so we get srcrefs attached to the {.
+> But in "foo(A -> B)" probably you only get one on the foo call.
+>
+> In some circumstances you could get the srcref on that call by looking
+> at sys.call().  But then things are complicated again, because R doesn't
+> attach srcrefs to things typed at the console, only to things that are
+> sourced from files or text strings (and parsed with keep.source=TRUE).
+>
+> So I think you should probably require input from a string or a file, or
+> not expect foo(A -> B) to work without some decoration.
+>
+
+Indeed, the more challenging task is to identify "->" at the console
+(from a script or a string, seems trivial now).
+
+I would be willing to decorate as much as it takes to make this work, I am
+just empty on more ideas how to persuade the parser.
+Dmitri
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Fri Mar  1 15:22:41 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Fri, 1 Mar 2024 09:22:41 -0500
+Subject: [Rd] capture "->"
+In-Reply-To: <CAJL_poiOUuBfPLqa3uTswA=1LG=1CZeBR9XudSaFQYbesQG+cA@mail.gmail.com>
+References: <CAJL_pojF-Qc8YA0_eB+Ab9w3qD5sgMkjm0C3b0ooOmoOUy769w@mail.gmail.com>
+ <ff87b48a-ccad-40ec-b79e-3fb4c945d3a9@gmail.com>
+ <CAJL_pogbYhhLxsXQN0jjm83sZybh1nO1wE6F+CwNV18F9EkYUA@mail.gmail.com>
+ <79f6c330-e5bf-4ad4-9ccc-ed47ab8dcb69@gmail.com>
+ <CAJL_poiOUuBfPLqa3uTswA=1LG=1CZeBR9XudSaFQYbesQG+cA@mail.gmail.com>
+Message-ID: <1cef84f8-a9d4-436a-a606-765a084a4a91@gmail.com>
+
+On 01/03/2024 8:51 a.m., Dmitri Popavenko wrote:
+> On Fri, Mar 1, 2024 at 1:00?PM Duncan Murdoch <murdoch.duncan at gmail.com 
+> <mailto:murdoch.duncan at gmail.com>> wrote:
+> 
+>     ...
+>     I was thinking more of you doing something like
+> 
+>      ? parse(text = "A -> B", keep.source = TRUE)
+> 
+>     I forget what the exact rules are for attaching srcrefs to arguments of
+>     functions, but I do remember they are a little strange, because not
+>     every possible argument can accept a srcref attribute.? For example,
+>     you
+>     can't attach one to NULL, or to a name.
+> 
+>     Srcrefs are also fairly big and building them is slow, so I think we
+>     tried to limit them to where they were needed, we didn't try to attach
+>     them to every subexpression, just one per statement.? Each expression
+>     within {} is a separate statement, so we get srcrefs attached to the {.
+>     But in "foo(A -> B)" probably you only get one on the foo call.
+> 
+>     In some circumstances you could get the srcref on that call by looking
+>     at sys.call().? But then things are complicated again, because R
+>     doesn't
+>     attach srcrefs to things typed at the console, only to things that are
+>     sourced from files or text strings (and parsed with keep.source=TRUE).
+> 
+>     So I think you should probably require input from a string or a
+>     file, or
+>     not expect foo(A -> B) to work without some decoration.
+> 
+> 
+> Indeed, the more challenging task is to identify "->" at the console
+> (from a script or a string, seems trivial now).
+> 
+> I would be willing to decorate as much as it takes to make this work, I 
+> am just empty on more ideas how to persuade the parser.
+
+By "decorate", I meant putting it in quotes and parsing it using 
+parse(text=...), or putting it in braces as you found.  I think parsing 
+a string is most likely to be reliable because someone might turn off 
+`keep.source` and then the braced approach would fail.  But you have 
+control over it when you call parse() yourself.
+
+Duncan Murdoch
+
+
+From @vi@e@gross m@iii@g oii gm@ii@com  Fri Mar  1 15:30:30 2024
+From: @vi@e@gross m@iii@g oii gm@ii@com (@vi@e@gross m@iii@g oii gm@ii@com)
+Date: Fri, 1 Mar 2024 09:30:30 -0500
+Subject: [Rd] capture "->"
+In-Reply-To: <1cef84f8-a9d4-436a-a606-765a084a4a91@gmail.com>
+References: <CAJL_pojF-Qc8YA0_eB+Ab9w3qD5sgMkjm0C3b0ooOmoOUy769w@mail.gmail.com>
+ <ff87b48a-ccad-40ec-b79e-3fb4c945d3a9@gmail.com>
+ <CAJL_pogbYhhLxsXQN0jjm83sZybh1nO1wE6F+CwNV18F9EkYUA@mail.gmail.com>
+ <79f6c330-e5bf-4ad4-9ccc-ed47ab8dcb69@gmail.com>
+ <CAJL_poiOUuBfPLqa3uTswA=1LG=1CZeBR9XudSaFQYbesQG+cA@mail.gmail.com>
+ <1cef84f8-a9d4-436a-a606-765a084a4a91@gmail.com>
+Message-ID: <005b01da6be5$0361b9f0$0a252dd0$@gmail.com>
+
+I am wondering what the specific need for this is or is it just an exercise?
+
+Where does it matter if a chunk of code assigns using "<-" beforehand or "->" after hand, or for that matter assigns indirectly without a symbol?
+
+And whatever you come up with, will it also support the global assignment of "->>" as compared to ""<<-" too?
+
+I do wonder if you can re-declare the assignment operators or would that mess up the parser.
+
+-----Original Message-----
+From: R-devel <r-devel-bounces at r-project.org> On Behalf Of Duncan Murdoch
+Sent: Friday, March 1, 2024 9:23 AM
+To: Dmitri Popavenko <dmitri.popavenko at gmail.com>
+Cc: r-devel <r-devel at r-project.org>
+Subject: Re: [Rd] capture "->"
+
+On 01/03/2024 8:51 a.m., Dmitri Popavenko wrote:
+> On Fri, Mar 1, 2024 at 1:00?PM Duncan Murdoch <murdoch.duncan at gmail.com 
+> <mailto:murdoch.duncan at gmail.com>> wrote:
+> 
+>     ...
+>     I was thinking more of you doing something like
+> 
+>        parse(text = "A -> B", keep.source = TRUE)
+> 
+>     I forget what the exact rules are for attaching srcrefs to arguments of
+>     functions, but I do remember they are a little strange, because not
+>     every possible argument can accept a srcref attribute.  For example,
+>     you
+>     can't attach one to NULL, or to a name.
+> 
+>     Srcrefs are also fairly big and building them is slow, so I think we
+>     tried to limit them to where they were needed, we didn't try to attach
+>     them to every subexpression, just one per statement.  Each expression
+>     within {} is a separate statement, so we get srcrefs attached to the {.
+>     But in "foo(A -> B)" probably you only get one on the foo call.
+> 
+>     In some circumstances you could get the srcref on that call by looking
+>     at sys.call().  But then things are complicated again, because R
+>     doesn't
+>     attach srcrefs to things typed at the console, only to things that are
+>     sourced from files or text strings (and parsed with keep.source=TRUE).
+> 
+>     So I think you should probably require input from a string or a
+>     file, or
+>     not expect foo(A -> B) to work without some decoration.
+> 
+> 
+> Indeed, the more challenging task is to identify "->" at the console
+> (from a script or a string, seems trivial now).
+> 
+> I would be willing to decorate as much as it takes to make this work, I 
+> am just empty on more ideas how to persuade the parser.
+
+By "decorate", I meant putting it in quotes and parsing it using 
+parse(text=...), or putting it in braces as you found.  I think parsing 
+a string is most likely to be reliable because someone might turn off 
+`keep.source` and then the braced approach would fail.  But you have 
+control over it when you call parse() yourself.
+
+Duncan Murdoch
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From du@@@@dr|@n @end|ng |rom gm@||@com  Fri Mar  1 17:37:31 2024
+From: du@@@@dr|@n @end|ng |rom gm@||@com (=?UTF-8?B?QWRyaWFuIER1yJlh?=)
+Date: Fri, 1 Mar 2024 18:37:31 +0200
+Subject: [Rd] capture "->"
+In-Reply-To: <005b01da6be5$0361b9f0$0a252dd0$@gmail.com>
+References: <CAJL_pojF-Qc8YA0_eB+Ab9w3qD5sgMkjm0C3b0ooOmoOUy769w@mail.gmail.com>
+ <ff87b48a-ccad-40ec-b79e-3fb4c945d3a9@gmail.com>
+ <CAJL_pogbYhhLxsXQN0jjm83sZybh1nO1wE6F+CwNV18F9EkYUA@mail.gmail.com>
+ <79f6c330-e5bf-4ad4-9ccc-ed47ab8dcb69@gmail.com>
+ <CAJL_poiOUuBfPLqa3uTswA=1LG=1CZeBR9XudSaFQYbesQG+cA@mail.gmail.com>
+ <1cef84f8-a9d4-436a-a606-765a084a4a91@gmail.com>
+ <005b01da6be5$0361b9f0$0a252dd0$@gmail.com>
+Message-ID: <CAJ=0CtBZPv+Sia-OkGQBCAj+ogSUeTyQ3hVWorbv-DaOZwi64A@mail.gmail.com>
+
+I would also be interested in that.
+For me, this is interesting for my QCA package, over which Dmitri and I
+have exchanged a couple of messages.
+The "<-" operator is used to denote necessity, and the "->" is used for
+sufficiency.
+
+Users often make use of Boolean expressions such as A*B + C -> Y
+(to calculate if the expression A*B + C is sufficient for the outcome Y)
+
+The parser inverses it into Y <- A*B + C, as if the outcome Y is necessary
+for the expression A*B + C, which changes the nature of the expression.
+
+Quoting such expressions is already possible and it works as expected. We
+were trying to avoid the quotes, if at all possible, to simplify the
+command use in the manuals.
+
+Best wishes,
+Adrian
+
+On Fri, Mar 1, 2024 at 4:33?PM <avi.e.gross at gmail.com> wrote:
+
+> I am wondering what the specific need for this is or is it just an
+> exercise?
+>
+> Where does it matter if a chunk of code assigns using "<-" beforehand or
+> "->" after hand, or for that matter assigns indirectly without a symbol?
+>
+> And whatever you come up with, will it also support the global assignment
+> of "->>" as compared to ""<<-" too?
+>
+> I do wonder if you can re-declare the assignment operators or would that
+> mess up the parser.
+>
+> -----Original Message-----
+> From: R-devel <r-devel-bounces at r-project.org> On Behalf Of Duncan Murdoch
+> Sent: Friday, March 1, 2024 9:23 AM
+> To: Dmitri Popavenko <dmitri.popavenko at gmail.com>
+> Cc: r-devel <r-devel at r-project.org>
+> Subject: Re: [Rd] capture "->"
+>
+> On 01/03/2024 8:51 a.m., Dmitri Popavenko wrote:
+> > On Fri, Mar 1, 2024 at 1:00?PM Duncan Murdoch <murdoch.duncan at gmail.com
+> > <mailto:murdoch.duncan at gmail.com>> wrote:
+> >
+> >     ...
+> >     I was thinking more of you doing something like
+> >
+> >        parse(text = "A -> B", keep.source = TRUE)
+> >
+> >     I forget what the exact rules are for attaching srcrefs to arguments
+> of
+> >     functions, but I do remember they are a little strange, because not
+> >     every possible argument can accept a srcref attribute.  For example,
+> >     you
+> >     can't attach one to NULL, or to a name.
+> >
+> >     Srcrefs are also fairly big and building them is slow, so I think we
+> >     tried to limit them to where they were needed, we didn't try to
+> attach
+> >     them to every subexpression, just one per statement.  Each expression
+> >     within {} is a separate statement, so we get srcrefs attached to the
+> {.
+> >     But in "foo(A -> B)" probably you only get one on the foo call.
+> >
+> >     In some circumstances you could get the srcref on that call by
+> looking
+> >     at sys.call().  But then things are complicated again, because R
+> >     doesn't
+> >     attach srcrefs to things typed at the console, only to things that
+> are
+> >     sourced from files or text strings (and parsed with
+> keep.source=TRUE).
+> >
+> >     So I think you should probably require input from a string or a
+> >     file, or
+> >     not expect foo(A -> B) to work without some decoration.
+> >
+> >
+> > Indeed, the more challenging task is to identify "->" at the console
+> > (from a script or a string, seems trivial now).
+> >
+> > I would be willing to decorate as much as it takes to make this work, I
+> > am just empty on more ideas how to persuade the parser.
+>
+> By "decorate", I meant putting it in quotes and parsing it using
+> parse(text=...), or putting it in braces as you found.  I think parsing
+> a string is most likely to be reliable because someone might turn off
+> `keep.source` and then the braced approach would fail.  But you have
+> control over it when you call parse() yourself.
+>
+> Duncan Murdoch
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From @vi@e@gross m@iii@g oii gm@ii@com  Fri Mar  1 22:30:37 2024
+From: @vi@e@gross m@iii@g oii gm@ii@com (@vi@e@gross m@iii@g oii gm@ii@com)
+Date: Fri, 1 Mar 2024 16:30:37 -0500
+Subject: [Rd] capture "->"
+In-Reply-To: <CAJ=0CtBZPv+Sia-OkGQBCAj+ogSUeTyQ3hVWorbv-DaOZwi64A@mail.gmail.com>
+References: <CAJL_pojF-Qc8YA0_eB+Ab9w3qD5sgMkjm0C3b0ooOmoOUy769w@mail.gmail.com>
+ <ff87b48a-ccad-40ec-b79e-3fb4c945d3a9@gmail.com>
+ <CAJL_pogbYhhLxsXQN0jjm83sZybh1nO1wE6F+CwNV18F9EkYUA@mail.gmail.com>
+ <79f6c330-e5bf-4ad4-9ccc-ed47ab8dcb69@gmail.com>
+ <CAJL_poiOUuBfPLqa3uTswA=1LG=1CZeBR9XudSaFQYbesQG+cA@mail.gmail.com>
+ <1cef84f8-a9d4-436a-a606-765a084a4a91@gmail.com>
+ <005b01da6be5$0361b9f0$0a252dd0$@gmail.com>
+ <CAJ=0CtBZPv+Sia-OkGQBCAj+ogSUeTyQ3hVWorbv-DaOZwi64A@mail.gmail.com>
+Message-ID: <003d01da6c1f$b4326b00$1c974100$@gmail.com>
+
+Adrian,
+ 
+That is indeed a specialized need albeit not necessarily one that cannot be done by requiring an alternate way of typing a formula that avoids being something the parser sees as needed to do at that level.
+ 
+In this case, my other questions become moot as I assume the global assignment operator and somethings like assign(?xyz?, 5) will not be in the way.
+ 
+What I was wondering about is what happens if you temporarily disable the meaning of the assignment operator <- and turn it back on after.
+ 
+In the following code, for no reason, I redefine + to mean ? and then undo it:
+ 
+ 
+> temp <- `+`
+> `+` <- `-`
+> 5 + 3
+[1] 2
+> `+` <- temp
+> 5 + 3
+[1] 8
+ 
+I have no idea if a similar technique could save and later restore the meaning of <- and replace it with something appropriate so that an expression using it is not evaluated the same way and leaves it alone long enough ?
+ 
+Of course, even if this works, it could cause side effects if anything else is done between changes that invokes it (maybe not likely) or the change back is not done perhaps due to an error interruption.
+ 
+ 
+Avi
+ 
+From: Adrian Du?a <dusa.adrian at gmail.com> 
+Sent: Friday, March 1, 2024 11:38 AM
+To: avi.e.gross at gmail.com
+Cc: r-devel <r-devel at r-project.org>; Dmitri Popavenko <dmitri.popavenko at gmail.com>
+Subject: Re: [Rd] capture "->"
+ 
+I would also be interested in that.
+For me, this is interesting for my QCA package, over which Dmitri and I have exchanged a couple of messages.
+The "<-" operator is used to denote necessity, and the "->" is used for sufficiency.
+ 
+Users often make use of Boolean expressions such as A*B + C -> Y
+(to calculate if the expression A*B + C is sufficient for the outcome Y)
+ 
+The parser inverses it into Y <- A*B + C, as if the outcome Y is necessary for the expression A*B + C, which changes the nature of the expression.
+ 
+Quoting such expressions is already possible and it works as expected. We were trying to avoid the quotes, if at all possible, to simplify the command use in the manuals.
+ 
+Best wishes,
+Adrian
+ 
+On Fri, Mar 1, 2024 at 4:33?PM <avi.e.gross at gmail.com <mailto:avi.e.gross at gmail.com> > wrote:
+I am wondering what the specific need for this is or is it just an exercise?
+
+Where does it matter if a chunk of code assigns using "<-" beforehand or "->" after hand, or for that matter assigns indirectly without a symbol?
+
+And whatever you come up with, will it also support the global assignment of "->>" as compared to ""<<-" too?
+
+I do wonder if you can re-declare the assignment operators or would that mess up the parser.
+
+-----Original Message-----
+From: R-devel <r-devel-bounces at r-project.org <mailto:r-devel-bounces at r-project.org> > On Behalf Of Duncan Murdoch
+Sent: Friday, March 1, 2024 9:23 AM
+To: Dmitri Popavenko <dmitri.popavenko at gmail.com <mailto:dmitri.popavenko at gmail.com> >
+Cc: r-devel <r-devel at r-project.org <mailto:r-devel at r-project.org> >
+Subject: Re: [Rd] capture "->"
+
+On 01/03/2024 8:51 a.m., Dmitri Popavenko wrote:
+> On Fri, Mar 1, 2024 at 1:00?PM Duncan Murdoch <murdoch.duncan at gmail.com <mailto:murdoch.duncan at gmail.com>  
+> <mailto:murdoch.duncan at gmail.com <mailto:murdoch.duncan at gmail.com> >> wrote:
+> 
+>     ...
+>     I was thinking more of you doing something like
+> 
+>        parse(text = "A -> B", keep.source = TRUE)
+> 
+>     I forget what the exact rules are for attaching srcrefs to arguments of
+>     functions, but I do remember they are a little strange, because not
+>     every possible argument can accept a srcref attribute.  For example,
+>     you
+>     can't attach one to NULL, or to a name.
+> 
+>     Srcrefs are also fairly big and building them is slow, so I think we
+>     tried to limit them to where they were needed, we didn't try to attach
+>     them to every subexpression, just one per statement.  Each expression
+>     within {} is a separate statement, so we get srcrefs attached to the {.
+>     But in "foo(A -> B)" probably you only get one on the foo call.
+> 
+>     In some circumstances you could get the srcref on that call by looking
+>     at sys.call().  But then things are complicated again, because R
+>     doesn't
+>     attach srcrefs to things typed at the console, only to things that are
+>     sourced from files or text strings (and parsed with keep.source=TRUE).
+> 
+>     So I think you should probably require input from a string or a
+>     file, or
+>     not expect foo(A -> B) to work without some decoration.
+> 
+> 
+> Indeed, the more challenging task is to identify "->" at the console
+> (from a script or a string, seems trivial now).
+> 
+> I would be willing to decorate as much as it takes to make this work, I 
+> am just empty on more ideas how to persuade the parser.
+
+By "decorate", I meant putting it in quotes and parsing it using 
+parse(text=...), or putting it in braces as you found.  I think parsing 
+a string is most likely to be reliable because someone might turn off 
+`keep.source` and then the braced approach would fail.  But you have 
+control over it when you call parse() yourself.
+
+Duncan Murdoch
+
+______________________________________________
+R-devel at r-project.org <mailto:R-devel at r-project.org>  mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+______________________________________________
+R-devel at r-project.org <mailto:R-devel at r-project.org>  mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+	[[alternative HTML version deleted]]
+
+
