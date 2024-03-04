@@ -603,3 +603,409 @@ https://stat.ethz.ch/mailman/listinfo/r-devel
 	[[alternative HTML version deleted]]
 
 
+From du@@@@dr|@n @end|ng |rom gm@||@com  Sat Mar  2 12:06:08 2024
+From: du@@@@dr|@n @end|ng |rom gm@||@com (=?UTF-8?B?QWRyaWFuIER1yJlh?=)
+Date: Sat, 2 Mar 2024 13:06:08 +0200
+Subject: [Rd] capture "->"
+In-Reply-To: <003d01da6c1f$b4326b00$1c974100$@gmail.com>
+References: <CAJL_pojF-Qc8YA0_eB+Ab9w3qD5sgMkjm0C3b0ooOmoOUy769w@mail.gmail.com>
+ <ff87b48a-ccad-40ec-b79e-3fb4c945d3a9@gmail.com>
+ <CAJL_pogbYhhLxsXQN0jjm83sZybh1nO1wE6F+CwNV18F9EkYUA@mail.gmail.com>
+ <79f6c330-e5bf-4ad4-9ccc-ed47ab8dcb69@gmail.com>
+ <CAJL_poiOUuBfPLqa3uTswA=1LG=1CZeBR9XudSaFQYbesQG+cA@mail.gmail.com>
+ <1cef84f8-a9d4-436a-a606-765a084a4a91@gmail.com>
+ <005b01da6be5$0361b9f0$0a252dd0$@gmail.com>
+ <CAJ=0CtBZPv+Sia-OkGQBCAj+ogSUeTyQ3hVWorbv-DaOZwi64A@mail.gmail.com>
+ <003d01da6c1f$b4326b00$1c974100$@gmail.com>
+Message-ID: <CAJ=0CtCdmFC_VQd7arvp5AvkeZzhrJXV=fnB5kDUtdu2b0NA4g@mail.gmail.com>
+
+That would have been an elegant solution, but it doesn't seem to work:
+
+> `->` <- `+`
+> 1 -> 3 # expecting 4
+Error in 3 <- 1 : invalid (do_set) left-hand side to assignment
+
+It is possible to reassign other multiple character operators:
+> `%%` <- `+`
+> 1 %% 3
+[1] 4
+
+The assignment operator `->` is so special for the R parser, that it seems
+impossible to change.
+
+On Fri, Mar 1, 2024 at 11:30?PM <avi.e.gross at gmail.com> wrote:
+
+> Adrian,
+>
+> That is indeed a specialized need albeit not necessarily one that cannot
+> be done by requiring an alternate way of typing a formula that avoids being
+> something the parser sees as needed to do at that level.
+>
+> In this case, my other questions become moot as I assume the global
+> assignment operator and somethings like assign(?xyz?, 5) will not be in the
+> way.
+>
+> What I was wondering about is what happens if you temporarily disable the
+> meaning of the assignment operator <- and turn it back on after.
+>
+> In the following code, for no reason, I redefine + to mean ? and then undo
+> it:
+>
+>
+> > temp <- `+`
+> > `+` <- `-`
+> > 5 + 3
+> [1] 2
+> > `+` <- temp
+> > 5 + 3
+> [1] 8
+>
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sat Mar  2 12:31:38 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sat, 2 Mar 2024 06:31:38 -0500
+Subject: [Rd] capture "->"
+In-Reply-To: <CAJ=0CtCdmFC_VQd7arvp5AvkeZzhrJXV=fnB5kDUtdu2b0NA4g@mail.gmail.com>
+References: <CAJL_pojF-Qc8YA0_eB+Ab9w3qD5sgMkjm0C3b0ooOmoOUy769w@mail.gmail.com>
+ <ff87b48a-ccad-40ec-b79e-3fb4c945d3a9@gmail.com>
+ <CAJL_pogbYhhLxsXQN0jjm83sZybh1nO1wE6F+CwNV18F9EkYUA@mail.gmail.com>
+ <79f6c330-e5bf-4ad4-9ccc-ed47ab8dcb69@gmail.com>
+ <CAJL_poiOUuBfPLqa3uTswA=1LG=1CZeBR9XudSaFQYbesQG+cA@mail.gmail.com>
+ <1cef84f8-a9d4-436a-a606-765a084a4a91@gmail.com>
+ <005b01da6be5$0361b9f0$0a252dd0$@gmail.com>
+ <CAJ=0CtBZPv+Sia-OkGQBCAj+ogSUeTyQ3hVWorbv-DaOZwi64A@mail.gmail.com>
+ <003d01da6c1f$b4326b00$1c974100$@gmail.com>
+ <CAJ=0CtCdmFC_VQd7arvp5AvkeZzhrJXV=fnB5kDUtdu2b0NA4g@mail.gmail.com>
+Message-ID: <42ad1f68-4cd6-407b-842a-d9917758d93e@gmail.com>
+
+You can't change the parser.  Changes like `+` <- `-` change the 
+function that is called when the expression contains a function call to 
+`+`; this happens in `eval()`, not in `parse()`.  There are never any 
+function calls to `->`, because the parser outputs a call to `<-` with 
+the operands reversed when it sees that token.
+
+Duncan Murdoch
+
+On 02/03/2024 6:06 a.m., Adrian Du?a wrote:
+> That would have been an elegant solution, but it doesn't seem to work:
+> 
+>> `->` <- `+`
+>> 1 -> 3 # expecting 4
+> Error in 3 <- 1 : invalid (do_set) left-hand side to assignment
+> 
+> It is possible to reassign other multiple character operators:
+>> `%%` <- `+`
+>> 1 %% 3
+> [1] 4
+> 
+> The assignment operator `->` is so special for the R parser, that it seems
+> impossible to change.
+> 
+> On Fri, Mar 1, 2024 at 11:30?PM <avi.e.gross at gmail.com> wrote:
+> 
+>> Adrian,
+>>
+>> That is indeed a specialized need albeit not necessarily one that cannot
+>> be done by requiring an alternate way of typing a formula that avoids being
+>> something the parser sees as needed to do at that level.
+>>
+>> In this case, my other questions become moot as I assume the global
+>> assignment operator and somethings like assign(?xyz?, 5) will not be in the
+>> way.
+>>
+>> What I was wondering about is what happens if you temporarily disable the
+>> meaning of the assignment operator <- and turn it back on after.
+>>
+>> In the following code, for no reason, I redefine + to mean ? and then undo
+>> it:
+>>
+>>
+>>> temp <- `+`
+>>> `+` <- `-`
+>>> 5 + 3
+>> [1] 2
+>>> `+` <- temp
+>>> 5 + 3
+>> [1] 8
+>>
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From dm|tr|@pop@venko @end|ng |rom gm@||@com  Sat Mar  2 15:05:07 2024
+From: dm|tr|@pop@venko @end|ng |rom gm@||@com (Dmitri Popavenko)
+Date: Sat, 2 Mar 2024 16:05:07 +0200
+Subject: [Rd] capture "->"
+In-Reply-To: <42ad1f68-4cd6-407b-842a-d9917758d93e@gmail.com>
+References: <CAJL_pojF-Qc8YA0_eB+Ab9w3qD5sgMkjm0C3b0ooOmoOUy769w@mail.gmail.com>
+ <ff87b48a-ccad-40ec-b79e-3fb4c945d3a9@gmail.com>
+ <CAJL_pogbYhhLxsXQN0jjm83sZybh1nO1wE6F+CwNV18F9EkYUA@mail.gmail.com>
+ <79f6c330-e5bf-4ad4-9ccc-ed47ab8dcb69@gmail.com>
+ <CAJL_poiOUuBfPLqa3uTswA=1LG=1CZeBR9XudSaFQYbesQG+cA@mail.gmail.com>
+ <1cef84f8-a9d4-436a-a606-765a084a4a91@gmail.com>
+ <005b01da6be5$0361b9f0$0a252dd0$@gmail.com>
+ <CAJ=0CtBZPv+Sia-OkGQBCAj+ogSUeTyQ3hVWorbv-DaOZwi64A@mail.gmail.com>
+ <003d01da6c1f$b4326b00$1c974100$@gmail.com>
+ <CAJ=0CtCdmFC_VQd7arvp5AvkeZzhrJXV=fnB5kDUtdu2b0NA4g@mail.gmail.com>
+ <42ad1f68-4cd6-407b-842a-d9917758d93e@gmail.com>
+Message-ID: <CAJL_poi4CY+MFCosVROsm89Txai3LZLpp_CS0JRp5PPiUtYykQ@mail.gmail.com>
+
+On Sat, Mar 2, 2024 at 1:31?PM Duncan Murdoch <murdoch.duncan at gmail.com>
+wrote:
+
+> You can't change the parser.  Changes like `+` <- `-` change the
+> function that is called when the expression contains a function call to
+> `+`; this happens in `eval()`, not in `parse()`.  There are never any
+> function calls to `->`, because the parser outputs a call to `<-` with
+> the operands reversed when it sees that token.
+>
+
+Another idea would have been to use "=>", which is disabled by default:
+> substitute(A => B)
+Error: '=>' is disabled; set '_R_USE_PIPEBIND_' envvar to a true value ...
+
+> Sys.setenv(`_R_USE_PIPEBIND_` = TRUE)
+> substitute(A => B)
+Error in substitute(`=>`(A, B)) :
+  invalid use of pipe bind symbol (<input>:1:0)
+
+The quest is to obtain a valid expression to get past substitute(), but it
+proves to be more difficult than I initially thought.
+Dmitri
+
+	[[alternative HTML version deleted]]
+
+
+From jeroenoom@ @end|ng |rom gm@||@com  Sat Mar  2 15:07:08 2024
+From: jeroenoom@ @end|ng |rom gm@||@com (Jeroen Ooms)
+Date: Sat, 2 Mar 2024 14:07:08 +0000
+Subject: [Rd] Big speedup in install.packages() by re-using connections
+Message-ID: <CABFfbXtpXChZLeLREEWFHFWP24cvD8Ox-7xfBGj0p+N0Rjzwbg@mail.gmail.com>
+
+Currently download.file() creates and terminates a new TLS connection
+for each download. This creates a lot of overhead which is expensive
+for both client and server (in particular the TLS handshake). Modern
+internet clients (including browsers) re-use connections for many http
+requests.
+
+We can do this in R by creating a persistent libcurl "multi-handle".
+The R libcurl implementation already uses a multi-handle, however it
+destroys it after each download, which defeats the purpose. The
+purpose of the multi-handle is to keep it alive and let libcurl
+maintain a persistent connection pool. This is particularly relevant
+for install.packages() which needs to download many files from one and
+the same server.
+
+Here is a bare minimal proof of concept patch that re-uses one and the
+same multi-handle for all requests in R:
+https://github.com/r-devel/r-svn/pull/155/files
+
+Some quick benchmarking shows that this can lead to big speedups for
+download.packages() on high-bandwidth servers (such as CI). This quick
+test to download 100 packages from CRAN showed more than 10x speedup
+for me: https://github.com/r-devel/r-svn/pull/155
+
+Moreover, I think this may make install.packages() more robust. In CI
+build logs that download many packages, I often see one or two
+downloads randomly failing with a TLS-connect error. I am hopeful this
+problem will disappear when using a single connection to the CRAN
+server to download all the packages.
+
+
+From @vi@e@gross m@iii@g oii gm@ii@com  Sat Mar  2 16:42:59 2024
+From: @vi@e@gross m@iii@g oii gm@ii@com (@vi@e@gross m@iii@g oii gm@ii@com)
+Date: Sat, 2 Mar 2024 10:42:59 -0500
+Subject: [Rd] capture "->"
+In-Reply-To: <42ad1f68-4cd6-407b-842a-d9917758d93e@gmail.com>
+References: <CAJL_pojF-Qc8YA0_eB+Ab9w3qD5sgMkjm0C3b0ooOmoOUy769w@mail.gmail.com>
+ <ff87b48a-ccad-40ec-b79e-3fb4c945d3a9@gmail.com>
+ <CAJL_pogbYhhLxsXQN0jjm83sZybh1nO1wE6F+CwNV18F9EkYUA@mail.gmail.com>
+ <79f6c330-e5bf-4ad4-9ccc-ed47ab8dcb69@gmail.com>
+ <CAJL_poiOUuBfPLqa3uTswA=1LG=1CZeBR9XudSaFQYbesQG+cA@mail.gmail.com>
+ <1cef84f8-a9d4-436a-a606-765a084a4a91@gmail.com>
+ <005b01da6be5$0361b9f0$0a252dd0$@gmail.com>
+ <CAJ=0CtBZPv+Sia-OkGQBCAj+ogSUeTyQ3hVWorbv-DaOZwi64A@mail.gmail.com>
+ <003d01da6c1f$b4326b00$1c974100$@gmail.com>
+ <CAJ=0CtCdmFC_VQd7arvp5AvkeZzhrJXV=fnB5kDUtdu2b0NA4g@mail.gmail.com>
+ <42ad1f68-4cd6-407b-842a-d9917758d93e@gmail.com>
+Message-ID: <005c01da6cb8$4e0df210$ea29d630$@gmail.com>
+
+Duncan, Adrian and all,
+
+I decided to look a bit at how various operators are seen by typeof() in light of this discussion and it seems there are quite a few categories as shown below and I suspect more exist. R, like many languages was not initially designed to have some object-oriented aspects and some have been cobbled on over the years including multiple emulations of what it means to be an object. So, explicit or implicit functions may be of different kinds.
+
+> typeof(`<-`)
+[1] "special"
+> typeof(`->`)
+Error: object '->' not found
+> typeof(`+`)
+[1] "builtin"
+> typeof(`=`)
+[1] "special"
+> typeof(`|>`)
+Error: object '|>' not found
+> typeof(`%>%`)
+[1] "closure"
+
+In principle, and someone can probably point to languages that do something like this, all assignments could be centralized into some kind of primitive function call along the lines of:
+
+assign("A", 5)
+
+Then you could build on that so that the definition of = and <- and even <-- would mean that the following might result in something like the above:
+
+A = 5
+A <- 5
+
+Bothe become an assign statement like the above meaning a function with a side effect.
+
+A <- 5
+
+Would simply be an assign with an added argument specifying the global environment.
+
+The other two forms would just invert it so that
+
+5 -> A
+5 --> A
+
+Simply generate the same assignment statement.
+
+I am not sure if such a system would work well for all needs but I can see a language doing that even if it makes it slower. And, in such a system, you could create your own assignment operators or redirect the ones already existing as I considered a possibility.
+
+But for some purposes, it may be way easier to have the ability to have some elements of absolutely fixed syntax that allow functionality even before an expression is fully evaluated. As one example, a comma that is not hidden in quotes is generally considered to be a way to determine how to break an expression into parts. Otherwise, how would you know that f(a,b,c) has three arguments. So what happens if your country uses a comma like other use a period as in numbers? Yes, in some environments you can specify that this is being done but it is really not trivial to make a system that is completely flexible in all aspects and allows you to flip from one way of using numbers to the other while also changing any other places the symbols are used in different ways.
+
+So the problem becomes whether you can graft the mini language required for dealing with graphs that can include A -> B and A <- B and perhaps A <-> B in ways that are either not seen as they are parsed or even evaluated or that over-ride normal behavior.
+
+One obvious idea is to avoid re-using the same symbols. R frequently just wraps symbols in percent signs so you might consider transforming anything to be A %->% B or maybe something like A %_>% or other notations that the parser does not see. It may be a pain but %FORWARD% versus %BACKWARD% or other gimmicks might work enough and you can always substitute out to the original version after you pass this danger zone.
+
+And if your formulas are wrapped into some kind of object, they can store several versions or have the ability to do conversions.
+
+But those ideas belong in  a more mainstream R mailing list.
+
+
+
+-----Original Message-----
+From: Duncan Murdoch <murdoch.duncan at gmail.com> 
+Sent: Saturday, March 2, 2024 6:32 AM
+To: Adrian Du?a <dusa.adrian at gmail.com>; avi.e.gross at gmail.com
+Cc: r-devel <r-devel at r-project.org>
+Subject: Re: [Rd] capture "->"
+
+You can't change the parser.  Changes like `+` <- `-` change the 
+function that is called when the expression contains a function call to 
+`+`; this happens in `eval()`, not in `parse()`.  There are never any 
+function calls to `->`, because the parser outputs a call to `<-` with 
+the operands reversed when it sees that token.
+
+Duncan Murdoch
+
+On 02/03/2024 6:06 a.m., Adrian Du?a wrote:
+> That would have been an elegant solution, but it doesn't seem to work:
+> 
+>> `->` <- `+`
+>> 1 -> 3 # expecting 4
+> Error in 3 <- 1 : invalid (do_set) left-hand side to assignment
+> 
+> It is possible to reassign other multiple character operators:
+>> `%%` <- `+`
+>> 1 %% 3
+> [1] 4
+> 
+> The assignment operator `->` is so special for the R parser, that it seems
+> impossible to change.
+> 
+> On Fri, Mar 1, 2024 at 11:30?PM <avi.e.gross at gmail.com> wrote:
+> 
+>> Adrian,
+>>
+>> That is indeed a specialized need albeit not necessarily one that cannot
+>> be done by requiring an alternate way of typing a formula that avoids being
+>> something the parser sees as needed to do at that level.
+>>
+>> In this case, my other questions become moot as I assume the global
+>> assignment operator and somethings like assign(?xyz?, 5) will not be in the
+>> way.
+>>
+>> What I was wondering about is what happens if you temporarily disable the
+>> meaning of the assignment operator <- and turn it back on after.
+>>
+>> In the following code, for no reason, I redefine + to mean ? and then undo
+>> it:
+>>
+>>
+>>> temp <- `+`
+>>> `+` <- `-`
+>>> 5 + 3
+>> [1] 2
+>>> `+` <- temp
+>>> 5 + 3
+>> [1] 8
+>>
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From ggrothend|eck @end|ng |rom gm@||@com  Sat Mar  2 18:57:34 2024
+From: ggrothend|eck @end|ng |rom gm@||@com (Gabor Grothendieck)
+Date: Sat, 2 Mar 2024 12:57:34 -0500
+Subject: [Rd] capture "->"
+In-Reply-To: <CAJL_pojF-Qc8YA0_eB+Ab9w3qD5sgMkjm0C3b0ooOmoOUy769w@mail.gmail.com>
+References: <CAJL_pojF-Qc8YA0_eB+Ab9w3qD5sgMkjm0C3b0ooOmoOUy769w@mail.gmail.com>
+Message-ID: <CAP01uRk-aKErTBoWNUeFaF23doSJP5v8nz4WGT+jxCgiFXip7A@mail.gmail.com>
+
+Would it be good enough to pass it as a formula?  Using your definition of foo
+
+  foo(~ A -> result)
+  ## result <- ~A
+
+  foo(~ result <- A)
+  ## ~result <- A
+
+On Fri, Mar 1, 2024 at 4:18?AM Dmitri Popavenko
+<dmitri.popavenko at gmail.com> wrote:
+>
+> Hi everyone,
+>
+> I am aware this is a parser issue, but is there any possibility to capture
+> the use of the inverse assignment operator into a formula?
+>
+> Something like:
+>
+> > foo <- function(x) substitute(x)
+>
+> gives:
+>
+> > foo(A -> B)
+> B <- A
+>
+> I wonder if there is any possibility whatsoever to signal the use of ->
+> instead of <-
+>
+> Thank you,
+> Dmitri
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+
+-- 
+Statistics & Software Consulting
+GKX Group, GKX Associates Inc.
+tel: 1-877-GKX-GROUP
+email: ggrothendieck at gmail.com
+
+
