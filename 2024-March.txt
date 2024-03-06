@@ -1047,3 +1047,760 @@ Dmitri
 	[[alternative HTML version deleted]]
 
 
+From b@row||ng@on @end|ng |rom |@nc@@ter@@c@uk  Mon Mar  4 10:40:39 2024
+From: b@row||ng@on @end|ng |rom |@nc@@ter@@c@uk (Barry Rowlingson)
+Date: Mon, 4 Mar 2024 09:40:39 +0000
+Subject: [Rd] [External] Re:  capture "->"
+In-Reply-To: <a75b4ccc217048fc860fd70db8766668@LO6P265MB6080.GBRP265.PROD.OUTLOOK.COM>
+References: <CAJL_pojF-Qc8YA0_eB+Ab9w3qD5sgMkjm0C3b0ooOmoOUy769w@mail.gmail.com>
+ <CAP01uRk-aKErTBoWNUeFaF23doSJP5v8nz4WGT+jxCgiFXip7A@mail.gmail.com>
+ <a75b4ccc217048fc860fd70db8766668@LO6P265MB6080.GBRP265.PROD.OUTLOOK.COM>
+Message-ID: <CANVKczOaiVjS4nNm2ht1tHhz0SHjeKSHkneeAHbW1pyShkgsOw@mail.gmail.com>
+
+It seems like you want to use -> and <- as arrows with different meanings
+to "A gets the value of B" in your package, as a means of writing
+expressions in your package language.
+
+Another possibility would be to use different symbols instead of the
+problematic -> and <-, for example you could use <.~ and ~.> which are not
+at all flipped or changed before you get a chance to parse your expression.
+It might make your language parser a bit trickier though. Let's see how
+these things turn into R's AST using `lobstr`:
+
+ > library(lobstr)
+ > ast(A ~.> B)
+??`~`
+??A
+????`>`
+  ??.
+  ??B
+ > ast(A <.~ B)
+??`~`
+????`<`
+? ??A
+? ??.
+??B
+
+You'd have to unpick that tree to figure out you've got A and B on either
+side of your expression, and that the direction of the expression is L-R or
+R-L.
+
+You could also use -.> and <.- symbols, leading to a different tree
+
+ > ast(A -.> B)
+??`>`
+????`-`
+? ??A
+? ??.
+??B
+ > ast(A <.- B)
+??`<`
+??A
+????`-`
+  ??.
+  ??B
+
+Without knowing the complexity of your language expressions (especially if
+it allows dots and minus signs with special meanings) I'm not sure if A)
+this will work or B) this will bend your brain in horrible directions in
+order to make it work... Although you don't need to parse the AST as above,
+you can always deparse to get the text version of it:
+
+ > textex = function(x){deparse(substitute(x))}
+ > textex(A <.~ B)
+[1] "A < . ~ B"
+
+The <.~ form has an advantage over the <.- form if you want to do complex
+expressions with more than one arrow, since the ~ form is syntactically
+correct but the - form isnt:
+
+ > textex(A <.~ B ~.> C)
+[1] "A < . ~ B ~ . > C"
+ > textex(A <.- B -.> C)
+Error: unexpected '>' in "textex(A <.- B -.>"
+
+
+Barry
+
+
+On Sun, Mar 3, 2024 at 12:25?PM Dmitri Popavenko <dmitri.popavenko at gmail.com>
+wrote:
+
+> This email originated outside the University. Check before clicking links
+> or attachments.
+>
+> On Sat, Mar 2, 2024 at 7:58?PM Gabor Grothendieck <ggrothendieck at gmail.com
+> >
+> wrote:
+>
+> > Would it be good enough to pass it as a formula?  Using your definition
+> of
+> > foo
+> >
+> >   foo(~ A -> result)
+> >   ## result <- ~A
+> >
+> >   foo(~ result <- A)
+> >   ## ~result <- A
+> >
+>
+> Yes, to pass as a formula would be the idea.
+> It's just that the parser inverses "~A -> result" into "result <- ~A".
+> We are seeking for any way possible to flag this inversion.
+>
+> Avi, thank you for your efforts too. Wrapping symbols into percent signs is
+> an option, but as Duncan says it is much more intuitive to just quote the
+> expression.
+> The challenge is to somehow flag the parser inversion, otherwise a quoted
+> expression seems to be the only solution possible.
+>
+> Regards,
+> Dmitri
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From dm|tr|@pop@venko @end|ng |rom gm@||@com  Mon Mar  4 10:58:45 2024
+From: dm|tr|@pop@venko @end|ng |rom gm@||@com (Dmitri Popavenko)
+Date: Mon, 4 Mar 2024 11:58:45 +0200
+Subject: [Rd] [External] Re:  capture "->"
+In-Reply-To: <CANVKczOaiVjS4nNm2ht1tHhz0SHjeKSHkneeAHbW1pyShkgsOw@mail.gmail.com>
+References: <CAJL_pojF-Qc8YA0_eB+Ab9w3qD5sgMkjm0C3b0ooOmoOUy769w@mail.gmail.com>
+ <CAP01uRk-aKErTBoWNUeFaF23doSJP5v8nz4WGT+jxCgiFXip7A@mail.gmail.com>
+ <a75b4ccc217048fc860fd70db8766668@LO6P265MB6080.GBRP265.PROD.OUTLOOK.COM>
+ <CANVKczOaiVjS4nNm2ht1tHhz0SHjeKSHkneeAHbW1pyShkgsOw@mail.gmail.com>
+Message-ID: <CAJL_pogKj-WGoQ1LiarBH--ebtrmAo5cQQ=aJt3suRU3+2ZHSw@mail.gmail.com>
+
+Dear Barry,
+
+In general, I believe users are already accustomed with the classical
+arrows "->" and "<-" which are used as such in quoted expressions.
+But I agree that "-.>" is a very neat trick, thanks a lot. A small dot,
+what a difference.
+
+All the best,
+Dmitri
+
+On Mon, Mar 4, 2024 at 11:40?AM Barry Rowlingson <
+b.rowlingson at lancaster.ac.uk> wrote:
+
+> It seems like you want to use -> and <- as arrows with different meanings
+> to "A gets the value of B" in your package, as a means of writing
+> expressions in your package language.
+>
+> Another possibility would be to use different symbols instead of the
+> problematic -> and <-, for example you could use <.~ and ~.> which are not
+> at all flipped or changed before you get a chance to parse your expression.
+> It might make your language parser a bit trickier though. Let's see how
+> these things turn into R's AST using `lobstr`:
+>
+>  > library(lobstr)
+>  > ast(A ~.> B)
+> ??`~`
+> ??A
+> ????`>`
+>   ??.
+>   ??B
+>  > ast(A <.~ B)
+> ??`~`
+> ????`<`
+> ? ??A
+> ? ??.
+> ??B
+>
+> You'd have to unpick that tree to figure out you've got A and B on either
+> side of your expression, and that the direction of the expression is L-R or
+> R-L.
+>
+> You could also use -.> and <.- symbols, leading to a different tree
+>
+>  > ast(A -.> B)
+> ??`>`
+> ????`-`
+> ? ??A
+> ? ??.
+> ??B
+>  > ast(A <.- B)
+> ??`<`
+> ??A
+> ????`-`
+>   ??.
+>   ??B
+>
+> Without knowing the complexity of your language expressions (especially if
+> it allows dots and minus signs with special meanings) I'm not sure if A)
+> this will work or B) this will bend your brain in horrible directions in
+> order to make it work... Although you don't need to parse the AST as above,
+> you can always deparse to get the text version of it:
+>
+>  > textex = function(x){deparse(substitute(x))}
+>  > textex(A <.~ B)
+> [1] "A < . ~ B"
+>
+> The <.~ form has an advantage over the <.- form if you want to do complex
+> expressions with more than one arrow, since the ~ form is syntactically
+> correct but the - form isnt:
+>
+>  > textex(A <.~ B ~.> C)
+> [1] "A < . ~ B ~ . > C"
+>  > textex(A <.- B -.> C)
+> Error: unexpected '>' in "textex(A <.- B -.>"
+>
+>
+> Barry
+>
+>
+> On Sun, Mar 3, 2024 at 12:25?PM Dmitri Popavenko <
+> dmitri.popavenko at gmail.com> wrote:
+>
+>> This email originated outside the University. Check before clicking links
+>> or attachments.
+>>
+>> On Sat, Mar 2, 2024 at 7:58?PM Gabor Grothendieck <
+>> ggrothendieck at gmail.com>
+>> wrote:
+>>
+>> > Would it be good enough to pass it as a formula?  Using your definition
+>> of
+>> > foo
+>> >
+>> >   foo(~ A -> result)
+>> >   ## result <- ~A
+>> >
+>> >   foo(~ result <- A)
+>> >   ## ~result <- A
+>> >
+>>
+>> Yes, to pass as a formula would be the idea.
+>> It's just that the parser inverses "~A -> result" into "result <- ~A".
+>> We are seeking for any way possible to flag this inversion.
+>>
+>> Avi, thank you for your efforts too. Wrapping symbols into percent signs
+>> is
+>> an option, but as Duncan says it is much more intuitive to just quote the
+>> expression.
+>> The challenge is to somehow flag the parser inversion, otherwise a quoted
+>> expression seems to be the only solution possible.
+>>
+>> Regards,
+>> Dmitri
+>>
+>>         [[alternative HTML version deleted]]
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+
+	[[alternative HTML version deleted]]
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Mon Mar  4 17:45:05 2024
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Mon, 4 Mar 2024 10:45:05 -0600 (CST)
+Subject: [Rd] Ordered comparison operators on language objects will signal
+ errors
+Message-ID: <1fe13b32-f40c-5995-ad95-01347ac5bb80@uiowa.edu>
+
+Comparison operators == and != can be used on language objects
+(i.e. call objects and symbols). The == operator in particular often
+seems to be used as a shorthand for calling identical(). The current
+implementation involves comparing deparsed calls as strings. This has
+a number of drawbacks and we would like to transition to a more robust
+and efficient implementation. As a first step, R-devel will soon be
+modified to signal an error when the ordered comparison operators <,
+<=, >, >= are used on language objects. A small number of CRAN and
+BIOC packages will fail after this change. If you want to check your
+packages or code before the change is committed you can run the
+current R-devel with the environment variable setting
+
+     _R_COMPARE_LANG_OBJECTS=eqonly
+
+where using such a comparison now produces
+
+     > quote(x + y) > 1
+     Error in quote(x + y) > 1 :
+       comparison (>) is not possible for language types
+
+Best,
+
+luke
+
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+
+
+From w||||@mwdun|@p @end|ng |rom gm@||@com  Mon Mar  4 17:51:00 2024
+From: w||||@mwdun|@p @end|ng |rom gm@||@com (Bill Dunlap)
+Date: Mon, 4 Mar 2024 08:51:00 -0800
+Subject: [Rd] [External] Re: capture "->"
+In-Reply-To: <CAJL_pogKj-WGoQ1LiarBH--ebtrmAo5cQQ=aJt3suRU3+2ZHSw@mail.gmail.com>
+References: <CAJL_pojF-Qc8YA0_eB+Ab9w3qD5sgMkjm0C3b0ooOmoOUy769w@mail.gmail.com>
+ <CAP01uRk-aKErTBoWNUeFaF23doSJP5v8nz4WGT+jxCgiFXip7A@mail.gmail.com>
+ <a75b4ccc217048fc860fd70db8766668@LO6P265MB6080.GBRP265.PROD.OUTLOOK.COM>
+ <CANVKczOaiVjS4nNm2ht1tHhz0SHjeKSHkneeAHbW1pyShkgsOw@mail.gmail.com>
+ <CAJL_pogKj-WGoQ1LiarBH--ebtrmAo5cQQ=aJt3suRU3+2ZHSw@mail.gmail.com>
+Message-ID: <CAHqSRuQ39Kt+Xgq6H-9m-q9tS7DgVe6VCUaiKWx6A8CzYd8JQw@mail.gmail.com>
+
+Maybe someone has already suggested this, but if your functions accepted
+strings you could use sub or gsub to replace the -> with a symbol that
+parsed at the same precedence as <-,
+say <<-.  Then parse it and deal with it.  When it is time to display the
+parsed and perhaps manipulated formulae to the user, deparse it and do the
+reverse replacement.
+
+> encode <- function(string)gsub(perl=TRUE, "->", "<<-", x=string)
+> decode <- function(string)gsub(perl=TRUE, "<<-", "->", x=string)
+> rightArrow <- as.name("<<-")
+> leftArrow <- as.name("<-")
+> ast1 <- parse(text=encode("x1 + x2 -> a3"))[[1]]
+> ast2 <- parse(text=encode("y4 <- b5 + (b6 / b7)"))[[1]]
+> identical(ast1[[1]], rightArrow)
+[1] TRUE
+> identical(ast2[[1]], leftArrow)
+[1] TRUE
+> ast1[[3]] <- as.name("new_a3")
+> decode(deparse(ast1))
+[1] "x1 + x2 -> new_a3"
+
+-Bill
+
+On Mon, Mar 4, 2024 at 1:59?AM Dmitri Popavenko <dmitri.popavenko at gmail.com>
+wrote:
+
+> Dear Barry,
+>
+> In general, I believe users are already accustomed with the classical
+> arrows "->" and "<-" which are used as such in quoted expressions.
+> But I agree that "-.>" is a very neat trick, thanks a lot. A small dot,
+> what a difference.
+>
+> All the best,
+> Dmitri
+>
+> On Mon, Mar 4, 2024 at 11:40?AM Barry Rowlingson <
+> b.rowlingson at lancaster.ac.uk> wrote:
+>
+> > It seems like you want to use -> and <- as arrows with different meanings
+> > to "A gets the value of B" in your package, as a means of writing
+> > expressions in your package language.
+> >
+> > Another possibility would be to use different symbols instead of the
+> > problematic -> and <-, for example you could use <.~ and ~.> which are
+> not
+> > at all flipped or changed before you get a chance to parse your
+> expression.
+> > It might make your language parser a bit trickier though. Let's see how
+> > these things turn into R's AST using `lobstr`:
+> >
+> >  > library(lobstr)
+> >  > ast(A ~.> B)
+> > ??`~`
+> > ??A
+> > ????`>`
+> >   ??.
+> >   ??B
+> >  > ast(A <.~ B)
+> > ??`~`
+> > ????`<`
+> > ? ??A
+> > ? ??.
+> > ??B
+> >
+> > You'd have to unpick that tree to figure out you've got A and B on either
+> > side of your expression, and that the direction of the expression is L-R
+> or
+> > R-L.
+> >
+> > You could also use -.> and <.- symbols, leading to a different tree
+> >
+> >  > ast(A -.> B)
+> > ??`>`
+> > ????`-`
+> > ? ??A
+> > ? ??.
+> > ??B
+> >  > ast(A <.- B)
+> > ??`<`
+> > ??A
+> > ????`-`
+> >   ??.
+> >   ??B
+> >
+> > Without knowing the complexity of your language expressions (especially
+> if
+> > it allows dots and minus signs with special meanings) I'm not sure if A)
+> > this will work or B) this will bend your brain in horrible directions in
+> > order to make it work... Although you don't need to parse the AST as
+> above,
+> > you can always deparse to get the text version of it:
+> >
+> >  > textex = function(x){deparse(substitute(x))}
+> >  > textex(A <.~ B)
+> > [1] "A < . ~ B"
+> >
+> > The <.~ form has an advantage over the <.- form if you want to do complex
+> > expressions with more than one arrow, since the ~ form is syntactically
+> > correct but the - form isnt:
+> >
+> >  > textex(A <.~ B ~.> C)
+> > [1] "A < . ~ B ~ . > C"
+> >  > textex(A <.- B -.> C)
+> > Error: unexpected '>' in "textex(A <.- B -.>"
+> >
+> >
+> > Barry
+> >
+> >
+> > On Sun, Mar 3, 2024 at 12:25?PM Dmitri Popavenko <
+> > dmitri.popavenko at gmail.com> wrote:
+> >
+> >> This email originated outside the University. Check before clicking
+> links
+> >> or attachments.
+> >>
+> >> On Sat, Mar 2, 2024 at 7:58?PM Gabor Grothendieck <
+> >> ggrothendieck at gmail.com>
+> >> wrote:
+> >>
+> >> > Would it be good enough to pass it as a formula?  Using your
+> definition
+> >> of
+> >> > foo
+> >> >
+> >> >   foo(~ A -> result)
+> >> >   ## result <- ~A
+> >> >
+> >> >   foo(~ result <- A)
+> >> >   ## ~result <- A
+> >> >
+> >>
+> >> Yes, to pass as a formula would be the idea.
+> >> It's just that the parser inverses "~A -> result" into "result <- ~A".
+> >> We are seeking for any way possible to flag this inversion.
+> >>
+> >> Avi, thank you for your efforts too. Wrapping symbols into percent signs
+> >> is
+> >> an option, but as Duncan says it is much more intuitive to just quote
+> the
+> >> expression.
+> >> The challenge is to somehow flag the parser inversion, otherwise a
+> quoted
+> >> expression seems to be the only solution possible.
+> >>
+> >> Regards,
+> >> Dmitri
+> >>
+> >>         [[alternative HTML version deleted]]
+> >>
+> >> ______________________________________________
+> >> R-devel at r-project.org mailing list
+> >> https://stat.ethz.ch/mailman/listinfo/r-devel
+> >>
+> >
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Mon Mar  4 18:15:12 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Mon, 4 Mar 2024 12:15:12 -0500
+Subject: [Rd] [External] Re: capture "->"
+In-Reply-To: <CAHqSRuQ39Kt+Xgq6H-9m-q9tS7DgVe6VCUaiKWx6A8CzYd8JQw@mail.gmail.com>
+References: <CAJL_pojF-Qc8YA0_eB+Ab9w3qD5sgMkjm0C3b0ooOmoOUy769w@mail.gmail.com>
+ <CAP01uRk-aKErTBoWNUeFaF23doSJP5v8nz4WGT+jxCgiFXip7A@mail.gmail.com>
+ <a75b4ccc217048fc860fd70db8766668@LO6P265MB6080.GBRP265.PROD.OUTLOOK.COM>
+ <CANVKczOaiVjS4nNm2ht1tHhz0SHjeKSHkneeAHbW1pyShkgsOw@mail.gmail.com>
+ <CAJL_pogKj-WGoQ1LiarBH--ebtrmAo5cQQ=aJt3suRU3+2ZHSw@mail.gmail.com>
+ <CAHqSRuQ39Kt+Xgq6H-9m-q9tS7DgVe6VCUaiKWx6A8CzYd8JQw@mail.gmail.com>
+Message-ID: <a92ef4cc-786e-4ed5-98f3-3875f4292ff4@gmail.com>
+
+That's a good suggestion, but if the function accepts strings, the 
+problem is fairly easy using the parser.  E.g. compare
+
+ > getParseData( parse(text="x1 + x2 -> a3") )
+    line1 col1 line2 col2 id parent        token terminal text
+11     1    1     1   13 11      0         expr    FALSE
+7      1    1     1    7  7     11         expr    FALSE
+1      1    1     1    2  1      3       SYMBOL     TRUE   x1
+3      1    1     1    2  3      7         expr    FALSE
+2      1    4     1    4  2      7          '+'     TRUE    +
+4      1    6     1    7  4      6       SYMBOL     TRUE   x2
+6      1    6     1    7  6      7         expr    FALSE
+5      1    9     1   10  5     11 RIGHT_ASSIGN     TRUE   ->
+8      1   12     1   13  8     10       SYMBOL     TRUE   a3
+10     1   12     1   13 10     11         expr    FALSE
+
+ > getParseData( parse(text="a3 <- x1 + x2") )
+    line1 col1 line2 col2 id parent       token terminal text
+11     1    1     1   13 11      0        expr    FALSE
+1      1    1     1    2  1      3      SYMBOL     TRUE   a3
+3      1    1     1    2  3     11        expr    FALSE
+2      1    4     1    5  2     11 LEFT_ASSIGN     TRUE   <-
+10     1    7     1   13 10     11        expr    FALSE
+4      1    7     1    8  4      6      SYMBOL     TRUE   x1
+6      1    7     1    8  6     10        expr    FALSE
+5      1   10     1   10  5     10         '+'     TRUE    +
+7      1   12     1   13  7      9      SYMBOL     TRUE   x2
+9      1   12     1   13  9     10        expr    FALSE
+
+The expressions produced are the same, but the parse data is different.
+
+Duncan Murdoch
+
+On 04/03/2024 11:51 a.m., Bill Dunlap wrote:
+> Maybe someone has already suggested this, but if your functions accepted
+> strings you could use sub or gsub to replace the -> with a symbol that
+> parsed at the same precedence as <-,
+> say <<-.  Then parse it and deal with it.  When it is time to display the
+> parsed and perhaps manipulated formulae to the user, deparse it and do the
+> reverse replacement.
+> 
+>> encode <- function(string)gsub(perl=TRUE, "->", "<<-", x=string)
+>> decode <- function(string)gsub(perl=TRUE, "<<-", "->", x=string)
+>> rightArrow <- as.name("<<-")
+>> leftArrow <- as.name("<-")
+>> ast1 <- parse(text=encode("x1 + x2 -> a3"))[[1]]
+>> ast2 <- parse(text=encode("y4 <- b5 + (b6 / b7)"))[[1]]
+>> identical(ast1[[1]], rightArrow)
+> [1] TRUE
+>> identical(ast2[[1]], leftArrow)
+> [1] TRUE
+>> ast1[[3]] <- as.name("new_a3")
+>> decode(deparse(ast1))
+> [1] "x1 + x2 -> new_a3"
+> 
+> -Bill
+> 
+> On Mon, Mar 4, 2024 at 1:59?AM Dmitri Popavenko <dmitri.popavenko at gmail.com>
+> wrote:
+> 
+>> Dear Barry,
+>>
+>> In general, I believe users are already accustomed with the classical
+>> arrows "->" and "<-" which are used as such in quoted expressions.
+>> But I agree that "-.>" is a very neat trick, thanks a lot. A small dot,
+>> what a difference.
+>>
+>> All the best,
+>> Dmitri
+>>
+>> On Mon, Mar 4, 2024 at 11:40?AM Barry Rowlingson <
+>> b.rowlingson at lancaster.ac.uk> wrote:
+>>
+>>> It seems like you want to use -> and <- as arrows with different meanings
+>>> to "A gets the value of B" in your package, as a means of writing
+>>> expressions in your package language.
+>>>
+>>> Another possibility would be to use different symbols instead of the
+>>> problematic -> and <-, for example you could use <.~ and ~.> which are
+>> not
+>>> at all flipped or changed before you get a chance to parse your
+>> expression.
+>>> It might make your language parser a bit trickier though. Let's see how
+>>> these things turn into R's AST using `lobstr`:
+>>>
+>>>   > library(lobstr)
+>>>   > ast(A ~.> B)
+>>> ??`~`
+>>> ??A
+>>> ????`>`
+>>>    ??.
+>>>    ??B
+>>>   > ast(A <.~ B)
+>>> ??`~`
+>>> ????`<`
+>>> ? ??A
+>>> ? ??.
+>>> ??B
+>>>
+>>> You'd have to unpick that tree to figure out you've got A and B on either
+>>> side of your expression, and that the direction of the expression is L-R
+>> or
+>>> R-L.
+>>>
+>>> You could also use -.> and <.- symbols, leading to a different tree
+>>>
+>>>   > ast(A -.> B)
+>>> ??`>`
+>>> ????`-`
+>>> ? ??A
+>>> ? ??.
+>>> ??B
+>>>   > ast(A <.- B)
+>>> ??`<`
+>>> ??A
+>>> ????`-`
+>>>    ??.
+>>>    ??B
+>>>
+>>> Without knowing the complexity of your language expressions (especially
+>> if
+>>> it allows dots and minus signs with special meanings) I'm not sure if A)
+>>> this will work or B) this will bend your brain in horrible directions in
+>>> order to make it work... Although you don't need to parse the AST as
+>> above,
+>>> you can always deparse to get the text version of it:
+>>>
+>>>   > textex = function(x){deparse(substitute(x))}
+>>>   > textex(A <.~ B)
+>>> [1] "A < . ~ B"
+>>>
+>>> The <.~ form has an advantage over the <.- form if you want to do complex
+>>> expressions with more than one arrow, since the ~ form is syntactically
+>>> correct but the - form isnt:
+>>>
+>>>   > textex(A <.~ B ~.> C)
+>>> [1] "A < . ~ B ~ . > C"
+>>>   > textex(A <.- B -.> C)
+>>> Error: unexpected '>' in "textex(A <.- B -.>"
+>>>
+>>>
+>>> Barry
+>>>
+>>>
+>>> On Sun, Mar 3, 2024 at 12:25?PM Dmitri Popavenko <
+>>> dmitri.popavenko at gmail.com> wrote:
+>>>
+>>>> This email originated outside the University. Check before clicking
+>> links
+>>>> or attachments.
+>>>>
+>>>> On Sat, Mar 2, 2024 at 7:58?PM Gabor Grothendieck <
+>>>> ggrothendieck at gmail.com>
+>>>> wrote:
+>>>>
+>>>>> Would it be good enough to pass it as a formula?  Using your
+>> definition
+>>>> of
+>>>>> foo
+>>>>>
+>>>>>    foo(~ A -> result)
+>>>>>    ## result <- ~A
+>>>>>
+>>>>>    foo(~ result <- A)
+>>>>>    ## ~result <- A
+>>>>>
+>>>>
+>>>> Yes, to pass as a formula would be the idea.
+>>>> It's just that the parser inverses "~A -> result" into "result <- ~A".
+>>>> We are seeking for any way possible to flag this inversion.
+>>>>
+>>>> Avi, thank you for your efforts too. Wrapping symbols into percent signs
+>>>> is
+>>>> an option, but as Duncan says it is much more intuitive to just quote
+>> the
+>>>> expression.
+>>>> The challenge is to somehow flag the parser inversion, otherwise a
+>> quoted
+>>>> expression seems to be the only solution possible.
+>>>>
+>>>> Regards,
+>>>> Dmitri
+>>>>
+>>>>          [[alternative HTML version deleted]]
+>>>>
+>>>> ______________________________________________
+>>>> R-devel at r-project.org mailing list
+>>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>>
+>>>
+>>
+>>          [[alternative HTML version deleted]]
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Tue Mar  5 03:03:30 2024
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Mon, 4 Mar 2024 18:03:30 -0800
+Subject: [Rd] 
+ Ordered comparison operators on language objects will signal errors
+In-Reply-To: <1fe13b32-f40c-5995-ad95-01347ac5bb80@uiowa.edu>
+References: <1fe13b32-f40c-5995-ad95-01347ac5bb80@uiowa.edu>
+Message-ID: <CAFDcVCQYJJbu7bhYXMVdgPSm8biB0-Tqu9izdbfh3SS9gPU-SQ@mail.gmail.com>
+
+On Mon, Mar 4, 2024 at 8:45?AM luke-tierney--- via R-devel
+<r-devel at r-project.org> wrote:
+>
+> Comparison operators == and != can be used on language objects
+> (i.e. call objects and symbols). The == operator in particular often
+> seems to be used as a shorthand for calling identical(). The current
+> implementation involves comparing deparsed calls as strings. This has
+> a number of drawbacks and we would like to transition to a more robust
+> and efficient implementation. As a first step, R-devel will soon be
+> modified to signal an error when the ordered comparison operators <,
+> <=, >, >= are used on language objects. A small number of CRAN and
+> BIOC packages will fail after this change. If you want to check your
+> packages or code before the change is committed you can run the
+> current R-devel with the environment variable setting
+>
+>      _R_COMPARE_LANG_OBJECTS=eqonly
+
+A minor comment, which or may not matter, depending on how long you're
+planning to keep that variable around. I believe all other "internal"
+environment variables in the R source code that starts with _R_ also
+ends with an underscore (_).  This name is an outlier in that sense.
+So, maybe it should be named '_R_COMPARE_LANG_OBJECTS_' instead? (I
+checked the source code - it's indeed without the trailing
+underscore).
+
+/Henrik
+
+>
+> where using such a comparison now produces
+>
+>      > quote(x + y) > 1
+>      Error in quote(x + y) > 1 :
+>        comparison (>) is not possible for language types
+>
+> Best,
+>
+> luke
+>
+>
+> --
+> Luke Tierney
+> Ralph E. Wareham Professor of Mathematical Sciences
+> University of Iowa                  Phone:             319-335-3386
+> Department of Statistics and        Fax:               319-335-3017
+>     Actuarial Science
+> 241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+> Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
