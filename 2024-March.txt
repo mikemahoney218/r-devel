@@ -1804,3 +1804,127 @@ underscore).
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From |kry|ov @end|ng |rom d|@root@org  Wed Mar  6 12:24:44 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Wed, 6 Mar 2024 14:24:44 +0300
+Subject: [Rd] Never exporting .__global__ and .__suppressForeign__?
+Message-ID: <20240306142444.7c8334f5@arachnoid>
+
+Hello,
+
+(Dear Richard, I hope you don't mind being Cc:'d on this thread in
+R-devel. This is one of the ways we can prevent similar problems from
+happening in the future.)
+
+Sometimes, package authors who use both exportPattern('.') and
+utils::globalVariables(...) get confusing WARNINGs about undocumented
+exports:
+https://stat.ethz.ch/pipermail/r-package-devel/2024q1/010531.html
+
+I would like to suggest adding the variables used by
+utils::globalVariables and utils::suppressForeignCheck to the list of
+things that should never be exported:
+
+Index: src/library/base/R/namespace.R
+===================================================================
+--- src/library/base/R/namespace.R	(revision 86054)
++++ src/library/base/R/namespace.R	(working copy)
+@@ -806,7 +806,8 @@
+         if (length(exports)) {
+             stoplist <- c(".__NAMESPACE__.", ".__S3MethodsTable__.",
+                           ".packageName", ".First.lib", ".onLoad",
+-                          ".onAttach", ".conflicts.OK", ".noGenerics")
++                          ".onAttach", ".conflicts.OK", ".noGenerics",
++                          ".__global__", ".__suppressForeign__")
+             exports <- exports[! exports %in% stoplist]
+         }
+ 	if(lev > 2L) message("--- processing exports for ", dQuote(package))
+
+(Indeed, R CMD check is very careful to only access these variables
+using the interface functions in the utils package, so there doesn't
+seem to be any code that depends on them being exported, and they
+usually aren't.)
+
+Alternatively (or maybe additionally), it may be possible to enhance
+the R CMD check diagnostics by checking whether the name of the
+undocumented object starts with a dot and asking the user whether it
+was intended to be exported. This is not as easy to implement due to
+tools:::.check_packages working with the log output from
+tools::undoc(), not the object itself. Would a change to
+tools:::format.undoc be warranted?
+
+-- 
+Best regards,
+Ivan
+
+
+From rmh @end|ng |rom temp|e@edu  Wed Mar  6 17:48:21 2024
+From: rmh @end|ng |rom temp|e@edu (Richard M. Heiberger)
+Date: Wed, 6 Mar 2024 16:48:21 +0000
+Subject: [Rd] [External] Never exporting .__global__ and
+ .__suppressForeign__?
+In-Reply-To: <20240306142444.7c8334f5@arachnoid>
+References: <20240306142444.7c8334f5@arachnoid>
+Message-ID: <2DBC3315-F87F-409D-9E8A-BE739CAD3A73@temple.edu>
+
+Ivan,
+
+thank you for including me on this thread on R-devel.
+
+Please be sure to see the last email in my R-pkg-devel thread on RcmdrPlugin.HH_1.1-48.tar.gz,
+in which I discuss how I responded to this issue, specifically to my detailed discussion
+in the RcmdrPlugion.HH/NEWS.
+
+Rich
+
+
+> On Mar 6, 2024, at 06:24, Ivan Krylov <ikrylov at disroot.org> wrote:
+>
+> Hello,
+>
+> (Dear Richard, I hope you don't mind being Cc:'d on this thread in
+> R-devel. This is one of the ways we can prevent similar problems from
+> happening in the future.)
+>
+> Sometimes, package authors who use both exportPattern('.') and
+> utils::globalVariables(...) get confusing WARNINGs about undocumented
+> exports:
+> https://stat.ethz.ch/pipermail/r-package-devel/2024q1/010531.html
+>
+> I would like to suggest adding the variables used by
+> utils::globalVariables and utils::suppressForeignCheck to the list of
+> things that should never be exported:
+>
+> Index: src/library/base/R/namespace.R
+> ===================================================================
+> --- src/library/base/R/namespace.R (revision 86054)
+> +++ src/library/base/R/namespace.R (working copy)
+> @@ -806,7 +806,8 @@
+>         if (length(exports)) {
+>             stoplist <- c(".__NAMESPACE__.", ".__S3MethodsTable__.",
+>                           ".packageName", ".First.lib", ".onLoad",
+> -                          ".onAttach", ".conflicts.OK", ".noGenerics")
+> +                          ".onAttach", ".conflicts.OK", ".noGenerics",
+> +                          ".__global__", ".__suppressForeign__")
+>             exports <- exports[! exports %in% stoplist]
+>         }
+> if(lev > 2L) message("--- processing exports for ", dQuote(package))
+>
+> (Indeed, R CMD check is very careful to only access these variables
+> using the interface functions in the utils package, so there doesn't
+> seem to be any code that depends on them being exported, and they
+> usually aren't.)
+>
+> Alternatively (or maybe additionally), it may be possible to enhance
+> the R CMD check diagnostics by checking whether the name of the
+> undocumented object starts with a dot and asking the user whether it
+> was intended to be exported. This is not as easy to implement due to
+> tools:::.check_packages working with the log output from
+> tools::undoc(), not the object itself. Would a change to
+> tools:::format.undoc be warranted?
+>
+> --
+> Best regards,
+> Ivan
+
+
