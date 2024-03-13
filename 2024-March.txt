@@ -1928,3 +1928,249 @@ Rich
 > Ivan
 
 
+From b@row||ng@on @end|ng |rom |@nc@@ter@@c@uk  Mon Mar 11 13:15:20 2024
+From: b@row||ng@on @end|ng |rom |@nc@@ter@@c@uk (Barry Rowlingson)
+Date: Mon, 11 Mar 2024 12:15:20 +0000
+Subject: [Rd] R6 "classname" and generator name
+Message-ID: <CANVKczP7UBx4b9=qXeBHXbf4S4p_MG+S50VPJ7_ze8Rj3U20DQ@mail.gmail.com>
+
+I'm writing some code that does a bit of introspection of R6 classes and am
+wondering about the "classname" parameter. Its the first parameter to the
+"R6Class" class generator generator function, and the few examples I've
+looked at on CRAN set it the same as the name of the generator function,
+for example, from the docs:
+
+Queue <- R6Class("Queue", .....)
+
+but this isn't mandatory, it can be anything. Or NULL. (side quest: do
+linters exist that flag this as bad style?).
+
+Does anyone have an example of a CRAN package where this isn't the case? Or
+even where an R6 class generator uses the default "NULL" for its classname
+parameter? My introspection code is in two minds whether to use the
+classname to label diagrams of classes, or to use the names of the actual
+generator functions (which are what the package users should be using), or
+show both if different, or flag up NULL values etc...
+
+Never should have opened this can of worms. I don't even like worms.
+
+Barry
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Mon Mar 11 14:32:31 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Mon, 11 Mar 2024 09:32:31 -0400
+Subject: [Rd] R6 "classname" and generator name
+In-Reply-To: <CANVKczP7UBx4b9=qXeBHXbf4S4p_MG+S50VPJ7_ze8Rj3U20DQ@mail.gmail.com>
+References: <CANVKczP7UBx4b9=qXeBHXbf4S4p_MG+S50VPJ7_ze8Rj3U20DQ@mail.gmail.com>
+Message-ID: <91b89e18-424c-4613-90cd-7a172a3276e2@gmail.com>
+
+On 11/03/2024 8:15 a.m., Barry Rowlingson wrote:
+> I'm writing some code that does a bit of introspection of R6 classes and am
+> wondering about the "classname" parameter. Its the first parameter to the
+> "R6Class" class generator generator function, and the few examples I've
+> looked at on CRAN set it the same as the name of the generator function,
+> for example, from the docs:
+> 
+> Queue <- R6Class("Queue", .....)
+> 
+> but this isn't mandatory, it can be anything. Or NULL. (side quest: do
+> linters exist that flag this as bad style?).
+> 
+> Does anyone have an example of a CRAN package where this isn't the case? Or
+> even where an R6 class generator uses the default "NULL" for its classname
+> parameter? My introspection code is in two minds whether to use the
+> classname to label diagrams of classes, or to use the names of the actual
+> generator functions (which are what the package users should be using), or
+> show both if different, or flag up NULL values etc...
+> 
+> Never should have opened this can of worms. I don't even like worms.
+
+Here's an example:
+
+https://github.com/saraswatmks/superml/blob/0d7f6aea09968267a11612475424d4635d57877c/R/RandomSearch.R#L11-L12
+
+I don't have any idea if this is intentional or not.
+
+Duncan Murdoch
+
+
+From therne@u @end|ng |rom m@yo@edu  Mon Mar 11 16:43:46 2024
+From: therne@u @end|ng |rom m@yo@edu (Therneau, Terry M., Ph.D.)
+Date: Mon, 11 Mar 2024 10:43:46 -0500
+Subject: [Rd] Vignettes with long compute time
+Message-ID: <d2a753$lln78o@ironport10.mayo.edu>
+
+Is there a way to include the compiled version of a vignette in the doc directory but mark 
+it to NOT be rerun by CRAN??? I think I remember that this is possible, but have forgotton 
+how.?? (It might even be a false memory.)
+
+Terry T.
+
+Background:? Beth Atkinson and I are splitting out many of the vignettes from the survival 
+package into a separate package survivalVignettes.? There are a few reasons
+
+ ?1. Some vignettes use packages outside of the base + recommended set; psueodovalues for 
+instance are normally used as input to a subsequent GEE model.??? Since survival is itself 
+a recommended package, it can't legally host the pseudo.Rnw vignette.
+ ?2. The set of vignettes for survival is large, and likely to get larger.??? It makes 
+sense to slim down the size of the package itself.
+ ?3. It allows us to use Rmd.? (Again, survival can't use anything outside of base + 
+recommended).
+ ?4. We have a couple of 'optional' vignettes that talk about edge cases, useful to some 
+people but not worth the size cost of cluttering up the main package.
+
+The current submission fails due to one vignette in group 4 which takes a looong time to 
+run.? This vignette in particular is talking about compute time, and illustrates a cases 
+where an O(n^2) case arises.?? As sentence that warns the use "of you do this it will take 
+hours to run" is a perfect case for a pdf that should not be recreated by R CMD check.
+
+-- 
+Terry M Therneau, PhD
+Department of Quantitative Health Sciences
+Mayo Clinic
+therneau at mayo.edu
+
+"TERR-ree THUR-noh"
+
+	[[alternative HTML version deleted]]
+
+
+From trevor@|@d@v|@ @end|ng |rom gm@||@com  Mon Mar 11 16:59:31 2024
+From: trevor@|@d@v|@ @end|ng |rom gm@||@com (Trevor Davis)
+Date: Mon, 11 Mar 2024 08:59:31 -0700
+Subject: [Rd] Vignettes with long compute time
+In-Reply-To: <d2a753$lln78o@ironport10.mayo.edu>
+References: <d2a753$lln78o@ironport10.mayo.edu>
+Message-ID: <CAMigB8GOmZWSY-OQPPmhA4eb1AzwopFM1tGOiyDJDue4Rm=TGA@mail.gmail.com>
+
+> Is there a way to include the compiled version of a vignette in the doc
+directory but mark
+it to NOT be rerun by CRAN?
+
+Some developers "precompute" their vignettes so CRAN has nothing left to
+run: https://ropensci.org/blog/2019/12/08/precompute-vignettes/
+
+> Beth Atkinson and I are splitting out many of the vignettes from the
+survival
+package into a separate package survivalVignettes.
+
+An alternative some authors use is to temporarily use a special
+`.Rbuildignore` file to omit large vignettes when building the CRAN package
+but don't use that file for the normal development version (so that all the
+vignettes are available in the `{pkgdown}` website and for users who
+install using alternative channels like `remotes::install_github()`).
+
+Trevor
+
+On Mon, Mar 11, 2024 at 8:44?AM Therneau, Terry M., Ph.D. via R-devel <
+r-devel at r-project.org> wrote:
+
+> Is there a way to include the compiled version of a vignette in the doc
+> directory but mark
+> it to NOT be rerun by CRAN?   I think I remember that this is possible,
+> but have forgotton
+> how.   (It might even be a false memory.)
+>
+> Terry T.
+>
+> Background:  Beth Atkinson and I are splitting out many of the vignettes
+> from the survival
+> package into a separate package survivalVignettes.  There are a few reasons
+>
+>   1. Some vignettes use packages outside of the base + recommended set;
+> psueodovalues for
+> instance are normally used as input to a subsequent GEE model.    Since
+> survival is itself
+> a recommended package, it can't legally host the pseudo.Rnw vignette.
+>   2. The set of vignettes for survival is large, and likely to get
+> larger.    It makes
+> sense to slim down the size of the package itself.
+>   3. It allows us to use Rmd.  (Again, survival can't use anything outside
+> of base +
+> recommended).
+>   4. We have a couple of 'optional' vignettes that talk about edge cases,
+> useful to some
+> people but not worth the size cost of cluttering up the main package.
+>
+> The current submission fails due to one vignette in group 4 which takes a
+> looong time to
+> run.  This vignette in particular is talking about compute time, and
+> illustrates a cases
+> where an O(n^2) case arises.   As sentence that warns the use "of you do
+> this it will take
+> hours to run" is a perfect case for a pdf that should not be recreated by
+> R CMD check.
+>
+> --
+> Terry M Therneau, PhD
+> Department of Quantitative Health Sciences
+> Mayo Clinic
+> therneau at mayo.edu
+>
+> "TERR-ree THUR-noh"
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Mon Mar 11 17:12:55 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Mon, 11 Mar 2024 12:12:55 -0400
+Subject: [Rd] Vignettes with long compute time
+In-Reply-To: <d2a753$lln78o@ironport10.mayo.edu>
+References: <d2a753$lln78o@ironport10.mayo.edu>
+Message-ID: <ad0acfd2-919b-4cd4-b1db-81aeaec891a4@gmail.com>
+
+On 11/03/2024 11:43 a.m., Therneau, Terry M., Ph.D. via R-devel wrote:
+> Is there a way to include the compiled version of a vignette in the doc directory but mark
+> it to NOT be rerun by CRAN??? I think I remember that this is possible, but have forgotton
+> how.?? (It might even be a false memory.)
+
+You could use a method similar to the testthat::skip_on_cran() approach. 
+  Have the long running chunks only run conditional on having a special 
+environment variable present.  This would be a little easier with knitr 
+than with Sweave, since there you can use expressions for the chunk 
+options, but you could always write the code something like this:
+
+   if (Sys.getenv("RUN_SLOW_CHUNKS", 0)) {
+
+     ... the slow code goes here ...
+
+   } else
+     cat("This chunk takes several hours to compute.  If you want to run
+          it, set the environment variable RUN_SLOW_CHUNKS to 1.\n")
+
+Duncan Murdoch
+
+> 
+> Terry T.
+> 
+> Background:? Beth Atkinson and I are splitting out many of the vignettes from the survival
+> package into a separate package survivalVignettes.? There are a few reasons
+> 
+>   ?1. Some vignettes use packages outside of the base + recommended set; psueodovalues for
+> instance are normally used as input to a subsequent GEE model.??? Since survival is itself
+> a recommended package, it can't legally host the pseudo.Rnw vignette.
+>   ?2. The set of vignettes for survival is large, and likely to get larger.??? It makes
+> sense to slim down the size of the package itself.
+>   ?3. It allows us to use Rmd.? (Again, survival can't use anything outside of base +
+> recommended).
+>   ?4. We have a couple of 'optional' vignettes that talk about edge cases, useful to some
+> people but not worth the size cost of cluttering up the main package.
+> 
+> The current submission fails due to one vignette in group 4 which takes a looong time to
+> run.? This vignette in particular is talking about compute time, and illustrates a cases
+> where an O(n^2) case arises.?? As sentence that warns the use "of you do this it will take
+> hours to run" is a perfect case for a pdf that should not be recreated by R CMD check.
+>
+
+
