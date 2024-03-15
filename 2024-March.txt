@@ -2244,3 +2244,85 @@ hpages.on.github at gmail.com
 	[[alternative HTML version deleted]]
 
 
+From |kry|ov @end|ng |rom d|@root@org  Wed Mar 13 09:02:25 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Wed, 13 Mar 2024 11:02:25 +0300
+Subject: [Rd] Spurious warning in as.data.frame.factor()
+In-Reply-To: <ace9e76c-bad0-4eb3-b3f8-c9cccd6e9a9d@gmail.com>
+References: <ace9e76c-bad0-4eb3-b3f8-c9cccd6e9a9d@gmail.com>
+Message-ID: <20240313110225.0c39202b@Tarkus>
+
+? Tue, 12 Mar 2024 12:33:17 -0700
+Herv? Pag?s <hpages.on.github at gmail.com> ?????:
+
+> The acrobatics that as.data.frame.factor() is going thru in order to 
+> recognize a direct call don't play nice if as.data.frame() is an S4 
+> generic:
+> 
+>  ??? df <- as.data.frame(factor(11:12))
+> 
+>  ??? suppressPackageStartupMessages(library(BiocGenerics))
+>  ??? isGeneric("as.data.frame")
+>  ??? # [1] TRUE
+> 
+>  ??? df <- as.data.frame(factor(11:12))
+>  ??? # Warning message:
+>  ??? # In as.data.frame.factor(factor(11:12)) :
+>  ??? # ? Direct call of 'as.data.frame.factor()' is deprecated.
+
+How about something like the following:
+
+Index: src/library/base/R/zzz.R
+===================================================================
+--- src/library/base/R/zzz.R	(revision 86109)
++++ src/library/base/R/zzz.R	(working copy)
+@@ -681,7 +681,14 @@
+     bdy <- body(as.data.frame.vector)
+     bdy <- bdy[c(1:2, seq_along(bdy)[-1L])] # taking [(1,2,2:n)] to insert at [2]:
+     ## deprecation warning only when not called by method dispatch from as.data.frame():
+-    bdy[[2L]] <- quote(if((sys.nframe() <= 1L || !identical(sys.function(-1L), as.data.frame)))
++    bdy[[2L]] <- quote(if((sys.nframe() <= 1L || !(
++	identical(sys.function(-1L), as.data.frame) || (
++	    .isMethodsDispatchOn() &&
++	    methods::is(sys.function(-1L), 'derivedDefaultMethod') &&
++	    identical(
++		sys.function(-1L)@generic,
++		structure('as.data.frame', package = 'base')
++	    )))))
+ 	.Deprecated(
+ 	    msg = gettextf(
+ 		"Direct call of '%s()' is deprecated.  Use '%s()' or
+ 		'%s()' instead",
+
+The patch passes make check-devel, but I'm not sure how to safely put
+setGeneric('as.data.frame'); as.data.frame(factor(1:10)) in a
+regression test.
+
+-- 
+Best regards,
+Ivan
+
+
+From ht @end|ng |rom he@therturner@net  Wed Mar 13 10:16:16 2024
+From: ht @end|ng |rom he@therturner@net (Heather Turner)
+Date: Wed, 13 Mar 2024 09:16:16 +0000
+Subject: [Rd] R Dev Day @ Imperial, London, Fri Apr 26
+Message-ID: <b9a5797c-ccca-4c33-8756-5d931c1730bd@app.fastmail.com>
+
+Dear All,
+
+R Dev Day @ Imperial will take place on Friday 26 April at Imperial College London:
+https://pretix.eu/r-contributors/r-dev-day-imperial-2024/
+
+This event is aimed at current or aspiring R contributors based in the UK. Unlike other contributor events, we may not have representation from the R Core Team, however it is a chance for interested folk to get together to learn more, or to work collaboratively on potential contributions to base R.
+
+This R Dev Day is a satellite to London satRday, Saturday 27 April: https://satrday-london-2024.jumpingrivers.com/. Thanks to Jumping Rivers and Imperial Central RSE Team, coffee and lunch breaks are catered for participants.
+
+There is no selective application for this event. Registration is free and open until Sunday 14 April or until places are filled.
+
+Best wishes,
+
+Heather
+	[[alternative HTML version deleted]]
+
+
