@@ -2326,3 +2326,162 @@ Heather
 	[[alternative HTML version deleted]]
 
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Mar 14 10:41:54 2024
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 14 Mar 2024 10:41:54 +0100
+Subject: [Rd] Spurious warning in as.data.frame.factor()
+In-Reply-To: <20240313110225.0c39202b@Tarkus>
+References: <ace9e76c-bad0-4eb3-b3f8-c9cccd6e9a9d@gmail.com>
+ <20240313110225.0c39202b@Tarkus>
+Message-ID: <26098.50786.729690.363734@stat.math.ethz.ch>
+
+
+> ? Tue, 12 Mar 2024 12:33:17 -0700
+> Herv? Pag?s <hpages.on.github at gmail.com> ?????:
+
+> > The acrobatics that as.data.frame.factor() is going thru in order to 
+> > recognize a direct call don't play nice if as.data.frame() is an S4 
+> > generic:
+
+> >  ??? df <- as.data.frame(factor(11:12))
+> > 
+> >  ??? suppressPackageStartupMessages(library(BiocGenerics))
+> >  ??? isGeneric("as.data.frame")
+> >  ??? # [1] TRUE
+> > 
+> >  ??? df <- as.data.frame(factor(11:12))
+> >  ??? # Warning message:
+> >  ??? # In as.data.frame.factor(factor(11:12)) :
+> >  ??? # ? Direct call of 'as.data.frame.factor()' is deprecated.
+
+aargh ... yes, all that's been a hack because in the end we do
+want to get rid of 12  base (hence "exported") 
+as.data.frame.<some>  methods, which will lead to *less*
+acrobatics, but alas for now ...
+
+
+> How about something like the following:
+
+> Index: src/library/base/R/zzz.R
+> ===================================================================
+> --- src/library/base/R/zzz.R	(revision 86109)
+> +++ src/library/base/R/zzz.R	(working copy)
+> @@ -681,7 +681,14 @@
+>      bdy <- body(as.data.frame.vector)
+>      bdy <- bdy[c(1:2, seq_along(bdy)[-1L])] # taking [(1,2,2:n)] to insert at [2]:
+>      ## deprecation warning only when not called by method dispatch from as.data.frame():
+> -    bdy[[2L]] <- quote(if((sys.nframe() <= 1L || !identical(sys.function(-1L), as.data.frame)))
+> +    bdy[[2L]] <- quote(if((sys.nframe() <= 1L || !(
+> +	identical(sys.function(-1L), as.data.frame) || (
+> +	    .isMethodsDispatchOn() &&
+> +	    methods::is(sys.function(-1L), 'derivedDefaultMethod') &&
+> +	    identical(
+> +		sys.function(-1L)@generic,
+> +		structure('as.data.frame', package = 'base')
+> +	    )))))
+>  	.Deprecated(
+>  	    msg = gettextf(
+>  		"Direct call of '%s()' is deprecated.  Use '%s()' or
+>  		'%s()' instead",
+
+Of course it's "sad" to need even more "acrobatics" ... but as it
+should only be temporary {but several years:
+       deprecation --> defunct --> complete }
+I (as "responsible" of the gymnastics) am grateful for Ivan's proposed
+additional S4-related conditions.
+
+Anybody trying S7 examples and see if they work w/o producing
+wrong warnings?
+
+
+> The patch passes make check-devel, but I'm not sure how to safely put
+> setGeneric('as.data.frame'); as.data.frame(factor(1:10)) in a
+> regression test.
+
+{What's the danger/problem?  we do have "similar" tests in both
+  src/library/methods/tests/*.R
+  tests/reg-S4.R
+
+ -- maybe we can discuss bi-laterally  (or here, as you prefer)
+}
+
+Martin
+
+> -- 
+> Best regards,
+> Ivan
+
+
+From |kry|ov @end|ng |rom d|@root@org  Thu Mar 14 12:17:38 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Thu, 14 Mar 2024 14:17:38 +0300
+Subject: [Rd] Spurious warning in as.data.frame.factor()
+In-Reply-To: <26098.50786.729690.363734@stat.math.ethz.ch>
+References: <ace9e76c-bad0-4eb3-b3f8-c9cccd6e9a9d@gmail.com>
+ <20240313110225.0c39202b@Tarkus>
+ <26098.50786.729690.363734@stat.math.ethz.ch>
+Message-ID: <20240314141738.4f9a73ac@arachnoid>
+
+On Thu, 14 Mar 2024 10:41:54 +0100
+Martin Maechler <maechler at stat.math.ethz.ch> wrote:
+
+> Anybody trying S7 examples and see if they work w/o producing
+> wrong warnings?
+
+It looks like this is not applicable to S7. If I overwrite
+as.data.frame with a newly created S7 generic, it fails to dispatch on
+existing S3 classes:
+
+new_generic('as.data.frame', 'x')(factor(1))
+# Error: Can't find method for `as.data.frame(S3<factor>)`.
+
+But there is no need to overwrite the generic, because S7 classes
+should work with existing S3 generics:
+
+foo <- new_class('foo', parent = class_double)
+method(as.data.frame, foo) <- function(x) structure(
+ # this is probably not generally correct
+ list(x),
+ names = deparse1(substitute(x)),
+ row.names = seq_len(length(x)),
+ class = 'data.frame'
+)
+str(as.data.frame(foo(pi)))
+# 'data.frame':   1 obs. of  1 variable:
+#  $ x: <foo> num 3.14
+
+So I think that is nothing to break because S7 methods for
+as.data.frame will rely on S3 for dispatch.
+
+> > The patch passes make check-devel, but I'm not sure how to safely
+> > put setGeneric('as.data.frame'); as.data.frame(factor(1:10)) in a
+> > regression test.  
+> 
+> {What's the danger/problem?  we do have "similar" tests in both
+>   src/library/methods/tests/*.R
+>   tests/reg-S4.R
+> 
+>  -- maybe we can discuss bi-laterally  (or here, as you prefer)
+> }
+
+This might be educational for other people wanting to add a regression
+test to their patch. I see that tests/reg-tests-1e.R is already running
+under options(warn = 2), so if I add the following near line 750
+("Deprecation of *direct* calls to as.data.frame.<someVector>")...
+
+# Should not warn for a call from a derivedDefaultMethod to the raw
+# S3 method -- implementation detail of S4 dispatch
+setGeneric('as.data.frame')
+as.data.frame(factor(1))
+
+...then as.data.frame will remain an S4 generic. Should the test then
+rm(as.data.frame) and keep going? (Or even keep the S4 generic?) Is
+there any hidden state I may be breaking for the rest of the test this
+way? The test does pass like this, so this may be worrying about
+nothing.
+
+-- 
+Best regards,
+Ivan
+
+
