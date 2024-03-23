@@ -3126,3 +3126,64 @@ hpages.on.github at gmail.com
 	[[alternative HTML version deleted]]
 
 
+From d@v|@ @end|ng |rom po@|t@co  Thu Mar 21 20:10:29 2024
+From: d@v|@ @end|ng |rom po@|t@co (Davis Vaughan)
+Date: Thu, 21 Mar 2024 15:10:29 -0400
+Subject: [Rd] `as.data.frame.matrix()` can produce a data frame without a
+ `names` attribute
+Message-ID: <CABzLhzzAVngai10h=Wk=XchSyv6aHWUd2AfzFCEsgkTJSJx=sw@mail.gmail.com>
+
+Hi all,
+
+I recently learned that it is possible for `as.data.frame.matrix()` to
+produce a data frame with 0 columns that is also entirely missing a
+`names` attribute, and I think this is a bug:
+
+```
+# No `names`, weird!
+attributes(as.data.frame(matrix(nrow = 0, ncol = 0)))
+#> $class
+#> [1] "data.frame"
+#>
+#> $row.names
+#> integer(0)
+
+# This is what I expected
+attributes(data.frame())
+#> $names
+#> character(0)
+#>
+#> $row.names
+#> integer(0)
+#>
+#> $class
+#> [1] "data.frame"
+```
+
+In my experience, 0 column data frames should probably still have a
+`names` attribute, and it should be set to `character()`. Some
+evidence to support my theory is that OOB subsetting doesn't give the
+intended error with this weird data frame:
+
+```
+# Good OOB error
+df <- data.frame()
+df[1]
+#> Error in `[.data.frame`(df, 1): undefined columns selected
+
+# This is weird!
+df <- as.data.frame(matrix(nrow = 0, ncol = 0))
+df[1]
+#> NULL
+#> <0 rows> (or 0-length row.names)
+```
+
+The one exception to requiring a `names` attribute that I can think of
+is `as.data.frame(optional = TRUE)`, mostly for internal use by
+`data.frame()` on each of the columns, but that doesn't seem to apply
+here.
+
+Thanks,
+Davis Vaughan
+
+
