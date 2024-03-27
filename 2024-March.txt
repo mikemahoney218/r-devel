@@ -3350,3 +3350,416 @@ On Wed, Feb 28, 2024, at 2:43 PM, Heather Turner wrote:
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From |kry|ov @end|ng |rom d|@root@org  Mon Mar 25 16:40:49 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Mon, 25 Mar 2024 18:40:49 +0300
+Subject: [Rd] Wish: a way to track progress of parallel operations
+Message-ID: <20240325184049.745179e0@arachnoid>
+
+Hello R-devel,
+
+A function to be run inside lapply() or one of its friends is trivial
+to augment with side effects to show a progress bar. When the code is
+intended to be run on a 'parallel' cluster, it generally cannot rely on
+its own side effects to report progress.
+
+I've found three approaches to progress bars for parallel processes on
+CRAN:
+
+ - Importing 'snow' (not 'parallel') internals like sendCall and
+   implementing parallel processing on top of them (doSNOW). This has
+   the downside of having to write higher-level code from scratch
+   using undocumented inferfaces.
+
+ - Splitting the workload into length(cluster)-sized chunks and
+   processing them in separate parLapply() calls between updating the
+   progress bar (pbapply). This approach trades off parallelism against
+   the precision of the progress information: the function has to wait
+   until all chunk elements have been processed before updating the
+   progress bar and submitting a new portion; dynamic load balancing
+   becomes much less efficient.
+
+ - Adding local side effects to the function and detecting them while
+   the parallel function is running in a child process (parabar). A
+   clever hack, but much harder to extend to distributed clusters.
+
+With recvData and recvOneData becoming exported in R-4.4 [*], another
+approach becomes feasible: wrap the cluster object (and all nodes) into
+another class, attach the progress callback as an attribute, and let
+recvData / recvOneData call it. This makes it possible to give wrapped
+cluster objects to unchanged code, but requires knowing the precise
+number of chunks that the workload will be split into.
+
+Could it be feasible to add an optional .progress argument after the
+ellipsis to parLapply() and its friends? We can require it to be a
+function accepting (done_chunk, total_chunks, ...). If not a new
+argument, what other interfaces could be used to get accurate progress
+information from staticClusterApply and dynamicClusterApply?
+
+I understand that the default parLapply() behaviour is not very
+amenable to progress tracking, but when running clusterMap(.scheduling
+= 'dynamic') spanning multiple hours if not whole days, having progress
+information sets the mind at ease.
+
+I would be happy to prepare code and documentation. If there is no time
+now, we can return to it after R-4.4 is released.
+
+-- 
+Best regards,
+Ivan
+
+[*] https://bugs.r-project.org/show_bug.cgi?id=18587
+
+
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Mon Mar 25 18:19:38 2024
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Mon, 25 Mar 2024 10:19:38 -0700
+Subject: [Rd] Wish: a way to track progress of parallel operations
+In-Reply-To: <20240325184049.745179e0@arachnoid>
+References: <20240325184049.745179e0@arachnoid>
+Message-ID: <CAFDcVCT0Aj_hnXsoSd_+mqU+vAKESkUri2SaG7Ye1XPJU96KRA@mail.gmail.com>
+
+Hello,
+
+thanks for bringing this topic up, and it would be excellent if we
+could come of with a generic solution for this in base R.  It is one
+of the top frequently asked questions and requested features in
+parallel processing, but also in sequential processing. We have also
+seen lots of variants on how to attack the problem of reporting on
+progress when running in parallel.
+
+As the author Futureverse (a parallel framework), I've been exposed to
+these requests and I thought quite a bit about how we could solve this
+problem. I'll outline my opinionated view and suggestions on this
+below:
+
+* Target a solution that works the same regardless whether we run in
+parallel or not, i.e. the code/API should look the same regardless of
+using, say, parallel::parLapply(), parallel::mclapply(), or
+base::lapply(). The solution should also work as-is in other parallel
+frameworks.
+
+* Consider who owns the control of whether progress updates should be
+reported or not. I believe it's best to separate what the end-user and
+the developer controls.  I argue the end-user should be able to
+decided whether they want to "see" progress updates or not, and the
+developer should focus on where to report on progress, but not how and
+when.
+
+* In line with the previous comment, controlling progress reporting
+via an argument (e.g. `.progress`) is not powerful enough. With such
+an approach, one need to make sure that that argument is exposed and
+relayed throughout in all nested function calls. If a package decides
+to introduce such an argument, what should the default be? If they set
+`.progress = TRUE`, then all of a sudden, any code/packages that
+depend on this function will all of a sudden see progress updates.
+There are endless per-package versions of this on CRAN and
+Bioconductor, any they rarely work in harmony.
+
+* Consider accessibility as well as graphical user interfaces. This
+means, don't assume progress is necessarily reported in the terminal.
+I found it a good practice to never use the term "progress bar",
+because that is too focused on how progress is reported.
+
+* Let the end-user control how progress is reported, e.g. a progress
+bar in the terminal, a progress bar in their favorite IDE/GUI,
+OS-specific notifications, third-party notification services, auditory
+output, etc.
+
+The above objectives challenge you to take a step back and think about
+what progress reporting is about, because the most immediate needs.
+Based on these, I came up with the 'progressr' package
+(https://progressr.futureverse.org/). FWIW, it was originally actually
+meant to be a proof-of-concept proposal for a universal, generic
+solution to this problem, but as the demands grew and the prototype
+showed to be useful, I made it official.  Here is the gist:
+
+* Motto: "The developer is responsible for providing progress updates,
+but it?s only the end user who decides if, when, and how progress
+should be presented. No exceptions will be allowed."
+
+* It rely on R's condition system to signal progress. The developer
+signals progress conditions. Condition handlers, which the end-user
+controls, are used to report/render these progress updates. The
+support for global condition handlers, introduced in R 4.0.0, makes
+this much more convenient. It is useful to think of the condition
+mechanism in R as a back channel for communication that operates
+separately from the rest of the "communication" stream (calling
+functions with arguments and returning value).
+
+* For parallel processing, progress conditions can be relayed back to
+the parent process via back channels in a "near-live" fashion, or at
+the very end when the parallel task is completed. Technically,
+progress conditions inherit from 'immediateCondition', which is a
+special class indicating that such conditions are allowed to be
+relayed immediately and out of order. It is possible to use the
+existing PSOCK socket connections to send such 'immediateCondition':s.
+
+* No assumption is made on progress updates arriving in a certain
+order. They are just a stream of "progress of this and that amount"
+was made.
+
+* There is a progress handler API. Using this API, various types of
+progress reporting can be implemented. This allows anyone to implement
+progress handlers in contributed R packages.
+
+See https://progressr.futureverse.org/ for more details.
+
+> I would be happy to prepare code and documentation. If there is no time now, we can return to it after R-4.4 is released.
+
+I strongly recommend to not rush this. This is an important, big
+problem that goes beyond the 'parallel' package. I think it would be a
+disfavor to introduce a '.progress' argument. As mentioned above, I
+think a solution should work throughout the R ecosystem - all base-R
+packages and beyond. I honestly think we could arrive at a solution
+where base-R proposes a very light, yet powerful, progress API that
+handles all of the above. The main task is to come up with a standard
+API/protocol - then the implementation does not matter.
+
+/Henrik
+
+On Mon, Mar 25, 2024 at 8:41?AM Ivan Krylov via R-devel
+<r-devel at r-project.org> wrote:
+>
+> Hello R-devel,
+>
+> A function to be run inside lapply() or one of its friends is trivial
+> to augment with side effects to show a progress bar. When the code is
+> intended to be run on a 'parallel' cluster, it generally cannot rely on
+> its own side effects to report progress.
+>
+> I've found three approaches to progress bars for parallel processes on
+> CRAN:
+>
+>  - Importing 'snow' (not 'parallel') internals like sendCall and
+>    implementing parallel processing on top of them (doSNOW). This has
+>    the downside of having to write higher-level code from scratch
+>    using undocumented inferfaces.
+>
+>  - Splitting the workload into length(cluster)-sized chunks and
+>    processing them in separate parLapply() calls between updating the
+>    progress bar (pbapply). This approach trades off parallelism against
+>    the precision of the progress information: the function has to wait
+>    until all chunk elements have been processed before updating the
+>    progress bar and submitting a new portion; dynamic load balancing
+>    becomes much less efficient.
+>
+>  - Adding local side effects to the function and detecting them while
+>    the parallel function is running in a child process (parabar). A
+>    clever hack, but much harder to extend to distributed clusters.
+>
+> With recvData and recvOneData becoming exported in R-4.4 [*], another
+> approach becomes feasible: wrap the cluster object (and all nodes) into
+> another class, attach the progress callback as an attribute, and let
+> recvData / recvOneData call it. This makes it possible to give wrapped
+> cluster objects to unchanged code, but requires knowing the precise
+> number of chunks that the workload will be split into.
+>
+> Could it be feasible to add an optional .progress argument after the
+> ellipsis to parLapply() and its friends? We can require it to be a
+> function accepting (done_chunk, total_chunks, ...). If not a new
+> argument, what other interfaces could be used to get accurate progress
+> information from staticClusterApply and dynamicClusterApply?
+>
+> I understand that the default parLapply() behaviour is not very
+> amenable to progress tracking, but when running clusterMap(.scheduling
+> = 'dynamic') spanning multiple hours if not whole days, having progress
+> information sets the mind at ease.
+>
+> I would be happy to prepare code and documentation. If there is no time
+> now, we can return to it after R-4.4 is released.
+>
+> --
+> Best regards,
+> Ivan
+>
+> [*] https://bugs.r-project.org/show_bug.cgi?id=18587
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @erv|ce @end|ng |rom @hd@w@on@com  Mon Mar 25 21:09:04 2024
+From: @erv|ce @end|ng |rom @hd@w@on@com (Stephen H. Dawson, DSL)
+Date: Mon, 25 Mar 2024 16:09:04 -0400
+Subject: [Rd] Wish: a way to track progress of parallel operations
+In-Reply-To: <CAFDcVCT0Aj_hnXsoSd_+mqU+vAKESkUri2SaG7Ye1XPJU96KRA@mail.gmail.com>
+References: <20240325184049.745179e0@arachnoid>
+ <CAFDcVCT0Aj_hnXsoSd_+mqU+vAKESkUri2SaG7Ye1XPJU96KRA@mail.gmail.com>
+Message-ID: <f78f2e0a-8094-600e-5d05-d77a35f0c8d3@shdawson.com>
+
+Thanks Ivan and Henrik for considering this work. It would be a valuable 
+contribution.
+
+Kindly,
+*Stephen Dawson, DSL*
+/Executive Strategy Consultant/
+Business & Technology
++1 (865) 804-3454
+http://www.shdawson.com
+
+
+On 3/25/24 13:19, Henrik Bengtsson wrote:
+> Hello,
+>
+> thanks for bringing this topic up, and it would be excellent if we
+> could come of with a generic solution for this in base R.  It is one
+> of the top frequently asked questions and requested features in
+> parallel processing, but also in sequential processing. We have also
+> seen lots of variants on how to attack the problem of reporting on
+> progress when running in parallel.
+>
+> As the author Futureverse (a parallel framework), I've been exposed to
+> these requests and I thought quite a bit about how we could solve this
+> problem. I'll outline my opinionated view and suggestions on this
+> below:
+>
+> * Target a solution that works the same regardless whether we run in
+> parallel or not, i.e. the code/API should look the same regardless of
+> using, say, parallel::parLapply(), parallel::mclapply(), or
+> base::lapply(). The solution should also work as-is in other parallel
+> frameworks.
+>
+> * Consider who owns the control of whether progress updates should be
+> reported or not. I believe it's best to separate what the end-user and
+> the developer controls.  I argue the end-user should be able to
+> decided whether they want to "see" progress updates or not, and the
+> developer should focus on where to report on progress, but not how and
+> when.
+>
+> * In line with the previous comment, controlling progress reporting
+> via an argument (e.g. `.progress`) is not powerful enough. With such
+> an approach, one need to make sure that that argument is exposed and
+> relayed throughout in all nested function calls. If a package decides
+> to introduce such an argument, what should the default be? If they set
+> `.progress = TRUE`, then all of a sudden, any code/packages that
+> depend on this function will all of a sudden see progress updates.
+> There are endless per-package versions of this on CRAN and
+> Bioconductor, any they rarely work in harmony.
+>
+> * Consider accessibility as well as graphical user interfaces. This
+> means, don't assume progress is necessarily reported in the terminal.
+> I found it a good practice to never use the term "progress bar",
+> because that is too focused on how progress is reported.
+>
+> * Let the end-user control how progress is reported, e.g. a progress
+> bar in the terminal, a progress bar in their favorite IDE/GUI,
+> OS-specific notifications, third-party notification services, auditory
+> output, etc.
+>
+> The above objectives challenge you to take a step back and think about
+> what progress reporting is about, because the most immediate needs.
+> Based on these, I came up with the 'progressr' package
+> (https://progressr.futureverse.org/). FWIW, it was originally actually
+> meant to be a proof-of-concept proposal for a universal, generic
+> solution to this problem, but as the demands grew and the prototype
+> showed to be useful, I made it official.  Here is the gist:
+>
+> * Motto: "The developer is responsible for providing progress updates,
+> but it?s only the end user who decides if, when, and how progress
+> should be presented. No exceptions will be allowed."
+>
+> * It rely on R's condition system to signal progress. The developer
+> signals progress conditions. Condition handlers, which the end-user
+> controls, are used to report/render these progress updates. The
+> support for global condition handlers, introduced in R 4.0.0, makes
+> this much more convenient. It is useful to think of the condition
+> mechanism in R as a back channel for communication that operates
+> separately from the rest of the "communication" stream (calling
+> functions with arguments and returning value).
+>
+> * For parallel processing, progress conditions can be relayed back to
+> the parent process via back channels in a "near-live" fashion, or at
+> the very end when the parallel task is completed. Technically,
+> progress conditions inherit from 'immediateCondition', which is a
+> special class indicating that such conditions are allowed to be
+> relayed immediately and out of order. It is possible to use the
+> existing PSOCK socket connections to send such 'immediateCondition':s.
+>
+> * No assumption is made on progress updates arriving in a certain
+> order. They are just a stream of "progress of this and that amount"
+> was made.
+>
+> * There is a progress handler API. Using this API, various types of
+> progress reporting can be implemented. This allows anyone to implement
+> progress handlers in contributed R packages.
+>
+> See https://progressr.futureverse.org/ for more details.
+>
+>> I would be happy to prepare code and documentation. If there is no time now, we can return to it after R-4.4 is released.
+> I strongly recommend to not rush this. This is an important, big
+> problem that goes beyond the 'parallel' package. I think it would be a
+> disfavor to introduce a '.progress' argument. As mentioned above, I
+> think a solution should work throughout the R ecosystem - all base-R
+> packages and beyond. I honestly think we could arrive at a solution
+> where base-R proposes a very light, yet powerful, progress API that
+> handles all of the above. The main task is to come up with a standard
+> API/protocol - then the implementation does not matter.
+>
+> /Henrik
+>
+> On Mon, Mar 25, 2024 at 8:41?AM Ivan Krylov via R-devel
+> <r-devel at r-project.org> wrote:
+>> Hello R-devel,
+>>
+>> A function to be run inside lapply() or one of its friends is trivial
+>> to augment with side effects to show a progress bar. When the code is
+>> intended to be run on a 'parallel' cluster, it generally cannot rely on
+>> its own side effects to report progress.
+>>
+>> I've found three approaches to progress bars for parallel processes on
+>> CRAN:
+>>
+>>   - Importing 'snow' (not 'parallel') internals like sendCall and
+>>     implementing parallel processing on top of them (doSNOW). This has
+>>     the downside of having to write higher-level code from scratch
+>>     using undocumented inferfaces.
+>>
+>>   - Splitting the workload into length(cluster)-sized chunks and
+>>     processing them in separate parLapply() calls between updating the
+>>     progress bar (pbapply). This approach trades off parallelism against
+>>     the precision of the progress information: the function has to wait
+>>     until all chunk elements have been processed before updating the
+>>     progress bar and submitting a new portion; dynamic load balancing
+>>     becomes much less efficient.
+>>
+>>   - Adding local side effects to the function and detecting them while
+>>     the parallel function is running in a child process (parabar). A
+>>     clever hack, but much harder to extend to distributed clusters.
+>>
+>> With recvData and recvOneData becoming exported in R-4.4 [*], another
+>> approach becomes feasible: wrap the cluster object (and all nodes) into
+>> another class, attach the progress callback as an attribute, and let
+>> recvData / recvOneData call it. This makes it possible to give wrapped
+>> cluster objects to unchanged code, but requires knowing the precise
+>> number of chunks that the workload will be split into.
+>>
+>> Could it be feasible to add an optional .progress argument after the
+>> ellipsis to parLapply() and its friends? We can require it to be a
+>> function accepting (done_chunk, total_chunks, ...). If not a new
+>> argument, what other interfaces could be used to get accurate progress
+>> information from staticClusterApply and dynamicClusterApply?
+>>
+>> I understand that the default parLapply() behaviour is not very
+>> amenable to progress tracking, but when running clusterMap(.scheduling
+>> = 'dynamic') spanning multiple hours if not whole days, having progress
+>> information sets the mind at ease.
+>>
+>> I would be happy to prepare code and documentation. If there is no time
+>> now, we can return to it after R-4.4 is released.
+>>
+>> --
+>> Best regards,
+>> Ivan
+>>
+>> [*] https://bugs.r-project.org/show_bug.cgi?id=18587
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
