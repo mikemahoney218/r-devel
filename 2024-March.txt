@@ -3763,3 +3763,74 @@ On 3/25/24 13:19, Henrik Bengtsson wrote:
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From |kry|ov @end|ng |rom d|@root@org  Tue Mar 26 12:14:40 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Tue, 26 Mar 2024 14:14:40 +0300
+Subject: [Rd] Wish: a way to track progress of parallel operations
+In-Reply-To: <CAFDcVCT0Aj_hnXsoSd_+mqU+vAKESkUri2SaG7Ye1XPJU96KRA@mail.gmail.com>
+References: <20240325184049.745179e0@arachnoid>
+ <CAFDcVCT0Aj_hnXsoSd_+mqU+vAKESkUri2SaG7Ye1XPJU96KRA@mail.gmail.com>
+Message-ID: <20240326141440.391746bd@arachnoid>
+
+Henrik,
+
+Thank you for taking the time to read and reply to my message!
+
+On Mon, 25 Mar 2024 10:19:38 -0700
+Henrik Bengtsson <henrik.bengtsson at gmail.com> wrote:
+
+> * Target a solution that works the same regardless whether we run in
+> parallel or not, i.e. the code/API should look the same regardless of
+> using, say, parallel::parLapply(), parallel::mclapply(), or
+> base::lapply(). The solution should also work as-is in other parallel
+> frameworks.
+
+You are absolutely right about mclapply(): it suffers from the same
+problem where the task running inside it has no reliable mechanism of
+reporting progress. Just like on a 'parallel' cluster (which can be
+running on top of an R connection, MPI, the 'mirai' package, a server
+pretending to be multiple cluster nodes, or something completely
+different), there is currently no documented interface for the task to
+report any additional data except the result of the computation.
+
+> I argue the end-user should be able to decided whether they want to
+> "see" progress updates or not, and the developer should focus on
+> where to report on progress, but not how and when.
+
+Agreed. As a package developer, I don't even want to bother calling
+setTxtProgressBar(...), but it gets most of the job done at zero
+dependency cost, and the users don't complain. The situation could
+definitely be improved.
+
+> It is possible to use the existing PSOCK socket connections to send
+> such 'immediateCondition':s.
+
+Thanks for pointing me towards ClusterFuture, that's a great hack, and
+conditions are a much better fit for progress tracking than callbacks.
+
+It would be even better if 'parallel' clusters could "officially"
+handle immediateConditions and re-signal them in the main R session.
+Since R-4.4 exports (but not yet documents) sendData, recvData and
+recvOneData generics from 'parallel', we are still in a position to
+codify and implement the change to the 'parallel' cluster back-end API.
+
+It shouldn't be too hard to document the requirement that recvData() /
+recvOneData() must signal immediateConditions arriving from the nodes
+and patch the existing cluster types (socket and MPI). Not sure how
+hard it will be to implement for 'mirai' clusters.
+
+> I honestly think we could arrive at a solution where base-R proposes
+> a very light, yet powerful, progress API that handles all of the
+> above. The main task is to come up with a standard API/protocol -
+> then the implementation does not matter.
+
+Since you've already given it a lot of thought, which parts of
+progressr would you suggest for inclusion into R, besides 'parallel'
+clusters and mclapply() forwarding immediateConditions from the worker
+processes?
+
+-- 
+Best regards,
+Ivan
+
+
