@@ -4095,3 +4095,462 @@ Trevor
 	[[alternative HTML version deleted]]
 
 
+From @nto|ne@|@br| @end|ng |rom gm@||@com  Fri Mar 29 15:52:59 2024
+From: @nto|ne@|@br| @end|ng |rom gm@||@com (Antoine Fabri)
+Date: Fri, 29 Mar 2024 15:52:59 +0100
+Subject: [Rd] declare and validate options
+Message-ID: <CAEKh8uh6OETodW+dFtYuPGxqf08biTpCz+Hxy5_NjTA_LXfUtQ@mail.gmail.com>
+
+Dear r-devel,
+
+options() are basically global variables and they come with several issues:
+* they're not really truly owned by a package aside from loose naming
+conventions
+* they're not validated
+* their documentation is not standard, and they're often not documented at
+all, it's hard to know what options exist
+* in practice they're sometimes used for internal purposes, which is at
+odds with their global nature and contribute to the mess, I think they can
+almost always be replaced by objects under a `globals` environment in the
+namespace, it's just a bit more work
+
+I tried to do as much as possible with static analysis using my package opt
+but it can only go so far : https://github.com/moodymudskipper/opt
+
+I think we can do a bit better and that it's not necessarily so complex,
+here's a draft of possible design :
+
+We could have something like this in a package to register options along
+with an optional validator, triggered on `options(..)` (or a new function).
+
+# similar to registerS3method() :
+registerOption("mypkg.my_option1")
+registerOption("mypkg.my_option2", function(x) stopifnot(is.numeric(x))
+# maybe a `default` arg too to avoid the .onLoad() gymnastics and invisible
+NULL options
+
+* validation is a breaking change so we'd have an environment variable to
+opt in
+* validation occurs when an option is set AND the namespace is already
+loaded (so we can still set options without loading a namespace) OR it
+occurs later when an applicable namespace is loaded
+* if we register an option that has already been registered by another
+package, we get a message, the validator of the last loaded namespace is
+used, in practice due to naming conventions it doesn't really happen, CRAN
+could also enforce naming conventions for new packages
+* New packages must use registerOption() if they define options, and there
+must be a standard documentation page for those, separately or together
+(with aliases), accessible with `?mypkg.my_option1` etc...
+
+This could certainly be done in different ways and I'd love to hear about
+other ideas or obstacles to improvements in this area.
+
+Thanks,
+
+Antoine
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Fri Mar 29 16:25:10 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Fri, 29 Mar 2024 11:25:10 -0400
+Subject: [Rd] declare and validate options
+In-Reply-To: <CAEKh8uh6OETodW+dFtYuPGxqf08biTpCz+Hxy5_NjTA_LXfUtQ@mail.gmail.com>
+References: <CAEKh8uh6OETodW+dFtYuPGxqf08biTpCz+Hxy5_NjTA_LXfUtQ@mail.gmail.com>
+Message-ID: <05c41377-c2ba-48a3-8f9c-efa87c0843ee@gmail.com>
+
+On 29/03/2024 10:52 a.m., Antoine Fabri wrote:
+> Dear r-devel,
+> 
+> options() are basically global variables and they come with several issues:
+> * they're not really truly owned by a package aside from loose naming
+> conventions
+> * they're not validated
+> * their documentation is not standard, and they're often not documented at
+> all, it's hard to know what options exist
+> * in practice they're sometimes used for internal purposes, which is at
+> odds with their global nature and contribute to the mess, I think they can
+> almost always be replaced by objects under a `globals` environment in the
+> namespace, it's just a bit more work
+> 
+> I tried to do as much as possible with static analysis using my package opt
+> but it can only go so far : https://github.com/moodymudskipper/opt
+> 
+> I think we can do a bit better and that it's not necessarily so complex,
+> here's a draft of possible design :
+> 
+> We could have something like this in a package to register options along
+> with an optional validator, triggered on `options(..)` (or a new function).
+> 
+> # similar to registerS3method() :
+> registerOption("mypkg.my_option1")
+> registerOption("mypkg.my_option2", function(x) stopifnot(is.numeric(x))
+> # maybe a `default` arg too to avoid the .onLoad() gymnastics and invisible
+> NULL options
+> 
+> * validation is a breaking change so we'd have an environment variable to
+> opt in
+> * validation occurs when an option is set AND the namespace is already
+> loaded (so we can still set options without loading a namespace) OR it
+> occurs later when an applicable namespace is loaded
+> * if we register an option that has already been registered by another
+> package, we get a message, the validator of the last loaded namespace is
+> used, in practice due to naming conventions it doesn't really happen, CRAN
+> could also enforce naming conventions for new packages
+> * New packages must use registerOption() if they define options, and there
+> must be a standard documentation page for those, separately or together
+> (with aliases), accessible with `?mypkg.my_option1` etc...
+> 
+> This could certainly be done in different ways and I'd love to hear about
+> other ideas or obstacles to improvements in this area.
+> 
+
+I think there are too many packages that would need changes under this 
+scheme.
+
+A more easily achievable improvement would be to provide functions to 
+support registration, validation and documentation, and leave it up to 
+the package author to call those.  This wouldn't give you validation at 
+the time a user set an option, but could make it easier to validate when 
+the package retrieved the value:  specify rules in one place, then 
+retrieve from multiple places, without needing to duplicate the rules.
+
+If those functions could be made simple enough and bulletproof and were 
+widely adopted, maybe they'd be copied into one of the base packages, 
+but really the only need for that would be to support validation on 
+setting, rather than validation on retrieval.
+
+Duncan Murdoch
+
+
+From @nto|ne@|@br| @end|ng |rom gm@||@com  Fri Mar 29 16:59:16 2024
+From: @nto|ne@|@br| @end|ng |rom gm@||@com (Antoine Fabri)
+Date: Fri, 29 Mar 2024 16:59:16 +0100
+Subject: [Rd] declare and validate options
+In-Reply-To: <05c41377-c2ba-48a3-8f9c-efa87c0843ee@gmail.com>
+References: <CAEKh8uh6OETodW+dFtYuPGxqf08biTpCz+Hxy5_NjTA_LXfUtQ@mail.gmail.com>
+ <05c41377-c2ba-48a3-8f9c-efa87c0843ee@gmail.com>
+Message-ID: <CAEKh8uh87uE77vYiBrmyNtKxJPRmMP1Ut3TO2cmC_LLnYxL69w@mail.gmail.com>
+
+>
+> I think there are too many packages that would need changes under this
+> scheme.
+
+
+There would be zero if the registration of options is not required for
+packages first uploaded on CRAN before the feature is implemented.
+If an option is not registered no validation is triggered and nothing
+breaks even if we opt in the behavior.
+
+
+> If those functions could be made simple enough and bulletproof and were
+> widely adopted, maybe they'd be copied into one of the base packages,
+>
+
+Sure but realistically few maintainers will opt-in for more restrictions.
+if posit did something on those lines maybe it would have a chance but
+otherwise I don't see an optional feature like this spread very far.
+Or we need this package to make working with options really really much
+easier for themselves as developers, not just beneficial for users in the
+long run.
+
+Le ven. 29 mars 2024 ? 16:25, Duncan Murdoch <murdoch.duncan at gmail.com> a
+?crit :
+
+> On 29/03/2024 10:52 a.m., Antoine Fabri wrote:
+> > Dear r-devel,
+> >
+> > options() are basically global variables and they come with several
+> issues:
+> > * they're not really truly owned by a package aside from loose naming
+> > conventions
+> > * they're not validated
+> > * their documentation is not standard, and they're often not documented
+> at
+> > all, it's hard to know what options exist
+> > * in practice they're sometimes used for internal purposes, which is at
+> > odds with their global nature and contribute to the mess, I think they
+> can
+> > almost always be replaced by objects under a `globals` environment in the
+> > namespace, it's just a bit more work
+> >
+> > I tried to do as much as possible with static analysis using my package
+> opt
+> > but it can only go so far : https://github.com/moodymudskipper/opt
+> >
+> > I think we can do a bit better and that it's not necessarily so complex,
+> > here's a draft of possible design :
+> >
+> > We could have something like this in a package to register options along
+> > with an optional validator, triggered on `options(..)` (or a new
+> function).
+> >
+> > # similar to registerS3method() :
+> > registerOption("mypkg.my_option1")
+> > registerOption("mypkg.my_option2", function(x) stopifnot(is.numeric(x))
+> > # maybe a `default` arg too to avoid the .onLoad() gymnastics and
+> invisible
+> > NULL options
+> >
+> > * validation is a breaking change so we'd have an environment variable to
+> > opt in
+> > * validation occurs when an option is set AND the namespace is already
+> > loaded (so we can still set options without loading a namespace) OR it
+> > occurs later when an applicable namespace is loaded
+> > * if we register an option that has already been registered by another
+> > package, we get a message, the validator of the last loaded namespace is
+> > used, in practice due to naming conventions it doesn't really happen,
+> CRAN
+> > could also enforce naming conventions for new packages
+> > * New packages must use registerOption() if they define options, and
+> there
+> > must be a standard documentation page for those, separately or together
+> > (with aliases), accessible with `?mypkg.my_option1` etc...
+> >
+> > This could certainly be done in different ways and I'd love to hear about
+> > other ideas or obstacles to improvements in this area.
+> >
+>
+> I think there are too many packages that would need changes under this
+> scheme.
+>
+> A more easily achievable improvement would be to provide functions to
+> support registration, validation and documentation, and leave it up to
+> the package author to call those.  This wouldn't give you validation at
+> the time a user set an option, but could make it easier to validate when
+> the package retrieved the value:  specify rules in one place, then
+> retrieve from multiple places, without needing to duplicate the rules.
+>
+> If those functions could be made simple enough and bulletproof and were
+> widely adopted, maybe they'd be copied into one of the base packages,
+> but really the only need for that would be to support validation on
+> setting, rather than validation on retrieval.
+>
+> Duncan Murdoch
+>
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Fri Mar 29 18:05:11 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Fri, 29 Mar 2024 13:05:11 -0400
+Subject: [Rd] declare and validate options
+In-Reply-To: <CAEKh8uh87uE77vYiBrmyNtKxJPRmMP1Ut3TO2cmC_LLnYxL69w@mail.gmail.com>
+References: <CAEKh8uh6OETodW+dFtYuPGxqf08biTpCz+Hxy5_NjTA_LXfUtQ@mail.gmail.com>
+ <05c41377-c2ba-48a3-8f9c-efa87c0843ee@gmail.com>
+ <CAEKh8uh87uE77vYiBrmyNtKxJPRmMP1Ut3TO2cmC_LLnYxL69w@mail.gmail.com>
+Message-ID: <55db1d35-7d39-4fd1-adcb-39a8b0192823@gmail.com>
+
+On 29/03/2024 11:59 a.m., Antoine Fabri wrote:
+>     I think there are too many packages that would need changes under this
+>     scheme.
+> 
+> 
+> There would be zero if the registration of options is not required for 
+> packages first uploaded on CRAN before the feature is implemented.
+> If an option is not registered no validation is triggered and nothing 
+> breaks even if we opt in the behavior.
+
+Sorry, I missed that.  Then the objection is that this would require 
+CRAN to apply two different sets of rules on submissions. When a 
+resubmission arrived, they'd need to look in the archive to find out 
+which set of rules applied to it.  They do a bit of that now 
+(determining if a submission is a resubmission, for example), but this 
+would be a bigger change.  I don't think date of first submission is 
+ever currently used.
+
+>     If those functions could be made simple enough and bulletproof and were
+>     widely adopted, maybe they'd be copied into one of the base packages,
+> 
+> Sure but realistically few maintainers will opt-in for more restrictions.
+
+If this is something that you want CRAN to force on package authors, 
+then you need to give some hard evidence that it will fix things that 
+cause trouble.  But if you only apply the rule to new packages, not 
+updates to old ones, it's hard to believe that it will really make much 
+difference, though it will still be extra work for CRAN and R Core.
+
+> if posit did something on those lines maybe it would have a chance but 
+> otherwise I don't see an optional feature like this spread very far.
+> Or we need this package to make working with options really really much 
+> easier for themselves as developers, not just beneficial for users in 
+> the long run.
+
+That should be a goal regardless of who does it.
+
+Think about the development of the pipe operator:  it was in magrittr 
+(and I think another package, but I forget the name) first, was widely 
+adopted, then a simpler version was brought into base R.
+
+Duncan Murdoch
+
+
+> 
+> Le?ven. 29 mars 2024 ??16:25, Duncan Murdoch <murdoch.duncan at gmail.com 
+> <mailto:murdoch.duncan at gmail.com>> a ?crit?:
+> 
+>     On 29/03/2024 10:52 a.m., Antoine Fabri wrote:
+>      > Dear r-devel,
+>      >
+>      > options() are basically global variables and they come with
+>     several issues:
+>      > * they're not really truly owned by a package aside from loose naming
+>      > conventions
+>      > * they're not validated
+>      > * their documentation is not standard, and they're often not
+>     documented at
+>      > all, it's hard to know what options exist
+>      > * in practice they're sometimes used for internal purposes, which
+>     is at
+>      > odds with their global nature and contribute to the mess, I think
+>     they can
+>      > almost always be replaced by objects under a `globals`
+>     environment in the
+>      > namespace, it's just a bit more work
+>      >
+>      > I tried to do as much as possible with static analysis using my
+>     package opt
+>      > but it can only go so far :
+>     https://github.com/moodymudskipper/opt
+>     <https://github.com/moodymudskipper/opt>
+>      >
+>      > I think we can do a bit better and that it's not necessarily so
+>     complex,
+>      > here's a draft of possible design :
+>      >
+>      > We could have something like this in a package to register
+>     options along
+>      > with an optional validator, triggered on `options(..)` (or a new
+>     function).
+>      >
+>      > # similar to registerS3method() :
+>      > registerOption("mypkg.my_option1")
+>      > registerOption("mypkg.my_option2", function(x)
+>     stopifnot(is.numeric(x))
+>      > # maybe a `default` arg too to avoid the .onLoad() gymnastics and
+>     invisible
+>      > NULL options
+>      >
+>      > * validation is a breaking change so we'd have an environment
+>     variable to
+>      > opt in
+>      > * validation occurs when an option is set AND the namespace is
+>     already
+>      > loaded (so we can still set options without loading a namespace)
+>     OR it
+>      > occurs later when an applicable namespace is loaded
+>      > * if we register an option that has already been registered by
+>     another
+>      > package, we get a message, the validator of the last loaded
+>     namespace is
+>      > used, in practice due to naming conventions it doesn't really
+>     happen, CRAN
+>      > could also enforce naming conventions for new packages
+>      > * New packages must use registerOption() if they define options,
+>     and there
+>      > must be a standard documentation page for those, separately or
+>     together
+>      > (with aliases), accessible with `?mypkg.my_option1` etc...
+>      >
+>      > This could certainly be done in different ways and I'd love to
+>     hear about
+>      > other ideas or obstacles to improvements in this area.
+>      >
+> 
+>     I think there are too many packages that would need changes under this
+>     scheme.
+> 
+>     A more easily achievable improvement would be to provide functions to
+>     support registration, validation and documentation, and leave it up to
+>     the package author to call those.? This wouldn't give you validation at
+>     the time a user set an option, but could make it easier to validate
+>     when
+>     the package retrieved the value:? specify rules in one place, then
+>     retrieve from multiple places, without needing to duplicate the rules.
+> 
+>     If those functions could be made simple enough and bulletproof and were
+>     widely adopted, maybe they'd be copied into one of the base packages,
+>     but really the only need for that would be to support validation on
+>     setting, rather than validation on retrieval.
+> 
+>     Duncan Murdoch
+>
+
+
+From @ndre@@g||@rd| @end|ng |rom po||m|@|t  Fri Mar 29 18:56:48 2024
+From: @ndre@@g||@rd| @end|ng |rom po||m|@|t (Andrea Gilardi)
+Date: Fri, 29 Mar 2024 17:56:48 +0000
+Subject: [Rd] Question regarding .make_numeric_version with non-character
+ input
+Message-ID: <PAXP251MB0578C2827F352E173D109017983A2@PAXP251MB0578.EURP251.PROD.OUTLOOK.COM>
+
+Dear all,
+
+I have a question regarding the R-devel version of .make_numeric_version() function. As far as I can understand, the current code (https://github.com/wch/r-source/blob/66b91578dfc85140968f07dd4e72d8cb8a54f4c6/src/library/base/R/version.R#L50-L56) runs the following steps in case of non-character input:
+
+1. It creates a message named msg using gettextf.
+2. Such object is then passed to stop(msg) or warning(msg) according to the following condition
+
+tolower(Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_") != "false")
+
+However, I don't understand the previous code since the output of Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_") != "false" is just a boolean value and tolower() will just return "true" or "false". Maybe the intended code is tolower(Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_")) != "false" ? Or am I missing something? 
+
+Thank you very much for your help
+Kind regards
+
+Andrea
+
+
+
+
+From edd @end|ng |rom deb|@n@org  Fri Mar 29 20:14:25 2024
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Fri, 29 Mar 2024 14:14:25 -0500
+Subject: [Rd] 
+ Question regarding .make_numeric_version with non-character input
+In-Reply-To: <PAXP251MB0578C2827F352E173D109017983A2@PAXP251MB0578.EURP251.PROD.OUTLOOK.COM>
+References: <PAXP251MB0578C2827F352E173D109017983A2@PAXP251MB0578.EURP251.PROD.OUTLOOK.COM>
+Message-ID: <26119.4881.618411.645248@rob.eddelbuettel.com>
+
+
+On 29 March 2024 at 17:56, Andrea Gilardi via R-devel wrote:
+| Dear all,
+| 
+| I have a question regarding the R-devel version of .make_numeric_version() function. As far as I can understand, the current code (https://github.com/wch/r-source/blob/66b91578dfc85140968f07dd4e72d8cb8a54f4c6/src/library/base/R/version.R#L50-L56) runs the following steps in case of non-character input:
+| 
+| 1. It creates a message named msg using gettextf.
+| 2. Such object is then passed to stop(msg) or warning(msg) according to the following condition
+| 
+| tolower(Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_") != "false")
+| 
+| However, I don't understand the previous code since the output of Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_") != "false" is just a boolean value and tolower() will just return "true" or "false". Maybe the intended code is tolower(Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_")) != "false" ? Or am I missing something? 
+
+Yes, agreed -- good catch.  In full, the code is (removing leading
+whitespace, and putting it back onto single lines)
+
+  msg <- gettextf("invalid non-character version specification 'x' (type: %s)", typeof(x))
+  if(tolower(Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_") != "false"))
+      stop(msg, domain = NA)
+  else
+      warning(msg, domain = NA, immediate. = TRUE)  
+
+where msg is constant (but reflecting language settings via standard i18n)
+and as you not the parentheses appear wrong.  What was intended is likely
+
+  msg <- gettextf("invalid non-character version specification 'x' (type: %s)", typeof(x))
+  if(tolower(Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_")) != "false")
+      stop(msg, domain = NA)
+  else
+      warning(msg, domain = NA, immediate. = TRUE)  
+
+If you use bugzilla before and have a handle, maybe file a bug report with
+this as patch at https://bugs.r-project.org/
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
