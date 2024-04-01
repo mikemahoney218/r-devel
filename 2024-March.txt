@@ -4554,3 +4554,537 @@ Dirk
 dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
 
 
+From r@mon|@||on @end|ng |rom gm@||@com  Sat Mar 30 11:55:48 2024
+From: r@mon|@||on @end|ng |rom gm@||@com (=?UTF-8?Q?Ram=C3=B3n_Fallon?=)
+Date: Sat, 30 Mar 2024 10:55:48 +0000
+Subject: [Rd] hand compile; link to MKL fails at BLAS zdotu
+Message-ID: <CA+WKpEvRK_WniZmfDBiCNVc-avKMhPKdVg1B+jyJZLacgFzSOA@mail.gmail.com>
+
+Hi,
+
+I've reached about 20 attempts hand compiling R-4.3.3 on my debian bookworm
+box. My configure directive is:
+
+./configure --prefix=/opt/R-4.3.3 --enable-R-shlib
+--enable-memory-profiling --with-tcltk --enable-threads=posix
+--with-blas="-lmkl_rt" --with-lapack
+
+In contrast to Dirk's solution, I've found R's configure script doesn't
+recognise the update-alternatives system on debian/ubuntu, if it's MKL. In
+fact, of all the blas libraries, R's configure script pays least attention
+to MKL, and is happier with OpenBLAS and even BLIS which is relatively
+recent.
+
+However, on MKL it fails at BLAS zdotu (double complex BLAS), but not at
+dgemm_, which IS found in libmkl_rt. Using bash command "nm" on
+libmkl_rt.so, both dgemm and zdotu symbols are there, so I'm finding it
+hard to understand why it can't find zdotu. appending "-lmkl_gf_lp64" to
+the --with-blas option does not help (that's suggested by several posts out
+there).
+
+So unfortunately, I've taken to hand editing the configure script .. a sure
+sign of desperation ... and of course that's not going to work. Any
+suggestions welcome, thanks in advance.
+
+	[[alternative HTML version deleted]]
+
+
+From 10657821 @end|ng |rom po||m|@|t  Sat Mar 30 10:30:20 2024
+From: 10657821 @end|ng |rom po||m|@|t (Andrea Gilardi)
+Date: Sat, 30 Mar 2024 10:30:20 +0100
+Subject: [Rd] 
+ Question regarding .make_numeric_version with non-character input
+In-Reply-To: <26119.4881.618411.645248@rob.eddelbuettel.com>
+References: <PAXP251MB0578C2827F352E173D109017983A2@PAXP251MB0578.EURP251.PROD.OUTLOOK.COM>
+ <26119.4881.618411.645248@rob.eddelbuettel.com>
+Message-ID: <14ab2002-74a8-491b-8921-b66364479003@polimi.it>
+
+Thank you very much Dirk for your kind words and for confirming the bug. 
+Next week I will open a new issue on Bugzilla adding the related patch.
+
+Kind regards
+
+Andrea
+
+On 29/03/2024 20:14, Dirk Eddelbuettel wrote:
+> On 29 March 2024 at 17:56, Andrea Gilardi via R-devel wrote:
+> | Dear all,
+> |
+> | I have a question regarding the R-devel version of .make_numeric_version() function. As far as I can understand, the current code (https://github.com/wch/r-source/blob/66b91578dfc85140968f07dd4e72d8cb8a54f4c6/src/library/base/R/version.R#L50-L56) runs the following steps in case of non-character input:
+> |
+> | 1. It creates a message named msg using gettextf.
+> | 2. Such object is then passed to stop(msg) or warning(msg) according to the following condition
+> |
+> | tolower(Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_") != "false")
+> |
+> | However, I don't understand the previous code since the output of Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_") != "false" is just a boolean value and tolower() will just return "true" or "false". Maybe the intended code is tolower(Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_")) != "false" ? Or am I missing something?
+>
+> Yes, agreed -- good catch.  In full, the code is (removing leading
+> whitespace, and putting it back onto single lines)
+>
+>    msg <- gettextf("invalid non-character version specification 'x' (type: %s)", typeof(x))
+>    if(tolower(Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_") != "false"))
+>        stop(msg, domain = NA)
+>    else
+>        warning(msg, domain = NA, immediate. = TRUE)
+>
+> where msg is constant (but reflecting language settings via standard i18n)
+> and as you not the parentheses appear wrong.  What was intended is likely
+>
+>    msg <- gettextf("invalid non-character version specification 'x' (type: %s)", typeof(x))
+>    if(tolower(Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_")) != "false")
+>        stop(msg, domain = NA)
+>    else
+>        warning(msg, domain = NA, immediate. = TRUE)
+>
+> If you use bugzilla before and have a handle, maybe file a bug report with
+> this as patch at https://bugs.r-project.org/
+>
+> Dirk
+>
+
+
+From j|r|@c@mor@vec @end|ng |rom gm@||@com  Sat Mar 30 11:15:25 2024
+From: j|r|@c@mor@vec @end|ng |rom gm@||@com (=?UTF-8?B?SmnFmcOtIE1vcmF2ZWM=?=)
+Date: Sat, 30 Mar 2024 23:15:25 +1300
+Subject: [Rd] declare and validate options
+In-Reply-To: <55db1d35-7d39-4fd1-adcb-39a8b0192823@gmail.com>
+References: <CAEKh8uh6OETodW+dFtYuPGxqf08biTpCz+Hxy5_NjTA_LXfUtQ@mail.gmail.com>
+ <05c41377-c2ba-48a3-8f9c-efa87c0843ee@gmail.com>
+ <CAEKh8uh87uE77vYiBrmyNtKxJPRmMP1Ut3TO2cmC_LLnYxL69w@mail.gmail.com>
+ <55db1d35-7d39-4fd1-adcb-39a8b0192823@gmail.com>
+Message-ID: <1ed24c22-9194-4442-920c-3b2c1e8c233a@gmail.com>
+
+re pipe: It was actually discussed on this mailing list long before 
+magrittr, and various pipe operators existed in various packages for a 
+long time.
+ From outside observer it really seems that it was magrittr that 
+popularized pipe and this popularity managed to get it into base R.
+
+
+re options: It seems that the popular way to handle them is with an 
+internal environment: https://r-pkgs.org/data.html#sec-data-state
+
+We have discussed this in `import` package and came to the conclusion 
+that this is much better than hooking into the global `options()`.
+This solves multiple mentioned issues, such as them being local to the 
+package and thus preventing possible conflict,
+and you could easily write setter that will automatically perform 
+validation.
+I adopted this approach at my work and it leads to simpler and more 
+robust code.
+
+I would welcomed a type safety in R, but as general trend, such as in 
+function definitions.
+But I don't see much value shoehorning them only into options.
+
+-- Jirka
+
+On 30/03/24 06:05, Duncan Murdoch wrote:
+> On 29/03/2024 11:59 a.m., Antoine Fabri wrote:
+>> ??? I think there are too many packages that would need changes under 
+>> this
+>> ??? scheme.
+>>
+>>
+>> There would be zero if the registration of options is not required 
+>> for packages first uploaded on CRAN before the feature is implemented.
+>> If an option is not registered no validation is triggered and nothing 
+>> breaks even if we opt in the behavior.
+>
+> Sorry, I missed that.? Then the objection is that this would require 
+> CRAN to apply two different sets of rules on submissions. When a 
+> resubmission arrived, they'd need to look in the archive to find out 
+> which set of rules applied to it.? They do a bit of that now 
+> (determining if a submission is a resubmission, for example), but this 
+> would be a bigger change.? I don't think date of first submission is 
+> ever currently used.
+>
+>> ??? If those functions could be made simple enough and bulletproof 
+>> and were
+>> ??? widely adopted, maybe they'd be copied into one of the base 
+>> packages,
+>>
+>> Sure but realistically few maintainers will opt-in for more 
+>> restrictions.
+>
+> If this is something that you want CRAN to force on package authors, 
+> then you need to give some hard evidence that it will fix things that 
+> cause trouble.? But if you only apply the rule to new packages, not 
+> updates to old ones, it's hard to believe that it will really make 
+> much difference, though it will still be extra work for CRAN and R Core.
+>
+>> if posit did something on those lines maybe it would have a chance 
+>> but otherwise I don't see an optional feature like this spread very far.
+>> Or we need this package to make working with options really really 
+>> much easier for themselves as developers, not just beneficial for 
+>> users in the long run.
+>
+> That should be a goal regardless of who does it.
+>
+> Think about the development of the pipe operator:? it was in magrittr 
+> (and I think another package, but I forget the name) first, was widely 
+> adopted, then a simpler version was brought into base R.
+>
+> Duncan Murdoch
+>
+>
+>>
+>> Le?ven. 29 mars 2024 ??16:25, Duncan Murdoch 
+>> <murdoch.duncan at gmail.com <mailto:murdoch.duncan at gmail.com>> a ?crit?:
+>>
+>> ??? On 29/03/2024 10:52 a.m., Antoine Fabri wrote:
+>> ???? > Dear r-devel,
+>> ???? >
+>> ???? > options() are basically global variables and they come with
+>> ??? several issues:
+>> ???? > * they're not really truly owned by a package aside from loose 
+>> naming
+>> ???? > conventions
+>> ???? > * they're not validated
+>> ???? > * their documentation is not standard, and they're often not
+>> ??? documented at
+>> ???? > all, it's hard to know what options exist
+>> ???? > * in practice they're sometimes used for internal purposes, which
+>> ??? is at
+>> ???? > odds with their global nature and contribute to the mess, I think
+>> ??? they can
+>> ???? > almost always be replaced by objects under a `globals`
+>> ??? environment in the
+>> ???? > namespace, it's just a bit more work
+>> ???? >
+>> ???? > I tried to do as much as possible with static analysis using my
+>> ??? package opt
+>> ???? > but it can only go so far :
+>> ??? https://github.com/moodymudskipper/opt
+>> ??? <https://github.com/moodymudskipper/opt>
+>> ???? >
+>> ???? > I think we can do a bit better and that it's not necessarily so
+>> ??? complex,
+>> ???? > here's a draft of possible design :
+>> ???? >
+>> ???? > We could have something like this in a package to register
+>> ??? options along
+>> ???? > with an optional validator, triggered on `options(..)` (or a new
+>> ??? function).
+>> ???? >
+>> ???? > # similar to registerS3method() :
+>> ???? > registerOption("mypkg.my_option1")
+>> ???? > registerOption("mypkg.my_option2", function(x)
+>> ??? stopifnot(is.numeric(x))
+>> ???? > # maybe a `default` arg too to avoid the .onLoad() gymnastics and
+>> ??? invisible
+>> ???? > NULL options
+>> ???? >
+>> ???? > * validation is a breaking change so we'd have an environment
+>> ??? variable to
+>> ???? > opt in
+>> ???? > * validation occurs when an option is set AND the namespace is
+>> ??? already
+>> ???? > loaded (so we can still set options without loading a namespace)
+>> ??? OR it
+>> ???? > occurs later when an applicable namespace is loaded
+>> ???? > * if we register an option that has already been registered by
+>> ??? another
+>> ???? > package, we get a message, the validator of the last loaded
+>> ??? namespace is
+>> ???? > used, in practice due to naming conventions it doesn't really
+>> ??? happen, CRAN
+>> ???? > could also enforce naming conventions for new packages
+>> ???? > * New packages must use registerOption() if they define options,
+>> ??? and there
+>> ???? > must be a standard documentation page for those, separately or
+>> ??? together
+>> ???? > (with aliases), accessible with `?mypkg.my_option1` etc...
+>> ???? >
+>> ???? > This could certainly be done in different ways and I'd love to
+>> ??? hear about
+>> ???? > other ideas or obstacles to improvements in this area.
+>> ???? >
+>>
+>> ??? I think there are too many packages that would need changes under 
+>> this
+>> ??? scheme.
+>>
+>> ??? A more easily achievable improvement would be to provide 
+>> functions to
+>> ??? support registration, validation and documentation, and leave it 
+>> up to
+>> ??? the package author to call those.? This wouldn't give you 
+>> validation at
+>> ??? the time a user set an option, but could make it easier to validate
+>> ??? when
+>> ??? the package retrieved the value:? specify rules in one place, then
+>> ??? retrieve from multiple places, without needing to duplicate the 
+>> rules.
+>>
+>> ??? If those functions could be made simple enough and bulletproof 
+>> and were
+>> ??? widely adopted, maybe they'd be copied into one of the base 
+>> packages,
+>> ??? but really the only need for that would be to support validation on
+>> ??? setting, rather than validation on retrieval.
+>>
+>> ??? Duncan Murdoch
+>>
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From |kry|ov @end|ng |rom d|@root@org  Sat Mar 30 18:31:25 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Sat, 30 Mar 2024 20:31:25 +0300
+Subject: [Rd] hand compile; link to MKL fails at BLAS zdotu
+In-Reply-To: <CA+WKpEvRK_WniZmfDBiCNVc-avKMhPKdVg1B+jyJZLacgFzSOA@mail.gmail.com>
+References: <CA+WKpEvRK_WniZmfDBiCNVc-avKMhPKdVg1B+jyJZLacgFzSOA@mail.gmail.com>
+Message-ID: <20240330203125.175be4c1@Tarkus>
+
+? Sat, 30 Mar 2024 10:55:48 +0000
+Ram?n Fallon <ramonfallon at gmail.com> ?????:
+
+> In contrast to Dirk's solution, I've found R's configure script
+> doesn't recognise the update-alternatives system on debian/ubuntu, if
+> it's MKL.
+
+It ought to work if configured with --with-blas=-lblas
+--with-lapack=-llapack, but, as you found out (and I can confirm), if
+libblas.so and liblapack.so already point to MKL, ./configure somehow
+fails the test for zdotu and falls back to bundled Rblas and Rlapack.
+
+If you'd like the built R to work with the update-alternatives system,
+the workaround seems to help is to temporarily switch the alternatives
+to reference BLAS & LAPACK, configure and build R, and then switch the
+alternatives back to MKL.
+
+> appending "-lmkl_gf_lp64" to the --with-blas option does not help
+> (that's suggested by several posts out there).
+
+MKL has an official "link line advisor" at
+<https://www.intel.com/content/www/us/en/developer/tools/oneapi/onemkl-link-line-advisor.html>,
+which may suggest a completely different set of linker options
+depending on what it is told. Here's how R's zdotu test always fails
+when linking directly with MKL:
+
+# pre-configure some variables
+echo '#define HAVE_F77_UNDERSCORE 1' > confdefs.h
+FC=gfortran
+FFLAGS='-g -Og'
+CC=gcc
+CFLAGS='-g -Og'
+CPPFLAGS=-I/usr/local/include
+MAIN_LDFLAGS='-Wl,--export-dynamic -fopenmp'
+LDFLAGS='-L/usr/local/lib'
+LIBM=-lm
+FLIBS=' -lgfortran -lm -lquadmath'
+# copied & pasted from the Intel web page
+BLAS_LIBS='-lmkl_rt -Wl,--no-as-needed -lpthread -lm -ldl'
+
+# R prepares to call zdotu from Fortran...
+cat > conftestf.f <<EOF
+c Goto's BLAS at least needs a XERBLA
+      subroutine xerbla(srname, info)
+      character*6 srname
+      integer info
+      end
+
+      subroutine test1(iflag)
+      double complex zx(2), ztemp, zres, zdotu
+      integer iflag
+      zx(1) = (3.1d0,1.7d0)
+      zx(2) = (1.6d0,-0.6d0)
+      zres = zdotu(2, zx, 1, zx, 1)
+      ztemp = (0.0d0,0.0d0)
+      do 10 i = 1,2
+         ztemp = ztemp + zx(i)*zx(i)
+ 10      continue
+      if(abs(zres - ztemp) > 1.0d-10) then
+        iflag = 1
+      else
+        iflag = 0
+      endif
+      end
+EOF
+${FC} ${FFLAGS} -c conftestf.f
+
+# and then call the Fortran subroutine from the C runner...
+cat > conftest.c <<EOF
+#include <stdlib.h>
+#include "confdefs.h"
+#ifdef HAVE_F77_UNDERSCORE
+# define F77_SYMBOL(x)   x ## _
+#else
+# define F77_SYMBOL(x)   x
+#endif
+extern void F77_SYMBOL(test1)(int *iflag);
+
+int main () {
+  int iflag;
+  F77_SYMBOL(test1)(&iflag);
+  exit(iflag);
+}
+EOF
+${CC} ${CPPFLAGS} ${CFLAGS} -c conftest.c
+
+# and then finally link and execute the program
+${CC} ${CPPFLAGS} ${CFLAGS} ${LDFLAGS} ${MAIN_LDFLAGS} \
+ -o conftest conftest.o conftestf.o \
+ ${BLAS_LIBS} ${FLIBS} ${LIBM}
+./conftest
+
+It seems to crash inside MKL!
+
+rax=ffffffffcccccccd rbx=00005590ee102008 rcx=00007ffdab2ddb20 rdx=00005590ee102008 
+rsi=00007ffdab2ddb18 rdi=00005590ee10200c rbp=00007ffdab2dd910 rsp=00007ffdab2db600 
+ r8=00005590ee102008  r9=00007ffdab2ddb28 r10=00007f4086a99178 r11=00007f4086e02490 
+r12=00005590ee10200c r13=00007ffdab2ddb20 r14=00005590ee102008 r15=00007ffdab2ddb28 
+ip = 7f4086e02a60, sp = 7ffdab2db600 [mkl_blas_zdotu+1488]
+ip = 7f4085dc5250, sp = 7ffdab2dd920 [zdotu+256]
+ip = 5590ee1011cc, sp = 7ffdab2ddb40 [test1_+91]
+ip = 5590ee101167, sp = 7ffdab2ddb70 [main+14]
+
+It's especially strange that R does seem to work if you just
+update-alternatives after linking it with the reference BLAS, but
+./conftest starts crashing again in the same place. This is with
+Debian's MKL version 2020.4.304-4, by the way.
+
+-- 
+Best regards,
+Ivan
+
+
+From |kry|ov @end|ng |rom d|@root@org  Sat Mar 30 19:28:30 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Sat, 30 Mar 2024 21:28:30 +0300
+Subject: [Rd] hand compile; link to MKL fails at BLAS zdotu
+In-Reply-To: <20240330203125.175be4c1@Tarkus>
+References: <CA+WKpEvRK_WniZmfDBiCNVc-avKMhPKdVg1B+jyJZLacgFzSOA@mail.gmail.com>
+ <20240330203125.175be4c1@Tarkus>
+Message-ID: <20240330212830.106ca6b0@Tarkus>
+
+? Sat, 30 Mar 2024 20:31:25 +0300
+Ivan Krylov via R-devel <r-devel at r-project.org> ?????:
+
+> It seems to crash inside MKL!
+
+Should have read some more about mkl_gf_lp64 before posting. According
+to the Intel forums, it is indeed required in order to work with the
+GFortran calling convention, but if you're linking against it, you also
+have to add the rest of the linker command line, i.e.:
+
+-lmkl_gf_lp64 -lmkl_core -lmkl_sequential 
+-Wl,--no-as-needed -lpthread -lm -ldl
+
+https://community.intel.com/t5/Intel-oneAPI-Math-Kernel-Library/ARPACK-with-MKL-crashes-when-calling-zdotc/m-p/1054316
+
+Maybe it's even documented somewhere, but Intel makes it too annoying
+to read their documentation, and they definitely don't mention it in
+the link line advisor. There's also the ominous comment saying that
+
+>> you cannot call standard BLAS [c,z]dot[c,u] functions from C/C++
+>> because the interface library that is linked is specific for
+>> GFortran which has a different calling convention of returning a
+>> Complex type and would cause issues
+
+I'm not seeing any calls to [c,z]dot[c,u] from inside R's C code (which
+is why R seems to work when running with libmkl_rt.so), and the
+respective declarations in R_ext/BLAS.h have an appropriate warning:
+
+>> WARNING!  The next two return a value that may not be compatible
+>> between C and Fortran, and even if it is, this might not be the
+>> right translation to C.
+
+...so it's likely that everything will keep working.
+
+Indeed, R configured with
+
+--with-blas='-lmkl_gf_lp64 -lmkl_core -lmkl_sequential'
+--with-lapack='-lmkl_gf_lp64 -lmkl_core -lmkl_sequential'
+
+seems to work with MKL.
+
+-- 
+Best regards,
+Ivan
+
+
+From r@mon|@||on @end|ng |rom gm@||@com  Sat Mar 30 21:20:18 2024
+From: r@mon|@||on @end|ng |rom gm@||@com (=?UTF-8?Q?Ram=C3=B3n_Fallon?=)
+Date: Sat, 30 Mar 2024 20:20:18 +0000
+Subject: [Rd] hand compile; link to MKL fails at BLAS zdotu
+In-Reply-To: <20240330212830.106ca6b0@Tarkus>
+References: <CA+WKpEvRK_WniZmfDBiCNVc-avKMhPKdVg1B+jyJZLacgFzSOA@mail.gmail.com>
+ <20240330203125.175be4c1@Tarkus> <20240330212830.106ca6b0@Tarkus>
+Message-ID: <CA+WKpEtqL+RsDkTVKwF_mZHo0bzZ2wHEE56ReqXZxzLMRgcdqA@mail.gmail.com>
+
+Yes, that work for me ... very many thanks Ivan.
+Just verifying ... the configure reports:
+  External libraries:          pcre2, readline, BLAS(MKL), LAPACK(generic),
+curl
+just what I was looking for.
+
+Then make && sudo make install, all fine (of course, I have all the
+dependencies sorted already)
+and once inside the REPL
+extSoftVersion() reports BLAS as /usr/lib/x86_64-linux-gnu/libmkl_gf_lp64.so
+and same goes for La_library() - BTW the "generic" from above is bit
+misleading.
+
+You really took ownership of problem! Well, of course, hopefully it will
+help others ...
+
+Cheers / Ram?n.
+
+On Sat, 30 Mar 2024 at 18:28, Ivan Krylov <ikrylov at disroot.org> wrote:
+
+> ? Sat, 30 Mar 2024 20:31:25 +0300
+> Ivan Krylov via R-devel <r-devel at r-project.org> ?????:
+>
+> > It seems to crash inside MKL!
+>
+> Should have read some more about mkl_gf_lp64 before posting. According
+> to the Intel forums, it is indeed required in order to work with the
+> GFortran calling convention, but if you're linking against it, you also
+> have to add the rest of the linker command line, i.e.:
+>
+> -lmkl_gf_lp64 -lmkl_core -lmkl_sequential
+> -Wl,--no-as-needed -lpthread -lm -ldl
+>
+>
+> https://community.intel.com/t5/Intel-oneAPI-Math-Kernel-Library/ARPACK-with-MKL-crashes-when-calling-zdotc/m-p/1054316
+>
+> Maybe it's even documented somewhere, but Intel makes it too annoying
+> to read their documentation, and they definitely don't mention it in
+> the link line advisor. There's also the ominous comment saying that
+>
+> >> you cannot call standard BLAS [c,z]dot[c,u] functions from C/C++
+> >> because the interface library that is linked is specific for
+> >> GFortran which has a different calling convention of returning a
+> >> Complex type and would cause issues
+>
+> I'm not seeing any calls to [c,z]dot[c,u] from inside R's C code (which
+> is why R seems to work when running with libmkl_rt.so), and the
+> respective declarations in R_ext/BLAS.h have an appropriate warning:
+>
+> >> WARNING!  The next two return a value that may not be compatible
+> >> between C and Fortran, and even if it is, this might not be the
+> >> right translation to C.
+>
+> ...so it's likely that everything will keep working.
+>
+> Indeed, R configured with
+>
+> --with-blas='-lmkl_gf_lp64 -lmkl_core -lmkl_sequential'
+> --with-lapack='-lmkl_gf_lp64 -lmkl_core -lmkl_sequential'
+>
+> seems to work with MKL.
+>
+> --
+> Best regards,
+> Ivan
+>
+
+	[[alternative HTML version deleted]]
+
+
