@@ -1,0 +1,67 @@
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Mon Apr  1 14:28:56 2024
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Mon, 1 Apr 2024 14:28:56 +0200
+Subject: [Rd] 
+ Question regarding .make_numeric_version with non-character input
+In-Reply-To: <14ab2002-74a8-491b-8921-b66364479003@polimi.it>
+References: <PAXP251MB0578C2827F352E173D109017983A2@PAXP251MB0578.EURP251.PROD.OUTLOOK.COM>
+ <26119.4881.618411.645248@rob.eddelbuettel.com>
+ <14ab2002-74a8-491b-8921-b66364479003@polimi.it>
+Message-ID: <26122.43144.181286.316307@hornik.net>
+
+>>>>> Andrea Gilardi via R-devel writes:
+
+Thanks: should be fixed now in the trunk.
+
+Best
+-k
+
+> Thank you very much Dirk for your kind words and for confirming the bug. 
+> Next week I will open a new issue on Bugzilla adding the related patch.
+
+> Kind regards
+
+> Andrea
+
+> On 29/03/2024 20:14, Dirk Eddelbuettel wrote:
+>> On 29 March 2024 at 17:56, Andrea Gilardi via R-devel wrote:
+>> | Dear all,
+>> |
+>> | I have a question regarding the R-devel version of .make_numeric_version() function. As far as I can understand, the current code (https://github.com/wch/r-source/blob/66b91578dfc85140968f07dd4e72d8cb8a54f4c6/src/library/base/R/version.R#L50-L56) runs the following steps in case of non-character input:
+>> |
+>> | 1. It creates a message named msg using gettextf.
+>> | 2. Such object is then passed to stop(msg) or warning(msg) according to the following condition
+>> |
+>> | tolower(Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_") != "false")
+>> |
+>> | However, I don't understand the previous code since the output of Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_") != "false" is just a boolean value and tolower() will just return "true" or "false". Maybe the intended code is tolower(Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_")) != "false" ? Or am I missing something?
+>> 
+>> Yes, agreed -- good catch.  In full, the code is (removing leading
+>> whitespace, and putting it back onto single lines)
+>> 
+>> msg <- gettextf("invalid non-character version specification 'x' (type: %s)", typeof(x))
+>> if(tolower(Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_") != "false"))
+>> stop(msg, domain = NA)
+>> else
+>> warning(msg, domain = NA, immediate. = TRUE)
+>> 
+>> where msg is constant (but reflecting language settings via standard i18n)
+>> and as you not the parentheses appear wrong.  What was intended is likely
+>> 
+>> msg <- gettextf("invalid non-character version specification 'x' (type: %s)", typeof(x))
+>> if(tolower(Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_")) != "false")
+>> stop(msg, domain = NA)
+>> else
+>> warning(msg, domain = NA, immediate. = TRUE)
+>> 
+>> If you use bugzilla before and have a handle, maybe file a bug report with
+>> this as patch at https://bugs.r-project.org/
+>> 
+>> Dirk
+>> 
+
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
