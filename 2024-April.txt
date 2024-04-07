@@ -412,3 +412,462 @@ Simon
 > 
 
 
+From jchoe001 @end|ng |rom gm@||@com  Fri Apr  5 14:15:20 2024
+From: jchoe001 @end|ng |rom gm@||@com (June Choe)
+Date: Fri, 5 Apr 2024 08:15:20 -0400
+Subject: [Rd] Bug in out-of-bounds assignment of list object to expression()
+ vector
+Message-ID: <CAH54GbXMhcy+JFV7dfBLV0J7+YVoTBB8zdnQqEhrOogZPnM-yQ@mail.gmail.com>
+
+There seems to be a bug in out-of-bounds assignment of list objects to an
+expression() vector. Tested on release and devel. (Many thanks to folks
+over at Mastodon for the help narrowing down this bug)
+
+When assigning a list into an existing index, it correctly errors on
+incompatible type, and the expression vector is unchanged:
+
+```
+x <- expression(a,b,c)
+x[[3]] <- list() # Error
+x
+#> expression(a, b, c)
+```
+
+When assigning a list to an out of bounds index (ex: the next, n+1 index),
+it errors the same but now changes the values of the vector to NULL:
+
+```
+x <- expression(a,b,c)
+x[[4]] <- list() # Error
+x
+#> expression(NULL, NULL, NULL)
+```
+
+Curiously, this behavior disappears if a prior attempt is made at assigning
+to the same index, using a different incompatible object that does not
+share this bug (like a function):
+
+```
+x <- expression(a,b,c)
+x[[4]] <- base::sum # Error
+x[[4]] <- list() # Error
+x
+#> expression(a, b, c)
+```
+
+That "protection" persists until x[[4]] is evaluated, at which point the
+bug can be produced again:
+
+```
+x[[4]] # Error
+x[[4]] <- list() # Error
+x
+#> expression(NULL, NULL, NULL)
+```
+
+Note that `x` has remained a 3-length vector throughout.
+
+Best,
+June
+
+	[[alternative HTML version deleted]]
+
+
+From |kry|ov @end|ng |rom d|@root@org  Fri Apr  5 14:49:25 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Fri, 5 Apr 2024 15:49:25 +0300
+Subject: [Rd] 
+ Bug in out-of-bounds assignment of list object to expression()
+ vector
+In-Reply-To: <CAH54GbXMhcy+JFV7dfBLV0J7+YVoTBB8zdnQqEhrOogZPnM-yQ@mail.gmail.com>
+References: <CAH54GbXMhcy+JFV7dfBLV0J7+YVoTBB8zdnQqEhrOogZPnM-yQ@mail.gmail.com>
+Message-ID: <20240405154925.4df66c28@arachnoid>
+
+On Fri, 5 Apr 2024 08:15:20 -0400
+June Choe <jchoe001 at gmail.com> wrote:
+
+> When assigning a list to an out of bounds index (ex: the next, n+1
+> index), it errors the same but now changes the values of the vector
+> to NULL:
+> 
+> ```
+> x <- expression(a,b,c)
+> x[[4]] <- list() # Error
+> x
+> #> expression(NULL, NULL, NULL)  
+> ```
+> 
+> Curiously, this behavior disappears if a prior attempt is made at
+> assigning to the same index, using a different incompatible object
+> that does not share this bug (like a function)
+
+Here's how the problem happens:
+
+1. The call lands in src/main/subassign.c, do_subassign2_dflt().
+
+2. do_subassign2_dflt() calls SubassignTypeFix() to prepare the operand
+for the assignment.
+
+3. Since the assignment is "stretching", SubassignTypeFix() calls
+EnlargeVector() to provide the space for the assignment.
+
+The bug relies on `x` not being IS_GROWABLE(), which may explain 
+why a plain x[[4]] <- list() sometimes doesn't fail.
+
+The future assignment result `x` is now expression(a, b, c, NULL), and
+the old `x` set to expression(NULL, NULL, NULL) by SET_VECTOR_ELT(newx,
+i, VECTOR_ELT(x, i)); CLEAR_VECTOR_ELT(x, i); during EnlargeVector().
+
+4. But then the assignment fails, raising the error back in
+do_subassign2_dflt(), because the assignment kind is invalid: there is
+no way to put data.frames into an expression vector. The new resized
+`x` is lost, and the old overwritten `x` stays there.
+
+Not sure what the right way to fix this is. It's desirable to avoid
+shallow_duplicate(x) for the overwriting assignments, but then the
+sub-assignment must either succeed or leave the operand untouched.
+Is there a way to perform the type check before overwriting the operand?
+
+-- 
+Best regards,
+Ivan
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Fri Apr  5 14:53:08 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Fri, 5 Apr 2024 08:53:08 -0400
+Subject: [Rd] 
+ Bug in out-of-bounds assignment of list object to expression()
+ vector
+In-Reply-To: <CAH54GbXMhcy+JFV7dfBLV0J7+YVoTBB8zdnQqEhrOogZPnM-yQ@mail.gmail.com>
+References: <CAH54GbXMhcy+JFV7dfBLV0J7+YVoTBB8zdnQqEhrOogZPnM-yQ@mail.gmail.com>
+Message-ID: <614fc33c-8120-4580-a89f-86929b562a50@gmail.com>
+
+Yes, definitely looks like a bug.
+
+Are you able to submit it to bugs.r-project.org?
+
+Duncan Murdoch
+
+On 05/04/2024 8:15 a.m., June Choe wrote:
+> There seems to be a bug in out-of-bounds assignment of list objects to an
+> expression() vector. Tested on release and devel. (Many thanks to folks
+> over at Mastodon for the help narrowing down this bug)
+> 
+> When assigning a list into an existing index, it correctly errors on
+> incompatible type, and the expression vector is unchanged:
+> 
+> ```
+> x <- expression(a,b,c)
+> x[[3]] <- list() # Error
+> x
+> #> expression(a, b, c)
+> ```
+> 
+> When assigning a list to an out of bounds index (ex: the next, n+1 index),
+> it errors the same but now changes the values of the vector to NULL:
+> 
+> ```
+> x <- expression(a,b,c)
+> x[[4]] <- list() # Error
+> x
+> #> expression(NULL, NULL, NULL)
+> ```
+> 
+> Curiously, this behavior disappears if a prior attempt is made at assigning
+> to the same index, using a different incompatible object that does not
+> share this bug (like a function):
+> 
+> ```
+> x <- expression(a,b,c)
+> x[[4]] <- base::sum # Error
+> x[[4]] <- list() # Error
+> x
+> #> expression(a, b, c)
+> ```
+> 
+> That "protection" persists until x[[4]] is evaluated, at which point the
+> bug can be produced again:
+> 
+> ```
+> x[[4]] # Error
+> x[[4]] <- list() # Error
+> x
+> #> expression(NULL, NULL, NULL)
+> ```
+> 
+> Note that `x` has remained a 3-length vector throughout.
+> 
+> Best,
+> June
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Fri Apr  5 16:12:00 2024
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Fri, 5 Apr 2024 09:12:00 -0500 (CDT)
+Subject: [Rd] 
+ [External] Re: Bug in out-of-bounds assignment of list object
+ to expression() vector
+In-Reply-To: <20240405154925.4df66c28@arachnoid>
+References: <CAH54GbXMhcy+JFV7dfBLV0J7+YVoTBB8zdnQqEhrOogZPnM-yQ@mail.gmail.com>
+ <20240405154925.4df66c28@arachnoid>
+Message-ID: <8b0d7cd8-edda-d116-f72f-44e87c5872a1@uiowa.edu>
+
+On Fri, 5 Apr 2024, Ivan Krylov via R-devel wrote:
+
+> On Fri, 5 Apr 2024 08:15:20 -0400
+> June Choe <jchoe001 at gmail.com> wrote:
+>
+>> When assigning a list to an out of bounds index (ex: the next, n+1
+>> index), it errors the same but now changes the values of the vector
+>> to NULL:
+>>
+>> ```
+>> x <- expression(a,b,c)
+>> x[[4]] <- list() # Error
+>> x
+>> #> expression(NULL, NULL, NULL)
+>> ```
+>>
+>> Curiously, this behavior disappears if a prior attempt is made at
+>> assigning to the same index, using a different incompatible object
+>> that does not share this bug (like a function)
+>
+> Here's how the problem happens:
+>
+> 1. The call lands in src/main/subassign.c, do_subassign2_dflt().
+>
+> 2. do_subassign2_dflt() calls SubassignTypeFix() to prepare the operand
+> for the assignment.
+>
+> 3. Since the assignment is "stretching", SubassignTypeFix() calls
+> EnlargeVector() to provide the space for the assignment.
+>
+> The bug relies on `x` not being IS_GROWABLE(), which may explain
+> why a plain x[[4]] <- list() sometimes doesn't fail.
+>
+> The future assignment result `x` is now expression(a, b, c, NULL), and
+> the old `x` set to expression(NULL, NULL, NULL) by SET_VECTOR_ELT(newx,
+> i, VECTOR_ELT(x, i)); CLEAR_VECTOR_ELT(x, i); during EnlargeVector().
+>
+> 4. But then the assignment fails, raising the error back in
+> do_subassign2_dflt(), because the assignment kind is invalid: there is
+> no way to put data.frames into an expression vector. The new resized
+> `x` is lost, and the old overwritten `x` stays there.
+>
+> Not sure what the right way to fix this is. It's desirable to avoid
+> shallow_duplicate(x) for the overwriting assignments, but then the
+> sub-assignment must either succeed or leave the operand untouched.
+> Is there a way to perform the type check before overwriting the operand?
+
+Yes. There are two places where there are some checks, one early and
+the other late. The early one is explicitly letting this one through
+and shouldn't. So a one line change would address this particular
+problem. But it would be a good idea to review why we the late checks
+are needed at all and maybe change that. I'll look into it.
+
+Best,
+
+luke
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+
+
+From jchoe001 @end|ng |rom gm@||@com  Fri Apr  5 16:18:37 2024
+From: jchoe001 @end|ng |rom gm@||@com (June Choe)
+Date: Fri, 5 Apr 2024 10:18:37 -0400
+Subject: [Rd] 
+ [External] Re: Bug in out-of-bounds assignment of list object
+ to expression() vector
+In-Reply-To: <8b0d7cd8-edda-d116-f72f-44e87c5872a1@uiowa.edu>
+References: <CAH54GbXMhcy+JFV7dfBLV0J7+YVoTBB8zdnQqEhrOogZPnM-yQ@mail.gmail.com>
+ <20240405154925.4df66c28@arachnoid>
+ <8b0d7cd8-edda-d116-f72f-44e87c5872a1@uiowa.edu>
+Message-ID: <CAH54GbXsrw2Pa3U=UUffVYjpMp=RFbeOBuY3vLwQx3XPYG8r3Q@mail.gmail.com>
+
+Thanks all for looking into this.
+
+Unfortunately I don't know my way around Bugzilla and I'm a bit occupied
+for the next few days - it would be great if a bug report could be opened
+on my behalf.
+
+Best,
+June
+
+On Fri, Apr 5, 2024 at 10:12?AM <luke-tierney at uiowa.edu> wrote:
+
+> On Fri, 5 Apr 2024, Ivan Krylov via R-devel wrote:
+>
+> > On Fri, 5 Apr 2024 08:15:20 -0400
+> > June Choe <jchoe001 at gmail.com> wrote:
+> >
+> >> When assigning a list to an out of bounds index (ex: the next, n+1
+> >> index), it errors the same but now changes the values of the vector
+> >> to NULL:
+> >>
+> >> ```
+> >> x <- expression(a,b,c)
+> >> x[[4]] <- list() # Error
+> >> x
+> >> #> expression(NULL, NULL, NULL)
+> >> ```
+> >>
+> >> Curiously, this behavior disappears if a prior attempt is made at
+> >> assigning to the same index, using a different incompatible object
+> >> that does not share this bug (like a function)
+> >
+> > Here's how the problem happens:
+> >
+> > 1. The call lands in src/main/subassign.c, do_subassign2_dflt().
+> >
+> > 2. do_subassign2_dflt() calls SubassignTypeFix() to prepare the operand
+> > for the assignment.
+> >
+> > 3. Since the assignment is "stretching", SubassignTypeFix() calls
+> > EnlargeVector() to provide the space for the assignment.
+> >
+> > The bug relies on `x` not being IS_GROWABLE(), which may explain
+> > why a plain x[[4]] <- list() sometimes doesn't fail.
+> >
+> > The future assignment result `x` is now expression(a, b, c, NULL), and
+> > the old `x` set to expression(NULL, NULL, NULL) by SET_VECTOR_ELT(newx,
+> > i, VECTOR_ELT(x, i)); CLEAR_VECTOR_ELT(x, i); during EnlargeVector().
+> >
+> > 4. But then the assignment fails, raising the error back in
+> > do_subassign2_dflt(), because the assignment kind is invalid: there is
+> > no way to put data.frames into an expression vector. The new resized
+> > `x` is lost, and the old overwritten `x` stays there.
+> >
+> > Not sure what the right way to fix this is. It's desirable to avoid
+> > shallow_duplicate(x) for the overwriting assignments, but then the
+> > sub-assignment must either succeed or leave the operand untouched.
+> > Is there a way to perform the type check before overwriting the operand?
+>
+> Yes. There are two places where there are some checks, one early and
+> the other late. The early one is explicitly letting this one through
+> and shouldn't. So a one line change would address this particular
+> problem. But it would be a good idea to review why we the late checks
+> are needed at all and maybe change that. I'll look into it.
+>
+> Best,
+>
+> luke
+>
+> --
+> Luke Tierney
+> Ralph E. Wareham Professor of Mathematical Sciences
+> University of Iowa                  Phone:             319-335-3386
+> Department of Statistics and        Fax:               319-335-3017
+>     Actuarial Science
+> 241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+> Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+>
+
+
+-- 
+
+June Choe (??? / Yong June Choe)
+
+He/Him/His
+
+	[[alternative HTML version deleted]]
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Sat Apr  6 01:04:01 2024
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Fri, 5 Apr 2024 18:04:01 -0500 (CDT)
+Subject: [Rd] 
+ [External] Bug in out-of-bounds assignment of list object to
+ expression() vector
+In-Reply-To: <CAH54GbXMhcy+JFV7dfBLV0J7+YVoTBB8zdnQqEhrOogZPnM-yQ@mail.gmail.com>
+References: <CAH54GbXMhcy+JFV7dfBLV0J7+YVoTBB8zdnQqEhrOogZPnM-yQ@mail.gmail.com>
+Message-ID: <1b3ea516-f019-a215-3151-c86ec2cb952b@uiowa.edu>
+
+Thanks for the report. Fixed in R-devel and R-patched (both
+R-4-4-branch and R-4-3-branch).
+
+On Fri, 5 Apr 2024, June Choe wrote:
+
+> [You don't often get email from jchoe001 at gmail.com. Learn why this is important at https://aka.ms/LearnAboutSenderIdentification ]
+>
+> There seems to be a bug in out-of-bounds assignment of list objects to an
+> expression() vector. Tested on release and devel. (Many thanks to folks
+> over at Mastodon for the help narrowing down this bug)
+>
+> When assigning a list into an existing index, it correctly errors on
+> incompatible type, and the expression vector is unchanged:
+>
+> ```
+> x <- expression(a,b,c)
+> x[[3]] <- list() # Error
+> x
+> #> expression(a, b, c)
+> ```
+>
+> When assigning a list to an out of bounds index (ex: the next, n+1 index),
+> it errors the same but now changes the values of the vector to NULL:
+>
+> ```
+> x <- expression(a,b,c)
+> x[[4]] <- list() # Error
+> x
+> #> expression(NULL, NULL, NULL)
+> ```
+>
+> Curiously, this behavior disappears if a prior attempt is made at assigning
+> to the same index, using a different incompatible object that does not
+> share this bug (like a function):
+>
+> ```
+> x <- expression(a,b,c)
+> x[[4]] <- base::sum # Error
+> x[[4]] <- list() # Error
+> x
+> #> expression(a, b, c)
+> ```
+>
+> That "protection" persists until x[[4]] is evaluated, at which point the
+> bug can be produced again:
+>
+> ```
+> x[[4]] # Error
+> x[[4]] <- list() # Error
+> x
+> #> expression(NULL, NULL, NULL)
+> ```
+>
+> Note that `x` has remained a 3-length vector throughout.
+>
+> Best,
+> June
+>
+>        [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu/
+
+
