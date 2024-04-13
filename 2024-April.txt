@@ -990,3 +990,479 @@ Size: 7038 bytes
 Desc: not available
 URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20240409/ae4844a8/attachment.bin>
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Apr 11 13:04:36 2024
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 11 Apr 2024 13:04:36 +0200
+Subject: [Rd] 
+ Repeated library() of one package with different include.only=
+ entries
+In-Reply-To: <CAPRVBcy8u+2K+4Gw=FnYqt5We-qwPVuA0QDoOCmSAcqaJs1_EQ@mail.gmail.com>
+References: <CAPRVBcy8u+2K+4Gw=FnYqt5We-qwPVuA0QDoOCmSAcqaJs1_EQ@mail.gmail.com>
+Message-ID: <26135.50116.623107.613121@stat.math.ethz.ch>
+
+>>>>> Michael Chirico 
+>>>>>     on Mon, 8 Apr 2024 10:19:29 -0700 writes:
+
+    > Right now, attaching the same package with different include.only= has no
+    > effect:
+
+    > library(Matrix, include.only="fac2sparse")
+    > library(Matrix)
+    > ls("package:Matrix")
+    > # [1] "fac2sparse"
+
+    > ?library does not cover this case -- what is covered is the _loading_
+    > behavior of repeated calls:
+
+    >> [library and require] check and update the list of currently attached
+    > packages and do not reload a namespace which is already loaded
+
+    > But here we're looking at the _attach_ behavior of repeated calls.
+
+    > I am particularly interested in allowing the exports of a package to be
+    > built up gradually:
+
+    > library(Matrix, include.only="fac2sparse")
+    > library(Matrix, include.only="isDiagonal") # want: ls("package:Matrix") -->
+    > c("fac2sparse", "isDiagonal")
+    > ...
+
+    > It seems quite hard to accomplish this at the moment. Is the behavior to
+    > ignore new inclusions intentional? Could there be an argument to get
+    > different behavior?
+
+As you did not get an answer yet, ..., some remarks by an
+R-corer who has tweaked library() behavior in the past :
+
+- The `include.only = *` argument to library() has been a
+  *relatively* recent addition {given the 25+ years of R history}:
+
+  It was part of the extensive new features by Luke Tierney for
+  R 3.6.0  [r76248 | luke | 2019-03-18 17:29:35 +0100], with NEWS entry
+
+    ? library() and require() now allow more control over handling
+      search path conflicts when packages are attached. The policy is
+      controlled by the new conflicts.policy option.
+
+- I haven't seen these (then) new features been used much, unfortunately,
+  also not from R-core members, but I'd be happy to be told a different story.
+  
+
+For the above reasons, it could well be that the current
+implementation {of these features} has not been exercised a lot
+yet, and limitations as you found them haven't been noticed yet,
+or at least not noticed on the public R mailing lists, nor
+otherwise by R-core (?).
+
+Your implicitly proposed new feature (or even *changed*
+default behavior) seems to make sense to me -- but as alluded
+to, above, I haven't been a conscious user of any
+'library(.., include.only = *)' till now.
+
+Martin
+
+--
+Martin Maechler
+ETH Zurich   and  R Core
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Thu Apr 11 15:06:40 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Thu, 11 Apr 2024 09:06:40 -0400
+Subject: [Rd] 
+ Repeated library() of one package with different include.only=
+ entries
+In-Reply-To: <26135.50116.623107.613121@stat.math.ethz.ch>
+References: <CAPRVBcy8u+2K+4Gw=FnYqt5We-qwPVuA0QDoOCmSAcqaJs1_EQ@mail.gmail.com>
+ <26135.50116.623107.613121@stat.math.ethz.ch>
+Message-ID: <bf5029c5-dd1b-4d81-93de-26da2c3fd561@gmail.com>
+
+On 11/04/2024 7:04 a.m., Martin Maechler wrote:
+>>>>>> Michael Chirico
+>>>>>>      on Mon, 8 Apr 2024 10:19:29 -0700 writes:
+> 
+>      > Right now, attaching the same package with different include.only= has no
+>      > effect:
+> 
+>      > library(Matrix, include.only="fac2sparse")
+>      > library(Matrix)
+>      > ls("package:Matrix")
+>      > # [1] "fac2sparse"
+> 
+>      > ?library does not cover this case -- what is covered is the _loading_
+>      > behavior of repeated calls:
+> 
+>      >> [library and require] check and update the list of currently attached
+>      > packages and do not reload a namespace which is already loaded
+> 
+>      > But here we're looking at the _attach_ behavior of repeated calls.
+> 
+>      > I am particularly interested in allowing the exports of a package to be
+>      > built up gradually:
+> 
+>      > library(Matrix, include.only="fac2sparse")
+>      > library(Matrix, include.only="isDiagonal") # want: ls("package:Matrix") -->
+>      > c("fac2sparse", "isDiagonal")
+>      > ...
+> 
+>      > It seems quite hard to accomplish this at the moment. Is the behavior to
+>      > ignore new inclusions intentional? Could there be an argument to get
+>      > different behavior?
+> 
+> As you did not get an answer yet, ..., some remarks by an
+> R-corer who has tweaked library() behavior in the past :
+> 
+> - The `include.only = *` argument to library() has been a
+>    *relatively* recent addition {given the 25+ years of R history}:
+> 
+>    It was part of the extensive new features by Luke Tierney for
+>    R 3.6.0  [r76248 | luke | 2019-03-18 17:29:35 +0100], with NEWS entry
+> 
+>      ? library() and require() now allow more control over handling
+>        search path conflicts when packages are attached. The policy is
+>        controlled by the new conflicts.policy option.
+> 
+> - I haven't seen these (then) new features been used much, unfortunately,
+>    also not from R-core members, but I'd be happy to be told a different story.
+>    
+> 
+> For the above reasons, it could well be that the current
+> implementation {of these features} has not been exercised a lot
+> yet, and limitations as you found them haven't been noticed yet,
+> or at least not noticed on the public R mailing lists, nor
+> otherwise by R-core (?).
+> 
+> Your implicitly proposed new feature (or even *changed*
+> default behavior) seems to make sense to me -- but as alluded
+> to, above, I haven't been a conscious user of any
+> 'library(.., include.only = *)' till now.
+
+I don't think it makes sense.  I would assume that
+
+   library(Matrix, include.only="isDiagonal")
+
+implies that only `isDiagonal` ends up on the search path, i.e. 
+"include.only" means "include only", not "include in addition to 
+whatever else has already been attached".
+
+I think a far better approach to solve Michael's problem is simply to use
+
+   fac2sparse <- Matrix::fac2sparse
+   isDiagonal <- Matrix::isDiagonal
+
+instead of messing around with the user's search list, which may have 
+been intentionally set to include only one of those.
+
+So I'd suggest changing the docs to say
+
+"[library and require] check and update the list of currently attached
+packages and do not reload a namespace which is already loaded.  If a 
+package is already attached, no change will be made."
+
+Duncan Murdoch
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Thu Apr 11 16:37:13 2024
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Thu, 11 Apr 2024 09:37:13 -0500 (CDT)
+Subject: [Rd] [External] Re: Repeated library() of one package with
+ different include.only= entries
+In-Reply-To: <bf5029c5-dd1b-4d81-93de-26da2c3fd561@gmail.com>
+References: <CAPRVBcy8u+2K+4Gw=FnYqt5We-qwPVuA0QDoOCmSAcqaJs1_EQ@mail.gmail.com>
+ <26135.50116.623107.613121@stat.math.ethz.ch>
+ <bf5029c5-dd1b-4d81-93de-26da2c3fd561@gmail.com>
+Message-ID: <fd132c71-8730-91a9-7d15-bec45c24df54@uiowa.edu>
+
+On Thu, 11 Apr 2024, Duncan Murdoch wrote:
+
+> On 11/04/2024 7:04 a.m., Martin Maechler wrote:
+>>>>>>> Michael Chirico
+>>>>>>>      on Mon, 8 Apr 2024 10:19:29 -0700 writes:
+>>
+>>      > Right now, attaching the same package with different include.only= 
+>> has no
+>>      > effect:
+>>
+>>      > library(Matrix, include.only="fac2sparse")
+>>      > library(Matrix)
+>>      > ls("package:Matrix")
+>>      > # [1] "fac2sparse"
+>>
+>>      > ?library does not cover this case -- what is covered is the 
+>> _loading_
+>>      > behavior of repeated calls:
+>>
+>>      >> [library and require] check and update the list of currently 
+>> attached
+>>      > packages and do not reload a namespace which is already loaded
+>>
+>>      > But here we're looking at the _attach_ behavior of repeated calls.
+>>
+>>      > I am particularly interested in allowing the exports of a package to 
+>> be
+>>      > built up gradually:
+>>
+>>      > library(Matrix, include.only="fac2sparse")
+>>      > library(Matrix, include.only="isDiagonal") # want: 
+>> ls("package:Matrix") -->
+>>      > c("fac2sparse", "isDiagonal")
+>>      > ...
+>>
+>>      > It seems quite hard to accomplish this at the moment. Is the 
+>> behavior to
+>>      > ignore new inclusions intentional? Could there be an argument to get
+>>      > different behavior?
+>> 
+>> As you did not get an answer yet, ..., some remarks by an
+>> R-corer who has tweaked library() behavior in the past :
+>> 
+>> - The `include.only = *` argument to library() has been a
+>>    *relatively* recent addition {given the 25+ years of R history}:
+>>
+>>    It was part of the extensive new features by Luke Tierney for
+>>    R 3.6.0  [r76248 | luke | 2019-03-18 17:29:35 +0100], with NEWS entry
+>>
+>>      ? library() and require() now allow more control over handling
+>>        search path conflicts when packages are attached. The policy is
+>>        controlled by the new conflicts.policy option.
+>> 
+>> - I haven't seen these (then) new features been used much, unfortunately,
+>>    also not from R-core members, but I'd be happy to be told a different 
+>> story.
+>> 
+>> For the above reasons, it could well be that the current
+>> implementation {of these features} has not been exercised a lot
+>> yet, and limitations as you found them haven't been noticed yet,
+>> or at least not noticed on the public R mailing lists, nor
+>> otherwise by R-core (?).
+>> 
+>> Your implicitly proposed new feature (or even *changed*
+>> default behavior) seems to make sense to me -- but as alluded
+>> to, above, I haven't been a conscious user of any
+>> 'library(.., include.only = *)' till now.
+>
+> I don't think it makes sense.  I would assume that
+>
+>  library(Matrix, include.only="isDiagonal")
+>
+> implies that only `isDiagonal` ends up on the search path, i.e. 
+> "include.only" means "include only", not "include in addition to whatever 
+> else has already been attached".
+>
+> I think a far better approach to solve Michael's problem is simply to use
+>
+>  fac2sparse <- Matrix::fac2sparse
+>  isDiagonal <- Matrix::isDiagonal
+>
+> instead of messing around with the user's search list, which may have been 
+> intentionally set to include only one of those.
+>
+> So I'd suggest changing the docs to say
+>
+> "[library and require] check and update the list of currently attached
+> packages and do not reload a namespace which is already loaded.  If a package 
+> is already attached, no change will be made."
+
+?library could also mention using detach() followed by library() or
+attachNamespace() with a new include.only specification.
+
+Best,
+
+luke
+
+>
+> Duncan Murdoch
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu/
+
+From m|ch@e|ch|r|co4 @end|ng |rom gm@||@com  Thu Apr 11 18:10:11 2024
+From: m|ch@e|ch|r|co4 @end|ng |rom gm@||@com (Michael Chirico)
+Date: Thu, 11 Apr 2024 09:10:11 -0700
+Subject: [Rd] [External] Re: Repeated library() of one package with
+ different include.only= entries
+In-Reply-To: <fd132c71-8730-91a9-7d15-bec45c24df54@uiowa.edu>
+References: <CAPRVBcy8u+2K+4Gw=FnYqt5We-qwPVuA0QDoOCmSAcqaJs1_EQ@mail.gmail.com>
+ <26135.50116.623107.613121@stat.math.ethz.ch>
+ <bf5029c5-dd1b-4d81-93de-26da2c3fd561@gmail.com>
+ <fd132c71-8730-91a9-7d15-bec45c24df54@uiowa.edu>
+Message-ID: <CAPRVBcyTJ++P78Ycr0XQAuua6awxVPvzy8NJXjiW_pKc1MZr=Q@mail.gmail.com>
+
+> I would assume that
+>   library(Matrix, include.only="isDiagonal")
+> implies that only `isDiagonal` ends up on the search path
+
+This could also be a reasonable behavior, but neither does that happen
+today.
+> I think a far better approach to solve Michael's problem is simply to use
+>   fac2sparse <- Matrix::fac2sparse
+
+This does not fully simulate attachment, e.g. running package hooks &
+resolving Depends.
+
+> ?library could also mention using detach() followed by library() or
+> attachNamespace() with a new include.only specification.
+
+This is the "quite hard to accomplish" I alluded to, admittedly I hadn't
+forced myself to write it all out -- maybe it's not as bad as all that.
+After some iterations, today I think we'd want to do...
+
+modify_attach = function(pkg, new_names) {
+  if (!startsWith(pkg, "package:")) pkg <- paste0("package:", pkg)
+  old <- tryCatch(ls(pkg, all.names=TRUE), error=\(c) character())
+  if (length(old)) detach(pkg)
+  attachNamespace(.rmpkg(pkg), include.only=c(new_names, old))
+}
+
+Perhaps detach() could invisibly return the exported names to make this a
+tiny bit easier (today it returns NULL):
+
+modify_attach = function(pkg, new_names) {
+  if (!startsWith(pkg, "package:")) pkg <- paste0("package:", pkg)
+  old <- tryCatch(detach(pkg), error=\(c) character())
+  attachNamespace(.rmpkg(pkg), include.only=c(new_names, old))
+}
+
+Regardless, I think your suggestion to just point to
+detach()+attachNamespace() is reasonable enough, the rare users that care
+about this are likely to be able to figure out the rest from there.
+
+On Thu, Apr 11, 2024 at 7:37?AM <luke-tierney at uiowa.edu> wrote:
+
+> On Thu, 11 Apr 2024, Duncan Murdoch wrote:
+>
+> > On 11/04/2024 7:04 a.m., Martin Maechler wrote:
+> >>>>>>> Michael Chirico
+> >>>>>>>      on Mon, 8 Apr 2024 10:19:29 -0700 writes:
+> >>
+> >>      > Right now, attaching the same package with different
+> include.only=
+> >> has no
+> >>      > effect:
+> >>
+> >>      > library(Matrix, include.only="fac2sparse")
+> >>      > library(Matrix)
+> >>      > ls("package:Matrix")
+> >>      > # [1] "fac2sparse"
+> >>
+> >>      > ?library does not cover this case -- what is covered is the
+> >> _loading_
+> >>      > behavior of repeated calls:
+> >>
+> >>      >> [library and require] check and update the list of currently
+> >> attached
+> >>      > packages and do not reload a namespace which is already loaded
+> >>
+> >>      > But here we're looking at the _attach_ behavior of repeated
+> calls.
+> >>
+> >>      > I am particularly interested in allowing the exports of a
+> package to
+> >> be
+> >>      > built up gradually:
+> >>
+> >>      > library(Matrix, include.only="fac2sparse")
+> >>      > library(Matrix, include.only="isDiagonal") # want:
+> >> ls("package:Matrix") -->
+> >>      > c("fac2sparse", "isDiagonal")
+> >>      > ...
+> >>
+> >>      > It seems quite hard to accomplish this at the moment. Is the
+> >> behavior to
+> >>      > ignore new inclusions intentional? Could there be an argument to
+> get
+> >>      > different behavior?
+> >>
+> >> As you did not get an answer yet, ..., some remarks by an
+> >> R-corer who has tweaked library() behavior in the past :
+> >>
+> >> - The `include.only = *` argument to library() has been a
+> >>    *relatively* recent addition {given the 25+ years of R history}:
+> >>
+> >>    It was part of the extensive new features by Luke Tierney for
+> >>    R 3.6.0  [r76248 | luke | 2019-03-18 17:29:35 +0100], with NEWS entry
+> >>
+> >>      ? library() and require() now allow more control over handling
+> >>        search path conflicts when packages are attached. The policy is
+> >>        controlled by the new conflicts.policy option.
+> >>
+> >> - I haven't seen these (then) new features been used much,
+> unfortunately,
+> >>    also not from R-core members, but I'd be happy to be told a
+> different
+> >> story.
+> >>
+> >> For the above reasons, it could well be that the current
+> >> implementation {of these features} has not been exercised a lot
+> >> yet, and limitations as you found them haven't been noticed yet,
+> >> or at least not noticed on the public R mailing lists, nor
+> >> otherwise by R-core (?).
+> >>
+> >> Your implicitly proposed new feature (or even *changed*
+> >> default behavior) seems to make sense to me -- but as alluded
+> >> to, above, I haven't been a conscious user of any
+> >> 'library(.., include.only = *)' till now.
+> >
+> > I don't think it makes sense.  I would assume that
+> >
+> >  library(Matrix, include.only="isDiagonal")
+> >
+> > implies that only `isDiagonal` ends up on the search path, i.e.
+> > "include.only" means "include only", not "include in addition to
+> whatever
+> > else has already been attached".
+> >
+> > I think a far better approach to solve Michael's problem is simply to use
+> >
+> >  fac2sparse <- Matrix::fac2sparse
+> >  isDiagonal <- Matrix::isDiagonal
+> >
+> > instead of messing around with the user's search list, which may have
+> been
+> > intentionally set to include only one of those.
+> >
+> > So I'd suggest changing the docs to say
+> >
+> > "[library and require] check and update the list of currently attached
+> > packages and do not reload a namespace which is already loaded.  If a
+> package
+> > is already attached, no change will be made."
+>
+> ?library could also mention using detach() followed by library() or
+> attachNamespace() with a new include.only specification.
+>
+> Best,
+>
+> luke
+>
+> >
+> > Duncan Murdoch
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+>
+> --
+> Luke Tierney
+> Ralph E. Wareham Professor of Mathematical Sciences
+> University of Iowa                  Phone:             319-335-3386
+> Department of Statistics and        Fax:               319-335-3017
+>     Actuarial Science
+> 241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+> Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu/
+
+	[[alternative HTML version deleted]]
+
+
