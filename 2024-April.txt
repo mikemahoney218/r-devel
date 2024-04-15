@@ -1466,3 +1466,163 @@ On Thu, Apr 11, 2024 at 7:37?AM <luke-tierney at uiowa.edu> wrote:
 	[[alternative HTML version deleted]]
 
 
+From m@tthew@k@y @end|ng |rom u@northwe@tern@edu  Sun Apr 14 21:21:52 2024
+From: m@tthew@k@y @end|ng |rom u@northwe@tern@edu (Matthew Kay)
+Date: Sun, 14 Apr 2024 14:21:52 -0500
+Subject: [Rd] Calling applyClosure from a package?
+Message-ID: <CAPa38nEZWsAc_7-NDLZ4eRfEVRj-qvXPOw2ND5_VCwEkxLCA7g@mail.gmail.com>
+
+Hi,
+
+Short version of my question: Rf_applyClosure was marked
+attribute_hidden in Oct 2023, and I am curious why and if there is an
+alternative interface to it planned.
+
+Long version:
+
+I have been toying with building a package that makes it easier to do
+non-standard evaluation directly using promises, rather than wrapping
+these in a custom type (like e.g. rlang does). The advantage of this
+approach is that it should be fully compatible with functions that use
+the standard R functions for NSE and inspecting function context, like
+substitute(), match.call(), or parent.frame(). And indeed, it works!
+-- in R 4.3, that is. The prototype version of the package is here:
+https://github.com/mjskay/uneval  (the relevant function to my
+question is probably do_invoke, in R/invoke.R).
+
+While testing on R-devel, I noticed that Rf_applyClosure(), which used
+to be exported, is now marked with attribute_hidden. I traced the
+change to this commit in Oct 2023:
+https://github.com/r-devel/r-svn/commit/57dbe8ad471c8a34314ee74362ad479db03c033a
+
+However, the commit message did not give me clarity on the reason for
+the change, and I have not been able to find mention of this change in
+R-devel, R-package-devel, or the R bug tracker.
+So, I am curious why this function is no longer exported and if there
+is an alternative function planned to take its place.
+
+Neither Rf_eval nor do.call can do what I need to fully support
+rlang-style NSE using base R. The problem is that I need to be able to
+manually set up the list of promises provided as arguments to the
+function.
+
+I fully understand that the answer to my question might be "don't do
+that" ;). But I will humbly suggest that it would be really nice to be
+able to do NSE that can capture expressions with heterogeneous
+environments and pass these to functions in a way that is compatible
+with existing R functions that do NSE. The basic tools to do it are
+there in R 4.3, I think...
+
+Thanks for the help!
+
+---Matt
+
+-- 
+Matthew Kay
+Associate Professor
+Computer Science & Communication Studies
+Northwestern University
+matthew.kay at u.northwestern.edu
+http://www.mjskay.com/
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Mon Apr 15 01:27:13 2024
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Sun, 14 Apr 2024 18:27:13 -0500 (CDT)
+Subject: [Rd] [External]  Calling applyClosure from a package?
+In-Reply-To: <CAPa38nEZWsAc_7-NDLZ4eRfEVRj-qvXPOw2ND5_VCwEkxLCA7g@mail.gmail.com>
+References: <CAPa38nEZWsAc_7-NDLZ4eRfEVRj-qvXPOw2ND5_VCwEkxLCA7g@mail.gmail.com>
+Message-ID: <a306ec0-3f23-ca96-768a-14f5eb22c5@uiowa.edu>
+
+On Sun, 14 Apr 2024, Matthew Kay wrote:
+
+> [You don't often get email from matthew.kay at u.northwestern.edu. Learn why this is important at https://aka.ms/LearnAboutSenderIdentification ]
+>
+> Hi,
+>
+> Short version of my question: Rf_applyClosure was marked
+> attribute_hidden in Oct 2023, and I am curious why and if there is an
+> alternative interface to it planned.
+
+applyClosure has never been part of the API and was/is not intended
+for use by packages. Keeping things like this internal is essential to
+give us flexibility to make needed improvements to the basic engine.
+Moving this out of the installed headers and marking it as not to be
+exported merely clarifies that it is internal.
+
+> Long version:
+>
+> I have been toying with building a package that makes it easier to do
+> non-standard evaluation directly using promises, rather than wrapping
+> these in a custom type (like e.g. rlang does). The advantage of this
+> approach is that it should be fully compatible with functions that use
+> the standard R functions for NSE and inspecting function context, like
+> substitute(), match.call(), or parent.frame(). And indeed, it works!
+> -- in R 4.3, that is. The prototype version of the package is here:
+> https://github.com/mjskay/uneval  (the relevant function to my
+> question is probably do_invoke, in R/invoke.R).
+>
+> While testing on R-devel, I noticed that Rf_applyClosure(), which used
+> to be exported, is now marked with attribute_hidden. I traced the
+> change to this commit in Oct 2023:
+> https://github.com/r-devel/r-svn/commit/57dbe8ad471c8a34314ee74362ad479db03c033a
+>
+> However, the commit message did not give me clarity on the reason for
+> the change, and I have not been able to find mention of this change in
+> R-devel, R-package-devel, or the R bug tracker.
+> So, I am curious why this function is no longer exported and if there
+> is an alternative function planned to take its place.
+>
+> Neither Rf_eval nor do.call can do what I need to fully support
+> rlang-style NSE using base R. The problem is that I need to be able to
+> manually set up the list of promises provided as arguments to the
+> function.
+>
+> I fully understand that the answer to my question might be "don't do
+> that" ;).
+
+That would be my advice: Don't do that. The API does not provide an
+interface for working with promises; in fact the existence of promises
+is not guaranteed in the future. Some packages have unfortunately made
+use of some internal functions related to promises. For the ones on
+CRAN we will work with the maintainers to find alternate
+approaches. This may mean adding some functions to the API for dealing
+with some lazy-evaluation-related features at a higher level.
+
+Best,
+
+luke
+
+> But I will humbly suggest that it would be really nice to be
+> able to do NSE that can capture expressions with heterogeneous
+> environments and pass these to functions in a way that is compatible
+> with existing R functions that do NSE. The basic tools to do it are
+> there in R 4.3, I think...
+>
+> Thanks for the help!
+>
+> ---Matt
+>
+> --
+> Matthew Kay
+> Associate Professor
+> Computer Science & Communication Studies
+> Northwestern University
+> matthew.kay at u.northwestern.edu
+> http://www.mjskay.com/
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu/
+
+
