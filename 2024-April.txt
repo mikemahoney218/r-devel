@@ -2023,3 +2023,503 @@ wrote:
 	[[alternative HTML version deleted]]
 
 
+From j|nghu@zh@o @end|ng |rom hotm@||@com  Tue Apr 16 12:46:02 2024
+From: j|nghu@zh@o @end|ng |rom hotm@||@com (jing hua zhao)
+Date: Tue, 16 Apr 2024 10:46:02 +0000
+Subject: [Rd] read.csv
+In-Reply-To: <C1CC6BFB-4735-4156-82CA-3B17091EF0B0@cbs.dk>
+References: <C1CC6BFB-4735-4156-82CA-3B17091EF0B0@cbs.dk>
+Message-ID: <CWLP123MB6299EC5F22E59B289CA755CCA5082@CWLP123MB6299.GBRP123.PROD.OUTLOOK.COM>
+
+Dear R-developers,
+
+I came to a somewhat unexpected behaviour of read.csv() which is trivial but worthwhile to note -- my data involves a protein named "1433E" but to save space I drop the quote so it becomes,
+
+Gene,SNP,prot,log10p
+YWHAE,13:62129097_C_T,1433E,7.35
+YWHAE,4:72617557_T_TA,1433E,7.73
+
+Both read.cv() and readr::read_csv() consider prot(ein) name as (possibly confused by scientific notation) numeric 1433 which only alerts me when I tried to combine data,
+
+all_data <- data.frame()
+for (protein in proteins[1:7])
+{
+   cat(protein,":\n")
+   f <- paste0(protein,".csv")
+   if(file.exists(f))
+   {
+     p <- read.csv(f)
+     print(p)
+     if(nrow(p)>0) all_data  <- bind_rows(all_data,p)
+   }
+}
+
+proteins[1:7]
+[1] "1433B" "1433E" "1433F" "1433G" "1433S" "1433T" "1433Z"
+
+dplyr::bind_rows() failed to work due to incompatible types nevertheless rbind() went ahead without warnings.
+
+Best wishes,
+
+
+Jing Hua
+
+
+From edd @end|ng |rom deb|@n@org  Tue Apr 16 12:52:09 2024
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Tue, 16 Apr 2024 05:52:09 -0500
+Subject: [Rd] read.csv
+In-Reply-To: <CWLP123MB6299EC5F22E59B289CA755CCA5082@CWLP123MB6299.GBRP123.PROD.OUTLOOK.COM>
+References: <C1CC6BFB-4735-4156-82CA-3B17091EF0B0@cbs.dk>
+ <CWLP123MB6299EC5F22E59B289CA755CCA5082@CWLP123MB6299.GBRP123.PROD.OUTLOOK.COM>
+Message-ID: <26142.22617.861374.789716@rob.eddelbuettel.com>
+
+
+On 16 April 2024 at 10:46, jing hua zhao wrote:
+| Dear R-developers,
+| 
+| I came to a somewhat unexpected behaviour of read.csv() which is trivial but worthwhile to note -- my data involves a protein named "1433E" but to save space I drop the quote so it becomes,
+| 
+| Gene,SNP,prot,log10p
+| YWHAE,13:62129097_C_T,1433E,7.35
+| YWHAE,4:72617557_T_TA,1433E,7.73
+| 
+| Both read.cv() and readr::read_csv() consider prot(ein) name as (possibly confused by scientific notation) numeric 1433 which only alerts me when I tried to combine data,
+| 
+| all_data <- data.frame()
+| for (protein in proteins[1:7])
+| {
+|    cat(protein,":\n")
+|    f <- paste0(protein,".csv")
+|    if(file.exists(f))
+|    {
+|      p <- read.csv(f)
+|      print(p)
+|      if(nrow(p)>0) all_data  <- bind_rows(all_data,p)
+|    }
+| }
+| 
+| proteins[1:7]
+| [1] "1433B" "1433E" "1433F" "1433G" "1433S" "1433T" "1433Z"
+| 
+| dplyr::bind_rows() failed to work due to incompatible types nevertheless rbind() went ahead without warnings.
+
+You may need to reconsider aiding read.csv() (and alternate reading
+functions) by supplying column-type info instead of relying on educated
+heuristic guesses which appear to fail here due to the nature of your data.
+
+Other storage formats can store type info. That is generally safer and may be
+an option too.
+
+I think this was more of an email for r-help than r-devel.
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From ru|pb@rr@d@@ @end|ng |rom @@po@pt  Tue Apr 16 13:36:36 2024
+From: ru|pb@rr@d@@ @end|ng |rom @@po@pt (Rui Barradas)
+Date: Tue, 16 Apr 2024 12:36:36 +0100
+Subject: [Rd] read.csv
+In-Reply-To: <CWLP123MB6299EC5F22E59B289CA755CCA5082@CWLP123MB6299.GBRP123.PROD.OUTLOOK.COM>
+References: <C1CC6BFB-4735-4156-82CA-3B17091EF0B0@cbs.dk>
+ <CWLP123MB6299EC5F22E59B289CA755CCA5082@CWLP123MB6299.GBRP123.PROD.OUTLOOK.COM>
+Message-ID: <285f4592-b0d8-4c1e-b3b2-bfce36e30d79@sapo.pt>
+
+?s 11:46 de 16/04/2024, jing hua zhao escreveu:
+> Dear R-developers,
+> 
+> I came to a somewhat unexpected behaviour of read.csv() which is trivial but worthwhile to note -- my data involves a protein named "1433E" but to save space I drop the quote so it becomes,
+> 
+> Gene,SNP,prot,log10p
+> YWHAE,13:62129097_C_T,1433E,7.35
+> YWHAE,4:72617557_T_TA,1433E,7.73
+> 
+> Both read.cv() and readr::read_csv() consider prot(ein) name as (possibly confused by scientific notation) numeric 1433 which only alerts me when I tried to combine data,
+> 
+> all_data <- data.frame()
+> for (protein in proteins[1:7])
+> {
+>     cat(protein,":\n")
+>     f <- paste0(protein,".csv")
+>     if(file.exists(f))
+>     {
+>       p <- read.csv(f)
+>       print(p)
+>       if(nrow(p)>0) all_data  <- bind_rows(all_data,p)
+>     }
+> }
+> 
+> proteins[1:7]
+> [1] "1433B" "1433E" "1433F" "1433G" "1433S" "1433T" "1433Z"
+> 
+> dplyr::bind_rows() failed to work due to incompatible types nevertheless rbind() went ahead without warnings.
+> 
+> Best wishes,
+> 
+> 
+> Jing Hua
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+Hello,
+
+I wrote a file with that content and read it back with
+
+
+read.csv("filename.csv", as.is = TRUE)
+
+
+There were no problems, it all worked as expected.
+
+Hope this helps,
+
+Rui Barradas
+
+
+
+
+-- 
+Este e-mail foi analisado pelo software antiv?rus AVG para verificar a presen?a de v?rus.
+www.avg.com
+
+
+From pd@|gd @end|ng |rom gm@||@com  Tue Apr 16 14:03:40 2024
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Tue, 16 Apr 2024 14:03:40 +0200
+Subject: [Rd] read.csv
+In-Reply-To: <CWLP123MB6299EC5F22E59B289CA755CCA5082@CWLP123MB6299.GBRP123.PROD.OUTLOOK.COM>
+References: <C1CC6BFB-4735-4156-82CA-3B17091EF0B0@cbs.dk>
+ <CWLP123MB6299EC5F22E59B289CA755CCA5082@CWLP123MB6299.GBRP123.PROD.OUTLOOK.COM>
+Message-ID: <C381250A-3195-498C-A428-40D56C52A2AC@gmail.com>
+
+Hum...
+
+This boils down to
+
+> as.numeric("1.23e")
+[1] 1.23
+> as.numeric("1.23e-")
+[1] 1.23
+> as.numeric("1.23e+")
+[1] 1.23
+
+which in turn comes from this code in src/main/util.c (function R_strtod)
+
+    if (*p == 'e' || *p == 'E') {
+        int expsign = 1;
+        switch(*++p) {
+        case '-': expsign = -1;
+        case '+': p++;
+        default: ;
+        }
+        for (n = 0; *p >= '0' && *p <= '9'; p++) n = (n < MAX_EXPONENT_PREFIX) ? n * 10 + (*p - '0') : n;
+        expn += expsign * n;
+    }
+
+which sets the exponent to zero even if the for loop terminates immediately.  
+
+This might qualify as a bug, as it differs from the C function strtod which accepts
+
+"A sequence of digits, optionally containing a decimal-point character (.), optionally followed by an exponent part (an e or E character followed by an optional sign and a sequence of digits)."
+
+[Of course, there would be nothing to stop e.g. "1433E1" from being converted to numeric.]
+
+-pd
+
+
+> On 16 Apr 2024, at 12:46 , jing hua zhao <jinghuazhao at hotmail.com> wrote:
+> 
+> Dear R-developers,
+> 
+> I came to a somewhat unexpected behaviour of read.csv() which is trivial but worthwhile to note -- my data involves a protein named "1433E" but to save space I drop the quote so it becomes,
+> 
+> Gene,SNP,prot,log10p
+> YWHAE,13:62129097_C_T,1433E,7.35
+> YWHAE,4:72617557_T_TA,1433E,7.73
+> 
+> Both read.cv() and readr::read_csv() consider prot(ein) name as (possibly confused by scientific notation) numeric 1433 which only alerts me when I tried to combine data,
+> 
+> all_data <- data.frame()
+> for (protein in proteins[1:7])
+> {
+>   cat(protein,":\n")
+>   f <- paste0(protein,".csv")
+>   if(file.exists(f))
+>   {
+>     p <- read.csv(f)
+>     print(p)
+>     if(nrow(p)>0) all_data  <- bind_rows(all_data,p)
+>   }
+> }
+> 
+> proteins[1:7]
+> [1] "1433B" "1433E" "1433F" "1433G" "1433S" "1433T" "1433Z"
+> 
+> dplyr::bind_rows() failed to work due to incompatible types nevertheless rbind() went ahead without warnings.
+> 
+> Best wishes,
+> 
+> 
+> Jing Hua
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Tue Apr 16 14:11:40 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 16 Apr 2024 08:11:40 -0400
+Subject: [Rd] read.csv
+In-Reply-To: <285f4592-b0d8-4c1e-b3b2-bfce36e30d79@sapo.pt>
+References: <C1CC6BFB-4735-4156-82CA-3B17091EF0B0@cbs.dk>
+ <CWLP123MB6299EC5F22E59B289CA755CCA5082@CWLP123MB6299.GBRP123.PROD.OUTLOOK.COM>
+ <285f4592-b0d8-4c1e-b3b2-bfce36e30d79@sapo.pt>
+Message-ID: <0f79ad00-3c90-48e8-bda6-0effa1028888@gmail.com>
+
+On 16/04/2024 7:36 a.m., Rui Barradas wrote:
+> ?s 11:46 de 16/04/2024, jing hua zhao escreveu:
+>> Dear R-developers,
+>>
+>> I came to a somewhat unexpected behaviour of read.csv() which is trivial but worthwhile to note -- my data involves a protein named "1433E" but to save space I drop the quote so it becomes,
+>>
+>> Gene,SNP,prot,log10p
+>> YWHAE,13:62129097_C_T,1433E,7.35
+>> YWHAE,4:72617557_T_TA,1433E,7.73
+>>
+>> Both read.cv() and readr::read_csv() consider prot(ein) name as (possibly confused by scientific notation) numeric 1433 which only alerts me when I tried to combine data,
+>>
+>> all_data <- data.frame()
+>> for (protein in proteins[1:7])
+>> {
+>>      cat(protein,":\n")
+>>      f <- paste0(protein,".csv")
+>>      if(file.exists(f))
+>>      {
+>>        p <- read.csv(f)
+>>        print(p)
+>>        if(nrow(p)>0) all_data  <- bind_rows(all_data,p)
+>>      }
+>> }
+>>
+>> proteins[1:7]
+>> [1] "1433B" "1433E" "1433F" "1433G" "1433S" "1433T" "1433Z"
+>>
+>> dplyr::bind_rows() failed to work due to incompatible types nevertheless rbind() went ahead without warnings.
+>>
+>> Best wishes,
+>>
+>>
+>> Jing Hua
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> Hello,
+> 
+> I wrote a file with that content and read it back with
+> 
+> 
+> read.csv("filename.csv", as.is = TRUE)
+> 
+> 
+> There were no problems, it all worked as expected.
+
+What platform are you on?  I got the same output as Jing Hua:
+
+Input filename.csv:
+
+Gene,SNP,prot,log10p
+YWHAE,13:62129097_C_T,1433E,7.35
+YWHAE,4:72617557_T_TA,1433E,7.73
+
+Output:
+
+ > read.csv("filename.csv")
+    Gene             SNP prot log10p
+1 YWHAE 13:62129097_C_T 1433   7.35
+2 YWHAE 4:72617557_T_TA 1433   7.73
+
+Duncan Murdoch
+
+
+From edd @end|ng |rom deb|@n@org  Tue Apr 16 14:22:19 2024
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Tue, 16 Apr 2024 07:22:19 -0500
+Subject: [Rd] read.csv
+In-Reply-To: <C381250A-3195-498C-A428-40D56C52A2AC@gmail.com>
+References: <C1CC6BFB-4735-4156-82CA-3B17091EF0B0@cbs.dk>
+ <CWLP123MB6299EC5F22E59B289CA755CCA5082@CWLP123MB6299.GBRP123.PROD.OUTLOOK.COM>
+ <C381250A-3195-498C-A428-40D56C52A2AC@gmail.com>
+Message-ID: <26142.28027.698465.688603@rob.eddelbuettel.com>
+
+
+As an aside, the odd format does not seem to bother data.table::fread() which
+also happens to be my personally preferred workhorse for these tasks:
+
+> fname <- "/tmp/r/filename.csv"
+> read.csv(fname)
+   Gene             SNP prot log10p
+1 YWHAE 13:62129097_C_T 1433   7.35
+2 YWHAE 4:72617557_T_TA 1433   7.73
+> data.table::fread(fname)
+     Gene             SNP   prot log10p
+   <char>          <char> <char>  <num>
+1:  YWHAE 13:62129097_C_T  1433E   7.35
+2:  YWHAE 4:72617557_T_TA  1433E   7.73
+> readr::read_csv(fname)
+Rows: 2 Columns: 4
+?? Column specification ??????????????????????????????????????????????????????????????????????????????
+Delimiter: ","
+chr (2): Gene, SNP
+dbl (2): prot, log10p
+
+? Use `spec()` to retrieve the full column specification for this data.
+? Specify the column types or set `show_col_types = FALSE` to quiet this message.
+# A tibble: 2 ? 4
+  Gene  SNP              prot log10p
+  <chr> <chr>           <dbl>  <dbl>
+1 YWHAE 13:62129097_C_T  1433   7.35
+2 YWHAE 4:72617557_T_TA  1433   7.73
+> 
+
+That's on Linux, everything current but dev version of data.table.
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From bbo|ker @end|ng |rom gm@||@com  Tue Apr 16 14:37:01 2024
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Tue, 16 Apr 2024 08:37:01 -0400
+Subject: [Rd] read.csv
+In-Reply-To: <CWLP123MB6299EC5F22E59B289CA755CCA5082@CWLP123MB6299.GBRP123.PROD.OUTLOOK.COM>
+References: <C1CC6BFB-4735-4156-82CA-3B17091EF0B0@cbs.dk>
+ <CWLP123MB6299EC5F22E59B289CA755CCA5082@CWLP123MB6299.GBRP123.PROD.OUTLOOK.COM>
+Message-ID: <74a5e758-9cd7-4698-8b4d-5e58e878440c@gmail.com>
+
+   Tangentially, your code will be more efficient if you add the data 
+files to a *list* one by one and then apply bind_rows or 
+do.call(rbind,...) after you have accumulated all of the information 
+(see chapter 2 of the _R Inferno_). This may or may not be practically 
+important in your particular case.
+
+Burns, Patrick. 2012. The R Inferno. Lulu.com. 
+http://www.burns-stat.com/pages/Tutor/R_inferno.pdf.
+
+
+On 2024-04-16 6:46 a.m., jing hua zhao wrote:
+> Dear R-developers,
+> 
+> I came to a somewhat unexpected behaviour of read.csv() which is trivial but worthwhile to note -- my data involves a protein named "1433E" but to save space I drop the quote so it becomes,
+> 
+> Gene,SNP,prot,log10p
+> YWHAE,13:62129097_C_T,1433E,7.35
+> YWHAE,4:72617557_T_TA,1433E,7.73
+> 
+> Both read.cv() and readr::read_csv() consider prot(ein) name as (possibly confused by scientific notation) numeric 1433 which only alerts me when I tried to combine data,
+> 
+> all_data <- data.frame()
+> for (protein in proteins[1:7])
+> {
+>     cat(protein,":\n")
+>     f <- paste0(protein,".csv")
+>     if(file.exists(f))
+>     {
+>       p <- read.csv(f)
+>       print(p)
+>       if(nrow(p)>0) all_data  <- bind_rows(all_data,p)
+>     }
+> }
+> 
+> proteins[1:7]
+> [1] "1433B" "1433E" "1433F" "1433G" "1433S" "1433T" "1433Z"
+> 
+> dplyr::bind_rows() failed to work due to incompatible types nevertheless rbind() went ahead without warnings.
+> 
+> Best wishes,
+> 
+> 
+> Jing Hua
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From r@c@rtwr|ght @end|ng |rom gm@||@com  Tue Apr 16 20:21:49 2024
+From: r@c@rtwr|ght @end|ng |rom gm@||@com (Reed A. Cartwright)
+Date: Tue, 16 Apr 2024 11:21:49 -0700
+Subject: [Rd] read.csv
+In-Reply-To: <CWLP123MB6299EC5F22E59B289CA755CCA5082@CWLP123MB6299.GBRP123.PROD.OUTLOOK.COM>
+References: <C1CC6BFB-4735-4156-82CA-3B17091EF0B0@cbs.dk>
+ <CWLP123MB6299EC5F22E59B289CA755CCA5082@CWLP123MB6299.GBRP123.PROD.OUTLOOK.COM>
+Message-ID: <CALOkxuy1Y-0B0Vg2OW23WJG3=r=1FyT94Na1G7R+Di6GeACFdw@mail.gmail.com>
+
+Gene names being misinterpreted by spreadsheet software (read.csv is
+no different) is a classic issue in bioinformatics. It seems like
+every practitioner ends up encountering this issue in due time. E.g.
+
+https://pubmed.ncbi.nlm.nih.gov/15214961/
+
+https://genomebiology.biomedcentral.com/articles/10.1186/s13059-016-1044-7
+
+https://www.nature.com/articles/d41586-021-02211-4
+
+https://www.theverge.com/2020/8/6/21355674/human-genes-rename-microsoft-excel-misreading-dates
+
+
+On Tue, Apr 16, 2024 at 3:46?AM jing hua zhao <jinghuazhao at hotmail.com> wrote:
+>
+> Dear R-developers,
+>
+> I came to a somewhat unexpected behaviour of read.csv() which is trivial but worthwhile to note -- my data involves a protein named "1433E" but to save space I drop the quote so it becomes,
+>
+> Gene,SNP,prot,log10p
+> YWHAE,13:62129097_C_T,1433E,7.35
+> YWHAE,4:72617557_T_TA,1433E,7.73
+>
+> Both read.cv() and readr::read_csv() consider prot(ein) name as (possibly confused by scientific notation) numeric 1433 which only alerts me when I tried to combine data,
+>
+> all_data <- data.frame()
+> for (protein in proteins[1:7])
+> {
+>    cat(protein,":\n")
+>    f <- paste0(protein,".csv")
+>    if(file.exists(f))
+>    {
+>      p <- read.csv(f)
+>      print(p)
+>      if(nrow(p)>0) all_data  <- bind_rows(all_data,p)
+>    }
+> }
+>
+> proteins[1:7]
+> [1] "1433B" "1433E" "1433F" "1433G" "1433S" "1433T" "1433Z"
+>
+> dplyr::bind_rows() failed to work due to incompatible types nevertheless rbind() went ahead without warnings.
+>
+> Best wishes,
+>
+>
+> Jing Hua
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://urldefense.com/v3/__https://stat.ethz.ch/mailman/listinfo/r-devel__;!!IKRxdwAv5BmarQ!YJzURlAK1O3rlvXvq9xl99aUaYL5iKm9gnN5RBi-WJtWa5IEtodN3vaN9pCvRTZA23dZyfrVD7X8nlYUk7S1AK893A$
+
+
