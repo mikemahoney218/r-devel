@@ -3733,3 +3733,265 @@ Yutani
 	[[alternative HTML version deleted]]
 
 
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Tue Apr 23 08:22:41 2024
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Tue, 23 Apr 2024 08:22:41 +0200
+Subject: [Rd] 
+ Petition to set warnPartialMatch* options to TRUE during R CMD
+ check by default
+In-Reply-To: <CAPRVBczEPOztjYDSezpC0MB13hnPoag3hpbVoQRsaRMrKvRH3w@mail.gmail.com>
+References: <CAPRVBczEPOztjYDSezpC0MB13hnPoag3hpbVoQRsaRMrKvRH3w@mail.gmail.com>
+Message-ID: <26151.21425.249942.74034@hornik.net>
+
+>>>>> Michael Chirico writes:
+
+Michael,
+
+You may have seen that some time ago I added
+
+check.R:            cprof <- Sys.getenv("_R_CHECK_EXAMPLES_PROFILE_", "")
+
+etc so one can use the _R_CHECK_EXAMPLES_PROFILE_ env var to specify a
+profile to use when running the examples, e.g.
+
+options(warnPartialMatchArgs = TRUE,
+        warnPartialMatchAttr = TRUE,
+        warnPartialMatchDollar = TRUE)
+
+In principle one could do this by default, because it has no effect:
+such warnings in the output will not be seen in the check log by
+default.  One could change that, but then the problem is that there is
+no way to filter the warnings according to where they come from.
+
+I had used the mechanism to eliminate partial matches from the base R
+packages.  I had also tried using it for my own CRAN packages, and fixed
+the ones under my control, and reported the others, most of which never
+got fixed ...
+
+Best
+-k
+
+> Hi all,
+> What it says in the title. This is likely to cause a lot of CRAN packages
+> to fail (I can try and quantify this if seen fit), but I think it's for the
+> best. Packages should not (IMHO) be relying on partial matching in package
+> code / tests. One might be more permissive for vignette/examples code,
+> though I still find it poor practice.
+
+> Among many reasons why package authors should resist using partial
+> matching, today I saw this:
+
+> upstream package A adds a new argument 'nb' to its print method, now there
+> are two arguments 'na' and 'nb' starting with 'n'
+> downstream package B importing A starts failing because it was using
+> print(n=...) and relying on that resolving to na= but now it's ambiguous
+
+> This feels like an unnecessary risk for considerate package A authors to
+> need to take into account when designing their API. Yes, downstream package
+> B "should" be broken & resubmitted to CRAN, but (1) there is some perceived
+> "blame" for package A "causing B to be removed" and (2) the re-submitted
+> package is by no means assured to be "safe" -- time-constrained B authors
+> may just fix the minimum set of partially-matched calls while leaving
+> potentially many other similar at-risk call sites unchanged.
+
+> Better to enforce exact matching in package code globally, I think.
+
+> It seems likely (given how options work in R) that committed authors will
+> be able to sidestep the issue by disabling the PartialMatch warnings, but
+> better to make this inconvenient with a stricter default.
+
+> Mike C
+
+> 	[[alternative HTML version deleted]]
+
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From h@w|ckh@m @end|ng |rom gm@||@com  Tue Apr 23 14:52:32 2024
+From: h@w|ckh@m @end|ng |rom gm@||@com (Hadley Wickham)
+Date: Tue, 23 Apr 2024 07:52:32 -0500
+Subject: [Rd] Is ALTREP "non-API"?
+In-Reply-To: <C13AAB3A-0189-4959-83E0-3E3B1392717D@R-project.org>
+References: <CALyqOb8VS+z-1c4r-NAGvg9EfTgSL_1MqbQkSWb+7jQZdJWQ1Q@mail.gmail.com>
+ <000a01da9452$c6f8bc70$54ea3550$@gmail.com>
+ <CALyqOb-vcs3RfB5SEOnk-f72N9WuAv6fRRUQmvO+Cyuh+x+bWQ@mail.gmail.com>
+ <CAD4oTHGp0CmnZV1-T+vOrEP7ekMsRJ8PQA3nn9KxqM7WX7oPdw@mail.gmail.com>
+ <7567536C-3B54-4568-996B-108670F55AAC@R-project.org>
+ <CABdHhvGiWFjTVMfcjowoO1QKATeTc0jw2EpMC=CYSwY+ZHs36A@mail.gmail.com>
+ <C13AAB3A-0189-4959-83E0-3E3B1392717D@R-project.org>
+Message-ID: <CABdHhvFpVJMMQD7CubomzCKC4HDGkbWfD-t6OaRSxZfcKcRZ6g@mail.gmail.com>
+
+>
+>
+>
+> > > ALTREP is part of the official R api, as illustrated by the presence of
+> > > src/include/R_ext/Altrep.h. Everything declared in the header files in
+> that
+> > > directory is official API AFAIK (and I believe that is more definitive
+> than
+> > > the manuals).
+> > >
+> >
+> > That is not true at all - the presence of header does not constitute
+> declaration of something as the R API. There are cases where internal
+> functions are in the headers for historical or other reasons since the
+> headers are used both for the internal implementation and packages. That's
+> why this is in R-exts under "The R API: entry points for C code":
+> >
+> > If I understand your point correctly, does this mean that
+> Rf_allocVector() is not part of the "official" R API? It does not appear to
+> be documented in the "The R API: entry points for C code" section.
+> >
+>
+> It does, obviously:
+> https://cran.r-project.org/doc/manuals/R-exts.html#Allocating-storage-1
+
+
+I'm just trying to understand the precise definition of the official API
+here. So it's any function mentioned in R-exts, regardless of which section
+it appears in?
+
+Does this sentence imply that all functions starting with alloc* are part
+of the official API?
+
+> For many purposes it is sufficient to allocate R objects and manipulate
+those. There are quite a
+> few allocXxx functions defined in Rinternals.h?you may want to explore
+them.
+
+Generally, things in a file with "internal" in its name are internal.
+
+Hadley
+
+-- 
+http://hadley.nz
+
+	[[alternative HTML version deleted]]
+
+
+From therne@u @end|ng |rom m@yo@edu  Tue Apr 23 15:07:58 2024
+From: therne@u @end|ng |rom m@yo@edu (Therneau, Terry M., Ph.D.)
+Date: Tue, 23 Apr 2024 08:07:58 -0500
+Subject: [Rd] Petition to set warnPartialMatch* options to TRUE
+Message-ID: <d2a753$lurlgq@ironport10.mayo.edu>
+
+Let me give partial assent to Michael's suggestion:? a) have an easy way to turn this on 
+and b) add a strong suggestion to do so to the WRE manual. Kurt's example in the email 
+shows how to do (a);? but I just looked in the WRE manual and don't see any reference to 
+it, nor any mention from R CMD check --help, so I don't know where I would have found out 
+about it.
+
+I have gotton warnings about partial matches from CRAN? wrt the survival package --- I 
+suspect at the benefit of Kurt? --- and though I muttered under my breath about it at the 
+time there is no doubt that it was a good idea to fix all of them, and I'm glad for the nudge.
+
+Kurt: does that envionment variable contain the options string itself, or does it point to 
+a file containing the options?
+
+I appreciate partial matching when typing code at the terminal so want the feature to 
+remain in that context.
+
+Terry T
+
+-- 
+Terry M Therneau, PhD
+Department of Quantitative Health Sciences
+Mayo Clinic
+therneau at mayo.edu
+
+"TERR-ree THUR-noh"
+
+	[[alternative HTML version deleted]]
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Tue Apr 23 23:25:00 2024
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Wed, 24 Apr 2024 09:25:00 +1200
+Subject: [Rd] Is ALTREP "non-API"?
+In-Reply-To: <CABdHhvFpVJMMQD7CubomzCKC4HDGkbWfD-t6OaRSxZfcKcRZ6g@mail.gmail.com>
+References: <CALyqOb8VS+z-1c4r-NAGvg9EfTgSL_1MqbQkSWb+7jQZdJWQ1Q@mail.gmail.com>
+ <000a01da9452$c6f8bc70$54ea3550$@gmail.com>
+ <CALyqOb-vcs3RfB5SEOnk-f72N9WuAv6fRRUQmvO+Cyuh+x+bWQ@mail.gmail.com>
+ <CAD4oTHGp0CmnZV1-T+vOrEP7ekMsRJ8PQA3nn9KxqM7WX7oPdw@mail.gmail.com>
+ <7567536C-3B54-4568-996B-108670F55AAC@R-project.org>
+ <CABdHhvGiWFjTVMfcjowoO1QKATeTc0jw2EpMC=CYSwY+ZHs36A@mail.gmail.com>
+ <C13AAB3A-0189-4959-83E0-3E3B1392717D@R-project.org>
+ <CABdHhvFpVJMMQD7CubomzCKC4HDGkbWfD-t6OaRSxZfcKcRZ6g@mail.gmail.com>
+Message-ID: <EBBB96A0-D6CA-4003-BF55-8F5344B18892@R-project.org>
+
+
+
+> On Apr 24, 2024, at 12:52 AM, Hadley Wickham <h.wickham at gmail.com> wrote:
+> 
+>> 
+>> 
+>> 
+>>>> ALTREP is part of the official R api, as illustrated by the presence of
+>>>> src/include/R_ext/Altrep.h. Everything declared in the header files in
+>> that
+>>>> directory is official API AFAIK (and I believe that is more definitive
+>> than
+>>>> the manuals).
+>>>> 
+>>> 
+>>> That is not true at all - the presence of header does not constitute
+>> declaration of something as the R API. There are cases where internal
+>> functions are in the headers for historical or other reasons since the
+>> headers are used both for the internal implementation and packages. That's
+>> why this is in R-exts under "The R API: entry points for C code":
+>>> 
+>>> If I understand your point correctly, does this mean that
+>> Rf_allocVector() is not part of the "official" R API? It does not appear to
+>> be documented in the "The R API: entry points for C code" section.
+>>> 
+>> 
+>> It does, obviously:
+>> https://cran.r-project.org/doc/manuals/R-exts.html#Allocating-storage-1
+> 
+> 
+> I'm just trying to understand the precise definition of the official API
+> here. So it's any function mentioned in R-exts, regardless of which section
+> it appears in?
+> 
+> Does this sentence imply that all functions starting with alloc* are part
+> of the official API?
+> 
+
+Again, I can only quote the R-exts (few lines below the previous "The R API" quote):
+
+
+We can classify the entry points as
+API
+Entry points which are documented in this manual and declared in an installed header file. These can be used in distributed packages and will only be changed after deprecation.
+
+
+It says "in this manual" - I don't see anywhere restriction on a particular section of the manual, so I really don't see why you would think that allocation is not part on the API.
+
+Cheers,
+Simon
+
+
+
+
+>> For many purposes it is sufficient to allocate R objects and manipulate
+> those. There are quite a
+>> few allocXxx functions defined in Rinternals.h?you may want to explore
+> them.
+> 
+> Generally, things in a file with "internal" in its name are internal.
+> 
+> Hadley
+> 
+> -- 
+> http://hadley.nz
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
