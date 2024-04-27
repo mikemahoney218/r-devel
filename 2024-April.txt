@@ -5031,3 +5031,1043 @@ Department of Statistics and        Fax:               319-335-3017
 Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu/
 
 
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Thu Apr 25 08:07:56 2024
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Thu, 25 Apr 2024 08:07:56 +0200
+Subject: [Rd] 
+ Question regarding .make_numeric_version with non-character input
+In-Reply-To: <8a599021-e0f5-4498-ba9c-bbdcb90e4486@gmail.com>
+References: <PAXP251MB0578C2827F352E173D109017983A2@PAXP251MB0578.EURP251.PROD.OUTLOOK.COM>
+ <26119.4881.618411.645248@rob.eddelbuettel.com>
+ <14ab2002-74a8-491b-8921-b66364479003@polimi.it>
+ <26122.43144.181286.316307@hornik.net>
+ <8a599021-e0f5-4498-ba9c-bbdcb90e4486@gmail.com>
+Message-ID: <26153.62268.101698.468796@hornik.net>
+
+>>>>> Herv? Pag?s writes:
+
+> Hi Kurt,
+> Is it intended that numeric_version() returns an error by default on
+> non-character input in R 4.4.0? 
+
+Dear Herve, yes, that's the intention.
+
+> It seems that I can turn this into a warning by setting
+> _R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_=false but I don't
+> seem to be able to find any of this mentioned in the NEWS file.
+
+That's what I added for smoothing the transition: it will be removed
+from the trunk shortly.
+
+Best
+-k
+
+> Thanks,
+
+> H.
+
+> On 4/1/24 05:28, Kurt Hornik wrote:
+
+>                         Andrea Gilardi via R-devel writes:
+                        
+>     Thanks: should be fixed now in the trunk.
+    
+>     Best
+>     -k
+
+>         Thank you very much Dirk for your kind words and for confirming the bug. 
+>         Next week I will open a new issue on Bugzilla adding the related patch.
+        
+>         Kind regards
+        
+>         Andrea
+        
+>         On 29/03/2024 20:14, Dirk Eddelbuettel wrote:
+        
+>             On 29 March 2024 at 17:56, Andrea Gilardi via R-devel wrote:
+>             | Dear all,
+>             |
+>             | I have a question regarding the R-devel version of .make_numeric_version() function. As far as I can understand, the current code (https://github.com/wch/r-source/blob/66b91578dfc85140968f07dd4e72d8cb8a54f4c6/src/library/base/R/version.R#L50-L56) runs the following steps in case of non-character input:
+>             |
+>             | 1. It creates a message named msg using gettextf.
+>             | 2. Such object is then passed to stop(msg) or warning(msg) according to the following condition
+>             |
+>             | tolower(Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_") != "false")
+>             |
+>             | However, I don't understand the previous code since the output of Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_") != "false" is just a boolean value and tolower() will just return "true" or "false". Maybe the intended code is tolower(Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_")) != "false" ? Or am I missing something?
+            
+>             Yes, agreed -- good catch.  In full, the code is (removing leading
+>             whitespace, and putting it back onto single lines)
+            
+>             msg <- gettextf("invalid non-character version specification 'x' (type: %s)", typeof(x))
+>             if(tolower(Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_") != "false"))
+>             stop(msg, domain = NA)
+>             else
+>             warning(msg, domain = NA, immediate. = TRUE)
+            
+>             where msg is constant (but reflecting language settings via standard i18n)
+>             and as you not the parentheses appear wrong.  What was intended is likely
+            
+>             msg <- gettextf("invalid non-character version specification 'x' (type: %s)", typeof(x))
+>             if(tolower(Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_")) != "false")
+>             stop(msg, domain = NA)
+>             else
+>             warning(msg, domain = NA, immediate. = TRUE)
+            
+>             If you use bugzilla before and have a handle, maybe file a bug report with
+>             this as patch at https://bugs.r-project.org/
+            
+>             Dirk
+
+>         ______________________________________________
+>         R-devel at r-project.org mailing list
+>         https://stat.ethz.ch/mailman/listinfo/r-devel
+        
+>     ______________________________________________
+>     R-devel at r-project.org mailing list
+>     https://stat.ethz.ch/mailman/listinfo/r-devel
+    
+> -- 
+> Herv? Pag?s
+
+> Bioconductor Core Team
+> hpages.on.github at gmail.com
+
+
+From |kry|ov @end|ng |rom d|@root@org  Thu Apr 25 08:56:10 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Thu, 25 Apr 2024 09:56:10 +0300
+Subject: [Rd] View() segfaulting ...
+In-Reply-To: <101c811e-3164-4a27-9465-01e360fa236f@gmail.com>
+References: <101c811e-3164-4a27-9465-01e360fa236f@gmail.com>
+Message-ID: <20240425095610.30865d04@Tarkus>
+
+On Wed, 24 Apr 2024 19:35:42 -0400
+Ben Bolker <bbolker at gmail.com> wrote:
+
+>  I'm using bleeding-edge R-devel, so maybe my build is weird. Can 
+> anyone else reproduce this?
+> 
+>    View() seems to crash on just about anything.
+
+Not for me, sorry.
+
+If you have a sufficiently new processor, you can use `rr` [*] to
+capture the crash, set a breakpoint in in_R_X11_dataviewer and rewind,
+then set a watchpoint on the stack canary and run the program forward
+again:
+https://www.redhat.com/en/blog/debugging-stack-protector-failures
+
+If you can't locate the canary, try setting watchpoints on large local
+variables. Without `rr`, the procedure is probably the same, but
+without rewinding: set a breakpoint in in_R_X11_dataviewer, set some
+watchpoints, see if they fire when they shouldn't, start from scratch
+if you get past the watchpoints and the process crashes.
+
+I think that that either an object file didn't get rebuilt when it
+should have, or a shared library used by something downstream from
+View() got an ABI-breaking update. If this still reproduces with a clean
+rebuild of R, it's definitely worth investigating further, perhaps using
+AddressSanitizer. Valgrind may be lacking the information about the
+stack canary and thus failing to distinguish between overwriting the
+canary and normal access to a stack variable via a pointer.
+
+-- 
+Best regards,
+Ivan
+
+[*] https://rr-project.org/
+Edit distance of one from the domain name of the R project!
+
+Use rr replay -g $EVENT_NUMBER to debug past the initial execve()
+from the shell wrapper: https://github.com/rr-debugger/rr/wiki/FAQ
+
+
+From hp@ge@@on@g|thub @end|ng |rom gm@||@com  Thu Apr 25 09:03:24 2024
+From: hp@ge@@on@g|thub @end|ng |rom gm@||@com (=?UTF-8?B?SGVydsOpIFBhZ8Oocw==?=)
+Date: Thu, 25 Apr 2024 00:03:24 -0700
+Subject: [Rd] 
+ Question regarding .make_numeric_version with non-character input
+In-Reply-To: <26153.62268.101698.468796@hornik.net>
+References: <PAXP251MB0578C2827F352E173D109017983A2@PAXP251MB0578.EURP251.PROD.OUTLOOK.COM>
+ <26119.4881.618411.645248@rob.eddelbuettel.com>
+ <14ab2002-74a8-491b-8921-b66364479003@polimi.it>
+ <26122.43144.181286.316307@hornik.net>
+ <8a599021-e0f5-4498-ba9c-bbdcb90e4486@gmail.com>
+ <26153.62268.101698.468796@hornik.net>
+Message-ID: <38248593-ae96-4600-8995-adc7512658a5@gmail.com>
+
+On 4/24/24 23:07, Kurt Hornik wrote:
+
+>>>>>> Herv? Pag?s writes:
+>> Hi Kurt,
+>> Is it intended that numeric_version() returns an error by default on
+>> non-character input in R 4.4.0?
+> Dear Herve, yes, that's the intention.
+>
+>> It seems that I can turn this into a warning by setting
+>> _R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_=false but I don't
+>> seem to be able to find any of this mentioned in the NEWS file.
+> That's what I added for smoothing the transition: it will be removed
+> from the trunk shortly.
+
+Thanks for clarifying.? Could this be documented in the NEWS file? This 
+is a breaking change (it breaks a couple of Bioconductor packages) and 
+people are not going to set this environment variable if they are not 
+aware of it.
+
+Thanks again,
+
+H.
+
+>
+> Best
+> -k
+>
+>> Thanks,
+>> H.
+>> On 4/1/24 05:28, Kurt Hornik wrote:
+>>                          Andrea Gilardi via R-devel writes:
+>                          
+>>      Thanks: should be fixed now in the trunk.
+>      
+>>      Best
+>>      -k
+>>          Thank you very much Dirk for your kind words and for confirming the bug.
+>>          Next week I will open a new issue on Bugzilla adding the related patch.
+>          
+>>          Kind regards
+>          
+>>          Andrea
+>          
+>>          On 29/03/2024 20:14, Dirk Eddelbuettel wrote:
+>          
+>>              On 29 March 2024 at 17:56, Andrea Gilardi via R-devel wrote:
+>>              | Dear all,
+>>              |
+>>              | I have a question regarding the R-devel version of .make_numeric_version() function. As far as I can understand, the current code (https://github.com/wch/r-source/blob/66b91578dfc85140968f07dd4e72d8cb8a54f4c6/src/library/base/R/version.R#L50-L56) runs the following steps in case of non-character input:
+>>              |
+>>              | 1. It creates a message named msg using gettextf.
+>>              | 2. Such object is then passed to stop(msg) or warning(msg) according to the following condition
+>>              |
+>>              | tolower(Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_") != "false")
+>>              |
+>>              | However, I don't understand the previous code since the output of Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_") != "false" is just a boolean value and tolower() will just return "true" or "false". Maybe the intended code is tolower(Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_")) != "false" ? Or am I missing something?
+>              
+>>              Yes, agreed -- good catch.  In full, the code is (removing leading
+>>              whitespace, and putting it back onto single lines)
+>              
+>>              msg <- gettextf("invalid non-character version specification 'x' (type: %s)", typeof(x))
+>>              if(tolower(Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_") != "false"))
+>>              stop(msg, domain = NA)
+>>              else
+>>              warning(msg, domain = NA, immediate. = TRUE)
+>              
+>>              where msg is constant (but reflecting language settings via standard i18n)
+>>              and as you not the parentheses appear wrong.  What was intended is likely
+>              
+>>              msg <- gettextf("invalid non-character version specification 'x' (type: %s)", typeof(x))
+>>              if(tolower(Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_")) != "false")
+>>              stop(msg, domain = NA)
+>>              else
+>>              warning(msg, domain = NA, immediate. = TRUE)
+>              
+>>              If you use bugzilla before and have a handle, maybe file a bug report with
+>>              this as patch athttps://bugs.r-project.org/
+>              
+>>              Dirk
+>>          ______________________________________________
+>>          R-devel at r-project.org  mailing list
+>>          https://stat.ethz.ch/mailman/listinfo/r-devel
+>          
+>>      ______________________________________________
+>>      R-devel at r-project.org  mailing list
+>>      https://stat.ethz.ch/mailman/listinfo/r-devel
+>      
+>> -- 
+>> Herv? Pag?s
+>> Bioconductor Core Team
+>> hpages.on.github at gmail.com
+
+-- 
+Herv? Pag?s
+
+Bioconductor Core Team
+hpages.on.github at gmail.com
+
+	[[alternative HTML version deleted]]
+
+
+From |kry|ov @end|ng |rom d|@root@org  Thu Apr 25 13:24:18 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Thu, 25 Apr 2024 14:24:18 +0300
+Subject: [Rd] [External] Re:  Is ALTREP "non-API"?
+In-Reply-To: <dc1e6797-0ec-1061-7ce3-88a384d7ee8c@uiowa.edu>
+References: <CALyqOb8VS+z-1c4r-NAGvg9EfTgSL_1MqbQkSWb+7jQZdJWQ1Q@mail.gmail.com>
+ <000a01da9452$c6f8bc70$54ea3550$@gmail.com>
+ <CALyqOb-vcs3RfB5SEOnk-f72N9WuAv6fRRUQmvO+Cyuh+x+bWQ@mail.gmail.com>
+ <CAD4oTHGp0CmnZV1-T+vOrEP7ekMsRJ8PQA3nn9KxqM7WX7oPdw@mail.gmail.com>
+ <7567536C-3B54-4568-996B-108670F55AAC@R-project.org>
+ <CABdHhvGiWFjTVMfcjowoO1QKATeTc0jw2EpMC=CYSwY+ZHs36A@mail.gmail.com>
+ <C13AAB3A-0189-4959-83E0-3E3B1392717D@R-project.org>
+ <CABdHhvFpVJMMQD7CubomzCKC4HDGkbWfD-t6OaRSxZfcKcRZ6g@mail.gmail.com>
+ <EBBB96A0-D6CA-4003-BF55-8F5344B18892@R-project.org>
+ <CABdHhvHqUZ=HAQyfQVfrUbnKBM6dKagbMCojU6xnwoyXJ0dgqA@mail.gmail.com>
+ <dc1e6797-0ec-1061-7ce3-88a384d7ee8c@uiowa.edu>
+Message-ID: <20240425142418.6b78c7ed@arachnoid>
+
+On Wed, 24 Apr 2024 15:31:39 -0500 (CDT)
+luke-tierney--- via R-devel <r-devel at r-project.org> wrote:
+
+> We would be better off (in my view, not necessarily shared by others
+> in R-core) if we could get to a point where:
+> 
+>      all entry points listed in installed header files can be used in
+>      packages, at least with some caveats;
+> 
+>      the caveats are expressed in a standard way that is searchable,
+>      e.g. with a standardized comment syntax at the header file or
+>      individual declaration level.
+
+This sounds almost like Doxygen, although the exact syntax used to
+denote the entry points and the necessary comments is far from the most
+important detail at this point.
+
+> There are some 500 entry points in the R shared library that are in
+> the installed headers but not mentioned in WRE. These would need to
+> be reviewed and adjusted.
+
+Is there a way for outsiders to help? For example, would it help to
+produce the linking graph (package P links to entry points X, Y)? I
+understand that an entry point being unpopular doesn't mean it
+shouldn't be public (and the other way around), but combined with a
+list of entry points that are listed in WRE, such a graph could be
+useful to direct effort or estimate impact from interface changes.
+
+-- 
+Best regards,
+Ivan
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Thu Apr 25 14:07:04 2024
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Thu, 25 Apr 2024 07:07:04 -0500 (CDT)
+Subject: [Rd] [External]  View() segfaulting ...
+In-Reply-To: <101c811e-3164-4a27-9465-01e360fa236f@gmail.com>
+References: <101c811e-3164-4a27-9465-01e360fa236f@gmail.com>
+Message-ID: <627b6a7c-0e1-7ed4-b6c9-5899d8d22065@uiowa.edu>
+
+I saw it also on some of my Ubuntu builds, but the issue went away
+after a make clean/make, so maybe give that a try.
+
+Best,
+
+luke
+
+On Wed, 24 Apr 2024, Ben Bolker wrote:
+
+>  I'm using bleeding-edge R-devel, so maybe my build is weird. Can anyone 
+> else reproduce this?
+>
+>  View() seems to crash on just about anything.
+>
+> View(1:3)
+> *** stack smashing detected ***: terminated
+> Aborted (core dumped)
+>
+>  If I debug(View) I get to the last line of code with nothing obviously 
+> looking pathological:
+>
+> Browse[1]>
+> debug: invisible(.External2(C_dataviewer, x, title))
+> Browse[1]> x
+> $x
+> [1] "1" "2" "3"
+>
+> Browse[1]> title
+> [1] "Data: 1:3"
+> Browse[1]>
+> *** stack smashing detected ***: terminated
+> Aborted (core dumped)
+>
+>
+>
+> ====
+> R Under development (unstable) (2024-04-24 r86483)
+> Platform: x86_64-pc-linux-gnu
+> Running under: Pop!_OS 22.04 LTS
+>
+> Matrix products: default
+> BLAS/LAPACK: 
+> /usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblasp-r0.3.20.so; LAPACK 
+> version 3.10.0
+>
+> locale:
+> [1] LC_CTYPE=en_CA.UTF-8       LC_NUMERIC=C
+> [3] LC_TIME=en_CA.UTF-8        LC_COLLATE=en_CA.UTF-8
+> [5] LC_MONETARY=en_CA.UTF-8    LC_MESSAGES=en_CA.UTF-8
+> [7] LC_PAPER=en_CA.UTF-8       LC_NAME=C
+> [9] LC_ADDRESS=C               LC_TELEPHONE=C
+> [11] LC_MEASUREMENT=en_CA.UTF-8 LC_IDENTIFICATION=C
+>
+> time zone: America/Toronto
+> tzcode source: system (glibc)
+>
+> attached base packages:
+> [1] stats     graphics  grDevices utils     datasets  methods   base
+>
+> loaded via a namespace (and not attached):
+> [1] compiler_4.5.0
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu/
+
+
+From edd @end|ng |rom deb|@n@org  Thu Apr 25 14:22:43 2024
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Thu, 25 Apr 2024 07:22:43 -0500
+Subject: [Rd] 
+ Question regarding .make_numeric_version with non-character input
+In-Reply-To: <26153.62268.101698.468796@hornik.net>
+References: <PAXP251MB0578C2827F352E173D109017983A2@PAXP251MB0578.EURP251.PROD.OUTLOOK.COM>
+ <26119.4881.618411.645248@rob.eddelbuettel.com>
+ <14ab2002-74a8-491b-8921-b66364479003@polimi.it>
+ <26122.43144.181286.316307@hornik.net>
+ <8a599021-e0f5-4498-ba9c-bbdcb90e4486@gmail.com>
+ <26153.62268.101698.468796@hornik.net>
+Message-ID: <26154.19219.534249.771759@rob.eddelbuettel.com>
+
+
+Hi Kurt,
+
+On 25 April 2024 at 08:07, Kurt Hornik wrote:
+| >>>>> Herv? Pag?s writes:
+| 
+| > Hi Kurt,
+| > Is it intended that numeric_version() returns an error by default on
+| > non-character input in R 4.4.0? 
+| 
+| Dear Herve, yes, that's the intention.
+| 
+| > It seems that I can turn this into a warning by setting
+| > _R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_=false but I don't
+| > seem to be able to find any of this mentioned in the NEWS file.
+| 
+| That's what I added for smoothing the transition: it will be removed
+| from the trunk shortly.
+
+I would actually be nice to have a more robust variant for non-CRAN
+versions. For example I just had to do a local hack to be able to use what
+the QuantLib 'rc' 1.34-rc reported (when I then used to R facilities to
+condition code and tests on whether I was dealing with code before or after
+an API transition).  So as a wishlist: could you envision an extension to
+package_version() casting that, say, removes all [a-zA-Z]+ first (if opted
+into) ?
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From jeroenoom@ @end|ng |rom gm@||@com  Thu Apr 25 14:45:04 2024
+From: jeroenoom@ @end|ng |rom gm@||@com (Jeroen Ooms)
+Date: Thu, 25 Apr 2024 14:45:04 +0200
+Subject: [Rd] Big speedup in install.packages() by re-using connections
+In-Reply-To: <CABFfbXtpXChZLeLREEWFHFWP24cvD8Ox-7xfBGj0p+N0Rjzwbg@mail.gmail.com>
+References: <CABFfbXtpXChZLeLREEWFHFWP24cvD8Ox-7xfBGj0p+N0Rjzwbg@mail.gmail.com>
+Message-ID: <CABFfbXtnteY=_qRz8ZBQ4aAPi-j+HjasRvU-fcLPJm2nu+QwLQ@mail.gmail.com>
+
+I'd like to raise this again now that 4.4 is out.
+
+Below is a more complete patch which includes a function to properly
+cleanup libcurl when R quits. Implementing this is a little tricky
+because libcurl is a separate "module" in R, perhaps there is a better
+way, but this works:
+
+  view: https://github.com/r-devel/r-svn/pull/166/files
+  patch: https://github.com/r-devel/r-svn/pull/166.diff
+
+The old patch is still there as well, which is meant a minimal proof
+of concept to test the performance gains for reusing the connection:
+
+  view: https://github.com/r-devel/r-svn/pull/155/files
+  patch: https://github.com/r-devel/r-svn/pull/155.diff
+
+Performance gains are greatest on high-bandwidth servers when
+downloading many files from the same server (e.g. packages from a cran
+mirror). In such cases, currently over 90% of the total time is spent
+on initiating and tearing town a separate SSL connection for each file
+download.
+
+Thoughts?
+
+
+
+On Sat, Mar 2, 2024 at 3:07?PM Jeroen Ooms <jeroenooms at gmail.com> wrote:
+>
+> Currently download.file() creates and terminates a new TLS connection
+> for each download. This creates a lot of overhead which is expensive
+> for both client and server (in particular the TLS handshake). Modern
+> internet clients (including browsers) re-use connections for many http
+> requests.
+>
+> We can do this in R by creating a persistent libcurl "multi-handle".
+> The R libcurl implementation already uses a multi-handle, however it
+> destroys it after each download, which defeats the purpose. The
+> purpose of the multi-handle is to keep it alive and let libcurl
+> maintain a persistent connection pool. This is particularly relevant
+> for install.packages() which needs to download many files from one and
+> the same server.
+>
+> Here is a bare minimal proof of concept patch that re-uses one and the
+> same multi-handle for all requests in R:
+> https://github.com/r-devel/r-svn/pull/155/files
+>
+> Some quick benchmarking shows that this can lead to big speedups for
+> download.packages() on high-bandwidth servers (such as CI). This quick
+> test to download 100 packages from CRAN showed more than 10x speedup
+> for me: https://github.com/r-devel/r-svn/pull/155
+>
+> Moreover, I think this may make install.packages() more robust. In CI
+> build logs that download many packages, I often see one or two
+> downloads randomly failing with a TLS-connect error. I am hopeful this
+> problem will disappear when using a single connection to the CRAN
+> server to download all the packages.
+
+
+From bbo|ker @end|ng |rom gm@||@com  Thu Apr 25 15:14:12 2024
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Thu, 25 Apr 2024 09:14:12 -0400
+Subject: [Rd] [External]  View() segfaulting ...
+In-Reply-To: <627b6a7c-0e1-7ed4-b6c9-5899d8d22065@uiowa.edu>
+References: <101c811e-3164-4a27-9465-01e360fa236f@gmail.com>
+ <627b6a7c-0e1-7ed4-b6c9-5899d8d22065@uiowa.edu>
+Message-ID: <85fe6d9a-38bb-440a-8127-e28a2c252c63@gmail.com>
+
+   A clean build solves it for me too. Thank you!
+   (I need to add this to my "have you tried turning it off and back on 
+again?" list ...)
+
+   Ben
+
+
+On 2024-04-25 8:07 a.m., luke-tierney at uiowa.edu wrote:
+> I saw it also on some of my Ubuntu builds, but the issue went away
+> after a make clean/make, so maybe give that a try.
+> 
+> Best,
+> 
+> luke
+> 
+> On Wed, 24 Apr 2024, Ben Bolker wrote:
+> 
+>> ?I'm using bleeding-edge R-devel, so maybe my build is weird. Can 
+>> anyone else reproduce this?
+>>
+>> ?View() seems to crash on just about anything.
+>>
+>> View(1:3)
+>> *** stack smashing detected ***: terminated
+>> Aborted (core dumped)
+>>
+>> ?If I debug(View) I get to the last line of code with nothing 
+>> obviously looking pathological:
+>>
+>> Browse[1]>
+>> debug: invisible(.External2(C_dataviewer, x, title))
+>> Browse[1]> x
+>> $x
+>> [1] "1" "2" "3"
+>>
+>> Browse[1]> title
+>> [1] "Data: 1:3"
+>> Browse[1]>
+>> *** stack smashing detected ***: terminated
+>> Aborted (core dumped)
+>>
+>>
+>>
+>> ====
+>> R Under development (unstable) (2024-04-24 r86483)
+>> Platform: x86_64-pc-linux-gnu
+>> Running under: Pop!_OS 22.04 LTS
+>>
+>> Matrix products: default
+>> BLAS/LAPACK: 
+>> /usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblasp-r0.3.20.so; 
+>> LAPACK version 3.10.0
+>>
+>> locale:
+>> [1] LC_CTYPE=en_CA.UTF-8?????? LC_NUMERIC=C
+>> [3] LC_TIME=en_CA.UTF-8??????? LC_COLLATE=en_CA.UTF-8
+>> [5] LC_MONETARY=en_CA.UTF-8??? LC_MESSAGES=en_CA.UTF-8
+>> [7] LC_PAPER=en_CA.UTF-8?????? LC_NAME=C
+>> [9] LC_ADDRESS=C?????????????? LC_TELEPHONE=C
+>> [11] LC_MEASUREMENT=en_CA.UTF-8 LC_IDENTIFICATION=C
+>>
+>> time zone: America/Toronto
+>> tzcode source: system (glibc)
+>>
+>> attached base packages:
+>> [1] stats???? graphics? grDevices utils???? datasets? methods?? base
+>>
+>> loaded via a namespace (and not attached):
+>> [1] compiler_4.5.0
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+
+
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Thu Apr 25 15:57:20 2024
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Thu, 25 Apr 2024 15:57:20 +0200
+Subject: [Rd] 
+ Question regarding .make_numeric_version with non-character input
+In-Reply-To: <26154.19219.534249.771759@rob.eddelbuettel.com>
+References: <PAXP251MB0578C2827F352E173D109017983A2@PAXP251MB0578.EURP251.PROD.OUTLOOK.COM>
+ <26119.4881.618411.645248@rob.eddelbuettel.com>
+ <14ab2002-74a8-491b-8921-b66364479003@polimi.it>
+ <26122.43144.181286.316307@hornik.net>
+ <8a599021-e0f5-4498-ba9c-bbdcb90e4486@gmail.com>
+ <26153.62268.101698.468796@hornik.net>
+ <26154.19219.534249.771759@rob.eddelbuettel.com>
+Message-ID: <26154.24896.64162.450076@hornik.net>
+
+>>>>> Dirk Eddelbuettel writes:
+
+> Hi Kurt,
+
+> On 25 April 2024 at 08:07, Kurt Hornik wrote:
+> | >>>>> Herv? Pag?s writes:
+> | 
+> | > Hi Kurt,
+> | > Is it intended that numeric_version() returns an error by default on
+> | > non-character input in R 4.4.0? 
+> | 
+> | Dear Herve, yes, that's the intention.
+> | 
+> | > It seems that I can turn this into a warning by setting
+> | > _R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_=false but I don't
+> | > seem to be able to find any of this mentioned in the NEWS file.
+> | 
+> | That's what I added for smoothing the transition: it will be removed
+> | from the trunk shortly.
+
+> I would actually be nice to have a more robust variant for non-CRAN
+> versions. For example I just had to do a local hack to be able to use
+> what the QuantLib 'rc' 1.34-rc reported (when I then used to R
+> facilities to condition code and tests on whether I was dealing with
+> code before or after an API transition).  So as a wishlist: could you
+> envision an extension to package_version() casting that, say, removes
+> all [a-zA-Z]+ first (if opted into) ?
+
+Well, if I could turn back time and start again, I'd implement package
+versions in the Debian way, and not numeric only.  As you know, the
+current approach does not conveniently allow for handling binary
+revisions or NMUs.
+
+Currently, package_version extends numeric_version, but in principle
+that could be changed: we would of course have to ensure that we go on
+using numeric-only package versions for source packages so that older
+versions of R can handle these.
+
+One could in principle also enhance the 'strict' argument so that
+e.g. strict = NA says drop all non-numeric non-sep parts, but it would
+be better to first figure out whether it wouldn't be better to make
+things work for non-numeric version components too :-)
+
+Best
+-k
+
+
+
+> Dirk
+
+> -- 
+> dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Thu Apr 25 16:04:13 2024
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Thu, 25 Apr 2024 16:04:13 +0200
+Subject: [Rd] 
+ Question regarding .make_numeric_version with non-character input
+In-Reply-To: <38248593-ae96-4600-8995-adc7512658a5@gmail.com>
+References: <PAXP251MB0578C2827F352E173D109017983A2@PAXP251MB0578.EURP251.PROD.OUTLOOK.COM>
+ <26119.4881.618411.645248@rob.eddelbuettel.com>
+ <14ab2002-74a8-491b-8921-b66364479003@polimi.it>
+ <26122.43144.181286.316307@hornik.net>
+ <8a599021-e0f5-4498-ba9c-bbdcb90e4486@gmail.com>
+ <26153.62268.101698.468796@hornik.net>
+ <38248593-ae96-4600-8995-adc7512658a5@gmail.com>
+Message-ID: <26154.25309.11823.154138@hornik.net>
+
+>>>>> Herv? Pag?s writes:
+
+> On 4/24/24 23:07, Kurt Hornik wrote:
+>>>>>>> Herv? Pag?s writes:
+>>> Hi Kurt,
+>>> Is it intended that numeric_version() returns an error by default on
+>>> non-character input in R 4.4.0?
+>> Dear Herve, yes, that's the intention.
+>> 
+>>> It seems that I can turn this into a warning by setting
+>>> _R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_=false but I don't
+>>> seem to be able to find any of this mentioned in the NEWS file.
+>> That's what I added for smoothing the transition: it will be removed
+>> from the trunk shortly.
+
+> Thanks for clarifying.? Could this be documented in the NEWS file? This 
+> is a breaking change (it breaks a couple of Bioconductor packages) and 
+> people are not going to set this environment variable if they are not 
+> aware of it.
+
+Sure, I'll look into adding something.  (Too late for 4.4.0, of course.)
+
+Best
+-k
+
+> Thanks again,
+
+> H.
+
+>> 
+>> Best
+>> -k
+>> 
+>>> Thanks,
+>>> H.
+>>> On 4/1/24 05:28, Kurt Hornik wrote:
+>>> Andrea Gilardi via R-devel writes:
+>> 
+>>> Thanks: should be fixed now in the trunk.
+>> 
+>>> Best
+>>> -k
+>>> Thank you very much Dirk for your kind words and for confirming the bug.
+>>> Next week I will open a new issue on Bugzilla adding the related patch.
+>> 
+>>> Kind regards
+>> 
+>>> Andrea
+>> 
+>>> On 29/03/2024 20:14, Dirk Eddelbuettel wrote:
+>> 
+>>> On 29 March 2024 at 17:56, Andrea Gilardi via R-devel wrote:
+>>> | Dear all,
+>>> |
+>>> | I have a question regarding the R-devel version of .make_numeric_version() function. As far as I can understand, the current code (https://github.com/wch/r-source/blob/66b91578dfc85140968f07dd4e72d8cb8a54f4c6/src/library/base/R/version.R#L50-L56) runs the following steps in case of non-character input:
+>>> |
+>>> | 1. It creates a message named msg using gettextf.
+>>> | 2. Such object is then passed to stop(msg) or warning(msg) according to the following condition
+>>> |
+>>> | tolower(Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_") != "false")
+>>> |
+>>> | However, I don't understand the previous code since the output of Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_") != "false" is just a boolean value and tolower() will just return "true" or "false". Maybe the intended code is tolower(Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_")) != "false" ? Or am I missing something?
+>> 
+>>> Yes, agreed -- good catch.  In full, the code is (removing leading
+>>> whitespace, and putting it back onto single lines)
+>> 
+>>> msg <- gettextf("invalid non-character version specification 'x' (type: %s)", typeof(x))
+>>> if(tolower(Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_") != "false"))
+>>> stop(msg, domain = NA)
+>>> else
+>>> warning(msg, domain = NA, immediate. = TRUE)
+>> 
+>>> where msg is constant (but reflecting language settings via standard i18n)
+>>> and as you not the parentheses appear wrong.  What was intended is likely
+>> 
+>>> msg <- gettextf("invalid non-character version specification 'x' (type: %s)", typeof(x))
+>>> if(tolower(Sys.getenv("_R_CHECK_STOP_ON_INVALID_NUMERIC_VERSION_INPUTS_")) != "false")
+>>> stop(msg, domain = NA)
+>>> else
+>>> warning(msg, domain = NA, immediate. = TRUE)
+>> 
+>>> If you use bugzilla before and have a handle, maybe file a bug report with
+>>> this as patch athttps://bugs.r-project.org/
+>> 
+>>> Dirk
+>>> ______________________________________________
+>>> R-devel at r-project.org  mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>> 
+>>> ______________________________________________
+>>> R-devel at r-project.org  mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>> 
+>>> -- 
+>>> Herv? Pag?s
+>>> Bioconductor Core Team
+>>> hpages.on.github at gmail.com
+
+> -- 
+> Herv? Pag?s
+
+> Bioconductor Core Team
+> hpages.on.github at gmail.com
+
+> 	[[alternative HTML version deleted]]
+
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From |kry|ov @end|ng |rom d|@root@org  Thu Apr 25 17:01:09 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Thu, 25 Apr 2024 18:01:09 +0300
+Subject: [Rd] Big speedup in install.packages() by re-using connections
+In-Reply-To: <CABFfbXtnteY=_qRz8ZBQ4aAPi-j+HjasRvU-fcLPJm2nu+QwLQ@mail.gmail.com>
+References: <CABFfbXtpXChZLeLREEWFHFWP24cvD8Ox-7xfBGj0p+N0Rjzwbg@mail.gmail.com>
+ <CABFfbXtnteY=_qRz8ZBQ4aAPi-j+HjasRvU-fcLPJm2nu+QwLQ@mail.gmail.com>
+Message-ID: <20240425180109.418ca5f4@arachnoid>
+
+On Thu, 25 Apr 2024 14:45:04 +0200
+Jeroen Ooms <jeroenooms at gmail.com> wrote:
+
+> Thoughts?
+
+How verboten would it be to create an empty external pointer object,
+add it to the preserved list, and set an on-exit finalizer to clean up
+the curl multi-handle? As far as I can tell, the internet module is not
+supposed to be unloaded, so this would not introduce an opportunity to
+jump to an unmapped address. This makes it possible to avoid adding a
+CurlCleanup() function to the internet module:
+
+Index: src/modules/internet/libcurl.c
+===================================================================
+--- src/modules/internet/libcurl.c	(revision 86484)
++++ src/modules/internet/libcurl.c	(working copy)
+@@ -55,6 +55,47 @@
+ 
+ static int current_timeout = 0;
+ 
++// The multi-handle is shared between downloads for reusing connections
++static CURLM *shared_mhnd = NULL;
++static SEXP mhnd_sentinel = NULL;
++
++static void cleanup_mhnd(SEXP ignored)
++{
++    if(shared_mhnd){
++        curl_multi_cleanup(shared_mhnd);
++        shared_mhnd = NULL;
++    }
++    curl_global_cleanup();
++}
++static void rollback_mhnd_sentinel(void* sentinel) {
++    // Failed to allocate memory while registering a finalizer,
++    // therefore must release the object
++    R_ReleaseObject((SEXP)sentinel);
++}
++static CURLM *get_mhnd(void)
++{
++    if (!mhnd_sentinel) {
++      SEXP sentinel = PROTECT(R_MakeExternalPtr(NULL, R_NilValue, R_NilValue));
++      R_PreserveObject(sentinel);
++      UNPROTECT(1);
++      // Avoid leaking the sentinel before setting the finalizer
++      RCNTXT cntxt;
++      begincontext(&cntxt, CTXT_CCODE, R_NilValue, R_BaseEnv, R_BaseEnv,
++                   R_NilValue, R_NilValue);
++      cntxt.cend = &rollback_mhnd_sentinel;
++      cntxt.cenddata = sentinel;
++      R_RegisterCFinalizerEx(sentinel, cleanup_mhnd, TRUE);
++      // Succeeded, no need to clean up if endcontext() fails allocation
++      mhnd_sentinel = sentinel;
++      cntxt.cend = NULL;
++      endcontext(&cntxt);
++    }
++    if(!shared_mhnd) {
++      shared_mhnd = curl_multi_init();
++    }
++    return shared_mhnd;
++}
++
+ # if LIBCURL_VERSION_MAJOR < 7 || (LIBCURL_VERSION_MAJOR == 7 && LIBCURL_VERSION_MINOR < 28)
+ 
+ // curl/curl.h includes <sys/select.h> and headers it requires.
+@@ -565,8 +606,6 @@
+ 	if (c->hnd && c->hnd[i])
+ 	    curl_easy_cleanup(c->hnd[i]);
+     }
+-    if (c->mhnd)
+-	curl_multi_cleanup(c->mhnd);
+     if (c->headers)
+ 	curl_slist_free_all(c->headers);
+ 
+@@ -668,7 +707,7 @@
+ 	c.headers = headers = tmp;
+     }
+ 
+-    CURLM *mhnd = curl_multi_init();
++    CURLM *mhnd = get_mhnd();
+     if (!mhnd)
+ 	error(_("could not create curl handle"));
+     c.mhnd = mhnd;
+
+
+-- 
+Best regards,
+Ivan
+
+
+From hp@ge@@on@g|thub @end|ng |rom gm@||@com  Thu Apr 25 18:57:25 2024
+From: hp@ge@@on@g|thub @end|ng |rom gm@||@com (=?UTF-8?B?SGVydsOpIFBhZ8Oocw==?=)
+Date: Thu, 25 Apr 2024 09:57:25 -0700
+Subject: [Rd] 
+ Question regarding .make_numeric_version with non-character input
+In-Reply-To: <26154.25309.11823.154138@hornik.net>
+References: <PAXP251MB0578C2827F352E173D109017983A2@PAXP251MB0578.EURP251.PROD.OUTLOOK.COM>
+ <26119.4881.618411.645248@rob.eddelbuettel.com>
+ <14ab2002-74a8-491b-8921-b66364479003@polimi.it>
+ <26122.43144.181286.316307@hornik.net>
+ <8a599021-e0f5-4498-ba9c-bbdcb90e4486@gmail.com>
+ <26153.62268.101698.468796@hornik.net>
+ <38248593-ae96-4600-8995-adc7512658a5@gmail.com>
+ <26154.25309.11823.154138@hornik.net>
+Message-ID: <0c9dd87b-200f-460d-ac60-49f476f6fddb@gmail.com>
+
+On 4/25/24 07:04, Kurt Hornik wrote:
+
+...
+> Sure, I'll look into adding something.  (Too late for 4.4.0, of course.)
+>
+> Best
+> -k
+
+Great. Thanks!
+
+H.
+
+-- 
+Herv? Pag?s
+
+Bioconductor Core Team
+hpages.on.github at gmail.com
+
+	[[alternative HTML version deleted]]
+
+
+From kev|nu@hey @end|ng |rom gm@||@com  Thu Apr 25 19:10:44 2024
+From: kev|nu@hey @end|ng |rom gm@||@com (Kevin Ushey)
+Date: Thu, 25 Apr 2024 10:10:44 -0700
+Subject: [Rd] [External] Re: Is ALTREP "non-API"?
+In-Reply-To: <20240425142418.6b78c7ed@arachnoid>
+References: <CALyqOb8VS+z-1c4r-NAGvg9EfTgSL_1MqbQkSWb+7jQZdJWQ1Q@mail.gmail.com>
+ <000a01da9452$c6f8bc70$54ea3550$@gmail.com>
+ <CALyqOb-vcs3RfB5SEOnk-f72N9WuAv6fRRUQmvO+Cyuh+x+bWQ@mail.gmail.com>
+ <CAD4oTHGp0CmnZV1-T+vOrEP7ekMsRJ8PQA3nn9KxqM7WX7oPdw@mail.gmail.com>
+ <7567536C-3B54-4568-996B-108670F55AAC@R-project.org>
+ <CABdHhvGiWFjTVMfcjowoO1QKATeTc0jw2EpMC=CYSwY+ZHs36A@mail.gmail.com>
+ <C13AAB3A-0189-4959-83E0-3E3B1392717D@R-project.org>
+ <CABdHhvFpVJMMQD7CubomzCKC4HDGkbWfD-t6OaRSxZfcKcRZ6g@mail.gmail.com>
+ <EBBB96A0-D6CA-4003-BF55-8F5344B18892@R-project.org>
+ <CABdHhvHqUZ=HAQyfQVfrUbnKBM6dKagbMCojU6xnwoyXJ0dgqA@mail.gmail.com>
+ <dc1e6797-0ec-1061-7ce3-88a384d7ee8c@uiowa.edu>
+ <20240425142418.6b78c7ed@arachnoid>
+Message-ID: <CAJXgQP2Lt2tgfZzASxKeodN7a7XNX4fkmihA+FdqdnEdUSpkgw@mail.gmail.com>
+
+On Thu, Apr 25, 2024 at 4:24?AM Ivan Krylov via R-devel
+<r-devel at r-project.org> wrote:
+>
+> On Wed, 24 Apr 2024 15:31:39 -0500 (CDT)
+> luke-tierney--- via R-devel <r-devel at r-project.org> wrote:
+>
+> > We would be better off (in my view, not necessarily shared by others
+> > in R-core) if we could get to a point where:
+> >
+> >      all entry points listed in installed header files can be used in
+> >      packages, at least with some caveats;
+> >
+> >      the caveats are expressed in a standard way that is searchable,
+> >      e.g. with a standardized comment syntax at the header file or
+> >      individual declaration level.
+>
+> This sounds almost like Doxygen, although the exact syntax used to
+> denote the entry points and the necessary comments is far from the most
+> important detail at this point.
+
+I'm guessing Doxygen would be overkill here? I think instead these
+would just be structured comments that mark a particular function, or
+set of functions, as part of the API -- and some automated tool could
+then just pull those functions out into a list of API functions. Then,
+we would have a single "source of truth" for what is in the API, and
+could be seen at a glance by browsing / grepping the installed R
+headers. I see this as a structured way of accomplishing what is
+already being done to clarify whether functions are part of the API in
+the R headers.
+
+A similar approach would have macros like R_API, or with a bit more
+specificity, maybe something like R_API(ALTREP), which would have no
+actual definition -- they would exist in the source purely to mark
+functions as part of (some subset of) the API. Or, similarly, anything
+declared within a block like R_API {} would be considered part of the
+API (to avoid the need to tag every declaration individually.) This
+would at least make it easy to figure out what functions are part of
+the R API, without requiring too much extra maintenance effort from
+the R maintainers.
+
+The other alternative I could imagine would be an installed header
+like R_ext/API.h, which package authors who want to submit packages to
+CRAN would be required to use, with direct usage of other headers
+eventually being phased out. But that would be a larger maintenance
+burden, unless its generation could be automated (e.g. from the
+functions tagged above).
+
+As a side note, it's worth stating that the set of API endpoints that
+R Core wants to make available to CRAN packages, versus those that are
+intended for other usages (e.g. applications embedding R), are
+different sets. But I suspect this discussion is most relevant to R
+package authors who wish to submit their packages to CRAN.
+
+> > There are some 500 entry points in the R shared library that are in
+> > the installed headers but not mentioned in WRE. These would need to
+> > be reviewed and adjusted.
+>
+> Is there a way for outsiders to help? For example, would it help to
+> produce the linking graph (package P links to entry points X, Y)? I
+> understand that an entry point being unpopular doesn't mean it
+> shouldn't be public (and the other way around), but combined with a
+> list of entry points that are listed in WRE, such a graph could be
+> useful to direct effort or estimate impact from interface changes.
+
+I'm guessing the most welcome kinds of contributions would be
+documentation? IMHO, "documenting an API" and "describing how an API
+can be used" are somewhat separate endeavors. I believe R-exts does an
+excellent job of the latter, but may not be the right vehicle for the
+former. To that end, I believe it would be helpful to have some
+structured API documentation as a separate R-api document. Each
+documented function would have described inputs, outputs, whether
+inputs + outputs require protection from the garbage collector, and
+other important usage notes. This is something that I think could be
+developed and maintained by community members, with members of the R
+community submitting documentation for each of the available API
+functions. Such an effort could be started independently from R Core,
+but some guidance would be appreciated as far as (1) would such a
+document eventually be accepted as part of the official R manuals, and
+(2) if so, what would be required of such a document.
+
+> --
+> Best regards,
+> Ivan
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
