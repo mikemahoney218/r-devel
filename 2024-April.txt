@@ -6071,3 +6071,363 @@ document eventually be accepted as part of the official R manuals, and
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From c@@rd|@g@bor @end|ng |rom gm@||@com  Fri Apr 26 11:55:36 2024
+From: c@@rd|@g@bor @end|ng |rom gm@||@com (=?UTF-8?B?R8OhYm9yIENzw6FyZGk=?=)
+Date: Fri, 26 Apr 2024 11:55:36 +0200
+Subject: [Rd] R 4.4.0 has version of Matrix 1.7-0,
+ but it's not available on CRAN
+Message-ID: <CABtg=KnJ-46TuQ5HhcFxZL3=T2h6G39HAJB_aUygUj6ZfhbKAw@mail.gmail.com>
+
+I don't know if this is a bug, but it is certainly weird. AFAICT R
+4.4.0 has Matrix 1.7-0.
+
+However, currently CRAN has
+
+Package: Matrix
+Version: 1.6-5
+Priority: recommended
+Depends: R (>= 3.5.0), methods
+...
+
+(plus another version for R >= 4.5.0 only).
+
+Which has some weird consequences, e.g. if I have an R 4.4.0
+installation without the recommended packages, I don't have a way of
+installing Matrix 1.7-0. Whereas R 4.4.0 installations with
+recommended packages come with Matrix 1.7-0.
+
+Gabor
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Fri Apr 26 12:32:59 2024
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Fri, 26 Apr 2024 12:32:59 +0200
+Subject: [Rd] R 4.4.0 has version of Matrix 1.7-0,
+ but it's not available on CRAN
+In-Reply-To: <CABtg=KnJ-46TuQ5HhcFxZL3=T2h6G39HAJB_aUygUj6ZfhbKAw@mail.gmail.com>
+References: <CABtg=KnJ-46TuQ5HhcFxZL3=T2h6G39HAJB_aUygUj6ZfhbKAw@mail.gmail.com>
+Message-ID: <26155.33499.174513.223350@stat.math.ethz.ch>
+
+>>>>> G?bor Cs?rdi 
+>>>>>     on Fri, 26 Apr 2024 11:55:36 +0200 writes:
+
+    > I don't know if this is a bug, but it is certainly weird. AFAICT R
+    > 4.4.0 has Matrix 1.7-0.
+
+Yes, it *is* available from CRAN:  You can see it when looking into the
+
+4.4.0/           , specifically the
+4.4.0/Recommended/ sub directory.
+
+Recommended packages should be built as part of R
+unless *you* really want to *not* get them by choosing at
+configure time, not to get them via extra flag
+  --without-recommended-packages.
+
+So, well, you got what you wanted.
+
+    > However, currently CRAN has
+
+    > Package: Matrix
+    > Version: 1.6-5
+    > Priority: recommended
+    > Depends: R (>= 3.5.0), methods
+    > ...
+
+Yes, because it has to provide Matrix to R versions before 4.4.0
+and Matrix 1.7-0 has  'Depends: R (>= 4.4.0)'
+
+    > (plus another version for R >= 4.5.0 only).
+
+    > Which has some weird consequences, e.g. if I have an R 4.4.0
+    > installation without the recommended packages, 
+
+(why would you explicitly choose *not* to have the
+ recommended packages when they *are* recommended .. :-b )
+
+    > I don't have a way of  installing Matrix 1.7-0. 
+
+That's not true (see above), but it maybe true that
+install.packages() does not work directly -- I guess you
+should get it to work with correct function arguments;
+if not, you'd definitely have found a missing feature...
+.. *and* Rstudio button clicking works even less, because it does
+not allow to specify the install.packages() call.
+
+.. and yes, ideally install.packages() would be smart enough to
+figure that Matrix is recommended *and* that it should therefore
+try the same location ( ./4.4.0/Recommended/ in this case) as
+R's own  tools/rsync-recommended  script does.
+
+Finally, I'd think it definitely would be nice for
+install.packages("Matrix") to automatically get the correct
+Matrix version from CRAN ... so we (R-core) would be grateful
+for a patch to install.packages() to achieve this  (unless that
+patch is too large or too much involved for reliable
+maintenance).
+
+Martin
+    
+    > Whereas R 4.4.0 installations with
+    > recommended packages come with Matrix 1.7-0.
+
+    > Gabor
+
+
+From t|m@t@y|or @end|ng |rom h|ddene|eph@nt@@co@uk  Fri Apr 26 12:58:21 2024
+From: t|m@t@y|or @end|ng |rom h|ddene|eph@nt@@co@uk (Tim Taylor)
+Date: Fri, 26 Apr 2024 11:58:21 +0100
+Subject: [Rd] R 4.4.0 has version of Matrix 1.7-0,
+ but it's not available on CRAN
+In-Reply-To: <26155.33499.174513.223350@stat.math.ethz.ch>
+References: <CABtg=KnJ-46TuQ5HhcFxZL3=T2h6G39HAJB_aUygUj6ZfhbKAw@mail.gmail.com>
+ <26155.33499.174513.223350@stat.math.ethz.ch>
+Message-ID: <d64bfbf5-d024-4448-99e8-bd38285723f2@app.fastmail.com>
+
+On Fri, 26 Apr 2024, at 11:32 AM, Martin Maechler wrote:
+>>>>>> G?bor Cs?rdi 
+>>>>>>     on Fri, 26 Apr 2024 11:55:36 +0200 writes:
+>
+>     > I don't know if this is a bug, but it is certainly weird. AFAICT R
+>     > 4.4.0 has Matrix 1.7-0.
+>
+> Yes, it *is* available from CRAN:  You can see it when looking into the
+>
+> 4.4.0/           , specifically the
+> 4.4.0/Recommended/ sub directory.
+>
+> Recommended packages should be built as part of R
+> unless *you* really want to *not* get them by choosing at
+> configure time, not to get them via extra flag
+>   --without-recommended-packages.
+>
+> So, well, you got what you wanted.
+>
+>     > However, currently CRAN has
+>
+>     > Package: Matrix
+>     > Version: 1.6-5
+>     > Priority: recommended
+>     > Depends: R (>= 3.5.0), methods
+>     > ...
+> .
+> Yes, because it has to provide Matrix to R versions before 4.4.0
+> and Matrix 1.7-0 has  'Depends: R (>= 4.4.0)'
+>
+>     > (plus another version for R >= 4.5.0 only).
+>
+>     > Which has some weird consequences, e.g. if I have an R 4.4.0
+>     > installation without the recommended packages, 
+>
+> (why would you explicitly choose *not* to have the
+>  recommended packages when they *are* recommended .. :-b )
+>   ...
+
+Hi Martin.
+
+I appreciate the efforts you are going to balance these Matrix updates across CRAN versions. Related, but a little tangential, to the installation situation, I'd still expect the canonical CRAN link (https://cran.r-project.org/package=Matrix) to provide links to the *current* version.  Currently links to a source tarball and the reference manual is for 1.6.5 (I'm guessing vignettes are also from 1.6.5.).
+
+Best
+
+Tim
+
+
+From |kry|ov @end|ng |rom d|@root@org  Fri Apr 26 13:06:45 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Fri, 26 Apr 2024 14:06:45 +0300
+Subject: [Rd] R 4.4.0 has version of Matrix 1.7-0,
+ but it's not available on CRAN
+In-Reply-To: <26155.33499.174513.223350@stat.math.ethz.ch>
+References: <CABtg=KnJ-46TuQ5HhcFxZL3=T2h6G39HAJB_aUygUj6ZfhbKAw@mail.gmail.com>
+ <26155.33499.174513.223350@stat.math.ethz.ch>
+Message-ID: <20240426140645.4f533273@arachnoid>
+
+On Fri, 26 Apr 2024 12:32:59 +0200
+Martin Maechler <maechler at stat.math.ethz.ch> wrote:
+
+> Finally, I'd think it definitely would be nice for
+> install.packages("Matrix") to automatically get the correct
+> Matrix version from CRAN ... so we (R-core) would be grateful
+> for a patch to install.packages() to achieve this
+
+Since the binaries offered on CRAN are already of the correct version
+(1.7-0 for -release and -devel), only source package installation needs
+to concern itself with the Recommended subdirectory.
+
+Would it be possible to generate the PACKAGES* index files in the
+4.4.0/Recommended subdirectory? Then on the R side it would be needed
+to add a new repo (adjusting chooseCRANmirror() to set it together with
+repos["CRAN"]) and keep the rest of the machinery intact.
+
+-- 
+Best regards,
+Ivan
+
+
+From c@@rd|@g@bor @end|ng |rom gm@||@com  Fri Apr 26 13:15:47 2024
+From: c@@rd|@g@bor @end|ng |rom gm@||@com (=?UTF-8?B?R8OhYm9yIENzw6FyZGk=?=)
+Date: Fri, 26 Apr 2024 13:15:47 +0200
+Subject: [Rd] R 4.4.0 has version of Matrix 1.7-0,
+ but it's not available on CRAN
+In-Reply-To: <20240426140645.4f533273@arachnoid>
+References: <CABtg=KnJ-46TuQ5HhcFxZL3=T2h6G39HAJB_aUygUj6ZfhbKAw@mail.gmail.com>
+ <26155.33499.174513.223350@stat.math.ethz.ch>
+ <20240426140645.4f533273@arachnoid>
+Message-ID: <CABtg=KmLstzV_LyV5Zb6XStUZQQkLrUmGQUOeMCCNuPF_iQbvw@mail.gmail.com>
+
+On Fri, Apr 26, 2024 at 1:06?PM Ivan Krylov <ikrylov at disroot.org> wrote:
+>
+> On Fri, 26 Apr 2024 12:32:59 +0200
+> Martin Maechler <maechler at stat.math.ethz.ch> wrote:
+>
+> > Finally, I'd think it definitely would be nice for
+> > install.packages("Matrix") to automatically get the correct
+> > Matrix version from CRAN ... so we (R-core) would be grateful
+> > for a patch to install.packages() to achieve this
+>
+> Since the binaries offered on CRAN are already of the correct version
+> (1.7-0 for -release and -devel), only source package installation needs
+> to concern itself with the Recommended subdirectory.
+>
+> Would it be possible to generate the PACKAGES* index files in the
+> 4.4.0/Recommended subdirectory? Then on the R side it would be needed
+> to add a new repo (adjusting chooseCRANmirror() to set it together with
+> repos["CRAN"]) and keep the rest of the machinery intact.
+
+That's not how this worked in the past AFAIR. Simply, the packages in
+the x.y.z/Recommended directories were included in
+src/contrib/PACKAGES*, metadata, with the correct R version
+dependencies, in the correct order, so that `install.packages()`
+automatically installed the correct version without having to add
+extra repositories or manually search for package files.
+E.g. right now we have
+
+Package: Matrix
+Version: 1.7-0
+Priority: recommended
+Depends: R (>= 4.5), methods
+Path: 4.5.0/Recommended
+
+for R 4.5.0. IMHO what we would need for R 4.4.0 is adding
+something like
+
+Package: Matrix
+Version: 1.7-0
+Priority: recommended
+Depends: R (>= 4.4), methods
+Path: 4.4.0/Recommended
+
+*after* that.
+
+G.
+
+[...]
+
+
+From |kry|ov @end|ng |rom d|@root@org  Fri Apr 26 13:36:50 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Fri, 26 Apr 2024 14:36:50 +0300
+Subject: [Rd] R 4.4.0 has version of Matrix 1.7-0,
+ but it's not available on CRAN
+In-Reply-To: <CABtg=KmLstzV_LyV5Zb6XStUZQQkLrUmGQUOeMCCNuPF_iQbvw@mail.gmail.com>
+References: <CABtg=KnJ-46TuQ5HhcFxZL3=T2h6G39HAJB_aUygUj6ZfhbKAw@mail.gmail.com>
+ <26155.33499.174513.223350@stat.math.ethz.ch>
+ <20240426140645.4f533273@arachnoid>
+ <CABtg=KmLstzV_LyV5Zb6XStUZQQkLrUmGQUOeMCCNuPF_iQbvw@mail.gmail.com>
+Message-ID: <20240426143650.08bbaa3b@arachnoid>
+
+On Fri, 26 Apr 2024 13:15:47 +0200
+G?bor Cs?rdi <csardi.gabor at gmail.com> wrote:
+
+> That's not how this worked in the past AFAIR. Simply, the packages in
+> the x.y.z/Recommended directories were included in
+> src/contrib/PACKAGES*, metadata, with the correct R version
+> dependencies, in the correct order, so that `install.packages()`
+> automatically installed the correct version without having to add
+> extra repositories or manually search for package files.
+
+That's great, then there is no need to patch anything. Thanks for
+letting me know.
+
+Should we be asking CRAN at R-project.org to add 4.4.0/Recommended to the
+index, then?
+
+-- 
+Best regards,
+Ivan
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Fri Apr 26 14:37:21 2024
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Sat, 27 Apr 2024 00:37:21 +1200
+Subject: [Rd] R 4.4.0 has version of Matrix 1.7-0,
+ but it's not available on CRAN
+In-Reply-To: <CABtg=KmLstzV_LyV5Zb6XStUZQQkLrUmGQUOeMCCNuPF_iQbvw@mail.gmail.com>
+References: <CABtg=KnJ-46TuQ5HhcFxZL3=T2h6G39HAJB_aUygUj6ZfhbKAw@mail.gmail.com>
+ <26155.33499.174513.223350@stat.math.ethz.ch>
+ <20240426140645.4f533273@arachnoid>
+ <CABtg=KmLstzV_LyV5Zb6XStUZQQkLrUmGQUOeMCCNuPF_iQbvw@mail.gmail.com>
+Message-ID: <8604B7E6-847C-4CC2-80BB-32458C5F54AE@R-project.org>
+
+Everyone, take a deep breath - there have been many disruptions in last few days - some obvious, others associated with the R release and the BioC disruptions on CRAN, so there is no need to panic and start devising "solutions" for issues that are temporary. Things are being sorted out and some may take longer than others to settle. Feel free to report, but please don't speculate or try to "help". That said, you may find that this thread is obsolete by now (thanks to Kurt!), so no need to respond.
+
+Cheers,
+Simon
+
+
+> On Apr 26, 2024, at 11:15 PM, G?bor Cs?rdi <csardi.gabor at gmail.com> wrote:
+> 
+> On Fri, Apr 26, 2024 at 1:06?PM Ivan Krylov <ikrylov at disroot.org> wrote:
+>> 
+>> On Fri, 26 Apr 2024 12:32:59 +0200
+>> Martin Maechler <maechler at stat.math.ethz.ch> wrote:
+>> 
+>>> Finally, I'd think it definitely would be nice for
+>>> install.packages("Matrix") to automatically get the correct
+>>> Matrix version from CRAN ... so we (R-core) would be grateful
+>>> for a patch to install.packages() to achieve this
+>> 
+>> Since the binaries offered on CRAN are already of the correct version
+>> (1.7-0 for -release and -devel), only source package installation needs
+>> to concern itself with the Recommended subdirectory.
+>> 
+>> Would it be possible to generate the PACKAGES* index files in the
+>> 4.4.0/Recommended subdirectory? Then on the R side it would be needed
+>> to add a new repo (adjusting chooseCRANmirror() to set it together with
+>> repos["CRAN"]) and keep the rest of the machinery intact.
+> 
+> That's not how this worked in the past AFAIR. Simply, the packages in
+> the x.y.z/Recommended directories were included in
+> src/contrib/PACKAGES*, metadata, with the correct R version
+> dependencies, in the correct order, so that `install.packages()`
+> automatically installed the correct version without having to add
+> extra repositories or manually search for package files.
+> E.g. right now we have
+> 
+> Package: Matrix
+> Version: 1.7-0
+> Priority: recommended
+> Depends: R (>= 4.5), methods
+> Path: 4.5.0/Recommended
+> 
+> for R 4.5.0. IMHO what we would need for R 4.4.0 is adding
+> something like
+> 
+> Package: Matrix
+> Version: 1.7-0
+> Priority: recommended
+> Depends: R (>= 4.4), methods
+> Path: 4.4.0/Recommended
+> 
+> *after* that.
+> 
+> G.
+> 
+> [...]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
