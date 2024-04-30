@@ -6777,3 +6777,95 @@ Best regards,
 Ivan
 
 
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Sun Apr 28 08:30:16 2024
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Sun, 28 Apr 2024 08:30:16 +0200
+Subject: [Rd] max on numeric_version with long components
+In-Reply-To: <20240427224443.02c60bcb@trisector>
+References: <CAE+qdJYcDhh-30JJbLX1CrBiiDjBiyaoQuAToREs_K0KLrYfRA@mail.gmail.com>
+ <20240427224443.02c60bcb@trisector>
+Message-ID: <26157.60664.423401.842507@hornik.net>
+
+>>>>> Ivan Krylov via R-devel writes:
+
+Indeed, apparently using which.min/which.max on the string encoding is
+not good enough.  ? which.min says that x can also be
+
+  an R object for which the internal coercion to ?double? works 
+
+and I guess we found a case where it does not work.
+
+I'll look into fixing this, but perhaps we should re-open
+<https://bugs.r-project.org/show_bug.cgi?id=18697> ?
+
+-k
+
+> ? Sat, 27 Apr 2024 13:56:58 -0500
+> Jonathan Keane <jkeane at gmail.com> ?????:
+
+>> In devel:
+>> > max(numeric_version(c("1.0.1.100000000", "1.0.3.100000000",  
+>> "1.0.2.100000000")))
+>> [1] ?1.0.1.100000000?
+>> > max(numeric_version(c("1.0.1.10000000", "1.0.3.10000000",  
+>> "1.0.2.10000000")))
+>> [1] ?1.0.3.10000000?
+
+> Thank you Jon for spotting this!
+
+> This is an unintended consequence of
+> https://bugs.r-project.org/show_bug.cgi?id=18697.
+
+> The old behaviour of max(<numeric_version>) was to call
+> which.max(xtfrm(x)), which first produced a permutation that sorted the
+> entire .encode_numeric_version(x). The new behavioiur is to call
+> which.max directly on .encode_numeric_version(x), which is faster (only
+> O(length(x)) instead of a sort).
+
+> What do the encoded version strings look like?
+
+> x <- numeric_version(c(
+>  "1.0.1.100000000", "1.0.3.100000000", "1.0.2.100000000"
+> ))
+> # Ignore the attributes
+> (e <- as.vector(.encode_numeric_version(x)))
+> # [1] "000000001000000000000000001575360400"
+> # [2] "000000001000000000000000003575360400"
+> # [3] "000000001000000000000000002575360400"
+
+> # order(), xtfrm(), sort() all agree that e[2] is the maximum:
+> order(e)
+> # [1] 1 3 2
+> xtfrm(e)
+> # [1] 1 3 2
+> sort(e)
+> # [1] "000000001000000000000000001575360400"
+> # [2] "000000001000000000000000002575360400"
+> # [3] "000000001000000000000000003575360400"
+
+> # but not which.max:
+> which.max(e)
+> # [1] 1
+
+> This happens because which.max() converts its argument to double, which
+> loses precision:
+
+> (n <- as.numeric(e))
+> # [1] 1e+27 1e+27 1e+27
+> identical(n[1], n[2])
+> # [1] TRUE
+> identical(n[3], n[2])
+> # [1] TRUE
+
+> Will be curious to know if there is a clever way to keep both the O(N)
+> complexity and the full arbitrary precision.
+
+> -- 
+> Best regards,
+> Ivan
+
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
