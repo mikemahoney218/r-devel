@@ -1,0 +1,228 @@
+From th|erry@onke||nx @end|ng |rom |nbo@be  Mon May  6 08:45:57 2024
+From: th|erry@onke||nx @end|ng |rom |nbo@be (Thierry Onkelinx)
+Date: Mon, 6 May 2024 08:45:57 +0200
+Subject: [Rd] [R-sig-ME] lmer error: number of observations <= number of
+ random effects
+In-Reply-To: <CAMvZauqY=naWQtSgfp+JtX73vB5+Sm3pO=iv6P6ujNGQHcg5WQ@mail.gmail.com>
+References: <CAMvZauqY=naWQtSgfp+JtX73vB5+Sm3pO=iv6P6ujNGQHcg5WQ@mail.gmail.com>
+Message-ID: <CAJuCY5ysmodQ=Jt8UGSuimNyz66WS9MAxdxWv4fttrM6O1Tw5A@mail.gmail.com>
+
+Dear Srinidhi,
+
+You are trying to fit 1 random intercept and 2 random slopes per
+individual, while you have at most 3 observations per individual. You
+simply don't have enough data to fit the random slopes. Reduce the random
+part to (1|ID).
+
+Best regards,
+
+Thierry
+
+ir. Thierry Onkelinx
+Statisticus / Statistician
+
+Vlaamse Overheid / Government of Flanders
+INSTITUUT VOOR NATUUR- EN BOSONDERZOEK / RESEARCH INSTITUTE FOR NATURE AND
+FOREST
+Team Biometrie & Kwaliteitszorg / Team Biometrics & Quality Assurance
+thierry.onkelinx at inbo.be
+Havenlaan 88 bus 73, 1000 Brussel
+*Postadres:* Koning Albert II-laan 15 bus 186, 1210 Brussel
+*Poststukken die naar dit adres worden gestuurd, worden ingescand en
+digitaal aan de geadresseerde bezorgd. Zo kan de Vlaamse overheid haar
+dossiers volledig digitaal behandelen. Poststukken met de vermelding
+?vertrouwelijk? worden niet ingescand, maar ongeopend aan de geadresseerde
+bezorgd.*
+www.inbo.be
+
+///////////////////////////////////////////////////////////////////////////////////////////
+To call in the statistician after the experiment is done may be no more
+than asking him to perform a post-mortem examination: he may be able to say
+what the experiment died of. ~ Sir Ronald Aylmer Fisher
+The plural of anecdote is not data. ~ Roger Brinner
+The combination of some data and an aching desire for an answer does not
+ensure that a reasonable answer can be extracted from a given body of data.
+~ John Tukey
+///////////////////////////////////////////////////////////////////////////////////////////
+
+<https://www.inbo.be>
+
+
+Op ma 6 mei 2024 om 01:59 schreef Srinidhi Jayakumar via R-sig-mixed-models
+<r-sig-mixed-models at r-project.org>:
+
+> I am running a multilevel growth curve model to examine predictors of
+> social anhedonia (SA) trajectory through ages 12, 15 and 18. SA is a
+> continuous numeric variable. The age variable (Index1) has been coded as 0
+> for age 12, 1 for age 15 and 2 for age 18. I am currently using a time
+> varying predictor, stress (LSI), which was measured at ages 12, 15 and 18,
+> to examine whether trajectory/variation in LSI predicts difference in SA
+> trajectory. LSI is a continuous numeric variable and was grand-mean
+> centered before using in the models. The data has been converted to long
+> format with SA in 1 column, LSI in the other, ID in another, and age in
+> another column. I used the code below to run my model using lmer. However,
+> I get the following error. Please let me know how I can solve this error.
+> Please note that I have 50% missing data in SA at age 12.
+> modelLSI_maineff_RE <- lmer(SA ~ Index1* LSI+ (1 + Index1+LSI |ID), data =
+> LSIDATA, control = lmerControl(optimizer ="bobyqa"), REML=TRUE)
+> summary(modelLSI_maineff_RE)
+> Error: number of observations (=1080) <= number of random effects (=1479)
+> for term (1 + Index1 + LSI | ID); the random-effects parameters and the
+> residual variance (or scale parameter) are probably unidentifiable
+>
+> I did test the within-person variance for the LSI variable and the
+> within-person variance is significant from the Greenhouse-Geisser,
+> Hyunh-Feidt tests.
+>
+> I also tried control = lmerControl(check.nobs.vs.nRE = "ignore") which gave
+> me the following output. modelLSI_maineff_RE <- lmer(SA ~ Index1* LSI+ (1 +
+> Index1+LSI |ID), data = LSIDATA, control = lmerControl(check.nobs.vs.nRE =
+> "ignore", optimizer ="bobyqa", check.conv.singular = .makeCC(action =
+> "ignore", tol = 1e-4)), REML=TRUE)
+>
+> summary(modelLSI_maineff_RE)
+> Linear mixed model fit by REML. t-tests use Satterthwaite's method
+> ['lmerModLmerTest']
+> Formula: SA ~ Index1 * LSI + (1 + Index1 + LSI | ID)
+> Data: LSIDATA
+> Control: lmerControl(check.nobs.vs.nRE = "ignore", optimizer = "bobyqa",
+> check.conv.singular = .makeCC(action = "ignore", tol = 1e-04))
+>
+> REML criterion at convergence: 7299.6
+>
+> Scaled residuals:
+> Min 1Q Median 3Q Max
+> -2.7289 -0.4832 -0.1449 0.3604 4.5715
+>
+> Random effects:
+> Groups Name Variance Std.Dev. Corr
+> ID (Intercept) 30.2919 5.5038
+> Index1 2.4765 1.5737 -0.15
+> LSI 0.1669 0.4085 -0.23 0.70
+> Residual 24.1793 4.9172
+> Number of obs: 1080, groups: ID, 493
+>
+> Fixed effects:
+> Estimate Std. Error df t value Pr(>|t|)
+> (Intercept) 24.68016 0.39722 313.43436 62.133 < 2e-16 ***
+> Index1 0.98495 0.23626 362.75018 4.169 3.83e-05 ***
+> LSI -0.05197 0.06226 273.85575 -0.835 0.4046
+> Index1:LSI 0.09797 0.04506 426.01185 2.174 0.0302 *
+> Signif. codes: 0 ?? 0.001 ?? 0.01 ?? 0.05 ?.? 0.1 ? ? 1
+>
+> Correlation of Fixed Effects:
+> (Intr) Index1 LSI
+> Index1 -0.645
+> LSI -0.032 0.057
+> Index1:LSI 0.015 0.037 -0.695
+>
+> I am a little vary of the output still as the error states that I have
+> equal observations as the number of random effects (i.e., 3 observations
+> per ID and 3 random effects). Hence, I am wondering whether I can simplify
+> the model as either of the below models and choose the one with the
+> best-fit statistics:
+>
+>  modelLSI2 <- lmer(SA ~ Index1* LSI+ (1 |ID)+ (Index1+LSI -1|ID),data =
+> LSIDATA, control = lmerControl(optimizer ="bobyqa"), REML=TRUE) *OR*
+>
+> modelLSI3 <- lmer(SA ~ Index1* LSI+ (1+LSI |ID),data = LSIDATA, control =
+> lmerControl(optimizer ="bobyqa"), REML=TRUE) [image: example of dataset]
+> <https://i.sstatic.net/JcRKS2C9.png>
+>
+>         [[alternative HTML version deleted]]
+>
+> _______________________________________________
+> R-sig-mixed-models at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-sig-mixed-models
+>
+
+	[[alternative HTML version deleted]]
+
+
+From @r|n|dh|@j@y@kum@r @end|ng |rom @tonybrook@edu  Mon May  6 01:58:35 2024
+From: @r|n|dh|@j@y@kum@r @end|ng |rom @tonybrook@edu (Srinidhi Jayakumar)
+Date: Sun, 5 May 2024 19:58:35 -0400
+Subject: [Rd] lmer error: number of observations <= number of random effects
+Message-ID: <CAMvZauqY=naWQtSgfp+JtX73vB5+Sm3pO=iv6P6ujNGQHcg5WQ@mail.gmail.com>
+
+I am running a multilevel growth curve model to examine predictors of
+social anhedonia (SA) trajectory through ages 12, 15 and 18. SA is a
+continuous numeric variable. The age variable (Index1) has been coded as 0
+for age 12, 1 for age 15 and 2 for age 18. I am currently using a time
+varying predictor, stress (LSI), which was measured at ages 12, 15 and 18,
+to examine whether trajectory/variation in LSI predicts difference in SA
+trajectory. LSI is a continuous numeric variable and was grand-mean
+centered before using in the models. The data has been converted to long
+format with SA in 1 column, LSI in the other, ID in another, and age in
+another column. I used the code below to run my model using lmer. However,
+I get the following error. Please let me know how I can solve this error.
+Please note that I have 50% missing data in SA at age 12.
+modelLSI_maineff_RE <- lmer(SA ~ Index1* LSI+ (1 + Index1+LSI |ID), data =
+LSIDATA, control = lmerControl(optimizer ="bobyqa"), REML=TRUE)
+summary(modelLSI_maineff_RE)
+Error: number of observations (=1080) <= number of random effects (=1479)
+for term (1 + Index1 + LSI | ID); the random-effects parameters and the
+residual variance (or scale parameter) are probably unidentifiable
+
+I did test the within-person variance for the LSI variable and the
+within-person variance is significant from the Greenhouse-Geisser,
+Hyunh-Feidt tests.
+
+I also tried control = lmerControl(check.nobs.vs.nRE = "ignore") which gave
+me the following output. modelLSI_maineff_RE <- lmer(SA ~ Index1* LSI+ (1 +
+Index1+LSI |ID), data = LSIDATA, control = lmerControl(check.nobs.vs.nRE =
+"ignore", optimizer ="bobyqa", check.conv.singular = .makeCC(action =
+"ignore", tol = 1e-4)), REML=TRUE)
+
+summary(modelLSI_maineff_RE)
+Linear mixed model fit by REML. t-tests use Satterthwaite's method
+['lmerModLmerTest']
+Formula: SA ~ Index1 * LSI + (1 + Index1 + LSI | ID)
+Data: LSIDATA
+Control: lmerControl(check.nobs.vs.nRE = "ignore", optimizer = "bobyqa",
+check.conv.singular = .makeCC(action = "ignore", tol = 1e-04))
+
+REML criterion at convergence: 7299.6
+
+Scaled residuals:
+Min 1Q Median 3Q Max
+-2.7289 -0.4832 -0.1449 0.3604 4.5715
+
+Random effects:
+Groups Name Variance Std.Dev. Corr
+ID (Intercept) 30.2919 5.5038
+Index1 2.4765 1.5737 -0.15
+LSI 0.1669 0.4085 -0.23 0.70
+Residual 24.1793 4.9172
+Number of obs: 1080, groups: ID, 493
+
+Fixed effects:
+Estimate Std. Error df t value Pr(>|t|)
+(Intercept) 24.68016 0.39722 313.43436 62.133 < 2e-16 ***
+Index1 0.98495 0.23626 362.75018 4.169 3.83e-05 ***
+LSI -0.05197 0.06226 273.85575 -0.835 0.4046
+Index1:LSI 0.09797 0.04506 426.01185 2.174 0.0302 *
+Signif. codes: 0 ?? 0.001 ?? 0.01 ?? 0.05 ?.? 0.1 ? ? 1
+
+Correlation of Fixed Effects:
+(Intr) Index1 LSI
+Index1 -0.645
+LSI -0.032 0.057
+Index1:LSI 0.015 0.037 -0.695
+
+I am a little vary of the output still as the error states that I have
+equal observations as the number of random effects (i.e., 3 observations
+per ID and 3 random effects). Hence, I am wondering whether I can simplify
+the model as either of the below models and choose the one with the
+best-fit statistics:
+
+ modelLSI2 <- lmer(SA ~ Index1* LSI+ (1 |ID)+ (Index1+LSI -1|ID),data =
+LSIDATA, control = lmerControl(optimizer ="bobyqa"), REML=TRUE) *OR*
+
+modelLSI3 <- lmer(SA ~ Index1* LSI+ (1+LSI |ID),data = LSIDATA, control =
+lmerControl(optimizer ="bobyqa"), REML=TRUE) [image: example of dataset]
+<https://i.sstatic.net/JcRKS2C9.png>
+
+	[[alternative HTML version deleted]]
+
+
