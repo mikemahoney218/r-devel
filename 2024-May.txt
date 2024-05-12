@@ -226,3 +226,125 @@ lmerControl(optimizer ="bobyqa"), REML=TRUE) [image: example of dataset]
 	[[alternative HTML version deleted]]
 
 
+From tr@ver@c @end|ng |rom gm@||@com  Sat May 11 02:39:53 2024
+From: tr@ver@c @end|ng |rom gm@||@com (Travers Ching)
+Date: Fri, 10 May 2024 17:39:53 -0700
+Subject: [Rd] R hang/bug with circular references and promises
+Message-ID: <CAPLMX9EyfB7cLgu89WPT_RFeuC1BDPYcZ81jR2q1aaDPVtnkEw@mail.gmail.com>
+
+The following code snippet causes R to hang. This example might be a
+bit contrived as I was experimenting and trying to understand
+promises, but uses only base R.
+
+It looks like it is looking for "not_a_variable" recursively but since
+it doesn't exist it goes on indefinitely.
+
+x0 <- new.env()
+x1 <- new.env(parent = x0)
+parent.env(x0) <- x1
+delayedAssign("v", not_a_variable, eval.env=x1)
+delayedAssign("w", v, assign.env=x1, eval.env=x0)
+x1$w
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Sat May 11 03:34:19 2024
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Fri, 10 May 2024 20:34:19 -0500 (CDT)
+Subject: [Rd] 
+ [External]  R hang/bug with circular references and promises
+In-Reply-To: <CAPLMX9EyfB7cLgu89WPT_RFeuC1BDPYcZ81jR2q1aaDPVtnkEw@mail.gmail.com>
+References: <CAPLMX9EyfB7cLgu89WPT_RFeuC1BDPYcZ81jR2q1aaDPVtnkEw@mail.gmail.com>
+Message-ID: <d0dc027e-b579-ba5b-ec62-d1bd52fbf47f@uiowa.edu>
+
+On Sat, 11 May 2024, Travers Ching wrote:
+
+> The following code snippet causes R to hang. This example might be a
+> bit contrived as I was experimenting and trying to understand
+> promises, but uses only base R.
+>
+> It looks like it is looking for "not_a_variable" recursively but since
+> it doesn't exist it goes on indefinitely.
+>
+> x0 <- new.env()
+> x1 <- new.env(parent = x0)
+> parent.env(x0) <- x1
+> delayedAssign("v", not_a_variable, eval.env=x1)
+> delayedAssign("w", v, assign.env=x1, eval.env=x0)
+> x1$w
+
+This has nothing to do with promises. You created a cycle in the
+environment chain. A simpler variant:
+
+e <- new.env()
+parent.env(e) <- e
+get("x", e)
+
+This will hang and is not interruptable -- loops searching up
+environment chains are too speed-critical to check for interrupts.  It
+is, however, pretty easy to check whether the parent change would
+create a cycle and throw an error if it would. Need to think a bit
+about exactly where the check should go.
+
+Best,
+
+luke
+
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu/
+
+
+From peter@|@ng|e|der @end|ng |rom gm@||@com  Sat May 11 17:03:07 2024
+From: peter@|@ng|e|der @end|ng |rom gm@||@com (Peter Langfelder)
+Date: Sat, 11 May 2024 23:03:07 +0800
+Subject: [Rd] 
+ [External] R hang/bug with circular references and promises
+In-Reply-To: <d0dc027e-b579-ba5b-ec62-d1bd52fbf47f@uiowa.edu>
+References: <CAPLMX9EyfB7cLgu89WPT_RFeuC1BDPYcZ81jR2q1aaDPVtnkEw@mail.gmail.com>
+ <d0dc027e-b579-ba5b-ec62-d1bd52fbf47f@uiowa.edu>
+Message-ID: <CA+hbrhVPoFR8tLuhS60oXW_OhWW76YxhnD0VLSZaAi4yVDgWhA@mail.gmail.com>
+
+On Sat, May 11, 2024 at 9:34?AM luke-tierney--- via R-devel
+<r-devel at r-project.org> wrote:
+>
+> On Sat, 11 May 2024, Travers Ching wrote:
+>
+> > The following code snippet causes R to hang. This example might be a
+> > bit contrived as I was experimenting and trying to understand
+> > promises, but uses only base R.
+>
+> This has nothing to do with promises. You created a cycle in the
+> environment chain. A simpler variant:
+>
+> e <- new.env()
+> parent.env(e) <- e
+> get("x", e)
+>
+> This will hang and is not interruptable -- loops searching up
+> environment chains are too speed-critical to check for interrupts.  It
+> is, however, pretty easy to check whether the parent change would
+> create a cycle and throw an error if it would. Need to think a bit
+> about exactly where the check should go.
+
+FWIW, the help for parent.env already explicitly warns against using
+parent.env <-:
+
+The replacement function ?parent.env<-? is extremely dangerous as
+     it can be used to destructively change environments in ways that
+     violate assumptions made by the internal C code.  It may be
+     removed in the near future.
+
+Peter
+
+
