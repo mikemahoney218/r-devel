@@ -348,3 +348,284 @@ The replacement function ?parent.env<-? is extremely dangerous as
 Peter
 
 
+From @vr@h@m@@d|er @end|ng |rom gm@||@com  Mon May 13 07:56:57 2024
+From: @vr@h@m@@d|er @end|ng |rom gm@||@com (Avraham Adler)
+Date: Mon, 13 May 2024 01:56:57 -0400
+Subject: [Rd] Change between 86152 and 86534 - probably 86265 - that looks
+ for zspmv in BLAS and not LAPACK causes R with OpenBLAS to fail
+Message-ID: <CAL6gwn+ZiPo7hUcJ5v99Y3AeTkSv+4o_yNa=h-A-qjjze2yNwA@mail.gmail.com>
+
+Executive summary:
+
+I believe revision 86265 makes it more difficult to build R with
+OpenBLAS on Windows as now the entire LAPACK needs to be built to
+obtain zspmv. Is there anything that can be done to allow the former
+behavior to be used, something in Mkrules.local perhaps?
+
+Detailed Explanation:
+
+I have been building R with OpenBLAS for Windows 64 for over a decade
+by patching /src/extra/blas/Makevars.win as follows:
+
+--- /c/r/trunk/src/extra/blas/Makefile.win    2024-01-24
+18:34:42.755255900 +0000
++++ /c/r/Makefile.win    2024-01-24 18:39:39.716458000 +0000
+@@ -12,7 +12,7 @@
+ ../../../$(BINDIR)/Rblas.dll: blas00.o ../../gnuwin32/dllversion.o
+     @$(ECHO) -------- Building $@ --------
+     $(DLL) -s -shared $(DLLFLAGS) -o $@ $^ Rblas.def \
+-       -L../../../$(IMPDIR) -lR  -L"$(ATLAS_PATH)" -lf77blas -latlas
++       -L../../../$(IMPDIR) -lR -L"$(ATLAS_PATH)" -fopenmp -lopenblas
+ else
+ ../../../$(BINDIR)/Rblas.dll: blas.o blas2.o cmplxblas.o cmplxblas2.o
+../../gnuwin32/dllversion.o
+     @$(ECHO) -------- Building $@ --------
+
+and then passing USE_ATLAS = YES and ATLAS_PATH = C:/R/OPB/whatever in
+Mkrules.local
+
+When I compile OpenBLAS, I have always done so with NO_CBLAS,
+NO_LAPACK, and NO_SHARED, as the Windows toolchain does not need
+CBLAS, a shared library, or allow for a separate LAPACK and this has
+worked, for the most part, since roughly 2013.
+When building the recent R-devel (a revision slightly before 86534),
+the compilation stopped when building Rblas with the following error:
+
+-------- Building ../../../bin/x64/Rblas.dll --------
+gcc  -s -shared  -o ../../../bin/x64/Rblas.dll blas00.o
+../../gnuwin32/dllversion.o Rblas.def \
+   -L../../../bin/x64 -lR -L"C:/R/OPB/OpenBLAS-develop-f0560f9"
+-fopenmp -lopenblas
+C:\rtools44\x86_64-w64-mingw32.static.posix\bin/ld.exe: cannot export
+zspmv_: symbol not defined
+collect2.exe: error: ld returned 1 exit status
+make[4]: *** [Makefile.win:14: ../../../bin/x64/Rblas.dll] Error 1
+make[3]: *** [Makefile:227: Rblas] Error 2
+make[2]: *** [Makefile:116: rbuild] Error 2
+make[1]: *** [Makefile:17: all] Error 2
+make: *** [Makefile:392: distribution] Error 2
+
+I reached out to OpenBLAS (there were other issues with OPB 0.3.27)
+and one of the maintainers responded:
+
+> "for historical reasons, ZSPMV is in LAPACK although conceptionally [sic] it belongs in BLAS. As you specified NO_LAPACK=1, this function gets omitted since 0.3.20 to allow combining the BLAS-only build with an external LAPACK." [1]
+
+He later followed up with "0.3.26 built with NO_LAPACK=1 will likewise
+omit the zspmv symbol (as directed)." [2]
+
+I last successfully compiled v86152 with OpenBLAS 0.3.26 on
+2024-03-19. When I compiled 86534 tonight with OPB 0.3.27, I got the
+error above. I then tried with OPB 0.3.26?which worked for 86152?and
+still got the zspmv error.
+
+I am guessing this relates to revision 86265 "amending r85873: zspmv
+is BLAS, not Lapack?" [3].
+
+I built OpenBLAS AND its LAPACK, which takes MUCH MUCH longer, and
+tried building R. This time, the build succeeded and passes make
+check-devel.
+
+Is there any way to allow the former functionality if the build
+recognizes the use of OpenBLAS? Is the only option to compile
+OpenBLAS's LAPACK too?
+
+Thank you,
+
+Avi
+
+
+[1] https://github.com/OpenMathLib/OpenBLAS/issues/4684#issuecomment-2101123154
+[2] https://github.com/OpenMathLib/OpenBLAS/issues/4684#issuecomment-2101213474
+[3] https://github.com/r-devel/r-svn/commit/c9f3aba39aa89821d294f4a524331a21e6904aec
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Mon May 13 16:54:27 2024
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Mon, 13 May 2024 09:54:27 -0500 (CDT)
+Subject: [Rd] 
+ [External] R hang/bug with circular references and promises
+In-Reply-To: <CA+hbrhVPoFR8tLuhS60oXW_OhWW76YxhnD0VLSZaAi4yVDgWhA@mail.gmail.com>
+References: <CAPLMX9EyfB7cLgu89WPT_RFeuC1BDPYcZ81jR2q1aaDPVtnkEw@mail.gmail.com>
+ <d0dc027e-b579-ba5b-ec62-d1bd52fbf47f@uiowa.edu>
+ <CA+hbrhVPoFR8tLuhS60oXW_OhWW76YxhnD0VLSZaAi4yVDgWhA@mail.gmail.com>
+Message-ID: <988ea195-1fbe-9e54-d68c-64f6bf36f9a0@uiowa.edu>
+
+On Sat, 11 May 2024, Peter Langfelder wrote:
+
+> On Sat, May 11, 2024 at 9:34?AM luke-tierney--- via R-devel
+> <r-devel at r-project.org> wrote:
+>>
+>> On Sat, 11 May 2024, Travers Ching wrote:
+>>
+>>> The following code snippet causes R to hang. This example might be a
+>>> bit contrived as I was experimenting and trying to understand
+>>> promises, but uses only base R.
+>>
+>> This has nothing to do with promises. You created a cycle in the
+>> environment chain. A simpler variant:
+>>
+>> e <- new.env()
+>> parent.env(e) <- e
+>> get("x", e)
+>>
+>> This will hang and is not interruptable -- loops searching up
+>> environment chains are too speed-critical to check for interrupts.  It
+>> is, however, pretty easy to check whether the parent change would
+>> create a cycle and throw an error if it would. Need to think a bit
+>> about exactly where the check should go.
+>
+> FWIW, the help for parent.env already explicitly warns against using
+> parent.env <-:
+>
+> The replacement function ?parent.env<-? is extremely dangerous as
+>     it can be used to destructively change environments in ways that
+>     violate assumptions made by the internal C code.  It may be
+>     removed in the near future.
+
+Looks like I added that warning 22 years ago, so that should be enough
+notice :-). I'll look into removing it now.
+
+Best,
+
+luke
+
+>
+> Peter
+>
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+
+From |kry|ov @end|ng |rom d|@root@org  Mon May 13 17:44:27 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Mon, 13 May 2024 18:44:27 +0300
+Subject: [Rd] 
+ [External] R hang/bug with circular references and promises
+In-Reply-To: <988ea195-1fbe-9e54-d68c-64f6bf36f9a0@uiowa.edu>
+References: <CAPLMX9EyfB7cLgu89WPT_RFeuC1BDPYcZ81jR2q1aaDPVtnkEw@mail.gmail.com>
+ <d0dc027e-b579-ba5b-ec62-d1bd52fbf47f@uiowa.edu>
+ <CA+hbrhVPoFR8tLuhS60oXW_OhWW76YxhnD0VLSZaAi4yVDgWhA@mail.gmail.com>
+ <988ea195-1fbe-9e54-d68c-64f6bf36f9a0@uiowa.edu>
+Message-ID: <20240513184427.0ba6a251@arachnoid>
+
+On Mon, 13 May 2024 09:54:27 -0500 (CDT)
+luke-tierney--- via R-devel <r-devel at r-project.org> wrote:
+
+> Looks like I added that warning 22 years ago, so that should be enough
+> notice :-). I'll look into removing it now.
+
+Dear Luke,
+
+I've got a somewhat niche use case: as a way of protecting myself
+against rogue *.rds files and vulnerabilities in the C code, I've been
+manually unserializing "plain" data objects (without anything
+executable), including environments, in R [1].
+
+I see that SET_ENCLOS() is already commented as "not API and probably
+should not be <...> used". Do you think there is a way to recreate an
+environment, taking the REFSXP entries into account, without
+`parent.env<-`?  Would you recommend to abandon the folly of
+unserializing environments manually?
+
+-- 
+Best regards,
+Ivan
+
+[1]
+https://codeberg.org/aitap/unserializeData/src/commit/33d72705c1ee265349b3e369874ce4b47f9cd358/R/unserialize.R#L289-L313
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Mon May 13 19:26:48 2024
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Mon, 13 May 2024 12:26:48 -0500 (CDT)
+Subject: [Rd] 
+ [External] R hang/bug with circular references and promises
+In-Reply-To: <20240513184427.0ba6a251@arachnoid>
+References: <CAPLMX9EyfB7cLgu89WPT_RFeuC1BDPYcZ81jR2q1aaDPVtnkEw@mail.gmail.com>
+ <d0dc027e-b579-ba5b-ec62-d1bd52fbf47f@uiowa.edu>
+ <CA+hbrhVPoFR8tLuhS60oXW_OhWW76YxhnD0VLSZaAi4yVDgWhA@mail.gmail.com>
+ <988ea195-1fbe-9e54-d68c-64f6bf36f9a0@uiowa.edu>
+ <20240513184427.0ba6a251@arachnoid>
+Message-ID: <b92b7f76-50fc-645b-51a9-91233e45b30@uiowa.edu>
+
+On Mon, 13 May 2024, Ivan Krylov wrote:
+
+> [You don't often get email from ikrylov at disroot.org. Learn why this is important at https://aka.ms/LearnAboutSenderIdentification ]
+>
+> On Mon, 13 May 2024 09:54:27 -0500 (CDT)
+> luke-tierney--- via R-devel <r-devel at r-project.org> wrote:
+>
+>> Looks like I added that warning 22 years ago, so that should be enough
+>> notice :-). I'll look into removing it now.
+>
+
+For now I have just changed the internal code to throw an error
+if the change would produce a cycle (r86545). This gives
+
+     > e <- new.env()
+     > parent.env(e) <- e
+     Error in `parent.env<-`(`*tmp*`, value = <environment>) :
+       cycles in parent chains are not allowed
+
+> Dear Luke,
+>
+> I've got a somewhat niche use case: as a way of protecting myself
+> against rogue *.rds files and vulnerabilities in the C code, I've been
+> manually unserializing "plain" data objects (without anything
+> executable), including environments, in R [1].
+
+I would try using two passes: create the environments in the first pass
+and in a second pass, either over the file or a new object with place holders, fill them in.
+
+> I see that SET_ENCLOS() is already commented as "not API and probably
+> should not be <...> used". Do you think there is a way to recreate an
+> environment, taking the REFSXP entries into account, without
+> `parent.env<-`?  Would you recommend to abandon the folly of
+> unserializing environments manually?
+
+SET_ENCLOS is one of a number of SET... functions that are not in the
+API and should not be since they are potentially unsafe to use. (One
+that is in the API and needs to be removed is SET_TYPEOF). So we would
+like to move them out of installed headers and not export them as
+entry points. For this particular case most uses I see are something
+like
+
+     env = allocSExp(ENVSXP);
+     SET_FRAME(env, R_NilValue);
+     SET_ENCLOS(env, parent);
+     SET_HASHTAB(env, R_NilValue);
+     SET_ATTRIB(env, R_NilValue);
+
+which could just use
+
+      env = R_NewEnv(parent, FALSE, 0);
+
+Best,
+
+luke
+
+>
+> --
+> Best regards,
+> Ivan
+>
+> [1]
+> https://codeberg.org/aitap/unserializeData/src/commit/33d72705c1ee265349b3e369874ce4b47f9cd358/R/unserialize.R#L289-L313
+>
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu/
+
+
