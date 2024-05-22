@@ -1804,3 +1804,277 @@ B
 	[[alternative HTML version deleted]]
 
 
+From z@|er@b@rutcuog|u @end|ng |rom gm@||@com  Mon May 20 07:36:59 2024
+From: z@|er@b@rutcuog|u @end|ng |rom gm@||@com (Zafer Barutcuoglu)
+Date: Mon, 20 May 2024 01:36:59 -0400
+Subject: [Rd] Output pipes to TTY hang
+In-Reply-To: <mailman.54288.3.1716026401.7919.r-devel@r-project.org>
+References: <mailman.54288.3.1716026401.7919.r-devel@r-project.org>
+Message-ID: <FA262651-F35A-436F-9086-A7DE77965A5B@gmail.com>
+
+Hi,
+
+I am seeing this on Linux as well as MacOS: Opening any output pipe from R 4.4.0 to TTY programs like "less"/"more" hangs, SIGINT-proof:
+> $ R/4.4.0/bin/Rscript -e 'pipe("less", "w")'
+> $ R/4.4.0/bin/Rscript -e 'cat("test", file="|less")
+> $ R/4.4.0/bin/Rscript -e 'cat("test", file="|more")
+
+R 4.3.3 and earlier have been working fine:
+> $ R/4.3.3/bin/Rscript -e 'pipe("less", "w")'
+> $ R/4.3.3/bin/Rscript -e 'cat("test", file="|less")
+> $ R/4.3.3/bin/Rscript -e 'cat("test", file="|more")
+
+
+R 4.4.0 also works fine with non-TTY output pipes:
+> $ R/4.4.0/bin/Rscript -e 'pipe("cat", "w")'
+
+> $ R/4.4.0/bin/Rscript -e 'cat("test", file="|cat")
+> $ R/4.4.0/bin/Rscript -e 'cat("Hi!\n", file="|tr i o")'
+> $ R/4.4.0/bin/Rscript -e 'cat("Hi!\n", file="|sed -e s/i/o/")'
+
+For what it's worth, input pipes from less/more to R 4.4.0 do not hang, but are not always the same as before either. These are the same:
+> $ R/4.3.3/bin/Rscript -e 'con <- pipe("less --version", "r"); readLines(con); close(con)'
+> [1] "less (GNU regular expressions)" "Copyright (C) Mark Nudelman" ...
+> $ R/4.4.0/bin/Rscript -e 'con <- pipe("less --version", "r"); readLines(con); close(con)'
+> [1] "less (GNU regular expressions)" "Copyright (C) Mark Nudelman" ...
+But these are not (again, on both Linux and MacOS):
+> $ R/4.3.3/bin/Rscript -e 'con <- pipe("less", "r"); readLines(con); close(con)'
+> [1] "Missing filename (\"less --help\" for help)"
+
+> $ R/4.4.0/bin/Rscript -e 'con <- pipe("less", "r"); readLines(con); close(con)'
+> character(0)
+
+
+I did not see anything related here or in release notes or bugzilla. Is this a bug or something else?
+
+Best,
+--
+Zafer
+
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Mon May 20 10:06:40 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Mon, 20 May 2024 04:06:40 -0400
+Subject: [Rd] config.site settings for M3 Mac typo in manual?
+Message-ID: <7d2fba0d-6abb-4df0-b388-e82280a8bac1@gmail.com>
+
+I've just upgraded to an M3 Mac laptop, and I'm working through getting 
+the right configure settings to build R.
+
+The Installation and Administration manual says to have this in config.site:
+
+FFLAGS="-g -O2 -mmacos-version-min=11.0"
+FCFLAGS="-g -O2 -mmacos-version-min=11.0"
+
+but those give an error on my system, with it suggesting the FFLAGS and 
+FCFLAGS version option should be -mmacosx-version-min=11.0.  I don't 
+know if that's a typo or a change.
+
+Besides
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Mon May 20 12:20:37 2024
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Mon, 20 May 2024 12:20:37 +0200
+Subject: [Rd] Output pipes to TTY hang
+In-Reply-To: <FA262651-F35A-436F-9086-A7DE77965A5B@gmail.com>
+References: <mailman.54288.3.1716026401.7919.r-devel@r-project.org>
+ <FA262651-F35A-436F-9086-A7DE77965A5B@gmail.com>
+Message-ID: <7da31dd1-3760-4c9f-be90-1f4051dddb2b@gmail.com>
+
+
+On 5/20/24 07:36, Zafer Barutcuoglu wrote:
+> Hi,
+>
+> I am seeing this on Linux as well as MacOS: Opening any output pipe from R 4.4.0 to TTY programs like "less"/"more" hangs, SIGINT-proof:
+>> $ R/4.4.0/bin/Rscript -e 'pipe("less", "w")'
+>> $ R/4.4.0/bin/Rscript -e 'cat("test", file="|less")
+>> $ R/4.4.0/bin/Rscript -e 'cat("test", file="|more")
+> R 4.3.3 and earlier have been working fine:
+>> $ R/4.3.3/bin/Rscript -e 'pipe("less", "w")'
+>> $ R/4.3.3/bin/Rscript -e 'cat("test", file="|less")
+>> $ R/4.3.3/bin/Rscript -e 'cat("test", file="|more")
+
+I've tried the first example and it doesn't work for me even in R 4.3.3 
+on Linux, so I can't easily test what changed the behavior for you, but 
+it was very likely a bugfix for PR#17764. Now the pipe() uses a special 
+process group to protect the processes (assumed to be background) from 
+the terminal.
+
+If you are interested in the details behind this, see the bug report 
+discussion or the blog post (below), and the source code.
+
+A perhaps slightly over-simplified description is that tasks executed 
+via pipe() and (file="|") and system(wait="FALSE") are background tasks, 
+which should not be interruptible e.g. by Ctrl+C. This was fixed in R 
+4.4, which required significant changes of the underlying implementation.
+
+To support the very rare case when a task executed via 
+system(wait="FALSE") should receive signals from a console, because it 
+is to logically implement an interactive task using background tasks, 
+there is now an argument "receive.console.signals", which can be used to 
+override this. This is used by the R's parallel package to implement 
+interactive computation on a cluster.
+
+Your use case seems to be running an interactive task using pipe(). 
+Currently, there is no argument of pipe() to allow this as we didn't 
+anticipate anyone would actually be doing this - and, on my system, it 
+doesn't work even in R 4.3.3.
+
+I assume the examples above are narrowed down cases to reproduce the 
+change in behavior. If there was a plausible, realistic example that 
+would indicate the need to add such argument to pipe(), it could be 
+considered, but perhaps it would be more natural to use 
+system(wait=FALSE,receive.console.signals=TRUE), anyway?
+
+Best
+Tomas
+
+https://blog.r-project.org/2023/05/23/not-interrupting-background-tasks-with-ctrl-c/index.html
+https://bugs.r-project.org/show_bug.cgi?id=17764
+
+>
+> R 4.4.0 also works fine with non-TTY output pipes:
+>> $ R/4.4.0/bin/Rscript -e 'pipe("cat", "w")'
+>> $ R/4.4.0/bin/Rscript -e 'cat("test", file="|cat")
+>> $ R/4.4.0/bin/Rscript -e 'cat("Hi!\n", file="|tr i o")'
+>> $ R/4.4.0/bin/Rscript -e 'cat("Hi!\n", file="|sed -e s/i/o/")'
+> For what it's worth, input pipes from less/more to R 4.4.0 do not hang, but are not always the same as before either. These are the same:
+>> $ R/4.3.3/bin/Rscript -e 'con <- pipe("less --version", "r"); readLines(con); close(con)'
+>> [1] "less (GNU regular expressions)" "Copyright (C) Mark Nudelman" ...
+>> $ R/4.4.0/bin/Rscript -e 'con <- pipe("less --version", "r"); readLines(con); close(con)'
+>> [1] "less (GNU regular expressions)" "Copyright (C) Mark Nudelman" ...
+> But these are not (again, on both Linux and MacOS):
+>> $ R/4.3.3/bin/Rscript -e 'con <- pipe("less", "r"); readLines(con); close(con)'
+>> [1] "Missing filename (\"less --help\" for help)"
+>> $ R/4.4.0/bin/Rscript -e 'con <- pipe("less", "r"); readLines(con); close(con)'
+>> character(0)
+>
+> I did not see anything related here or in release notes or bugzilla. Is this a bug or something else?
+>
+> Best,
+> --
+> Zafer
+>
+>
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From r|p|ey @end|ng |rom @t@t@@ox@@c@uk  Mon May 20 13:10:02 2024
+From: r|p|ey @end|ng |rom @t@t@@ox@@c@uk (Prof Brian Ripley)
+Date: Mon, 20 May 2024 12:10:02 +0100
+Subject: [Rd] config.site settings for M3 Mac typo in manual?
+In-Reply-To: <7d2fba0d-6abb-4df0-b388-e82280a8bac1@gmail.com>
+References: <7d2fba0d-6abb-4df0-b388-e82280a8bac1@gmail.com>
+Message-ID: <344faa38-c054-400b-b1b4-15ef47a00d7f@stats.ox.ac.uk>
+
+On 20/05/2024 09:06, Duncan Murdoch wrote:
+> I've just upgraded to an M3 Mac laptop, and I'm working through getting 
+> the right configure settings to build R.
+> 
+> The Installation and Administration manual says to have this in 
+> config.site:
+> 
+> FFLAGS="-g -O2 -mmacos-version-min=11.0"
+> FCFLAGS="-g -O2 -mmacos-version-min=11.0"
+> 
+> but those give an error on my system, with it suggesting the FFLAGS and 
+> FCFLAGS version option should be -mmacosx-version-min=11.0.? I don't 
+> know if that's a typo or a change.
+
+-mmacos-version-min= is the current Apple option.  However, the gfortran 
+build recommended in the manual is quite old and this has apparently 
+differed by GCC version (and is not documented in the 'man gfortran' I 
+have).
+
+I'll change the manual to mention both forms, and that it is only 
+sometimes needed (not on my current setup).
+
+-- 
+Brian D. Ripley,                  ripley at stats.ox.ac.uk
+Emeritus Professor of Applied Statistics, University of Oxford
+
+
+From z@|er@b@rutcuog|u @end|ng |rom gm@||@com  Mon May 20 14:19:32 2024
+From: z@|er@b@rutcuog|u @end|ng |rom gm@||@com (Zafer Barutcuoglu)
+Date: Mon, 20 May 2024 08:19:32 -0400
+Subject: [Rd] Output pipes to TTY hang
+In-Reply-To: <7da31dd1-3760-4c9f-be90-1f4051dddb2b@gmail.com>
+References: <mailman.54288.3.1716026401.7919.r-devel@r-project.org>
+ <FA262651-F35A-436F-9086-A7DE77965A5B@gmail.com>
+ <7da31dd1-3760-4c9f-be90-1f4051dddb2b@gmail.com>
+Message-ID: <FE131191-A2A6-487D-A386-1DD15DE83ED2@gmail.com>
+
+Thank you, that makes sense. Not worth messing with those changes on my account, but since you asked, my actual use case was for an R script (or rather my package used by one) to display text (e.g. for --help) using the system PAGER, without writing temporary files for file.show() because modifying the file system just to show some help text doesn't seem right. No worries, easy enough for me to add a text.show() or general pipecat() in C, though cat(x, file="|less") did use to just work fine, too. Thanks again for clearing this up.
+
+> On May 20, 2024, at 6:20 AM, Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+> 
+> 
+> On 5/20/24 07:36, Zafer Barutcuoglu wrote:
+>> Hi,
+>> 
+>> I am seeing this on Linux as well as MacOS: Opening any output pipe from R 4.4.0 to TTY programs like "less"/"more" hangs, SIGINT-proof:
+>>> $ R/4.4.0/bin/Rscript -e 'pipe("less", "w")'
+>>> $ R/4.4.0/bin/Rscript -e 'cat("test", file="|less")
+>>> $ R/4.4.0/bin/Rscript -e 'cat("test", file="|more")
+>> R 4.3.3 and earlier have been working fine:
+>>> $ R/4.3.3/bin/Rscript -e 'pipe("less", "w")'
+>>> $ R/4.3.3/bin/Rscript -e 'cat("test", file="|less")
+>>> $ R/4.3.3/bin/Rscript -e 'cat("test", file="|more")
+> 
+> I've tried the first example and it doesn't work for me even in R 4.3.3 on Linux, so I can't easily test what changed the behavior for you, but it was very likely a bugfix for PR#17764. Now the pipe() uses a special process group to protect the processes (assumed to be background) from the terminal.
+> 
+> If you are interested in the details behind this, see the bug report discussion or the blog post (below), and the source code.
+> 
+> A perhaps slightly over-simplified description is that tasks executed via pipe() and (file="|") and system(wait="FALSE") are background tasks, which should not be interruptible e.g. by Ctrl+C. This was fixed in R 4.4, which required significant changes of the underlying implementation.
+> 
+> To support the very rare case when a task executed via system(wait="FALSE") should receive signals from a console, because it is to logically implement an interactive task using background tasks, there is now an argument "receive.console.signals", which can be used to override this. This is used by the R's parallel package to implement interactive computation on a cluster.
+> 
+> Your use case seems to be running an interactive task using pipe(). Currently, there is no argument of pipe() to allow this as we didn't anticipate anyone would actually be doing this - and, on my system, it doesn't work even in R 4.3.3.
+> 
+> I assume the examples above are narrowed down cases to reproduce the change in behavior. If there was a plausible, realistic example that would indicate the need to add such argument to pipe(), it could be considered, but perhaps it would be more natural to use system(wait=FALSE,receive.console.signals=TRUE), anyway?
+> 
+> Best
+> Tomas
+> 
+> https://blog.r-project.org/2023/05/23/not-interrupting-background-tasks-with-ctrl-c/index.html
+> https://bugs.r-project.org/show_bug.cgi?id=17764
+> 
+>> 
+>> R 4.4.0 also works fine with non-TTY output pipes:
+>>> $ R/4.4.0/bin/Rscript -e 'pipe("cat", "w")'
+>>> $ R/4.4.0/bin/Rscript -e 'cat("test", file="|cat")
+>>> $ R/4.4.0/bin/Rscript -e 'cat("Hi!\n", file="|tr i o")'
+>>> $ R/4.4.0/bin/Rscript -e 'cat("Hi!\n", file="|sed -e s/i/o/")'
+>> For what it's worth, input pipes from less/more to R 4.4.0 do not hang, but are not always the same as before either. These are the same:
+>>> $ R/4.3.3/bin/Rscript -e 'con <- pipe("less --version", "r"); readLines(con); close(con)'
+>>> [1] "less (GNU regular expressions)" "Copyright (C) Mark Nudelman" ...
+>>> $ R/4.4.0/bin/Rscript -e 'con <- pipe("less --version", "r"); readLines(con); close(con)'
+>>> [1] "less (GNU regular expressions)" "Copyright (C) Mark Nudelman" ...
+>> But these are not (again, on both Linux and MacOS):
+>>> $ R/4.3.3/bin/Rscript -e 'con <- pipe("less", "r"); readLines(con); close(con)'
+>>> [1] "Missing filename (\"less --help\" for help)"
+>>> $ R/4.4.0/bin/Rscript -e 'con <- pipe("less", "r"); readLines(con); close(con)'
+>>> character(0)
+>> 
+>> I did not see anything related here or in release notes or bugzilla. Is this a bug or something else?
+>> 
+>> Best,
+>> --
+>> Zafer
+>> 
+>> 
+>> 	[[alternative HTML version deleted]]
+>> 
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
