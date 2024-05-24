@@ -2145,3 +2145,100 @@ https://search.r-project.org/CRAN/refmans/flexiblas/html/flexiblas-threads.html
 https://cran.r-project.org/doc/manuals/R-admin.html#BLAS
 
 
+From bbo|ker @end|ng |rom gm@||@com  Thu May 23 00:45:30 2024
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Wed, 22 May 2024 18:45:30 -0400
+Subject: [Rd] confint Attempts to Use All Server CPUs by Default
+In-Reply-To: <20240521130028.18b79409@arachnoid>
+References: <SY2PR01MB3003B98D67B632CB7EF7498CCDEA2@SY2PR01MB3003.ausprd01.prod.outlook.com>
+ <20240521130028.18b79409@arachnoid>
+Message-ID: <7efae16d-f59e-4cfe-a9eb-dd0400d39386@gmail.com>
+
+   Following up on this -- on my system, I have 69 packages installed 
+that appear to provide something like a confint() method:
+
+h <-  help.search("confint", agrep = FALSE)
+p <- sort(unique(h$matches$Package))
+length(p)
+## [1] 69
+
+p
+
+  [1] "bamlss"          "bbmle"           "binom"           "brglm2" 
+
+  [5] "broom"           "caper"           "car"             "CDM" 
+
+  [9] "CLME"            "coin"            "crosstable"      "dclone" 
+
+[13] "doBy"            "drc"             "Ecfun"           "emmeans"
+[17] "epigrowthfit"    "evd"             "Exact"           "fitode"
+[21] "fixest"          "ggfortify"       "ggplot2"         "GLMMadaptive"
+[25] "glmmTMB"         "gratia"          "hdm"             "JMbayes"
+[29] "JointAI"         "lava"            "lme4"            "lmeresampler"
+[33] "lmtest"          "logistf"         "MASS"            "maxLik"
+[37] "metafor"         "mitml"           "MKmisc"          "mmrm"
+[41] "mosaic"          "MplusAutomation" "multcomp"        "ordinal"
+[45] "papaja"          "parsnip"         "prodlim"         "R2admb"
+[49] "rethinking"      "riskRegression"  "RSA"             "rstanarm"
+[53] "rxode2"          "segmented"       "simr"            "sirt"
+[57] "sn"              "spaMM"           "stats"           "stats4"
+[61] "strucchange"     "survey"          "survival"        "systemfit"
+[65] "TMB"             "unmarked"        "vegan"           "VGAM"
+[69] "zipfR"
+
+  If a confint() method were actually included in the package test 
+suite, I would expect this kind of problem to be caught by CRAN checks 
+(which look for code that is being greedy with parallelization). But 
+it's perfectly possible that a package maintainer neglected to include 
+such tests ...
+
+
+On 2024-05-21 6:00 a.m., Ivan Krylov via R-devel wrote:
+> ? Tue, 21 May 2024 08:00:11 +0000
+> Dario Strbenac via R-devel <r-devel at r-project.org> ?????:
+> 
+>> Would a less resource-intensive value, such as 1, be a safer default
+>> CPU value for confint?
+> 
+> Which confint() method do you have in mind? There is at least four of
+> them by default in R, and many additional classes could make use of
+> stats:::confint.default by implementing vcov().
+> 
+>> Also, there is no mention of such parallel processing in ?confint, so
+>> it was not clear at first where to look for performance degradation.
+>> It could at least be described in the manual page so that users would
+>> know that export OPENBLAS_NUM_THREADS=1 is a solution.
+> 
+> There isn't much R can do about the behaviour of the BLAS, because
+> there is no standard interface to set the number of threads. Some BLASes
+> (like ATLAS) don't even offer it as a tunable number at all [*].
+> 
+> A system administrator could link the installation of R against
+> FlexiBLAS [**], provide safe defaults in the environment variables and
+> educate the users about its tunables [***], but that's a choice just
+> like it had been a choice to link R against a parallel variant of
+> OpenBLAS on a shared computer. This is described in R Installation and
+> Administration, section A.3.1 [****].
+>
+
+
+From d@tr7320 @end|ng |rom un|@@ydney@edu@@u  Thu May 23 01:05:06 2024
+From: d@tr7320 @end|ng |rom un|@@ydney@edu@@u (Dario Strbenac)
+Date: Wed, 22 May 2024 23:05:06 +0000
+Subject: [Rd] confint Attempts to Use All Server CPUs by Default
+In-Reply-To: <7efae16d-f59e-4cfe-a9eb-dd0400d39386@gmail.com>
+References: <SY2PR01MB3003B98D67B632CB7EF7498CCDEA2@SY2PR01MB3003.ausprd01.prod.outlook.com>
+ <20240521130028.18b79409@arachnoid>
+ <7efae16d-f59e-4cfe-a9eb-dd0400d39386@gmail.com>
+Message-ID: <SY2PR01MB30037D83DBDD9DB76E8B9F02CDEB2@SY2PR01MB3003.ausprd01.prod.outlook.com>
+
+Hello,
+
+It is from the stats package and applied to the output of logistic regression as implemented by glm with setting family = "binomial". So, it is a base package and not an add-on CRAN package. I shall recommend linking to FlexiBLAS to our system administrator.
+
+--------------------------------------
+Dario Strbenac
+University of Sydney
+Camperdown NSW 2050
+Australia
+
