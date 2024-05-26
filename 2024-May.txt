@@ -2260,3 +2260,70 @@ On the face of it, using format(..., scientific = FALSE) instead of as.character
 	[[alternative HTML version deleted]]
 
 
+From pd@|gd @end|ng |rom gm@||@com  Fri May 24 10:34:05 2024
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Fri, 24 May 2024 10:34:05 +0200
+Subject: [Rd] Undesirable behaviour of base::factor
+In-Reply-To: <DB4P195MB226629D3C69513584B71BB9597F42@DB4P195MB2266.EURP195.PROD.OUTLOOK.COM>
+References: <DB4P195MB2266A52E6F1456922F5F11AD97F42@DB4P195MB2266.EURP195.PROD.OUTLOOK.COM>
+ <DB4P195MB226629D3C69513584B71BB9597F42@DB4P195MB2266.EURP195.PROD.OUTLOOK.COM>
+Message-ID: <73412EF7-A673-4F92-82E2-2D0472ABDF87@gmail.com>
+
+I think this is a "Doctor, it hurts when I do this" issue. 
+
+The root of it is that as.character() behaves differently on integers and floating values.
+
+> factor(100000)
+[1] 1e+05
+Levels: 1e+05
+
+> factor(100000,levels=100000)
+[1] 1e+05
+Levels: 1e+05
+
+> factor(100000,levels=100000:100000)
+[1] <NA>
+
+> factor(as.integer(100000),levels=100000:100000)
+[1] 100000
+Levels: 100000
+
+Or, more directly: It is the difference between these
+
+> as.character(seq(99999L,100001L,1L))
+[1] "99999"  "100000" "100001"
+> as.character(seq(99999L,100001L,1))
+[1] "99999"  "1e+05"  "100001"
+
+in which the formatting code has detected that "1e+05" is shorter than "100000", but won't convert integers to scientific notation.
+
+You can play whack-a-mole with this sort of issue: Fix a perceived problem in one place only to find a new problem popping up elsewhere. It is probably better just to never trust character conversion of numbers beyond 99999.
+
+- pd
+
+
+
+> On 23 May 2024, at 18:33 , Andrew Gustar <andrew_gustar at msn.com> wrote:
+> 
+> This thread on stackoverflow illustrates the problem... https://stackoverflow.com/questions/78523612/r-factor-from-numeric-vector-drops-every-100-000th-element-from-its-levels
+> 
+> The issue is that factor(), applied to numeric values, uses as.character(), which converts numbers to character strings according to the value of scipen. The stackoverflow thread illustrates a case where this causes some factor levels to become NA. There is also an inconsistency between the treatment of numeric and integer values.
+> 
+> On the face of it, using format(..., scientific = FALSE) instead of as.character() would solve the problem, but this probably needs careful thinking through in case of other side effects!
+> 
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
