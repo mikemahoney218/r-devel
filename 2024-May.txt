@@ -2327,3 +2327,440 @@ Office: A 4.23
 Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
 
 
+From rkoenker @end|ng |rom ||||no|@@edu  Mon May 27 12:52:26 2024
+From: rkoenker @end|ng |rom ||||no|@@edu (Koenker, Roger W)
+Date: Mon, 27 May 2024 10:52:26 +0000
+Subject: [Rd] Mismatches for methods registered for non-generic:
+Message-ID: <F5CBCFF2-44E2-4D13-8D65-BA8B85A33377@illinois.edu>
+
+I?m trying to repair my SparseM package to meet new CRAN rules.  The fun part was rewriting the arithmetic-ifs in cholesky.f ? to conform with new fortran rules.  (This struck me as a bit like updating ?the wine dark seas?  in Homer.)  Now, my remaining trouble is that I have several functions declared as generic, e.g. 
+
+setGeneric("as.matrix.coo")
+setMethod("as.matrix.coo","matrix.csr", function(x, nrow, ncol,eps){.csr.coo(x)})
+
+that have been fine until now and on my fresh R version 4.4.0 (2024-04-24) are still ok with R CMD check ?as-cran but CRAN checking reveals, e.g.
+
+Check: S3 generic/method consistency, Result: NOTE
+ Mismatches for methods registered for non-generic:
+ as:
+   function(object, Class, strict, ext)
+ as.matrix.coo:
+   function(x, nrow, ncol, eps, ?)
+
+which I interpret as regarding  my generics as just S3 methods for the non-generic ?as?.  Can someone advise on the best way to repair this?
+
+With best regards, and eternal gratitude for the efforts of R-core in making R a living language.
+
+
+Roger Koenker
+r.koenker at ucl.ac.uk
+Honorary Professor of Economics
+Department of Economics, UCL
+Emeritus Professor of Economics
+	and Statistics, UIUC
+
+
+
+From |kry|ov @end|ng |rom d|@root@org  Mon May 27 13:16:15 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Mon, 27 May 2024 14:16:15 +0300
+Subject: [Rd] Mismatches for methods registered for non-generic:
+In-Reply-To: <F5CBCFF2-44E2-4D13-8D65-BA8B85A33377@illinois.edu>
+References: <F5CBCFF2-44E2-4D13-8D65-BA8B85A33377@illinois.edu>
+Message-ID: <20240527141615.28531049@arachnoid>
+
+? Mon, 27 May 2024 10:52:26 +0000
+"Koenker, Roger W" <rkoenker at illinois.edu> ?????:
+
+> that have been fine until now and on my fresh R version 4.4.0
+> (2024-04-24) are still ok with R CMD check ?as-cran
+
+This extra check requires the environment variable
+_R_CHECK_S3_METHODS_SHOW_POSSIBLE_ISSUES_ to be set to TRUE to show the
+issues.
+
+> but CRAN checking reveals, e.g.
+> 
+> Check: S3 generic/method consistency, Result: NOTE
+>  Mismatches for methods registered for non-generic:
+>  as:
+>    function(object, Class, strict, ext)
+>  as.matrix.coo:
+>    function(x, nrow, ncol, eps, ?)
+> 
+> which I interpret as regarding  my generics as just S3 methods for
+> the non-generic ?as?.
+
+There are calls to S3method("as", ...) and S3method("is", ...) at the
+end of the NAMESPACE for the current CRAN version of SparseM. If I
+comment them out, the package passes R CMD check --as-cran without the
+NOTE and seemingly with no extra problems.
+
+-- 
+Best regards,
+Ivan
+
+
+From dom|n|c@@chuhm@cher @end|ng |rom m@them@t|k@un|-goett|ngen@de  Mon May 27 17:49:06 2024
+From: dom|n|c@@chuhm@cher @end|ng |rom m@them@t|k@un|-goett|ngen@de (Schuhmacher, Dominic)
+Date: Mon, 27 May 2024 15:49:06 +0000
+Subject: [Rd] Keep class attribute when applying c() to hexmodes
+Message-ID: <52BAF15B-B97D-4695-891E-904A903E3CC7@gwdg.de>
+
+Dear list,
+
+The following behavior in base R is unexpected to me:
+
+a <- as.hexmode("99ac")
+b <- as.hexmode("9ce5")
+v <- c(a,b)
+v
+#> [1] 39340 40165
+class(v)
+#> [1] "integer"
+
+Is there a good reason why v should not be of class "hexmode"?
+
+I can see that this is exactly as documented. The help for `c()` only says that the arguments are coerced to a common type (which is integer anyway) and that all attributes except names are removed. On the other hand, it says further down that "c methods other than the default are not required to remove attributes (and they will almost certainly preserve a class attribute)".
+
+So couldn't (or even shouldn't) there be a c.hexmode that keeps the class attribute?
+
+Best regards,
+Dominic
+
+
+------------------------------------------
+Prof. Dr. Dominic Schuhmacher
+Institute for Mathematical Stochastics
+University of G?ttingen, Germany
+https://dschuhm1.pages.gwdg.de
+
+
+
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Mon May 27 21:24:18 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Mon, 27 May 2024 15:24:18 -0400
+Subject: [Rd] Keep class attribute when applying c() to hexmodes
+In-Reply-To: <52BAF15B-B97D-4695-891E-904A903E3CC7@gwdg.de>
+References: <52BAF15B-B97D-4695-891E-904A903E3CC7@gwdg.de>
+Message-ID: <6f167450-51ba-4d5e-8382-f189422cf449@gmail.com>
+
+On 2024-05-27 11:49 a.m., Schuhmacher, Dominic wrote:
+> Dear list,
+> 
+> The following behavior in base R is unexpected to me:
+> 
+> a <- as.hexmode("99ac")
+> b <- as.hexmode("9ce5")
+> v <- c(a,b)
+> v
+> #> [1] 39340 40165
+> class(v)
+> #> [1] "integer"
+> 
+> Is there a good reason why v should not be of class "hexmode"?
+> 
+> I can see that this is exactly as documented. The help for `c()` only says that the arguments are coerced to a common type (which is integer anyway) and that all attributes except names are removed. On the other hand, it says further down that "c methods other than the default are not required to remove attributes (and they will almost certainly preserve a class attribute)".
+> 
+> So couldn't (or even shouldn't) there be a c.hexmode that keeps the class attribute?
+
+I believe there could.  If you think there should, then you should 
+submit a patch containing it to bugs.r-project.org.  Based on c.Date, 
+here's a first attempt:
+
+   c.hexmode <- function(...) as.hexmode(c(unlist(lapply(list(...), 
+function(e) unclass(as.hexmode(e))))))
+
+If you want this to be incorporated into R, you should test it, document 
+it, and submit a patch containing it.
+
+Duncan Murdoch
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue May 28 16:56:13 2024
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 28 May 2024 16:56:13 +0200
+Subject: [Rd] 
+ FR: Customize background colour of row and column headers for
+ the View output
+In-Reply-To: <20240516184852.17c5fcba@arachnoid>
+References: <AM6PR02MB4423181B246EC91BEA61412294E42@AM6PR02MB4423.eurprd02.prod.outlook.com>
+ <6fd81bdd-4e7e-4736-b71d-f71c402d5cfa@gmail.com>
+ <AM6PR02MB4423E2D236D742E90FC6603494E42@AM6PR02MB4423.eurprd02.prod.outlook.com>
+ <1fd3aba6-1da9-4d6a-804b-13a70cb9f096@gmail.com>
+ <20240508095832.7886e41c@rolf-Latitude-E7470>
+ <AM6PR02MB4423D3D9A3934F4489338FC894E22@AM6PR02MB4423.eurprd02.prod.outlook.com>
+ <cd6eee8a-a70d-40b8-b4ad-ba4a2e929c26@gmail.com>
+ <20240513153435.2a735f2c@arachnoid>
+ <AM6PR02MB44236CC3F4A7D6769DD7BA8994E32@AM6PR02MB4423.eurprd02.prod.outlook.com>
+ <d90f9a91-dee0-44e3-89c3-bdba711f4ab8@gmail.com>
+ <AM6PR02MB4423958F79FB134A16406AF194EC2@AM6PR02MB4423.eurprd02.prod.outlook.com>
+ <ecfae895-c648-4025-b786-b4c734ade5ba@gmail.com>
+ <20240516184852.17c5fcba@arachnoid>
+Message-ID: <e625c734-fba5-4333-8f08-1a3ab20792b8@gmail.com>
+
+I think we should do more than this trivial change. The two real dialogs 
+used by the data editor would then also get the new background color 
+(setting the cell width, the "variable" editor). Then, the code clearly 
+distinguishes between cells for names (row, column) and cells for data, 
+so choosing a different color for the two types, but setting these two 
+colors in the code to the same one would make the code confusing.
+
+This could be fixed, but I also think there is a value in 
+back-compatibility, people may have saved preferences with customized 
+background color and have been used to how it looked like, after all the 
+current behavior has been around for about 16 years and from the code, 
+it was intentional. Yes, it meant that one would have to choose a 
+foreground color for the data editor that would be visible on any chosen 
+background color as well as on lighgray (the names), so, e.g., not 
+yellow. But, maybe that was good enough as there had been no reports 
+about this earlier.
+
+So, instead of changing the behavior I've created a new setting for the 
+background for the names in the data editor (dataeditnbg). Now in 
+R-devel. Please let me know if you see any problems with this,
+
+Thanks
+Tomas
+
+On 5/16/24 17:48, Ivan Krylov via R-devel wrote:
+> The change suggested by Iago Gin? V?zquez is indeed very simple. It
+> sets the background colour of the row and column headers to the
+> background of the rest of the dataentry window. With this patch, R
+> passes 'make check'. As Duncan Murdoch mentions, the X11 editor already
+> behaves this way.
+>
+> If it's not acceptable to make the row and column headers the same
+> colour as the rest of the text, let's make it into a separate setting.
+>
+> --- src/library/utils/src/windows/dataentry.c	(revision 86557)
+> +++ src/library/utils/src/windows/dataentry.c	(working copy)
+> @@ -1474,7 +1474,7 @@
+>       resize(DE->de, r);
+>   
+>       DE->CellModified = DE->CellEditable = FALSE;
+> -    bbg = dialog_bg();
+> +    bbg = guiColors[dataeditbg];
+>       /* set the active cell to be the upper left one */
+>       DE->crow = 1;
+>       DE->ccol = 1;
+>
+
+
+From h@w|ckh@m @end|ng |rom gm@||@com  Tue May 28 19:35:10 2024
+From: h@w|ckh@m @end|ng |rom gm@||@com (Hadley Wickham)
+Date: Tue, 28 May 2024 12:35:10 -0500
+Subject: [Rd] Segfault when parsing UTF-8 text with srcrefs
+Message-ID: <CABdHhvGF04U8YAA5m5qA7eiDS45_Dq3toTyf1-nPcibo0VNPTw@mail.gmail.com>
+
+Hi all,
+
+When I run the following code, R segfaults:
+
+text <- "?"
+srcfile <- srcfilecopy("test.r", text)
+parse(textConnection(text), srcfile = srcfile)
+
+It doesn't segfault if text is ASCII, or it's not wrapped in
+textConnection, or srcfile isn't set.
+
+Hadley
+
+-- 
+http://hadley.nz
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Tue May 28 20:14:05 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 28 May 2024 14:14:05 -0400
+Subject: [Rd] Segfault when parsing UTF-8 text with srcrefs
+In-Reply-To: <CABdHhvGF04U8YAA5m5qA7eiDS45_Dq3toTyf1-nPcibo0VNPTw@mail.gmail.com>
+References: <CABdHhvGF04U8YAA5m5qA7eiDS45_Dq3toTyf1-nPcibo0VNPTw@mail.gmail.com>
+Message-ID: <92adfffe-a691-48ce-bbba-6eb2d96be637@gmail.com>
+
+On 2024-05-28 1:35 p.m., Hadley Wickham wrote:
+> Hi all,
+> 
+> When I run the following code, R segfaults:
+> 
+> text <- "?"
+> srcfile <- srcfilecopy("test.r", text)
+> parse(textConnection(text), srcfile = srcfile)
+> 
+> It doesn't segfault if text is ASCII, or it's not wrapped in
+> textConnection, or srcfile isn't set.
+
+I also see the segfault on
+
+   R version 4.4.0 (2024-04-24) -- "Puppy Cup"
+   Copyright (C) 2024 The R Foundation for Statistical Computing
+   Platform: aarch64-apple-darwin20
+
+Apple shows me this stack trace:
+
+Thread 0 Crashed::  Dispatch queue: com.apple.main-thread
+0   libsystem_platform.dylib      	       0x189364904 _platform_strlen + 4
+1   libR.dylib                    	       0x10380a954 Rf_mkChar + 20 
+(envir.c:4076)
+2   libR.dylib                    	       0x10385e3ac finalizeData + 1516
+3   libR.dylib                    	       0x10385d6dc R_Parse + 924 
+(gram.c:4215)
+4   libR.dylib                    	       0x1038f4a6c do_parse + 1260 
+(source.c:294)
+5   libR.dylib                    	       0x10383ac4c bcEval_loop + 
+40204 (eval.c:8141)
+6   libR.dylib                    	       0x10382356c bcEval + 684 
+(eval.c:7524)
+7   libR.dylib                    	       0x103822c6c Rf_eval + 556 
+(eval.c:1167)
+8   libR.dylib                    	       0x10382582c R_execClosure + 
+812 (eval.c:2398)
+9   libR.dylib                    	       0x103824924 applyClosure_core 
++ 164 (eval.c:2311)
+10  libR.dylib                    	       0x103822f08 Rf_applyClosure + 
+20 (eval.c:2333) [inlined]
+11  libR.dylib                    	       0x103822f08 Rf_eval + 1224 
+(eval.c:1285)
+12  libR.dylib                    	       0x10387f8f8 R_ReplDLLdo1 + 440 
+(main.c:398)
+13  R                             	       0x102d22fa0 
+run_REngineRmainloop + 260
+14  R                             	       0x102d1a64c -[REngine runREPL] 
++ 124
+15  R                             	       0x102d0dd90 main + 588
+16  dyld                          	       0x188fae0e0 start + 2360
+
+Duncan Murdoch
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue May 28 20:41:31 2024
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 28 May 2024 20:41:31 +0200
+Subject: [Rd] Segfault when parsing UTF-8 text with srcrefs
+In-Reply-To: <CABdHhvGF04U8YAA5m5qA7eiDS45_Dq3toTyf1-nPcibo0VNPTw@mail.gmail.com>
+References: <CABdHhvGF04U8YAA5m5qA7eiDS45_Dq3toTyf1-nPcibo0VNPTw@mail.gmail.com>
+Message-ID: <97e8b60f-271e-4959-81eb-93c236d922ac@gmail.com>
+
+
+On 5/28/24 19:35, Hadley Wickham wrote:
+> Hi all,
+>
+> When I run the following code, R segfaults:
+>
+> text <- "?"
+> srcfile <- srcfilecopy("test.r", text)
+> parse(textConnection(text), srcfile = srcfile)
+>
+> It doesn't segfault if text is ASCII, or it's not wrapped in
+> textConnection, or srcfile isn't set.
+
+Thanks, this is because R parser doesn't support non-ASCII UTF-8 outside 
+string literals and comments, plus a missing bounds check. The "correct" 
+result should be an R error, which I get in a debug build.
+
+The tokenizer ends up with a negative token and then when the parse data 
+are being finalized, creating a table of token names, there is an out of 
+bounds access (yytname array). Probably the check should go right away 
+into the tokenizer.
+
+Tomas
+
+>
+> Hadley
+>
+
+
+From re|jo@@und @end|ng |rom ue|@||  Wed May 29 00:25:54 2024
+From: re|jo@@und @end|ng |rom ue|@|| (Reijo Sund)
+Date: Tue, 28 May 2024 22:25:54 +0000
+Subject: [Rd] How to call directly "dotTcl" C-function of the tcltk-package
+ from the C-code of an external package?
+Message-ID: <DDF6B4A9-693B-4C4F-8D6E-2E828BB41225@uef.fi>
+
+I have a use case with tcltk-package where I need to repeatedly call Tcl/Tk functions
+very quickly. For such purpose, the standard R-interface turned out to be too slow, and
+better option has been to call package's C-function dotTcl directly from my own C-code.
+
+Before R 4.4.0 it was possible to use getNativeSymbolInfo("dotTcl","tcltk")$address (or 
+R_FindSymbol("dotTcl","tcltk",NULL) in C) to get the function-pointer and then call the
+function directly, even though it has not been registered as C-callable for other
+packages.
+
+With R 4.4.0 these methods are unable to find the symbol anymore (tested in Linux).
+I was not able to find what change has caused this new behaviour.
+
+Taking a look at tcltk source code, it can be seen that the dotTcl is called using 
+.External within tcltk-package and there is a registration done for it with
+R_registerRoutines. An object of class NativeSymbolInfo has also been created in the
+tcltk namespace, and that can be accessed using tcltk:::.C_dotTcl.
+
+However, the tcltk:::.C_dotTcl$address is an external pointer of a class
+RegisteredNativeSymbol and not directly the function pointer to the actual routine. The
+problem is that there appears not to be any R-level function that would extract the actual
+function-pointer and that the C-interface for R_RegisteredNativeSymbol has been defined
+in the internal Rdynpriv.h header that is not included in the public API headers.
+
+The only way I was able to access the function directly was using the following C-level 
+approach in which essential parts of the headers are copied from the Rdynpriv.h:
+
+#include <R.h>
+#include <Rinternals.h>
+#include <R_ext/Rdynload.h>
+
+typedef struct {
+    char       *name;
+    DL_FUNC     fun;
+    int         numArgs;
+
+    R_NativePrimitiveArgType *types;   
+} Rf_DotCSymbol;
+
+typedef Rf_DotCSymbol Rf_DotFortranSymbol;
+
+typedef struct {
+    char       *name;
+    DL_FUNC     fun;
+    int         numArgs;
+} Rf_DotCallSymbol;
+
+typedef Rf_DotCallSymbol Rf_DotExternalSymbol;
+
+struct Rf_RegisteredNativeSymbol {
+    NativeSymbolType type;
+    union {
+	Rf_DotCSymbol        *c;
+	Rf_DotCallSymbol     *call;
+	Rf_DotFortranSymbol  *fortran;
+	Rf_DotExternalSymbol *external;
+    } symbol;
+};
+
+SEXP(*direct_dotTcl)(SEXP) = NULL;
+
+SEXP FindRegFunc(SEXP symbol) {
+    R_RegisteredNativeSymbol *tmp = NULL;
+    tmp = (R_RegisteredNativeSymbol *) R_ExternalPtrAddr(symbol);
+    if (tmp==NULL) return R_NilValue;
+	direct_dotTcl = (SEXP(*)(SEXP)) tmp->symbol.external->fun;	
+    return R_NilValue;
+}	
+
+
+Although that works for me, I'm aware that this kind of approach is certainly not
+recommmended for publicly available external packages. However, I couldn't find any
+other more legitimate way to access dotTcl function directly from my C-code in R 4.4.0. 
+
+
+I have two questions:
+
+Would it be possible to get dotTcl C-function (in tcltk.c) of the tcltk-package
+registered as C-callable from other packages?
+
+Was it an intentional change that caused the hiding of the earlier visible (registered)
+symbols from other packages?
+
+
