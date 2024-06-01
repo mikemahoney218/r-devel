@@ -2764,3 +2764,477 @@ Was it an intentional change that caused the hiding of the earlier visible (regi
 symbols from other packages?
 
 
+From b@row||ng@on @end|ng |rom |@nc@@ter@@c@uk  Thu May 30 09:29:39 2024
+From: b@row||ng@on @end|ng |rom |@nc@@ter@@c@uk (Barry Rowlingson)
+Date: Thu, 30 May 2024 08:29:39 +0100
+Subject: [Rd] 
+ [External] Re:  Segfault when parsing UTF-8 text with srcrefs
+In-Reply-To: <bedfaebd85074cbcbf9969f66acd985b@LO0P265MB2603.GBRP265.PROD.OUTLOOK.COM>
+References: <CABdHhvGF04U8YAA5m5qA7eiDS45_Dq3toTyf1-nPcibo0VNPTw@mail.gmail.com>
+ <bedfaebd85074cbcbf9969f66acd985b@LO0P265MB2603.GBRP265.PROD.OUTLOOK.COM>
+Message-ID: <CANVKczPMSbF4epkdyj5c__BG9WSqaPiaC5ViSvF4f_SVDT1hkw@mail.gmail.com>
+
+I get an R error and no segfault:
+
+> parse(textConnection(text), srcfile = srcfile)
+Error in parse(textConnection(text), srcfile = srcfile) :
+  test.r:1:1: unexpected $end
+1: ?
+    ^
+
+This is R 4.3.0, so maybe the bug has been introduced since then...
+
+Version and system info:
+
+> version
+               _
+platform       x86_64-pc-linux-gnu
+arch           x86_64
+os             linux-gnu
+system         x86_64, linux-gnu
+status
+major          4
+minor          3.0
+year           2023
+month          04
+day            21
+svn rev        84292
+language       R
+version.string R version 4.3.0 (2023-04-21)
+nickname       Already Tomorrow
+
+> sessionInfo()
+R version 4.3.0 (2023-04-21)
+Platform: x86_64-pc-linux-gnu (64-bit)
+Running under: Ubuntu 22.04.4 LTS
+
+Matrix products: default
+BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3
+LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblasp-r0.3.20.so;
+ LAPACK version 3.10.0
+
+locale:
+ [1] LC_CTYPE=en_GB.UTF-8       LC_NUMERIC=C
+ [3] LC_TIME=en_GB.UTF-8        LC_COLLATE=en_GB.UTF-8
+ [5] LC_MONETARY=en_GB.UTF-8    LC_MESSAGES=en_GB.UTF-8
+ [7] LC_PAPER=en_GB.UTF-8       LC_NAME=C
+ [9] LC_ADDRESS=C               LC_TELEPHONE=C
+[11] LC_MEASUREMENT=en_GB.UTF-8 LC_IDENTIFICATION=C
+
+time zone: Europe/London
+tzcode source: system (glibc)
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base
+
+loaded via a namespace (and not attached):
+[1] compiler_4.3.0
+
+On Tue, May 28, 2024 at 7:42?PM Tomas Kalibera <tomas.kalibera at gmail.com>
+wrote:
+
+> This email originated outside the University. Check before clicking links
+> or attachments.
+>
+> On 5/28/24 19:35, Hadley Wickham wrote:
+> > Hi all,
+> >
+> > When I run the following code, R segfaults:
+> >
+> > text <- "?"
+> > srcfile <- srcfilecopy("test.r", text)
+> > parse(textConnection(text), srcfile = srcfile)
+> >
+> > It doesn't segfault if text is ASCII, or it's not wrapped in
+> > textConnection, or srcfile isn't set.
+>
+> Thanks, this is because R parser doesn't support non-ASCII UTF-8 outside
+> string literals and comments, plus a missing bounds check. The "correct"
+> result should be an R error, which I get in a debug build.
+>
+> The tokenizer ends up with a negative token and then when the parse data
+> are being finalized, creating a table of token names, there is an out of
+> bounds access (yytname array). Probably the check should go right away
+> into the tokenizer.
+>
+> Tomas
+>
+> >
+> > Hadley
+> >
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Thu May 30 10:00:52 2024
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Thu, 30 May 2024 10:00:52 +0200
+Subject: [Rd] 
+ [External] Re:  Segfault when parsing UTF-8 text with srcrefs
+In-Reply-To: <CANVKczPMSbF4epkdyj5c__BG9WSqaPiaC5ViSvF4f_SVDT1hkw@mail.gmail.com>
+References: <CABdHhvGF04U8YAA5m5qA7eiDS45_Dq3toTyf1-nPcibo0VNPTw@mail.gmail.com>
+ <bedfaebd85074cbcbf9969f66acd985b@LO0P265MB2603.GBRP265.PROD.OUTLOOK.COM>
+ <CANVKczPMSbF4epkdyj5c__BG9WSqaPiaC5ViSvF4f_SVDT1hkw@mail.gmail.com>
+Message-ID: <97d19568-1be1-4739-b1d8-a14a3895c61e@gmail.com>
+
+
+On 5/30/24 09:29, Barry Rowlingson wrote:
+> I get an R error and no segfault:
+>
+> > parse(textConnection(text), srcfile = srcfile)
+> Error in parse(textConnection(text), srcfile = srcfile) :
+> ? test.r:1:1: unexpected $end
+> 1: ?
+> ? ? ^
+>
+> This is R 4.3.0, so maybe the bug has been introduced since then...
+
+Thanks, am looking into it and have found the cause, now testing a 
+patch. The bug has been in the code for a long time, but whether it 
+causes a crash or not is non-deterministic, depending on memory layout 
+and content (out of bounds access).
+
+Tomas
+
+>
+> Version and system info:
+>
+> > version
+> ? ? ? ? ? ? ? ?_
+> platform ? ? ? x86_64-pc-linux-gnu
+> arch ? ? ? ? ? x86_64
+> os ? ? ? ? ? ? linux-gnu
+> system ? ? ? ? x86_64, linux-gnu
+> status
+> major ? ? ? ? ?4
+> minor ? ? ? ? ?3.0
+> year ? ? ? ? ? 2023
+> month ? ? ? ? ?04
+> day ? ? ? ? ? ?21
+> svn rev ? ? ? ?84292
+> language ? ? ? R
+> version.string R version 4.3.0 (2023-04-21)
+> nickname ? ? ? Already Tomorrow
+>
+> > sessionInfo()
+> R version 4.3.0 (2023-04-21)
+> Platform: x86_64-pc-linux-gnu (64-bit)
+> Running under: Ubuntu 22.04.4 LTS
+>
+> Matrix products: default
+> BLAS: /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3
+> LAPACK: 
+> /usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblasp-r0.3.20.so 
+> <http://libopenblasp-r0.3.20.so>; ?LAPACK version 3.10.0
+>
+> locale:
+> ?[1] LC_CTYPE=en_GB.UTF-8 ? ? ? LC_NUMERIC=C
+> ?[3] LC_TIME=en_GB.UTF-8 ? ? ? ?LC_COLLATE=en_GB.UTF-8
+> ?[5] LC_MONETARY=en_GB.UTF-8 ? ?LC_MESSAGES=en_GB.UTF-8
+> ?[7] LC_PAPER=en_GB.UTF-8 ? ? ? LC_NAME=C
+> ?[9] LC_ADDRESS=C ? ? ? ? ? ? ? LC_TELEPHONE=C
+> [11] LC_MEASUREMENT=en_GB.UTF-8 LC_IDENTIFICATION=C
+>
+> time zone: Europe/London
+> tzcode source: system (glibc)
+>
+> attached base packages:
+> [1] stats ? ? graphics ?grDevices utils ? ? datasets ?methods ? base
+>
+> loaded via a namespace (and not attached):
+> [1] compiler_4.3.0
+>
+> On Tue, May 28, 2024 at 7:42?PM Tomas Kalibera 
+> <tomas.kalibera at gmail.com> wrote:
+>
+>     This email originated outside the University. Check before
+>     clicking links or attachments.
+>
+>     On 5/28/24 19:35, Hadley Wickham wrote:
+>     > Hi all,
+>     >
+>     > When I run the following code, R segfaults:
+>     >
+>     > text <- "?"
+>     > srcfile <- srcfilecopy("test.r", text)
+>     > parse(textConnection(text), srcfile = srcfile)
+>     >
+>     > It doesn't segfault if text is ASCII, or it's not wrapped in
+>     > textConnection, or srcfile isn't set.
+>
+>     Thanks, this is because R parser doesn't support non-ASCII UTF-8
+>     outside
+>     string literals and comments, plus a missing bounds check. The
+>     "correct"
+>     result should be an R error, which I get in a debug build.
+>
+>     The tokenizer ends up with a negative token and then when the
+>     parse data
+>     are being finalized, creating a table of token names, there is an
+>     out of
+>     bounds access (yytname array). Probably the check should go right away
+>     into the tokenizer.
+>
+>     Tomas
+>
+>     >
+>     > Hadley
+>     >
+>
+>     ______________________________________________
+>     R-devel at r-project.org mailing list
+>     https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From pd@|gd @end|ng |rom gm@||@com  Thu May 30 15:54:25 2024
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Thu, 30 May 2024 15:54:25 +0200
+Subject: [Rd] 
+ How to call directly "dotTcl" C-function of the tcltk-package
+ from the C-code of an external package?
+In-Reply-To: <DDF6B4A9-693B-4C4F-8D6E-2E828BB41225@uef.fi>
+References: <DDF6B4A9-693B-4C4F-8D6E-2E828BB41225@uef.fi>
+Message-ID: <6172673F-9E42-4940-9D7A-B5A2C2A21800@gmail.com>
+
+I asked Tomas. 
+
+
+Apparently this works:
+
+getNativeSymbolInfo("dotTcl",PACKAGE=getLoadedDLLs()$tcltk)
+
+and the tcltk behavior was changed by 
+
+
+r84265 | hornik | 2023-04-15 08:44:36 +0200 (Sat, 15 Apr 2023) | 1 line
+
+Try forcing symbols in ff calls.
+
+Index: library/tcltk/src/init.c
+===================================================================
+--- library/tcltk/src/init.c    (revision 84264)
++++ library/tcltk/src/init.c    (revision 84265)
+@@ -66,6 +66,6 @@
+ {
+     R_registerRoutines(dll, CEntries, NULL, NULL, ExternEntries);
+     R_useDynamicSymbols(dll, FALSE);
+-    R_forceSymbols(dll, FALSE);
++    R_forceSymbols(dll, TRUE);
+ }
+
+I don't know what that was all about, and I'm also a bit puzzled
+
+a) that the .External lookup is so slow that you need to bypass it (would have thought that the byte compiler could speed it up)
+b) that you don't use dotTclObjv and friends to avoid parsing on the Tcl side.
+
+- pd
+
+
+> On 29 May 2024, at 00:25 , Reijo Sund <reijo.sund at uef.fi> wrote:
+> 
+> I have a use case with tcltk-package where I need to repeatedly call Tcl/Tk functions
+> very quickly. For such purpose, the standard R-interface turned out to be too slow, and
+> better option has been to call package's C-function dotTcl directly from my own C-code.
+> 
+> Before R 4.4.0 it was possible to use getNativeSymbolInfo("dotTcl","tcltk")$address (or 
+> R_FindSymbol("dotTcl","tcltk",NULL) in C) to get the function-pointer and then call the
+> function directly, even though it has not been registered as C-callable for other
+> packages.
+> 
+> With R 4.4.0 these methods are unable to find the symbol anymore (tested in Linux).
+> I was not able to find what change has caused this new behaviour.
+> 
+> Taking a look at tcltk source code, it can be seen that the dotTcl is called using 
+> .External within tcltk-package and there is a registration done for it with
+> R_registerRoutines. An object of class NativeSymbolInfo has also been created in the
+> tcltk namespace, and that can be accessed using tcltk:::.C_dotTcl.
+> 
+> However, the tcltk:::.C_dotTcl$address is an external pointer of a class
+> RegisteredNativeSymbol and not directly the function pointer to the actual routine. The
+> problem is that there appears not to be any R-level function that would extract the actual
+> function-pointer and that the C-interface for R_RegisteredNativeSymbol has been defined
+> in the internal Rdynpriv.h header that is not included in the public API headers.
+> 
+> The only way I was able to access the function directly was using the following C-level 
+> approach in which essential parts of the headers are copied from the Rdynpriv.h:
+> 
+> #include <R.h>
+> #include <Rinternals.h>
+> #include <R_ext/Rdynload.h>
+> 
+> typedef struct {
+>    char       *name;
+>    DL_FUNC     fun;
+>    int         numArgs;
+> 
+>    R_NativePrimitiveArgType *types;   
+> } Rf_DotCSymbol;
+> 
+> typedef Rf_DotCSymbol Rf_DotFortranSymbol;
+> 
+> typedef struct {
+>    char       *name;
+>    DL_FUNC     fun;
+>    int         numArgs;
+> } Rf_DotCallSymbol;
+> 
+> typedef Rf_DotCallSymbol Rf_DotExternalSymbol;
+> 
+> struct Rf_RegisteredNativeSymbol {
+>    NativeSymbolType type;
+>    union {
+> 	Rf_DotCSymbol        *c;
+> 	Rf_DotCallSymbol     *call;
+> 	Rf_DotFortranSymbol  *fortran;
+> 	Rf_DotExternalSymbol *external;
+>    } symbol;
+> };
+> 
+> SEXP(*direct_dotTcl)(SEXP) = NULL;
+> 
+> SEXP FindRegFunc(SEXP symbol) {
+>    R_RegisteredNativeSymbol *tmp = NULL;
+>    tmp = (R_RegisteredNativeSymbol *) R_ExternalPtrAddr(symbol);
+>    if (tmp==NULL) return R_NilValue;
+> 	direct_dotTcl = (SEXP(*)(SEXP)) tmp->symbol.external->fun;	
+>    return R_NilValue;
+> }	
+> 
+> 
+> Although that works for me, I'm aware that this kind of approach is certainly not
+> recommmended for publicly available external packages. However, I couldn't find any
+> other more legitimate way to access dotTcl function directly from my C-code in R 4.4.0. 
+> 
+> 
+> I have two questions:
+> 
+> Would it be possible to get dotTcl C-function (in tcltk.c) of the tcltk-package
+> registered as C-callable from other packages?
+> 
+> Was it an intentional change that caused the hiding of the earlier visible (registered)
+> symbols from other packages?
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+
+From pd@|gd @end|ng |rom gm@||@com  Fri May 31 16:31:25 2024
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Fri, 31 May 2024 16:31:25 +0200
+Subject: [Rd] R 4.4.1 scheduled for June 14
+Message-ID: <53FC7302-AB4F-4DA5-A88F-5A26061ACD33@gmail.com>
+
+Full schedule is available on developer.r-project.org (pending update from SVN).
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Fri May 31 16:36:11 2024
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Fri, 31 May 2024 16:36:11 +0200
+Subject: [Rd] Segfault when parsing UTF-8 text with srcrefs
+In-Reply-To: <97e8b60f-271e-4959-81eb-93c236d922ac@gmail.com>
+References: <CABdHhvGF04U8YAA5m5qA7eiDS45_Dq3toTyf1-nPcibo0VNPTw@mail.gmail.com>
+ <97e8b60f-271e-4959-81eb-93c236d922ac@gmail.com>
+Message-ID: <07006d3c-9383-410e-8be8-729cd5267f0d@gmail.com>
+
+
+On 5/28/24 20:41, Tomas Kalibera wrote:
+>
+> On 5/28/24 19:35, Hadley Wickham wrote:
+>> Hi all,
+>>
+>> When I run the following code, R segfaults:
+>>
+>> text <- "?"
+>> srcfile <- srcfilecopy("test.r", text)
+>> parse(textConnection(text), srcfile = srcfile)
+>>
+>> It doesn't segfault if text is ASCII, or it's not wrapped in
+>> textConnection, or srcfile isn't set.
+>
+> Thanks, this is because R parser doesn't support non-ASCII UTF-8 
+> outside string literals and comments, plus a missing bounds check. The 
+> "correct" result should be an R error, which I get in a debug build.
+
+To be more precise, the current implementation of the parser allows a 
+bit more than that, but there are recommendations in WRE 1.1.5 "Package 
+subdirectories" on (not) using non-ASCII characters in packages.
+
+"?" (\ud7) is not an allowed symbol name and the current implementation 
+should throw an error.
+
+> The tokenizer ends up with a negative token and then when the parse 
+> data are being finalized, creating a table of token names, there is an 
+> out of bounds access (yytname array). Probably the check should go 
+> right away into the tokenizer.
+
+Fixed in R-devel.
+
+Tomas
+
+>
+> Tomas
+>
+>>
+>> Hadley
+>>
+
+
+From re|jo@@und @end|ng |rom ue|@||  Fri May 31 23:47:14 2024
+From: re|jo@@und @end|ng |rom ue|@|| (Reijo Sund)
+Date: Fri, 31 May 2024 21:47:14 +0000
+Subject: [Rd] 
+ How to call directly "dotTcl" C-function of the tcltk-package
+ from the C-code of an external package?
+In-Reply-To: <6172673F-9E42-4940-9D7A-B5A2C2A21800@gmail.com>
+References: <DDF6B4A9-693B-4C4F-8D6E-2E828BB41225@uef.fi>
+ <6172673F-9E42-4940-9D7A-B5A2C2A21800@gmail.com>
+Message-ID: <DCB036A7-D345-4795-8AF0-41C1757B1E83@uef.fi>
+
+> Apparently this works:
+> getNativeSymbolInfo("dotTcl",PACKAGE=getLoadedDLLs()$tcltk)
+
+Thank you Peter! This solved the problem.
+
+> and the tcltk behavior was changed by 
+> r84265 | hornik | 2023-04-15 08:44:36 +0200 (Sat, 15 Apr 2023) | 1 line
+> Try forcing symbols in ff calls.
+> I don't know what that was all about, and I'm also a bit puzzled
+
+> a) that the .External lookup is so slow that you need to bypass it (would have thought that the byte compiler could speed it up)
+
+I want to use Tcl/Tk directly from C-code, so any unnecessary crosswalk through R back to C slows things down in a disturbing way especially when there is need for potentially tens of thousands of calls to Tcl/Tk as fast as possible (e.g. while constructing a vector image from small number of basic elements or while (re)rendering parts of the text-widget). 
+
+> b) that you don't use dotTclObjv and friends to avoid parsing on the Tcl side.
+
+Thanks for the tip - avoiding parsing on the Tcl side would be great! I need to take a look at that possibility. Never done that before as using just dotTcl has been working fast enough for me the past fifteen years.
+
+ 
+
+
