@@ -1,0 +1,173 @@
+From rub|@n@v|@n@ @end|ng |rom gm@||@com  Mon Jun  3 21:30:25 2024
+From: rub|@n@v|@n@ @end|ng |rom gm@||@com (Rubiana Viana)
+Date: Mon, 3 Jun 2024 16:30:25 -0300
+Subject: [Rd] R for Windows FAQ
+Message-ID: <CABz3Tr1qHNdFmL5muFyhQYAjFAEXXu8HZr22-ZzDPXKzHdsjEw@mail.gmail.com>
+
+Hi!
+
+How can I get older versions of R software?
+
+Thank you!
+
+-- 
+*Rubiana Viana*
+Psic?loga e Mestra em Sociologia Pol?tica
+G?nero Ra?a e Direitos Humanos ? Pesquisa ? Projetos ? Cultura e
+Diversidade
+LinkedIn <https://www.linkedin.com/in/rubiana-viana/>| Portfolio
+<https://readymag.website/u2474224357/rubianaviana/> | Lattes
+<http://lattes.cnpq.br/1002116427542223>
+
+	[[alternative HTML version deleted]]
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Mon Jun  3 22:00:34 2024
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Mon, 3 Jun 2024 22:00:34 +0200
+Subject: [Rd] R for Windows FAQ
+In-Reply-To: <CABz3Tr1qHNdFmL5muFyhQYAjFAEXXu8HZr22-ZzDPXKzHdsjEw@mail.gmail.com>
+References: <CABz3Tr1qHNdFmL5muFyhQYAjFAEXXu8HZr22-ZzDPXKzHdsjEw@mail.gmail.com>
+Message-ID: <a0421657-4a9f-41c3-add3-18d766e14f8d@gmail.com>
+
+https://cran.r-project.org/bin/windows/base/old/
+
+Tomas
+
+On 6/3/24 21:30, Rubiana Viana wrote:
+> Hi!
+>
+> How can I get older versions of R software?
+>
+> Thank you!
+>
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Thu Jun  6 16:47:02 2024
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Thu, 6 Jun 2024 09:47:02 -0500 (CDT)
+Subject: [Rd] clarifying and adjusting the C API for R
+Message-ID: <5a1ccb59-3e90-31eb-132a-35c3a1839bbf@uiowa.edu>
+
+This is an update on some current work on the C API for use in R
+extensions.
+
+The internal R implementation makes use of tens of thousands of C
+entry points. On Linux and Windows, which support visibility
+restrictions, most of these are visible only within the R executble or
+shared library. About 1500 are not hidden and are visible to
+dynamically loaded shared libraries, such as ones in packages, and to
+embedding applications.
+
+There are two main reasons for limiting access to entry points in a
+software framework:
+
+- Some entry points are very easy to use in ways that corrupt internal
+   data, leading to segfaults or, worse, incorrect computations without
+   segfaults.
+
+- Some entry point expose internal structure and other implementation
+   details, which makes it hard to make improvements without breaking
+   client code that has come to depend on these details.
+
+The API of C entry points that can be used in R extensions, both for
+packages and embedding, has evolved organically over many years. The
+definition for the current release expressed in the Writing R
+Extensions manual (WRE) is roughly:
+
+     An entry point can be used if (1) it is declared in a header file
+     in R.home("include"), and (2) if it is documented for use in WRE.
+
+Ideally, (1) would be necessary and sufficient, but for a variety of
+reasons that isn't achievable, at least not in the near term. (2) can
+be challenging to determine; in particular, it is not amenable to a
+computational answer.
+
+An experimental effort is underway to add annotations to the WRE
+Texinfo source to allow (2) to be answered unambiguously. The
+annotations so far mostly reflect my reading or WRE and may be revised
+as they are reviewed by others. The annotated document can be used for
+programmatically identifying what is currently considered part of the C
+API. The result so far is an experimental function tools:::funAPI():
+
+     > head(tools:::funAPI())
+ 		     name                    loc apitype
+     1 Rf_AdobeSymbol2utf8 R_ext/GraphicsDevice.h    eapi
+     2        alloc3DArray                    WRE     api
+     3          allocArray                    WRE     api
+     4           allocLang                    WRE     api
+     5           allocList                    WRE     api
+     6         allocMatrix                    WRE     api
+
+The 'apitype' field has three possible levels
+
+     | api  | stable (ideally) API |
+     | eapi | experimental API     |
+     | emb  | embedding API        |
+
+Entry points in the embedded API would typically only be used in
+applications embedding R or providing new front ends, but might be
+reasonable to use in packages that support embedding.
+
+The 'loc' field indicates how the entry point is identified as part of
+an API: explicit mention in WRE, or declaration in a header file
+identified as fully part of an API.
+
+[tools:::funAPI() may not be completely accurate as it relies on
+regular expressions for examining header files considered part of the
+API rather than proper parsing. But it seems to be pretty close to
+what can be achieved with proper parsing.  Proper parsing would add
+dependencies on additional tools, which I would like to avoid for
+now. One dependency already present is that a C compiler has to be on
+the search path and cc -E has to run the C pre-processor.]
+
+Two additional experimental functions are available for analyzing
+package compliance: tools:::checkPkgAPI and tools:::checkAllPkgsAPI.
+These examine installed packages.
+
+[These may produce some false positives on macOS; they may or may not
+work on Windows at this point.]
+
+Using these tools initially showed around 200 non-API entry points
+used across packages on CRAN and BIOC. Ideally this number should be
+reduced to zero. This will require a combination of additions to the
+API and changes in packages.
+
+Some entry points can safely be added to the API. Around 40 have
+already been added to WRE with API annotations; another 40 or so can
+probably be added after review.
+
+The remainder mostly fall into two groups:
+
+- Entry points that should never be used in packages, such as
+   SET_OBJECT or SETLENGTH (or any non-API SETXYZ functions for that
+   matter) that can create inconsistent or corrupt internal state.
+
+- Entry points that depend on the existence of internal structure that
+   might be subject to change, such as the existence of promise objects
+   or internal structure of environments.
+
+Many, if not most, of these seem to be used in idioms that can either
+be accomplished with existing higher-level functions already in the
+API, or by new higher level functions that can be created and
+added. Working through these will take some time and coordination
+between R-core and maintainers of affected packages.
+
+Once things have gelled a bit more I hope to turn this into a blog
+post that will include some examples of moving non-API entry point
+uses into compliance.
+
+Best,
+
+luke
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu
+
+
