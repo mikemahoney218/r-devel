@@ -2936,3 +2936,1088 @@ On Sat, Jun 8, 2024 at 9:29?PM Hiroaki Yutani <yutani.ini at gmail.com> wrote:
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From ggrothend|eck @end|ng |rom gm@||@com  Mon Jun 10 03:40:12 2024
+From: ggrothend|eck @end|ng |rom gm@||@com (Gabor Grothendieck)
+Date: Sun, 9 Jun 2024 21:40:12 -0400
+Subject: [Rd] head.ts, tail.ts loses time
+In-Reply-To: <016d5bb8-b0ee-47f0-91b2-7a2b8c51557d@prodsyse.com>
+References: <016d5bb8-b0ee-47f0-91b2-7a2b8c51557d@prodsyse.com>
+Message-ID: <CAP01uRmdPR_3M5qUnD8+4REw8Fz8sSf1UrrxzJFwQN+f1dx1xQ@mail.gmail.com>
+
+zoo overcomes many of the limitations of ts:
+
+  library(zoo)
+  as.ts(head(as.zoo(presidents)))
+  ##      Qtr1 Qtr2 Qtr3 Qtr4
+  ## 1945   NA   87   82   75
+  ## 1946   63   50
+
+xts also works here.
+
+On Sun, Jun 9, 2024 at 12:04?PM Spencer Graves
+<spencer.graves at prodsyse.com> wrote:
+>
+> Hello, All:
+>
+>
+>           The 'head' and 'tail' functions strip the time from a 'ts' object.
+> Example:
+>
+>
+>  > head(presidents)
+> [1] NA 87 82 75 63 50
+>
+>
+>  > window(presidents, 1945, 1946.25)
+>       Qtr1 Qtr2 Qtr3 Qtr4
+> 1945   NA   87   82   75
+> 1946   63   50
+>
+>
+>           Below please find code for 'head.ts' and 'tail.ts' that matches
+> 'window'.
+>
+>
+>           Comments?
+>           Spencer Graves
+>
+> head.ts <- function(x, n=6L, ...){
+>    tmx <- as.numeric(time(x))
+> #
+>    utils:::checkHT(n, d <- dim(x))
+>    if(is.na(n[1]) || n[1]==0)ts(NULL)
+> #
+>    firstn <- head(tmx, n[1])
+>    if(is.null(d)){
+>      return(window(x, firstn[1], tail(firstn, 1)))
+>    } else{
+>      if(length(n)<2){
+>        return(window(x, firstn[1], tail(firstn, 1)))
+>      } else {
+>        Cols <- head(1:d[2], n[2])
+>        xn2 <- x[, Cols[1]:tail(Cols, 1)]
+>        return(window(xn2, firstn[1], tail(firstn, 1)))
+>      }
+>    }
+> }
+>
+>
+> tail.ts <- function (x, n = 6L, ...)
+> {
+>    utils:::checkHT(n, d <- dim(x))
+>    tmx <- as.numeric(time(x))
+> #
+>    if(is.na(n[1]) || n[1]==0)ts(NULL)
+> #
+>    lastn <- tail(tmx, n[1])
+>    if(is.null(d)){
+>      return(window(x, lastn[1], tail(lastn, 1)))
+>    } else{
+>      if(length(n)<2){
+>        return(window(x, lastn[1], tail(lastn, 1)))
+>      } else {
+>        Cols <- head(1:d[2], n[2])
+>        xn2 <- x[, Cols[1]:tail(Cols, 1)]
+>        return(window(xn2, lastn[1], tail(lastn, 1)))
+>      }
+>    }
+> }
+>
+>
+> # examples
+> head(presidents)
+>
+> head(presidents, 2)
+>
+> npresObs <- length(presidents)
+> head(presidents, 6-npresObs)
+>
+> try(head(presidents, 1:2)) # 'try-error'
+>
+> try(head(presidents, 0)) # 'try-error'
+>
+> # matrix time series
+> str(pres <- cbind(n=1:length(presidents), presidents))
+> head(pres, 2)
+>
+> head(pres, 2-npresObs)
+>
+> head(pres, 1:2)
+> head(pres, 2:1)
+> head(pres, 1:3)
+>
+> # examples
+> tail(presidents)
+>
+> tail(presidents, 2)
+>
+> npresObs <- length(presidents)
+> tail(presidents, 6-npresObs)
+>
+> try(tail(presidents, 1:2)) # 'try-error'
+>
+> try(tail(presidents, 0)) # 'try-error'
+>
+> # matrix time series
+> str(pres <- cbind(n=1:length(presidents), presidents))
+> tail(pres, 2)
+>
+> tail(pres, 2-npresObs)
+>
+> tail(pres, 1:2)
+> tail(pres, 2:1)
+> tail(pres, 1:3)
+>
+> # for unit testing:
+> headPres <- head(presidents)
+> pres6 <- ts(presidents[1:6], time(presidents)[1],
+>              frequency=frequency(presidents))
+> stopifnot(all.equal(headPres, pres6))
+>
+> headPres2 <- head(presidents, 2)
+> pres2 <- ts(presidents[1:2], time(presidents)[1],
+>              frequency=frequency(presidents))
+> stopifnot(all.equal(headPres2, pres2))
+>
+> npresObs <- length(presidents)
+> headPres. <- head(presidents, 6-npresObs)
+> stopifnot(all.equal(headPres., pres6))
+>
+> headPresOops <- try(head(presidents, 1:2))
+> stopifnot(class(headPresOops) == 'try-error')
+>
+> headPres0 <- try(head(presidents, 0))
+> stopifnot(class(headPres0) == 'try-error')
+>
+> str(pres <- cbind(n=1:length(presidents), presidents))
+> headP2 <- head(pres, 2)
+>
+> p2 <- ts(pres[1:2, ], time(presidents)[1],
+>           frequency=frequency(presidents))
+> stopifnot(all.equal(headP2, p2))
+>
+> headP2. <- head(pres, 2-npresObs)
+> stopifnot(all.equal(headP2., p2))
+>
+>
+> #############
+>
+>
+> sessionInfo()
+> R version 4.4.0 (2024-04-24)
+> Platform: aarch64-apple-darwin20
+> Running under: macOS Sonoma 14.5
+>
+> Matrix products: default
+> BLAS:
+> /System/Library/Frameworks/Accelerate.framework/Versions/A/Frameworks/vecLib.framework/Versions/A/libBLAS.dylib
+>
+> LAPACK:
+> /Library/Frameworks/R.framework/Versions/4.4-arm64/Resources/lib/libRlapack.dylib;
+>   LAPACK version 3.12.0
+>
+> locale:
+> [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+>
+> time zone: America/Chicago
+> tzcode source: internal
+>
+> attached base packages:
+> [1] stats     graphics  grDevices utils     datasets
+> [6] methods   base
+>
+> loaded via a namespace (and not attached):
+> [1] compiler_4.4.0 tools_4.4.0
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+
+-- 
+Statistics & Software Consulting
+GKX Group, GKX Associates Inc.
+tel: 1-877-GKX-GROUP
+email: ggrothendieck at gmail.com
+
+
+From they||@n||u @end|ng |rom gm@||@com  Mon Jun 10 11:13:23 2024
+From: they||@n||u @end|ng |rom gm@||@com (Yifan Liu)
+Date: Mon, 10 Jun 2024 04:13:23 -0500
+Subject: [Rd] summary() does not count missing characters
+Message-ID: <CADdpgayq--ABABGMc17C3px3BDu3K9mPdbz526pkS_csw76feg@mail.gmail.com>
+
+as.character(NA) |> rep(times = 10) |> summary()
+vs.
+as.numeric(NA) |> rep(times = 10) |> summary()
+This feels inconsistent, doesn't it?
+
+I constantly need to count missing characters in some data.frame columns.
+It would be helpful if summary() can do that. Thanks.
+
+Sincerely,
+
+Yifan Liu
+
+	[[alternative HTML version deleted]]
+
+
+From @pencer@gr@ve@ @end|ng |rom prod@y@e@com  Mon Jun 10 14:50:13 2024
+From: @pencer@gr@ve@ @end|ng |rom prod@y@e@com (Spencer Graves)
+Date: Mon, 10 Jun 2024 07:50:13 -0500
+Subject: [Rd] head.ts, tail.ts loses time
+In-Reply-To: <CAP01uRmdPR_3M5qUnD8+4REw8Fz8sSf1UrrxzJFwQN+f1dx1xQ@mail.gmail.com>
+References: <016d5bb8-b0ee-47f0-91b2-7a2b8c51557d@prodsyse.com>
+ <CAP01uRmdPR_3M5qUnD8+4REw8Fz8sSf1UrrxzJFwQN+f1dx1xQ@mail.gmail.com>
+Message-ID: <da0e13c2-d7d6-4f9e-b22e-c2b7392066e1@prodsyse.com>
+
+Hi, Gabor et al.:
+
+
+	  Thanks for this. I should change my current application to use either 
+zoo or xts, as Gabor suggests.
+
+
+	  However, I was surprised to learn that "[.ts" does NOT return an 
+object of class "ts". I see that "head.default" and "head.matrix" both 
+call "[", so "head" cannot return a ts object, because "[" doesn't.
+
+
+	  Best Wishes,
+	  Spencer Graves
+
+
+On 6/9/24 8:40 PM, Gabor Grothendieck wrote:
+> zoo overcomes many of the limitations of ts:
+> 
+>    library(zoo)
+>    as.ts(head(as.zoo(presidents)))
+>    ##      Qtr1 Qtr2 Qtr3 Qtr4
+>    ## 1945   NA   87   82   75
+>    ## 1946   63   50
+> 
+> xts also works here.
+> 
+> On Sun, Jun 9, 2024 at 12:04?PM Spencer Graves
+> <spencer.graves at prodsyse.com> wrote:
+>>
+>> Hello, All:
+>>
+>>
+>>            The 'head' and 'tail' functions strip the time from a 'ts' object.
+>> Example:
+>>
+>>
+>>   > head(presidents)
+>> [1] NA 87 82 75 63 50
+>>
+>>
+>>   > window(presidents, 1945, 1946.25)
+>>        Qtr1 Qtr2 Qtr3 Qtr4
+>> 1945   NA   87   82   75
+>> 1946   63   50
+>>
+>>
+>>            Below please find code for 'head.ts' and 'tail.ts' that matches
+>> 'window'.
+>>
+>>
+>>            Comments?
+>>            Spencer Graves
+>>
+>> head.ts <- function(x, n=6L, ...){
+>>     tmx <- as.numeric(time(x))
+>> #
+>>     utils:::checkHT(n, d <- dim(x))
+>>     if(is.na(n[1]) || n[1]==0)ts(NULL)
+>> #
+>>     firstn <- head(tmx, n[1])
+>>     if(is.null(d)){
+>>       return(window(x, firstn[1], tail(firstn, 1)))
+>>     } else{
+>>       if(length(n)<2){
+>>         return(window(x, firstn[1], tail(firstn, 1)))
+>>       } else {
+>>         Cols <- head(1:d[2], n[2])
+>>         xn2 <- x[, Cols[1]:tail(Cols, 1)]
+>>         return(window(xn2, firstn[1], tail(firstn, 1)))
+>>       }
+>>     }
+>> }
+>>
+>>
+>> tail.ts <- function (x, n = 6L, ...)
+>> {
+>>     utils:::checkHT(n, d <- dim(x))
+>>     tmx <- as.numeric(time(x))
+>> #
+>>     if(is.na(n[1]) || n[1]==0)ts(NULL)
+>> #
+>>     lastn <- tail(tmx, n[1])
+>>     if(is.null(d)){
+>>       return(window(x, lastn[1], tail(lastn, 1)))
+>>     } else{
+>>       if(length(n)<2){
+>>         return(window(x, lastn[1], tail(lastn, 1)))
+>>       } else {
+>>         Cols <- head(1:d[2], n[2])
+>>         xn2 <- x[, Cols[1]:tail(Cols, 1)]
+>>         return(window(xn2, lastn[1], tail(lastn, 1)))
+>>       }
+>>     }
+>> }
+>>
+>>
+>> # examples
+>> head(presidents)
+>>
+>> head(presidents, 2)
+>>
+>> npresObs <- length(presidents)
+>> head(presidents, 6-npresObs)
+>>
+>> try(head(presidents, 1:2)) # 'try-error'
+>>
+>> try(head(presidents, 0)) # 'try-error'
+>>
+>> # matrix time series
+>> str(pres <- cbind(n=1:length(presidents), presidents))
+>> head(pres, 2)
+>>
+>> head(pres, 2-npresObs)
+>>
+>> head(pres, 1:2)
+>> head(pres, 2:1)
+>> head(pres, 1:3)
+>>
+>> # examples
+>> tail(presidents)
+>>
+>> tail(presidents, 2)
+>>
+>> npresObs <- length(presidents)
+>> tail(presidents, 6-npresObs)
+>>
+>> try(tail(presidents, 1:2)) # 'try-error'
+>>
+>> try(tail(presidents, 0)) # 'try-error'
+>>
+>> # matrix time series
+>> str(pres <- cbind(n=1:length(presidents), presidents))
+>> tail(pres, 2)
+>>
+>> tail(pres, 2-npresObs)
+>>
+>> tail(pres, 1:2)
+>> tail(pres, 2:1)
+>> tail(pres, 1:3)
+>>
+>> # for unit testing:
+>> headPres <- head(presidents)
+>> pres6 <- ts(presidents[1:6], time(presidents)[1],
+>>               frequency=frequency(presidents))
+>> stopifnot(all.equal(headPres, pres6))
+>>
+>> headPres2 <- head(presidents, 2)
+>> pres2 <- ts(presidents[1:2], time(presidents)[1],
+>>               frequency=frequency(presidents))
+>> stopifnot(all.equal(headPres2, pres2))
+>>
+>> npresObs <- length(presidents)
+>> headPres. <- head(presidents, 6-npresObs)
+>> stopifnot(all.equal(headPres., pres6))
+>>
+>> headPresOops <- try(head(presidents, 1:2))
+>> stopifnot(class(headPresOops) == 'try-error')
+>>
+>> headPres0 <- try(head(presidents, 0))
+>> stopifnot(class(headPres0) == 'try-error')
+>>
+>> str(pres <- cbind(n=1:length(presidents), presidents))
+>> headP2 <- head(pres, 2)
+>>
+>> p2 <- ts(pres[1:2, ], time(presidents)[1],
+>>            frequency=frequency(presidents))
+>> stopifnot(all.equal(headP2, p2))
+>>
+>> headP2. <- head(pres, 2-npresObs)
+>> stopifnot(all.equal(headP2., p2))
+>>
+>>
+>> #############
+>>
+>>
+>> sessionInfo()
+>> R version 4.4.0 (2024-04-24)
+>> Platform: aarch64-apple-darwin20
+>> Running under: macOS Sonoma 14.5
+>>
+>> Matrix products: default
+>> BLAS:
+>> /System/Library/Frameworks/Accelerate.framework/Versions/A/Frameworks/vecLib.framework/Versions/A/libBLAS.dylib
+>>
+>> LAPACK:
+>> /Library/Frameworks/R.framework/Versions/4.4-arm64/Resources/lib/libRlapack.dylib;
+>>    LAPACK version 3.12.0
+>>
+>> locale:
+>> [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+>>
+>> time zone: America/Chicago
+>> tzcode source: internal
+>>
+>> attached base packages:
+>> [1] stats     graphics  grDevices utils     datasets
+>> [6] methods   base
+>>
+>> loaded via a namespace (and not attached):
+>> [1] compiler_4.4.0 tools_4.4.0
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> 
+>
+
+
+From j@g@nmn2 @end|ng |rom gm@||@com  Mon Jun 10 16:12:52 2024
+From: j@g@nmn2 @end|ng |rom gm@||@com (Mikael Jagan)
+Date: Mon, 10 Jun 2024 10:12:52 -0400
+Subject: [Rd] changes in R-devel and zero-extent objects in Rcpp
+In-Reply-To: <mailman.54329.3.1717927202.15503.r-devel@r-project.org>
+References: <mailman.54329.3.1717927202.15503.r-devel@r-project.org>
+Message-ID: <9694a015-e5be-4aa9-a5fe-bb0e6bb530cf@gmail.com>
+
+     > Date: Sat, 8 Jun 2024 19:16:22 -0400
+     > From: Ben Bolker <bbolker at gmail.com>
+     >
+     >     The ASAN errors occur *even if the zero-length object is not actually
+     > accessed*/is used in a perfectly correct manner, i.e. it's perfectly
+     > legal in base R to define `m <- numeric(0)` or `m <- matrix(nrow = 0,
+     > ncol = 0)`, whereas doing the equivalent in Rcpp will (now) lead to an
+     > ASAN error.
+     >
+     >     i.e., these are *not* previously cryptic out-of-bounds accesses that
+     > are now being revealed, but instead sensible and previously legal
+     > definitions of zero-length objects that are now causing problems.
+     >
+
+The ASan output is:
+
+     > reference binding to misaligned address 0x000000000001 for type 'const 
+double', which requires 8 byte alignment
+
+That there is a "reference" to 0x1 means that there really _is_ an attempt to
+access memory there.  The stack trace provided by ASan tells you exactly where
+it happens: line 100 of
+RcppEigen/inst/include/Eigen/src/Core/products/GeneralMatrixMatrixTriangular.h:
+
+     for(Index k2=0; k2<depth; k2+=kc)
+     {
+       const Index actual_kc = (std::min)(k2+kc,depth)-k2;
+
+
+       // note that the actual rhs is the transpose/adjoint of mat
+       pack_rhs(blockB, rhs.getSubMapper(k2,0), actual_kc, size);
+                        ^^^^^^^^^^^^^^^^^^^^^^
+
+where 'rhs' is an object wrapping the pointer with a method getSubMapper(i, j)
+for accessing the data like a matrix.  In the first loop iteration, you access
+rhs[0]; there is no defensive test for 'rhs' of positive length.
+
+So ASan _is_ revealing an illegal access, complaining only now (since r86629)
+because _now_ the address that you access illegally is misaligned.
+
+This really should be avoided in lme4 and ideally reported to Eigen maintainers
+if not already fixed there.
+
+Mikael
+
+     >      I'm pretty sure I'm right about this, but it's absolutely possible
+     > that I'm just confused at this point; I don't have a super-simple
+     > example to show you at the moment. The closest is this example by Mikael
+     > Jagan: https://github.com/lme4/lme4/issues/794#issuecomment-2155093049
+     >
+     >     which shows that if x is a pointer to a zero-length vector (in plain
+     > C++ for R, no Rcpp is involved), DATAPTR(x) and REAL(x) evaluate to
+     > different values.
+     >
+     >     Mikael further points out that "Rcpp seems to cast a (void *)
+     > returned by DATAPTR to (double *) when constructing a Vector<REALSXP>
+     > from a SEXP, rather than using the (double *) returned by REAL." So
+     > perhaps R-core doesn't want to guarantee that these operations give
+     > identical answers, in which case Rcpp will have to change the way it
+     > does things ...
+     >
+     >     cheers
+     >      Ben
+     >
+     >
+     >
+     > On 2024-06-08 6:39 p.m., Kevin Ushey wrote:
+     >    > IMHO, this should be changed in both Rcpp and downstream packages:
+     >    >
+     >    > 1. Rcpp could check for out-of-bounds accesses in cases like these, and
+     >    > emit an R warning / error when such an access is detected;
+     >    >
+     >    > 2. The downstream packages unintentionally making these out-of-bounds
+     >    > accesses should be fixed to avoid doing that.
+     >    >
+     >    > That is, I think this is ultimately a bug in the affected packages, but
+     >    > Rcpp could do better in detecting and handling this for client packages
+     >    > (avoiding a segfault).
+     >    >
+     >    > Best,
+     >    > Kevin
+     >    >
+     >    >
+     >    > On Sat, Jun 8, 2024, 3:06?PM Ben Bolker <bbolker at gmail.com
+     >    > <mailto:bbolker at gmail.com>> wrote:
+     >    >
+     >    >
+     >    >       ? ? A change to R-devel (SVN r86629 or
+     >    > 
+https://github.com/r-devel/r-svn/commit/92c1d5de23c93576f55062e26d446feface07250 
+<https://github.com/r-devel/r-svn/commit/92c1d5de23c93576f55062e26d446feface07250>
+     >    >      has changed the handling of pointers to zero-length objects, 
+leading to
+     >    >      ASAN issues with a number of Rcpp-based packages (the commit 
+message
+     >    >      reads, in part, "Also define STRICT_TYPECHECK when compiling
+     >    >      inlined.c.")
+     >    >
+     >    >       ? ?I'm interested in discussion from the community.
+     >    >
+     >    >       ? ?Details/diagnosis for the issues in the lme4 package are here:
+     >    >      https://github.com/lme4/lme4/issues/794
+     >    >      <https://github.com/lme4/lme4/issues/794>, with a bit more 
+discussion
+     >    >      about how zero-length objects should be handled.
+     >    >
+     >    >       ? ?The short(ish) version is that r86629 enables the
+     >    >      CATCH_ZERO_LENGTH_ACCESS definition. This turns on the CHKZLN macro
+     >    > 
+<https://github.com/r-devel/r-svn/blob/4ef83b9dc3c6874e774195d329cbb6c11a71c414/src/main/memory.c#L4090-L4104 
+<https://github.com/r-devel/r-svn/blob/4ef83b9dc3c6874e774195d329cbb6c11a71c414/src/main/memory.c#L4090-L4104>>,
+     >    >      which returns a trivial pointer (rather than the data pointer that
+     >    >      would
+     >    >      be returned in the normal control flow) if an object has length 0:
+     >    >
+     >    >      /* Attempts to read or write elements of a zero length vector will
+     >    >       ? ? result in a segfault, rather than read and write random 
+memory.
+     >    >       ? ? Returning NULL would be more natural, but Matrix seems to 
+assume
+     >    >       ? ? that even zero-length vectors have non-NULL data pointers, so
+     >    >       ? ? return (void *) 1 instead. Zero-length CHARSXP objects 
+still have a
+     >    >       ? ? trailing zero byte so they are not handled. */
+     >    >
+     >    >       ? ?In the Rcpp context this leads to an inconsistency, where 
+`REAL(x)`
+     >    >      is a 'real' external pointer and `DATAPTR(x)` is 0x1, which in turn
+     >    >      leads to ASAN warnings like
+     >    >
+     >    >      runtime error: reference binding to misaligned address 
+0x000000000001
+     >    >      for type 'const double', which requires 8 byte alignment
+     >    >      0x000000000001: note: pointer points here
+     >    >
+     >    >       ? ? I'm in over my head and hoping for insight into whether this
+     >    >      problem
+     >    >      should be resolved by changing R, Rcpp, or downstream Rcpp 
+packages ...
+     >    >
+     >    >       ? ?cheers
+     >    >       ? ? Ben Bolker
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Mon Jun 10 16:32:17 2024
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Mon, 10 Jun 2024 16:32:17 +0200
+Subject: [Rd] head.ts, tail.ts loses time
+In-Reply-To: <da0e13c2-d7d6-4f9e-b22e-c2b7392066e1@prodsyse.com>
+References: <016d5bb8-b0ee-47f0-91b2-7a2b8c51557d@prodsyse.com>
+ <CAP01uRmdPR_3M5qUnD8+4REw8Fz8sSf1UrrxzJFwQN+f1dx1xQ@mail.gmail.com>
+ <da0e13c2-d7d6-4f9e-b22e-c2b7392066e1@prodsyse.com>
+Message-ID: <26215.3697.815212.54251@stat.math.ethz.ch>
+
+>>>>> Spencer Graves 
+>>>>>     on Mon, 10 Jun 2024 07:50:13 -0500 writes:
+
+    > Hi, Gabor et al.: Thanks for this. I should change my
+    > current application to use either zoo or xts, as Gabor
+    > suggests.
+
+
+    > 	  However, I was surprised to learn that "[.ts" does NOT
+    > return an object of class "ts". I see that "head.default"
+    > and "head.matrix" both call "[", so "head" cannot return a
+    > ts object, because "[" doesn't.
+
+Yes, the default head() and tail() are built on  `[` very much
+on purpose.
+Note that   `[`  should *not* keep the "ts"  property  in
+general, e.g.,  
+	 lynx[c(1:3, 7)]
+cannot be a regular time series 
+
+I think I'd consider using  windows() for a head.ts() and tail.ts(),
+but in any case, I am sympathetic adding such methods to "base R"'s
+utils package.
+
+
+Martin
+
+    > 	  Best Wishes, Spencer Graves
+
+
+    > On 6/9/24 8:40 PM, Gabor Grothendieck wrote:
+    >> zoo overcomes many of the limitations of ts:
+    >> 
+    >> library(zoo) as.ts(head(as.zoo(presidents))) ## Qtr1 Qtr2
+    >> Qtr3 Qtr4 ## 1945 NA 87 82 75 ## 1946 63 50
+    >> 
+    >> xts also works here.
+    >> 
+    >> On Sun, Jun 9, 2024 at 12:04?PM Spencer Graves
+    >> <spencer.graves at prodsyse.com> wrote:
+    >>> 
+    >>> Hello, All:
+    >>> 
+    >>> 
+    >>> The 'head' and 'tail' functions strip the time from a
+    >>> 'ts' object.  Example:
+    >>> 
+    >>> 
+    >>> > head(presidents) [1] NA 87 82 75 63 50
+    >>> 
+    >>> 
+    >>> > window(presidents, 1945, 1946.25) Qtr1 Qtr2 Qtr3 Qtr4
+    >>> 1945 NA 87 82 75 1946 63 50
+    >>> 
+    >>> 
+    >>> Below please find code for 'head.ts' and 'tail.ts' that
+    >>> matches 'window'.
+    >>> 
+    >>> 
+    >>> Comments?  Spencer Graves
+    >>> 
+    >>> head.ts <- function(x, n=6L, ...){ tmx <-
+    >>> as.numeric(time(x))
+    >>> #
+    >>> utils:::checkHT(n, d <- dim(x)) if(is.na(n[1]) ||
+    >>> n[1]==0)ts(NULL)
+    >>> #
+    >>> firstn <- head(tmx, n[1]) if(is.null(d)){
+    >>> return(window(x, firstn[1], tail(firstn, 1))) } else{
+    >>> if(length(n)<2){ return(window(x, firstn[1],
+    >>> tail(firstn, 1))) } else { Cols <- head(1:d[2], n[2])
+    >>> xn2 <- x[, Cols[1]:tail(Cols, 1)] return(window(xn2,
+    >>> firstn[1], tail(firstn, 1))) } } }
+    >>> 
+    >>> 
+    >>> tail.ts <- function (x, n = 6L, ...)  {
+    >>> utils:::checkHT(n, d <- dim(x)) tmx <-
+    >>> as.numeric(time(x))
+    >>> #
+    >>> if(is.na(n[1]) || n[1]==0)ts(NULL)
+    >>> #
+    >>> lastn <- tail(tmx, n[1]) if(is.null(d)){
+    >>> return(window(x, lastn[1], tail(lastn, 1))) } else{
+    >>> if(length(n)<2){ return(window(x, lastn[1], tail(lastn,
+    >>> 1))) } else { Cols <- head(1:d[2], n[2]) xn2 <- x[,
+    >>> Cols[1]:tail(Cols, 1)] return(window(xn2, lastn[1],
+    >>> tail(lastn, 1))) } } }
+    >>> 
+    >>> 
+    >>> # examples head(presidents)
+    >>> 
+    >>> head(presidents, 2)
+    >>> 
+    >>> npresObs <- length(presidents) head(presidents,
+    >>> 6-npresObs)
+    >>> 
+    >>> try(head(presidents, 1:2)) # 'try-error'
+    >>> 
+    >>> try(head(presidents, 0)) # 'try-error'
+    >>> 
+    >>> # matrix time series str(pres <-
+    >>> cbind(n=1:length(presidents), presidents)) head(pres, 2)
+    >>> 
+    >>> head(pres, 2-npresObs)
+    >>> 
+    >>> head(pres, 1:2) head(pres, 2:1) head(pres, 1:3)
+    >>> 
+    >>> # examples tail(presidents)
+    >>> 
+    >>> tail(presidents, 2)
+    >>> 
+    >>> npresObs <- length(presidents) tail(presidents,
+    >>> 6-npresObs)
+    >>> 
+    >>> try(tail(presidents, 1:2)) # 'try-error'
+    >>> 
+    >>> try(tail(presidents, 0)) # 'try-error'
+    >>> 
+    >>> # matrix time series str(pres <-
+    >>> cbind(n=1:length(presidents), presidents)) tail(pres, 2)
+    >>> 
+    >>> tail(pres, 2-npresObs)
+    >>> 
+    >>> tail(pres, 1:2) tail(pres, 2:1) tail(pres, 1:3)
+    >>> 
+    >>> # for unit testing: headPres <- head(presidents) pres6
+    >>> <- ts(presidents[1:6], time(presidents)[1],
+    >>> frequency=frequency(presidents))
+    >>> stopifnot(all.equal(headPres, pres6))
+    >>> 
+    >>> headPres2 <- head(presidents, 2) pres2 <-
+    >>> ts(presidents[1:2], time(presidents)[1],
+    >>> frequency=frequency(presidents))
+    >>> stopifnot(all.equal(headPres2, pres2))
+    >>> 
+    >>> npresObs <- length(presidents) headPres. <-
+    >>> head(presidents, 6-npresObs)
+    >>> stopifnot(all.equal(headPres., pres6))
+    >>> 
+    >>> headPresOops <- try(head(presidents, 1:2))
+    >>> stopifnot(class(headPresOops) == 'try-error')
+    >>> 
+    >>> headPres0 <- try(head(presidents, 0))
+    >>> stopifnot(class(headPres0) == 'try-error')
+    >>> 
+    >>> str(pres <- cbind(n=1:length(presidents), presidents))
+    >>> headP2 <- head(pres, 2)
+    >>> 
+    >>> p2 <- ts(pres[1:2, ], time(presidents)[1],
+    >>> frequency=frequency(presidents))
+    >>> stopifnot(all.equal(headP2, p2))
+    >>> 
+    >>> headP2. <- head(pres, 2-npresObs)
+    >>> stopifnot(all.equal(headP2., p2))
+    >>> 
+    >>> 
+    >>> #############
+    >>> 
+    >>> 
+    >>> sessionInfo() R version 4.4.0 (2024-04-24) Platform:
+    >>> aarch64-apple-darwin20 Running under: macOS Sonoma 14.5
+    >>> 
+    >>> Matrix products: default BLAS:
+    >>> /System/Library/Frameworks/Accelerate.framework/Versions/A/Frameworks/vecLib.framework/Versions/A/libBLAS.dylib
+    >>> 
+    >>> LAPACK:
+    >>> /Library/Frameworks/R.framework/Versions/4.4-arm64/Resources/lib/libRlapack.dylib;
+    >>> LAPACK version 3.12.0
+    >>> 
+    >>> locale: [1]
+    >>> en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+    >>> 
+    >>> time zone: America/Chicago tzcode source: internal
+    >>> 
+    >>> attached base packages: [1] stats graphics grDevices
+    >>> utils datasets [6] methods base
+    >>> 
+    >>> loaded via a namespace (and not attached): [1]
+    >>> compiler_4.4.0 tools_4.4.0
+    >>> 
+    >>> ______________________________________________
+    >>> R-devel at r-project.org mailing list
+    >>> https://stat.ethz.ch/mailman/listinfo/r-devel
+    >> 
+    >> 
+    >> 
+
+    > ______________________________________________
+    > R-devel at r-project.org mailing list
+    > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @pencer@gr@ve@ @end|ng |rom prod@y@e@com  Mon Jun 10 16:45:46 2024
+From: @pencer@gr@ve@ @end|ng |rom prod@y@e@com (Spencer Graves)
+Date: Mon, 10 Jun 2024 09:45:46 -0500
+Subject: [Rd] head.ts, tail.ts loses time
+In-Reply-To: <26215.3697.815212.54251@stat.math.ethz.ch>
+References: <016d5bb8-b0ee-47f0-91b2-7a2b8c51557d@prodsyse.com>
+ <CAP01uRmdPR_3M5qUnD8+4REw8Fz8sSf1UrrxzJFwQN+f1dx1xQ@mail.gmail.com>
+ <da0e13c2-d7d6-4f9e-b22e-c2b7392066e1@prodsyse.com>
+ <26215.3697.815212.54251@stat.math.ethz.ch>
+Message-ID: <295e6967-6ea6-4334-a43d-58c18ef7fcfd@prodsyse.com>
+
+Hi, Martin et al.:
+
+
+On 6/10/24 9:32 AM, Martin Maechler wrote:
+>>>>>> Spencer Graves
+>>>>>>      on Mon, 10 Jun 2024 07:50:13 -0500 writes:
+> 
+>      > Hi, Gabor et al.: Thanks for this. I should change my
+>      > current application to use either zoo or xts, as Gabor
+>      > suggests.
+> 
+> 
+>      > 	  However, I was surprised to learn that "[.ts" does NOT
+>      > return an object of class "ts". I see that "head.default"
+>      > and "head.matrix" both call "[", so "head" cannot return a
+>      > ts object, because "[" doesn't.
+> 
+> Yes, the default head() and tail() are built on  `[` very much
+> on purpose.
+> Note that   `[`  should *not* keep the "ts"  property  in
+> general, e.g.,
+> 	 lynx[c(1:3, 7)]
+> cannot be a regular time series
+
+
+	  Agreed.
+
+> 
+> I think I'd consider using  windows() for a head.ts() and tail.ts(),
+> but in any case, I am sympathetic adding such methods to "base R"'s
+> utils package.
+
+
+	  The code I provided below for head.ts() and tail.ts() does that: I 
+took the code for head.default and head.matrix, etc., computed tmx <- 
+as.numeric(time(x)), and then used head(tmx) [and tail(tmx)] in "window()".
+
+
+	  Thanks for your reply.
+	  sg
+> 
+> 
+> Martin
+> 
+>      > 	  Best Wishes, Spencer Graves
+> 
+> 
+>      > On 6/9/24 8:40 PM, Gabor Grothendieck wrote:
+>      >> zoo overcomes many of the limitations of ts:
+>      >>
+>      >> library(zoo) as.ts(head(as.zoo(presidents))) ## Qtr1 Qtr2
+>      >> Qtr3 Qtr4 ## 1945 NA 87 82 75 ## 1946 63 50
+>      >>
+>      >> xts also works here.
+>      >>
+>      >> On Sun, Jun 9, 2024 at 12:04?PM Spencer Graves
+>      >> <spencer.graves at prodsyse.com> wrote:
+>      >>>
+>      >>> Hello, All:
+>      >>>
+>      >>>
+>      >>> The 'head' and 'tail' functions strip the time from a
+>      >>> 'ts' object.  Example:
+>      >>>
+>      >>>
+>      >>> > head(presidents) [1] NA 87 82 75 63 50
+>      >>>
+>      >>>
+>      >>> > window(presidents, 1945, 1946.25) Qtr1 Qtr2 Qtr3 Qtr4
+>      >>> 1945 NA 87 82 75 1946 63 50
+>      >>>
+>      >>>
+>      >>> Below please find code for 'head.ts' and 'tail.ts' that
+>      >>> matches 'window'.
+>      >>>
+>      >>>
+>      >>> Comments?  Spencer Graves
+>      >>>
+>      >>> head.ts <- function(x, n=6L, ...){ tmx <-
+>      >>> as.numeric(time(x))
+>      >>> #
+>      >>> utils:::checkHT(n, d <- dim(x)) if(is.na(n[1]) ||
+>      >>> n[1]==0)ts(NULL)
+>      >>> #
+>      >>> firstn <- head(tmx, n[1]) if(is.null(d)){
+>      >>> return(window(x, firstn[1], tail(firstn, 1))) } else{
+>      >>> if(length(n)<2){ return(window(x, firstn[1],
+>      >>> tail(firstn, 1))) } else { Cols <- head(1:d[2], n[2])
+>      >>> xn2 <- x[, Cols[1]:tail(Cols, 1)] return(window(xn2,
+>      >>> firstn[1], tail(firstn, 1))) } } }
+>      >>>
+>      >>>
+>      >>> tail.ts <- function (x, n = 6L, ...)  {
+>      >>> utils:::checkHT(n, d <- dim(x)) tmx <-
+>      >>> as.numeric(time(x))
+>      >>> #
+>      >>> if(is.na(n[1]) || n[1]==0)ts(NULL)
+>      >>> #
+>      >>> lastn <- tail(tmx, n[1]) if(is.null(d)){
+>      >>> return(window(x, lastn[1], tail(lastn, 1))) } else{
+>      >>> if(length(n)<2){ return(window(x, lastn[1], tail(lastn,
+>      >>> 1))) } else { Cols <- head(1:d[2], n[2]) xn2 <- x[,
+>      >>> Cols[1]:tail(Cols, 1)] return(window(xn2, lastn[1],
+>      >>> tail(lastn, 1))) } } }
+>      >>>
+>      >>>
+>      >>> # examples head(presidents)
+>      >>>
+>      >>> head(presidents, 2)
+>      >>>
+>      >>> npresObs <- length(presidents) head(presidents,
+>      >>> 6-npresObs)
+>      >>>
+>      >>> try(head(presidents, 1:2)) # 'try-error'
+>      >>>
+>      >>> try(head(presidents, 0)) # 'try-error'
+>      >>>
+>      >>> # matrix time series str(pres <-
+>      >>> cbind(n=1:length(presidents), presidents)) head(pres, 2)
+>      >>>
+>      >>> head(pres, 2-npresObs)
+>      >>>
+>      >>> head(pres, 1:2) head(pres, 2:1) head(pres, 1:3)
+>      >>>
+>      >>> # examples tail(presidents)
+>      >>>
+>      >>> tail(presidents, 2)
+>      >>>
+>      >>> npresObs <- length(presidents) tail(presidents,
+>      >>> 6-npresObs)
+>      >>>
+>      >>> try(tail(presidents, 1:2)) # 'try-error'
+>      >>>
+>      >>> try(tail(presidents, 0)) # 'try-error'
+>      >>>
+>      >>> # matrix time series str(pres <-
+>      >>> cbind(n=1:length(presidents), presidents)) tail(pres, 2)
+>      >>>
+>      >>> tail(pres, 2-npresObs)
+>      >>>
+>      >>> tail(pres, 1:2) tail(pres, 2:1) tail(pres, 1:3)
+>      >>>
+>      >>> # for unit testing: headPres <- head(presidents) pres6
+>      >>> <- ts(presidents[1:6], time(presidents)[1],
+>      >>> frequency=frequency(presidents))
+>      >>> stopifnot(all.equal(headPres, pres6))
+>      >>>
+>      >>> headPres2 <- head(presidents, 2) pres2 <-
+>      >>> ts(presidents[1:2], time(presidents)[1],
+>      >>> frequency=frequency(presidents))
+>      >>> stopifnot(all.equal(headPres2, pres2))
+>      >>>
+>      >>> npresObs <- length(presidents) headPres. <-
+>      >>> head(presidents, 6-npresObs)
+>      >>> stopifnot(all.equal(headPres., pres6))
+>      >>>
+>      >>> headPresOops <- try(head(presidents, 1:2))
+>      >>> stopifnot(class(headPresOops) == 'try-error')
+>      >>>
+>      >>> headPres0 <- try(head(presidents, 0))
+>      >>> stopifnot(class(headPres0) == 'try-error')
+>      >>>
+>      >>> str(pres <- cbind(n=1:length(presidents), presidents))
+>      >>> headP2 <- head(pres, 2)
+>      >>>
+>      >>> p2 <- ts(pres[1:2, ], time(presidents)[1],
+>      >>> frequency=frequency(presidents))
+>      >>> stopifnot(all.equal(headP2, p2))
+>      >>>
+>      >>> headP2. <- head(pres, 2-npresObs)
+>      >>> stopifnot(all.equal(headP2., p2))
+>      >>>
+>      >>>
+>      >>> #############
+>      >>>
+>      >>>
+>      >>> sessionInfo() R version 4.4.0 (2024-04-24) Platform:
+>      >>> aarch64-apple-darwin20 Running under: macOS Sonoma 14.5
+>      >>>
+>      >>> Matrix products: default BLAS:
+>      >>> /System/Library/Frameworks/Accelerate.framework/Versions/A/Frameworks/vecLib.framework/Versions/A/libBLAS.dylib
+>      >>>
+>      >>> LAPACK:
+>      >>> /Library/Frameworks/R.framework/Versions/4.4-arm64/Resources/lib/libRlapack.dylib;
+>      >>> LAPACK version 3.12.0
+>      >>>
+>      >>> locale: [1]
+>      >>> en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+>      >>>
+>      >>> time zone: America/Chicago tzcode source: internal
+>      >>>
+>      >>> attached base packages: [1] stats graphics grDevices
+>      >>> utils datasets [6] methods base
+>      >>>
+>      >>> loaded via a namespace (and not attached): [1]
+>      >>> compiler_4.4.0 tools_4.4.0
+>      >>>
+>      >>> ______________________________________________
+>      >>> R-devel at r-project.org mailing list
+>      >>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>      >>
+>      >>
+>      >>
+> 
+>      > ______________________________________________
+>      > R-devel at r-project.org mailing list
+>      > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From bbo|ker @end|ng |rom gm@||@com  Mon Jun 10 17:02:38 2024
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Mon, 10 Jun 2024 11:02:38 -0400
+Subject: [Rd] changes in R-devel and zero-extent objects in Rcpp
+In-Reply-To: <9694a015-e5be-4aa9-a5fe-bb0e6bb530cf@gmail.com>
+References: <mailman.54329.3.1717927202.15503.r-devel@r-project.org>
+ <9694a015-e5be-4aa9-a5fe-bb0e6bb530cf@gmail.com>
+Message-ID: <09e1f687-3973-4673-a393-ad6d0060a46c@gmail.com>
+
+   Thanks, that's very useful.
+
+   AFAICT, in the problematic case we are doing some linear algebra with 
+zero-column matrices that are mathematically well-defined (and whose 
+base-R equivalents work correctly). It's maybe not surprising that 
+Eigen/RcppEigen would do some weird stuff in this edge case.  I'll see 
+if I can come up with some pure RcppEigen/Eigen examples to illustrate 
+the problem ...
+
+   cheers
+    Ben
+
+
+
+On 2024-06-10 10:12 a.m., Mikael Jagan wrote:
+> 
+> The ASan output is:
+> 
+>  ??? > reference binding to misaligned address 0x000000000001 for type 
+> 'const double', which requires 8 byte alignment
+> 
+> That there is a "reference" to 0x1 means that there really _is_ an 
+> attempt to
+> access memory there.? The stack trace provided by ASan tells you exactly 
+> where
+> it happens: line 100 of
+> RcppEigen/inst/include/Eigen/src/Core/products/GeneralMatrixMatrixTriangular.h:
+> 
+>  ??? for(Index k2=0; k2<depth; k2+=kc)
+>  ??? {
+>  ????? const Index actual_kc = (std::min)(k2+kc,depth)-k2;
+> 
+> 
+>  ????? // note that the actual rhs is the transpose/adjoint of mat
+>  ????? pack_rhs(blockB, rhs.getSubMapper(k2,0), actual_kc, size);
+>  ?????????????????????? ^^^^^^^^^^^^^^^^^^^^^^
+> 
+> where 'rhs' is an object wrapping the pointer with a method 
+> getSubMapper(i, j)
+> for accessing the data like a matrix.? In the first loop iteration, you 
+> access
+> rhs[0]; there is no defensive test for 'rhs' of positive length.
+> 
+> So ASan _is_ revealing an illegal access, complaining only now (since 
+> r86629)
+> because _now_ the address that you access illegally is misaligned.
+
+-- 
+Dr. Benjamin Bolker
+Professor, Mathematics & Statistics and Biology, McMaster University
+Director, School of Computational Science and Engineering
+(Acting) Graduate chair, Mathematics & Statistics
+ > E-mail is sent at my convenience; I don't expect replies outside of 
+working hours.
+
+
