@@ -4540,3 +4540,832 @@ Best
 >> https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Jun 13 10:40:49 2024
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 13 Jun 2024 10:40:49 +0200
+Subject: [Rd] head.ts, tail.ts loses time
+In-Reply-To: <295e6967-6ea6-4334-a43d-58c18ef7fcfd@prodsyse.com>
+References: <016d5bb8-b0ee-47f0-91b2-7a2b8c51557d@prodsyse.com>
+ <CAP01uRmdPR_3M5qUnD8+4REw8Fz8sSf1UrrxzJFwQN+f1dx1xQ@mail.gmail.com>
+ <da0e13c2-d7d6-4f9e-b22e-c2b7392066e1@prodsyse.com>
+ <26215.3697.815212.54251@stat.math.ethz.ch>
+ <295e6967-6ea6-4334-a43d-58c18ef7fcfd@prodsyse.com>
+Message-ID: <26218.45201.138876.12305@stat.math.ethz.ch>
+
+>>>>> Spencer Graves 
+>>>>>     on Mon, 10 Jun 2024 09:45:46 -0500 writes:
+
+    > Hi, Martin et al.:
+    > On 6/10/24 9:32 AM, Martin Maechler wrote:
+    >>>>>>> Spencer Graves
+    >>>>>>> on Mon, 10 Jun 2024 07:50:13 -0500 writes:
+    >> 
+    >> > Hi, Gabor et al.: Thanks for this. I should change my
+    >> > current application to use either zoo or xts, as Gabor
+    >> > suggests.
+    >> 
+    >> 
+    >> > 	  However, I was surprised to learn that "[.ts" does NOT
+    >> > return an object of class "ts". I see that "head.default"
+    >> > and "head.matrix" both call "[", so "head" cannot return a
+    >> > ts object, because "[" doesn't.
+    >> 
+    >> Yes, the default head() and tail() are built on  `[` very much
+    >> on purpose.
+    >> Note that   `[`  should *not* keep the "ts"  property  in
+    >> general, e.g.,
+    >> lynx[c(1:3, 7)]
+    >> cannot be a regular time series
+
+
+    > Agreed.
+
+    >> 
+    >> I think I'd consider using  windows() for a head.ts() and tail.ts(),
+    >> but in any case, I am sympathetic adding such methods to "base R"'s
+    >> utils package.
+
+
+    > The code I provided below for head.ts() and tail.ts() does that: I 
+    > took the code for head.default and head.matrix, etc., computed tmx <- 
+    > as.numeric(time(x)), and then used head(tmx) [and tail(tmx)] in "window()".
+
+Indeed.  I've found that the new methods really belong to pkg
+'stats' (where "ts" are), and hence renamed and exported  the internal
+.checkHT(), and shence the change became somewhat more extensive:
+
+------------------------------------------------------------------------
+r86728 | maechler | 2024-06-13 10:36:51 +0200 (Thu, 13 Jun 2024) | 1 line
+Changed paths:
+   M doc/NEWS.Rd
+   M src/library/stats/NAMESPACE
+   M src/library/stats/R/ts.R
+   M src/library/stats/man/ts.Rd
+   M src/library/utils/NAMESPACE
+   M src/library/utils/R/head.R
+   M src/library/utils/man/head.Rd
+   M tests/Examples/stats-Ex.Rout.save
+
+add head() & tail() methods for "ts"(time series) ==> export .checkHT() utility
+------------------------------------------------------------------------
+
+With thanks to Spencer Graves,
+
+Martin
+
+
+    > Thanks for your reply.
+    > sg
+    >> 
+    >> 
+    >> Martin
+    >> 
+    >> > 	  Best Wishes, Spencer Graves
+    >> 
+    >> 
+    >> > On 6/9/24 8:40 PM, Gabor Grothendieck wrote:
+    >> >> zoo overcomes many of the limitations of ts:
+    >> >>
+    >> >> library(zoo) as.ts(head(as.zoo(presidents))) ## Qtr1 Qtr2
+    >> >> Qtr3 Qtr4 ## 1945 NA 87 82 75 ## 1946 63 50
+    >> >>
+    >> >> xts also works here.
+    >> >>
+    >> >> On Sun, Jun 9, 2024 at 12:04?PM Spencer Graves
+    >> >> <spencer.graves at prodsyse.com> wrote:
+    >> >>>
+    >> >>> Hello, All:
+    >> >>>
+    >> >>>
+    >> >>> The 'head' and 'tail' functions strip the time from a
+    >> >>> 'ts' object.  Example:
+    >> >>>
+    >> >>>
+    >> >>> > head(presidents) [1] NA 87 82 75 63 50
+    >> >>>
+    >> >>>
+    >> >>> > window(presidents, 1945, 1946.25) Qtr1 Qtr2 Qtr3 Qtr4
+    >> >>> 1945 NA 87 82 75 1946 63 50
+    >> >>>
+    >> >>>
+    >> >>> Below please find code for 'head.ts' and 'tail.ts' that
+    >> >>> matches 'window'.
+    >> >>>
+    >> >>>
+    >> >>> Comments?  Spencer Graves
+    >> >>>
+    >> >>> head.ts <- function(x, n=6L, ...){ tmx <-
+    >> >>> as.numeric(time(x))
+    >> >>> #
+    >> >>> utils:::checkHT(n, d <- dim(x)) if(is.na(n[1]) ||
+    >> >>> n[1]==0)ts(NULL)
+    >> >>> #
+    >> >>> firstn <- head(tmx, n[1]) if(is.null(d)){
+    >> >>> return(window(x, firstn[1], tail(firstn, 1))) } else{
+    >> >>> if(length(n)<2){ return(window(x, firstn[1],
+    >> >>> tail(firstn, 1))) } else { Cols <- head(1:d[2], n[2])
+    >> >>> xn2 <- x[, Cols[1]:tail(Cols, 1)] return(window(xn2,
+    >> >>> firstn[1], tail(firstn, 1))) } } }
+    >> >>>
+    >> >>>
+    >> >>> tail.ts <- function (x, n = 6L, ...)  {
+    >> >>> utils:::checkHT(n, d <- dim(x)) tmx <-
+    >> >>> as.numeric(time(x))
+    >> >>> #
+    >> >>> if(is.na(n[1]) || n[1]==0)ts(NULL)
+    >> >>> #
+    >> >>> lastn <- tail(tmx, n[1]) if(is.null(d)){
+    >> >>> return(window(x, lastn[1], tail(lastn, 1))) } else{
+    >> >>> if(length(n)<2){ return(window(x, lastn[1], tail(lastn,
+    >> >>> 1))) } else { Cols <- head(1:d[2], n[2]) xn2 <- x[,
+    >> >>> Cols[1]:tail(Cols, 1)] return(window(xn2, lastn[1],
+    >> >>> tail(lastn, 1))) } } }
+    >> >>>
+    >> >>>
+    >> >>> # examples head(presidents)
+    >> >>>
+    >> >>> head(presidents, 2)
+    >> >>>
+    >> >>> npresObs <- length(presidents) head(presidents,
+    >> >>> 6-npresObs)
+    >> >>>
+    >> >>> try(head(presidents, 1:2)) # 'try-error'
+    >> >>>
+    >> >>> try(head(presidents, 0)) # 'try-error'
+    >> >>>
+    >> >>> # matrix time series str(pres <-
+    >> >>> cbind(n=1:length(presidents), presidents)) head(pres, 2)
+    >> >>>
+    >> >>> head(pres, 2-npresObs)
+    >> >>>
+    >> >>> head(pres, 1:2) head(pres, 2:1) head(pres, 1:3)
+    >> >>>
+    >> >>> # examples tail(presidents)
+    >> >>>
+    >> >>> tail(presidents, 2)
+    >> >>>
+    >> >>> npresObs <- length(presidents) tail(presidents,
+    >> >>> 6-npresObs)
+    >> >>>
+    >> >>> try(tail(presidents, 1:2)) # 'try-error'
+    >> >>>
+    >> >>> try(tail(presidents, 0)) # 'try-error'
+    >> >>>
+    >> >>> # matrix time series str(pres <-
+    >> >>> cbind(n=1:length(presidents), presidents)) tail(pres, 2)
+    >> >>>
+    >> >>> tail(pres, 2-npresObs)
+    >> >>>
+    >> >>> tail(pres, 1:2) tail(pres, 2:1) tail(pres, 1:3)
+    >> >>>
+    >> >>> # for unit testing: headPres <- head(presidents) pres6
+    >> >>> <- ts(presidents[1:6], time(presidents)[1],
+    >> >>> frequency=frequency(presidents))
+    >> >>> stopifnot(all.equal(headPres, pres6))
+    >> >>>
+    >> >>> headPres2 <- head(presidents, 2) pres2 <-
+    >> >>> ts(presidents[1:2], time(presidents)[1],
+    >> >>> frequency=frequency(presidents))
+    >> >>> stopifnot(all.equal(headPres2, pres2))
+    >> >>>
+    >> >>> npresObs <- length(presidents) headPres. <-
+    >> >>> head(presidents, 6-npresObs)
+    >> >>> stopifnot(all.equal(headPres., pres6))
+    >> >>>
+    >> >>> headPresOops <- try(head(presidents, 1:2))
+    >> >>> stopifnot(class(headPresOops) == 'try-error')
+    >> >>>
+    >> >>> headPres0 <- try(head(presidents, 0))
+    >> >>> stopifnot(class(headPres0) == 'try-error')
+    >> >>>
+    >> >>> str(pres <- cbind(n=1:length(presidents), presidents))
+    >> >>> headP2 <- head(pres, 2)
+    >> >>>
+    >> >>> p2 <- ts(pres[1:2, ], time(presidents)[1],
+    >> >>> frequency=frequency(presidents))
+    >> >>> stopifnot(all.equal(headP2, p2))
+    >> >>>
+    >> >>> headP2. <- head(pres, 2-npresObs)
+    >> >>> stopifnot(all.equal(headP2., p2))
+    >> >>>
+    >> >>>
+    >> >>> #############
+    >> >>>
+    >> >>>
+    >> >>> sessionInfo() R version 4.4.0 (2024-04-24) Platform:
+    >> >>> aarch64-apple-darwin20 Running under: macOS Sonoma 14.5
+    >> >>>
+    >> >>> Matrix products: default BLAS:
+    >> >>> /System/Library/Frameworks/Accelerate.framework/Versions/A/Frameworks/vecLib.framework/Versions/A/libBLAS.dylib
+    >> >>>
+    >> >>> LAPACK:
+    >> >>> /Library/Frameworks/R.framework/Versions/4.4-arm64/Resources/lib/libRlapack.dylib;
+    >> >>> LAPACK version 3.12.0
+    >> >>>
+    >> >>> locale: [1]
+    >> >>> en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+    >> >>>
+    >> >>> time zone: America/Chicago tzcode source: internal
+    >> >>>
+    >> >>> attached base packages: [1] stats graphics grDevices
+    >> >>> utils datasets [6] methods base
+    >> >>>
+    >> >>> loaded via a namespace (and not attached): [1]
+    >> >>> compiler_4.4.0 tools_4.4.0
+    >> >>>
+    >> >>> ______________________________________________
+    >> >>> R-devel at r-project.org mailing list
+    >> >>> https://stat.ethz.ch/mailman/listinfo/r-devel
+    >> >>
+    >> >>
+    >> >>
+    >> 
+    >> > ______________________________________________
+    >> > R-devel at r-project.org mailing list
+    >> > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Jun 13 10:47:27 2024
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 13 Jun 2024 10:47:27 +0200
+Subject: [Rd] head.ts, tail.ts loses time
+In-Reply-To: <CAP01uRkHWsQrELjRDU7MR9XtXgghT5VM0vnQmrE=pOa-mqSBhQ@mail.gmail.com>
+References: <016d5bb8-b0ee-47f0-91b2-7a2b8c51557d@prodsyse.com>
+ <CAP01uRmdPR_3M5qUnD8+4REw8Fz8sSf1UrrxzJFwQN+f1dx1xQ@mail.gmail.com>
+ <da0e13c2-d7d6-4f9e-b22e-c2b7392066e1@prodsyse.com>
+ <26215.3697.815212.54251@stat.math.ethz.ch>
+ <CAP01uRkHWsQrELjRDU7MR9XtXgghT5VM0vnQmrE=pOa-mqSBhQ@mail.gmail.com>
+Message-ID: <26218.45599.975713.139484@stat.math.ethz.ch>
+
+>>>>> Gabor Grothendieck 
+>>>>>     on Tue, 11 Jun 2024 09:13:49 -0400 writes:
+
+    > It isn't really clear that it can't work.  This does work by inserting NA's.
+    > library(zoo)
+    > as.ts(as.zoo(lynx)[ c(1:3, 7) ] )
+    > ## Time Series:
+    > ## Start = 1821
+    > ## End = 1827
+    > ## Frequency = 1
+    > ## [1]  269  321  585   NA   NA   NA 3928
+
+You are right,  Gabor, such an implementation of  `[.ts`
+*would* make sense, too.
+
+But given that head.ts() and tail.ts() -- slightly compactified
+from Spencer's proposal,  are now simple and "robust",
+
+I did not want to make such a "strong" change to such a basic class and its `[` operator.
+(I'm not *against* it either currently, but I'm not convinced
+ it's worth the effort with possible subsequent changes needed
+ in code which has relied on the old behavior for > 30 years
+ if you count the pre-R  S version, too.)
+
+Best, Martin
+
+
+    > On Mon, Jun 10, 2024 at 10:32?AM Martin Maechler
+    > <maechler at stat.math.ethz.ch> wrote:
+    >> 
+    >> >>>>> Spencer Graves
+    >> >>>>>     on Mon, 10 Jun 2024 07:50:13 -0500 writes:
+    >> 
+    >> > Hi, Gabor et al.: Thanks for this. I should change my
+    >> > current application to use either zoo or xts, as Gabor
+    >> > suggests.
+    >> 
+    >> 
+    >> >     However, I was surprised to learn that "[.ts" does NOT
+    >> > return an object of class "ts". I see that "head.default"
+    >> > and "head.matrix" both call "[", so "head" cannot return a
+    >> > ts object, because "[" doesn't.
+    >> 
+    >> Yes, the default head() and tail() are built on  `[` very much
+    >> on purpose.
+    >> Note that   `[`  should *not* keep the "ts"  property  in
+    >> general, e.g.,
+    >> lynx[c(1:3, 7)]
+    >> cannot be a regular time series
+    >> 
+    >> I think I'd consider using  windows() for a head.ts() and tail.ts(),
+    >> but in any case, I am sympathetic adding such methods to "base R"'s
+    >> utils package.
+    >> 
+    >> 
+    >> Martin
+    >> 
+    >> >     Best Wishes, Spencer Graves
+    >> 
+    >> 
+    >> > On 6/9/24 8:40 PM, Gabor Grothendieck wrote:
+    >> >> zoo overcomes many of the limitations of ts:
+    >> >>
+    >> >> library(zoo) as.ts(head(as.zoo(presidents))) ## Qtr1 Qtr2
+    >> >> Qtr3 Qtr4 ## 1945 NA 87 82 75 ## 1946 63 50
+    >> >>
+    >> >> xts also works here.
+    >> >>
+    >> >> On Sun, Jun 9, 2024 at 12:04?PM Spencer Graves
+    >> >> <spencer.graves at prodsyse.com> wrote:
+    >> >>>
+    >> >>> Hello, All:
+    >> >>>
+    >> >>>
+    >> >>> The 'head' and 'tail' functions strip the time from a
+    >> >>> 'ts' object.  Example:
+    >> >>>
+    >> >>>
+    >> >>> > head(presidents) [1] NA 87 82 75 63 50
+    >> >>>
+    >> >>>
+    >> >>> > window(presidents, 1945, 1946.25) Qtr1 Qtr2 Qtr3 Qtr4
+    >> >>> 1945 NA 87 82 75 1946 63 50
+    >> >>>
+    >> >>>
+    >> >>> Below please find code for 'head.ts' and 'tail.ts' that
+    >> >>> matches 'window'.
+    >> >>>
+    >> >>>
+    >> >>> Comments?  Spencer Graves
+    >> >>>
+    >> >>> head.ts <- function(x, n=6L, ...){ tmx <-
+    >> >>> as.numeric(time(x))
+    >> >>> #
+    >> >>> utils:::checkHT(n, d <- dim(x)) if(is.na(n[1]) ||
+    >> >>> n[1]==0)ts(NULL)
+    >> >>> #
+    >> >>> firstn <- head(tmx, n[1]) if(is.null(d)){
+    >> >>> return(window(x, firstn[1], tail(firstn, 1))) } else{
+    >> >>> if(length(n)<2){ return(window(x, firstn[1],
+    >> >>> tail(firstn, 1))) } else { Cols <- head(1:d[2], n[2])
+    >> >>> xn2 <- x[, Cols[1]:tail(Cols, 1)] return(window(xn2,
+    >> >>> firstn[1], tail(firstn, 1))) } } }
+    >> >>>
+    >> >>>
+    >> >>> tail.ts <- function (x, n = 6L, ...)  {
+    >> >>> utils:::checkHT(n, d <- dim(x)) tmx <-
+    >> >>> as.numeric(time(x))
+    >> >>> #
+    >> >>> if(is.na(n[1]) || n[1]==0)ts(NULL)
+    >> >>> #
+    >> >>> lastn <- tail(tmx, n[1]) if(is.null(d)){
+    >> >>> return(window(x, lastn[1], tail(lastn, 1))) } else{
+    >> >>> if(length(n)<2){ return(window(x, lastn[1], tail(lastn,
+    >> >>> 1))) } else { Cols <- head(1:d[2], n[2]) xn2 <- x[,
+    >> >>> Cols[1]:tail(Cols, 1)] return(window(xn2, lastn[1],
+    >> >>> tail(lastn, 1))) } } }
+    >> >>>
+    >> >>>
+    >> >>> # examples head(presidents)
+    >> >>>
+    >> >>> head(presidents, 2)
+    >> >>>
+    >> >>> npresObs <- length(presidents) head(presidents,
+    >> >>> 6-npresObs)
+    >> >>>
+    >> >>> try(head(presidents, 1:2)) # 'try-error'
+    >> >>>
+    >> >>> try(head(presidents, 0)) # 'try-error'
+    >> >>>
+    >> >>> # matrix time series str(pres <-
+    >> >>> cbind(n=1:length(presidents), presidents)) head(pres, 2)
+    >> >>>
+    >> >>> head(pres, 2-npresObs)
+    >> >>>
+    >> >>> head(pres, 1:2) head(pres, 2:1) head(pres, 1:3)
+    >> >>>
+    >> >>> # examples tail(presidents)
+    >> >>>
+    >> >>> tail(presidents, 2)
+    >> >>>
+    >> >>> npresObs <- length(presidents) tail(presidents,
+    >> >>> 6-npresObs)
+    >> >>>
+    >> >>> try(tail(presidents, 1:2)) # 'try-error'
+    >> >>>
+    >> >>> try(tail(presidents, 0)) # 'try-error'
+    >> >>>
+    >> >>> # matrix time series str(pres <-
+    >> >>> cbind(n=1:length(presidents), presidents)) tail(pres, 2)
+    >> >>>
+    >> >>> tail(pres, 2-npresObs)
+    >> >>>
+    >> >>> tail(pres, 1:2) tail(pres, 2:1) tail(pres, 1:3)
+    >> >>>
+    >> >>> # for unit testing: headPres <- head(presidents) pres6
+    >> >>> <- ts(presidents[1:6], time(presidents)[1],
+    >> >>> frequency=frequency(presidents))
+    >> >>> stopifnot(all.equal(headPres, pres6))
+    >> >>>
+    >> >>> headPres2 <- head(presidents, 2) pres2 <-
+    >> >>> ts(presidents[1:2], time(presidents)[1],
+    >> >>> frequency=frequency(presidents))
+    >> >>> stopifnot(all.equal(headPres2, pres2))
+    >> >>>
+    >> >>> npresObs <- length(presidents) headPres. <-
+    >> >>> head(presidents, 6-npresObs)
+    >> >>> stopifnot(all.equal(headPres., pres6))
+    >> >>>
+    >> >>> headPresOops <- try(head(presidents, 1:2))
+    >> >>> stopifnot(class(headPresOops) == 'try-error')
+    >> >>>
+    >> >>> headPres0 <- try(head(presidents, 0))
+    >> >>> stopifnot(class(headPres0) == 'try-error')
+    >> >>>
+    >> >>> str(pres <- cbind(n=1:length(presidents), presidents))
+    >> >>> headP2 <- head(pres, 2)
+    >> >>>
+    >> >>> p2 <- ts(pres[1:2, ], time(presidents)[1],
+    >> >>> frequency=frequency(presidents))
+    >> >>> stopifnot(all.equal(headP2, p2))
+    >> >>>
+    >> >>> headP2. <- head(pres, 2-npresObs)
+    >> >>> stopifnot(all.equal(headP2., p2))
+    >> >>>
+    >> >>>
+    >> >>> #############
+    >> >>>
+    >> >>>
+    >> >>> sessionInfo() R version 4.4.0 (2024-04-24) Platform:
+    >> >>> aarch64-apple-darwin20 Running under: macOS Sonoma 14.5
+    >> >>>
+    >> >>> Matrix products: default BLAS:
+    >> >>> /System/Library/Frameworks/Accelerate.framework/Versions/A/Frameworks/vecLib.framework/Versions/A/libBLAS.dylib
+    >> >>>
+    >> >>> LAPACK:
+    >> >>> /Library/Frameworks/R.framework/Versions/4.4-arm64/Resources/lib/libRlapack.dylib;
+    >> >>> LAPACK version 3.12.0
+    >> >>>
+    >> >>> locale: [1]
+    >> >>> en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+    >> >>>
+    >> >>> time zone: America/Chicago tzcode source: internal
+    >> >>>
+    >> >>> attached base packages: [1] stats graphics grDevices
+    >> >>> utils datasets [6] methods base
+    >> >>>
+    >> >>> loaded via a namespace (and not attached): [1]
+    >> >>> compiler_4.4.0 tools_4.4.0
+    >> >>>
+    >> >>> ______________________________________________
+    >> >>> R-devel at r-project.org mailing list
+    >> >>> https://stat.ethz.ch/mailman/listinfo/r-devel
+    >> >>
+    >> >>
+    >> >>
+    >> 
+    >> > ______________________________________________
+    >> > R-devel at r-project.org mailing list
+    >> > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+
+    > -- 
+    > Statistics & Software Consulting
+    > GKX Group, GKX Associates Inc.
+    > tel: 1-877-GKX-GROUP
+    > email: ggrothendieck at gmail.com
+
+
+From georg|@bo@hn@kov @end|ng |rom m@nche@ter@@c@uk  Thu Jun 13 11:38:21 2024
+From: georg|@bo@hn@kov @end|ng |rom m@nche@ter@@c@uk (Georgi Boshnakov)
+Date: Thu, 13 Jun 2024 09:38:21 +0000
+Subject: [Rd] head.ts, tail.ts loses time
+In-Reply-To: <mailman.54342.3.1718186401.9590.r-devel@r-project.org>
+References: <mailman.54342.3.1718186401.9590.r-devel@r-project.org>
+Message-ID: <LO0P265MB6325A77C563D088D0DE7C44BAEC12@LO0P265MB6325.GBRP265.PROD.OUTLOOK.COM>
+
+> It isn't really clear that it can't work.  This does work by inserting NA's...
+>
+>  library(zoo)
+> as.ts(as.zoo(lynx)[ c(1:3, 7) ] )
+
+If by 'this' you mean indexing, it would be very confusing and error prone for expressions like lynx[c(1:3, 7)] (lynx is from class 'ts') to return a ts object with NA's inserted and, even more  so, since this has been unambiguously documented for ages in '?ts'. For 'zoo' objects, the situation is different since they have a time index by definition, so the above index doesn't introduce artificial NA's:
+
+> as.zoo(lynx)[ c(1:3, 7) ]
+1821 1822 1823 1827 
+ 269  321  585 3928 
+> coredata(as.zoo(lynx)[ c(1:3, 7) ])
+[1]  269  321  585 3928
+
+On the other hand,  'ts' methods for 'head' and 'tail' would be suitable, since the indexing is contiguous by definition there. Also, compatibility problems may not be a big concern for these functions.
+
+Georgi Boshnakov
+
+
+
+Date: Tue, 11 Jun 2024 09:13:49 -0400
+From: Gabor Grothendieck <ggrothendieck at gmail.com>
+To: Martin Maechler <maechler at stat.math.ethz.ch>
+Cc: Spencer Graves <spencer.graves at prodsyse.com>, r-devel
+        <r-devel at r-project.org>
+Subject: Re: [Rd] head.ts, tail.ts loses time
+Message-ID:
+        <CAP01uRkHWsQrELjRDU7MR9XtXgghT5VM0vnQmrE=pOa-mqSBhQ at mail.gmail.com>
+Content-Type: text/plain; charset="utf-8"
+
+It isn't really clear that it can't work.  This does work by inserting NA's...
+
+  library(zoo)
+  as.ts(as.zoo(lynx)[ c(1:3, 7) ] )
+  ## Time Series:
+  ## Start = 1821
+  ## End = 1827
+  ## Frequency = 1
+  ## [1]  269  321  585   NA   NA   NA 3928
+
+
+On Mon, Jun 10, 2024 at 10:32?AM Martin Maechler
+<maechler at stat.math.ethz.ch> wrote:
+>
+> >>>>> Spencer Graves
+> >>>>>     on Mon, 10 Jun 2024 07:50:13 -0500 writes:
+>
+>     > Hi, Gabor et al.: Thanks for this. I should change my
+>     > current application to use either zoo or xts, as Gabor
+>     > suggests.
+>
+>
+>     >     However, I was surprised to learn that "[.ts" does NOT
+>     > return an object of class "ts". I see that "head.default"
+>     > and "head.matrix" both call "[", so "head" cannot return a
+>     > ts object, because "[" doesn't.
+>
+> Yes, the default head() and tail() are built on  `[` very much
+> on purpose.
+> Note that   `[`  should *not* keep the "ts"  property  in
+> general, e.g.,
+>          lynx[c(1:3, 7)]
+> cannot be a regular time series
+>
+> I think I'd consider using  windows() for a head.ts() and tail.ts(),
+> but in any case, I am sympathetic adding such methods to "base R"'s
+> utils package.
+>
+>
+> Martin
+>
+>     >     Best Wishes, Spencer Graves
+>
+>
+>     > On 6/9/24 8:40 PM, Gabor Grothendieck wrote:
+>     >> zoo overcomes many of the limitations of ts:
+>     >>
+>     >> library(zoo) as.ts(head(as.zoo(presidents))) ## Qtr1 Qtr2
+>     >> Qtr3 Qtr4 ## 1945 NA 87 82 75 ## 1946 63 50
+>     >>
+>     >> xts also works here.
+>     >>
+>     >> On Sun, Jun 9, 2024 at 12:04?PM Spencer Graves
+>     >> <spencer.graves at prodsyse.com> wrote:
+>     >>>
+>     >>> Hello, All:
+>     >>>
+>     >>>
+>     >>> The 'head' and 'tail' functions strip the time from a
+>     >>> 'ts' object.  Example:
+>     >>>
+>     >>>
+>     >>> > head(presidents) [1] NA 87 82 75 63 50
+>     >>>
+>     >>>
+>     >>> > window(presidents, 1945, 1946.25) Qtr1 Qtr2 Qtr3 Qtr4
+>     >>> 1945 NA 87 82 75 1946 63 50
+>     >>>
+>     >>>
+>     >>> Below please find code for 'head.ts' and 'tail.ts' that
+>     >>> matches 'window'.
+>     >>>
+>     >>>
+>     >>> Comments?  Spencer Graves
+>     >>>
+>     >>> head.ts <- function(x, n=6L, ...){ tmx <-
+>     >>> as.numeric(time(x))
+>     >>> #
+>     >>> utils:::checkHT(n, d <- dim(x)) if(is.na(n[1]) ||
+>     >>> n[1]==0)ts(NULL)
+>     >>> #
+>     >>> firstn <- head(tmx, n[1]) if(is.null(d)){
+>     >>> return(window(x, firstn[1], tail(firstn, 1))) } else{
+>     >>> if(length(n)<2){ return(window(x, firstn[1],
+>     >>> tail(firstn, 1))) } else { Cols <- head(1:d[2], n[2])
+>     >>> xn2 <- x[, Cols[1]:tail(Cols, 1)] return(window(xn2,
+>     >>> firstn[1], tail(firstn, 1))) } } }
+>     >>>
+>     >>>
+>     >>> tail.ts <- function (x, n = 6L, ...)  {
+>     >>> utils:::checkHT(n, d <- dim(x)) tmx <-
+>     >>> as.numeric(time(x))
+>     >>> #
+>     >>> if(is.na(n[1]) || n[1]==0)ts(NULL)
+>     >>> #
+>     >>> lastn <- tail(tmx, n[1]) if(is.null(d)){
+>     >>> return(window(x, lastn[1], tail(lastn, 1))) } else{
+>     >>> if(length(n)<2){ return(window(x, lastn[1], tail(lastn,
+>     >>> 1))) } else { Cols <- head(1:d[2], n[2]) xn2 <- x[,
+>     >>> Cols[1]:tail(Cols, 1)] return(window(xn2, lastn[1],
+>     >>> tail(lastn, 1))) } } }
+>     >>>
+>     >>>
+>     >>> # examples head(presidents)
+>     >>>
+>     >>> head(presidents, 2)
+>     >>>
+>     >>> npresObs <- length(presidents) head(presidents,
+>     >>> 6-npresObs)
+>     >>>
+>     >>> try(head(presidents, 1:2)) # 'try-error'
+>     >>>
+>     >>> try(head(presidents, 0)) # 'try-error'
+>     >>>
+>     >>> # matrix time series str(pres <-
+>     >>> cbind(n=1:length(presidents), presidents)) head(pres, 2)
+>     >>>
+>     >>> head(pres, 2-npresObs)
+>     >>>
+>     >>> head(pres, 1:2) head(pres, 2:1) head(pres, 1:3)
+>     >>>
+>     >>> # examples tail(presidents)
+>     >>>
+>     >>> tail(presidents, 2)
+>     >>>
+>     >>> npresObs <- length(presidents) tail(presidents,
+>     >>> 6-npresObs)
+>     >>>
+>     >>> try(tail(presidents, 1:2)) # 'try-error'
+>     >>>
+>     >>> try(tail(presidents, 0)) # 'try-error'
+>     >>>
+>     >>> # matrix time series str(pres <-
+>     >>> cbind(n=1:length(presidents), presidents)) tail(pres, 2)
+>     >>>
+>     >>> tail(pres, 2-npresObs)
+>     >>>
+>     >>> tail(pres, 1:2) tail(pres, 2:1) tail(pres, 1:3)
+>     >>>
+>     >>> # for unit testing: headPres <- head(presidents) pres6
+>     >>> <- ts(presidents[1:6], time(presidents)[1],
+>     >>> frequency=frequency(presidents))
+>     >>> stopifnot(all.equal(headPres, pres6))
+>     >>>
+>     >>> headPres2 <- head(presidents, 2) pres2 <-
+>     >>> ts(presidents[1:2], time(presidents)[1],
+>     >>> frequency=frequency(presidents))
+>     >>> stopifnot(all.equal(headPres2, pres2))
+>     >>>
+>     >>> npresObs <- length(presidents) headPres. <-
+>     >>> head(presidents, 6-npresObs)
+>     >>> stopifnot(all.equal(headPres., pres6))
+>     >>>
+>     >>> headPresOops <- try(head(presidents, 1:2))
+>     >>> stopifnot(class(headPresOops) == 'try-error')
+>     >>>
+>     >>> headPres0 <- try(head(presidents, 0))
+>     >>> stopifnot(class(headPres0) == 'try-error')
+>     >>>
+>     >>> str(pres <- cbind(n=1:length(presidents), presidents))
+>     >>> headP2 <- head(pres, 2)
+>     >>>
+>     >>> p2 <- ts(pres[1:2, ], time(presidents)[1],
+>     >>> frequency=frequency(presidents))
+>     >>> stopifnot(all.equal(headP2, p2))
+>     >>>
+>     >>> headP2. <- head(pres, 2-npresObs)
+>     >>> stopifnot(all.equal(headP2., p2))
+>     >>>
+>     >>>
+>     >>> #############
+>     >>>
+>     >>>
+>     >>> sessionInfo() R version 4.4.0 (2024-04-24) Platform:
+>     >>> aarch64-apple-darwin20 Running under: macOS Sonoma 14.5
+>     >>>
+>     >>> Matrix products: default BLAS:
+>     >>> /System/Library/Frameworks/Accelerate.framework/Versions/A/Frameworks/vecLib.framework/Versions/A/libBLAS.dylib
+>     >>>
+>     >>> LAPACK:
+>     >>> /Library/Frameworks/R.framework/Versions/4.4-arm64/Resources/lib/libRlapack.dylib;
+>     >>> LAPACK version 3.12.0
+>     >>>
+>     >>> locale: [1]
+>     >>> en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+>     >>>
+>     >>> time zone: America/Chicago tzcode source: internal
+>     >>>
+>     >>> attached base packages: [1] stats graphics grDevices
+>     >>> utils datasets [6] methods base
+>     >>>
+>     >>> loaded via a namespace (and not attached): [1]
+>     >>> compiler_4.4.0 tools_4.4.0
+>     >>>
+>     >>> ______________________________________________
+>     >>> R-devel at r-project.org mailing list
+>     >>> https://urldefense.com/v3/__https://stat.ethz.ch/mailman/listinfo/r-devel__;!!PDiH4ENfjr2_Jw!BrlX0n74cttdH54fH7zImanZ4AEoUysullXuaB2TLwZnk4MElP8_Wzb1Jb-Qa6hu4N2xsqMoRZOivoiAzEMCMrHpuPa3LvL2StE0whuxSwE$ [stat[.]ethz[.]ch]
+>     >>
+>     >>
+>     >>
+>
+>     > ______________________________________________
+>     > R-devel at r-project.org mailing list
+>     > https://urldefense.com/v3/__https://stat.ethz.ch/mailman/listinfo/r-devel__;!!PDiH4ENfjr2_Jw!BrlX0n74cttdH54fH7zImanZ4AEoUysullXuaB2TLwZnk4MElP8_Wzb1Jb-Qa6hu4N2xsqMoRZOivoiAzEMCMrHpuPa3LvL2StE0whuxSwE$ [stat[.]ethz[.]ch]
+
+
+
+--
+Statistics & Software Consulting
+GKX Group, GKX Associates Inc.
+tel: 1-877-GKX-GROUP
+email: ggrothendieck at gmail.com
+
+From edd @end|ng |rom deb|@n@org  Thu Jun 13 14:20:00 2024
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Thu, 13 Jun 2024 07:20:00 -0500
+Subject: [Rd] R-devel on Windows temporarily broken?
+Message-ID: <26218.58352.92640.574440@rob.eddelbuettel.com>
+
+
+I had a very routine CI job fail twice this morning on r-devel on Windows;
+the package (in fine standard form) doesn't even install under win-builder
+r-devel. Whereas on Linux with r86731 everything is peachy.
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From edd @end|ng |rom deb|@n@org  Thu Jun 13 15:35:24 2024
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Thu, 13 Jun 2024 08:35:24 -0500
+Subject: [Rd] R-devel on Windows temporarily broken?
+In-Reply-To: <26218.62344.708682.22736@stat.math.ethz.ch>
+References: <26218.58352.92640.574440@rob.eddelbuettel.com>
+ <26218.62344.708682.22736@stat.math.ethz.ch>
+Message-ID: <26218.62876.585076.819818@rob.eddelbuettel.com>
+
+
+On 13 June 2024 at 15:26, Martin Maechler wrote:
+| >>>>> Dirk Eddelbuettel 
+| >>>>>     on Thu, 13 Jun 2024 07:20:00 -0500 writes:
+| 
+|     > I had a very routine CI job fail twice this morning on r-devel on Windows;
+|     > the package (in fine standard form) doesn't even install under win-builder
+|     > r-devel. Whereas on Linux with r86731 everything is peachy.
+| 
+|     > Dirk
+| 
+| There was a texinfo typo for a while which Prof Brian Ripley
+| fixed in r86729.
+| 
+| Hence r86731 is fine on Windows, too, at least when I look at
+| the R contributor svn dashboard  (provided thanks to Jeroen Ooms):
+|     https://contributor.r-project.org/svn-dashboard/
+
+This ran twice, and blew up both times in a spot where it is 'impossible to
+blow up where it did' (line 183) 
+  https://github.com/TileDB-Inc/TileDB-R/actions/runs/9498253355/job/26179179289
+Note that r-release ran fine on the same commit.
+
+Ditto with this win-builder r-devel build _not even installing_
+  https://win-builder.r-project.org/SNSy1J8W8H8b
+
+The package now also errors on r-devel-linux-x86_64-debian-gcc and was fine
+days ago (as we just uploaded that release last week). 
+
+Neither one of these errors has, as best as I can tell, anything to do with
+texinfo, as you brought that up.
+
+Anyway, I just disabled r-devel in the CI matrix for now and will revisit in
+a few days.  As I wrote, it works here (as I wrote) under '2024-06-13 r86731'.
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Jun 13 15:26:32 2024
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 13 Jun 2024 15:26:32 +0200
+Subject: [Rd] R-devel on Windows temporarily broken?
+In-Reply-To: <26218.58352.92640.574440@rob.eddelbuettel.com>
+References: <26218.58352.92640.574440@rob.eddelbuettel.com>
+Message-ID: <26218.62344.708682.22736@stat.math.ethz.ch>
+
+>>>>> Dirk Eddelbuettel 
+>>>>>     on Thu, 13 Jun 2024 07:20:00 -0500 writes:
+
+    > I had a very routine CI job fail twice this morning on r-devel on Windows;
+    > the package (in fine standard form) doesn't even install under win-builder
+    > r-devel. Whereas on Linux with r86731 everything is peachy.
+
+    > Dirk
+
+There was a texinfo typo for a while which Prof Brian Ripley
+fixed in r86729.
+
+Hence r86731 is fine on Windows, too, at least when I look at
+the R contributor svn dashboard  (provided thanks to Jeroen Ooms):
+    https://contributor.r-project.org/svn-dashboard/
+
+
