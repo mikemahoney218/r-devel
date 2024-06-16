@@ -5514,3 +5514,152 @@ R-devel at r-project.org mailing list
 https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From therne@u @end|ng |rom m@yo@edu  Sat Jun 15 04:04:31 2024
+From: therne@u @end|ng |rom m@yo@edu (Therneau, Terry M., Ph.D.)
+Date: Sat, 15 Jun 2024 02:04:31 +0000
+Subject: [Rd] Hard crash of lme4 in R-devel
+Message-ID: <f50ddc$mda1i3@ironport10.mayo.edu>
+
+I ran across this by accident when working up an example.    It uses a data set from the survival package, but nothing else from there.  Fails on the Intel machine shown below, and on a virtual linux instance on a newer Mac.
+
+Terry
+
+> library(survival)
+> library(lme4)
+Loading required package: Matrix
+> sessionInfo()
+R Under development (unstable) (2024-06-14 r86747)
+Platform: aarch64-unknown-linux-gnu
+Running under: Ubuntu 22.04.4 LTS
+
+Matrix products: default
+BLAS:   /usr/local/src/R-devel/lib/libRblas.so
+LAPACK: /usr/lib/aarch64-linux-gnu/lapack/liblapack.so.3.10.0
+
+locale:
+[1] LC_CTYPE=C.UTF-8       LC_NUMERIC=C           LC_TIME=C.UTF-8
+ [4] LC_COLLATE=C           LC_MONETARY=C.UTF-8    LC_MESSAGES=C.UTF-8
+ [7] LC_PAPER=C.UTF-8       LC_NAME=C              LC_ADDRESS=C
+[10] LC_TELEPHONE=C         LC_MEASUREMENT=C.UTF-8 LC_IDENTIFICATION=C
+
+time zone: America/Chicago
+tzcode source: system (glibc)
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base
+
+other attached packages:
+[1] lme4_1.1-35.1  Matrix_1.7-0   survival_3.6-6
+
+loaded via a namespace (and not attached):
+[1] minqa_1.2.5    MASS_7.3-60.2  compiler_4.5.0 Rcpp_1.0.11    splines_4.5.0
+ [6] nlme_3.1-164   grid_4.5.0     nloptr_2.0.3   boot_1.3-30    lattice_0.22-6
+>
+> # Create a data set of all PBC subjects with 4 or more values
+> count <- table(pbcseq$id)
+> data4 <- subset(pbcseq, id %in% names(count)[count>3])
+> data4$year <- data4$day/365.25
+>
+> fit <- lmer(log(bili) ~ year + (1+year | id), data4)
+
+-- more lines than I can capture --
+
+= NULL, verbose = 0L,     control = list(optimizer = "nloptwrap", restart_edge = TRUE,         boundary.tol = 1e-05, calc.derivs = TRUE, use.last.params = FALSE,         checkControl = list(check.nobs.vs.rankZ = "ignore", check.nobs.vs.nlev = "stop",             check.nlev.gtreq.5 = "ignore", check.nlev.gtr.1 = "stop",             check.nobs.vs.nRE = "stop", check.rankX = "message+drop.cols",             check.scaleX = "warning", check.formula.LHS = "stop"),         checkConv = list(check.conv.grad = list(action = "warning",             tol = 0.002, relTol = NULL), check.conv.singular = list(            action = "message", tol = 1e-04), check.conv.hess = list(            action = "warning", tol = 1e-06)), optCtrl = list()))
+10: do.call(mkLmerDevfun, c(lmod, list(start = start, verbose = verbose,     control = control)))
+11: lmer(log(bili) ~ year + (1 + year | id), data4)
+
+Possible actions:
+1: abort (with core dump, if enabled)
+2: normal R exit
+3: exit R without saving workspace
+4: exit R saving workspace
+Selection:
+
+
+	[[alternative HTML version deleted]]
+
+
+From |kry|ov @end|ng |rom d|@root@org  Sat Jun 15 09:06:43 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Sat, 15 Jun 2024 10:06:43 +0300
+Subject: [Rd] Hard crash of lme4 in R-devel
+In-Reply-To: <f50ddc$mda1i3@ironport10.mayo.edu>
+References: <f50ddc$mda1i3@ironport10.mayo.edu>
+Message-ID: <20240615100643.7d37ad60@trisector>
+
+? Sat, 15 Jun 2024 02:04:31 +0000
+"Therneau, Terry M., Ph.D. via R-devel" <r-devel at r-project.org> ?????:
+
+> other attached packages:
+> [1] lme4_1.1-35.1  Matrix_1.7-0 
+
+I see you have a new Matrix (1.7-0 from 2024-04-26 with a new ABI) but
+an older lme4 (1.1-35.1 from 2023-11-05).
+
+I reproduced the crash and the giant backtrace by first installing
+latest lme4 and then updating Matrix. With the latest version of lme4,
+this results in a warning:
+
+library(lme4)
+# Loading required package: Matrix
+# Warning message:
+# In check_dep_version() : ABI version mismatch:
+# lme4 was built with Matrix ABI version 1
+# Current Matrix ABI version is 2
+# Please re-install lme4 from source or restore original 'Matrix'
+# package
+
+The version of lme4 that you have installed doesn't have this check
+because it only appeared in March 2024:
+https://github.com/lme4/lme4/commit/8be641b7a1fd5b6e6ac962552add13e29bb5ff5b
+
+The crash should go away if you update or at least reinstall lme4 from
+source.
+
+-- 
+Best regards,
+Ivan
+
+
+From therne@u @end|ng |rom m@yo@edu  Sat Jun 15 15:12:51 2024
+From: therne@u @end|ng |rom m@yo@edu (Therneau, Terry M., Ph.D.)
+Date: Sat, 15 Jun 2024 08:12:51 -0500
+Subject: [Rd] [EXTERNAL] Re:  Hard crash of lme4 in R-devel
+In-Reply-To: <20240615100643.7d37ad60@trisector>
+References: <f50ddc$mda1i3@ironport10.mayo.edu>
+ <20240615100643.7d37ad60@trisector>
+Message-ID: <f50ddc$mdavq3@ironport10.mayo.edu>
+
+Thank you.? An update of lme4 fixed the issue.? No warning, no crash.
+
+On 6/15/24 2:06 AM, Ivan Krylov wrote:
+> ? Sat, 15 Jun 2024 02:04:31 +0000
+> "Therneau, Terry M., Ph.D. via R-devel" <r-devel at r-project.org> ?????:
+>
+>> other attached packages:
+>> [1] lme4_1.1-35.1  Matrix_1.7-0
+> I see you have a new Matrix (1.7-0 from 2024-04-26 with a new ABI) but
+> an older lme4 (1.1-35.1 from 2023-11-05).
+>
+> I reproduced the crash and the giant backtrace by first installing
+> latest lme4 and then updating Matrix. With the latest version of lme4,
+> this results in a warning:
+>
+> library(lme4)
+> # Loading required package: Matrix
+> # Warning message:
+> # In check_dep_version() : ABI version mismatch:
+> # lme4 was built with Matrix ABI version 1
+> # Current Matrix ABI version is 2
+> # Please re-install lme4 from source or restore original 'Matrix'
+> # package
+>
+> The version of lme4 that you have installed doesn't have this check
+> because it only appeared in March 2024:
+> https://nam12.safelinks.protection.outlook.com/?url=https%3A%2F%2Fgithub.com%2Flme4%2Flme4%2Fcommit%2F8be641b7a1fd5b6e6ac962552add13e29bb5ff5b&data=05%7C02%7Ctherneau%40mayo.edu%7C2a013c76b6014f6962c108dc8d09bfe2%7Ca25fff9c3f634fb29a8ad9bdd0321f9a%7C0%7C0%7C638540320365706612%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C60000%7C%7C%7C&sdata=3OfJDIvrciY0w0uI0W0KT%2BfPfgezqsmOHPD1R2Gynyo%3D&reserved=0
+>
+> The crash should go away if you update or at least reinstall lme4 from
+> source.
+>
+
+
