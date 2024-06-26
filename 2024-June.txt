@@ -5935,3 +5935,1443 @@ mailto: erinm.hodgess at gmail.com
 	[[alternative HTML version deleted]]
 
 
+From D@v|d@McArthur@2 @end|ng |rom g|@@gow@@c@uk  Tue Jun 25 11:42:59 2024
+From: D@v|d@McArthur@2 @end|ng |rom g|@@gow@@c@uk (David McArthur)
+Date: Tue, 25 Jun 2024 09:42:59 +0000
+Subject: [Rd] Creating a text-based device/output format
+Message-ID: <CWLP302MB034975D5EFA31892D896E1F3CAD52@CWLP302MB0349.GBRP302.PROD.OUTLOOK.COM>
+
+Hi there, I hope I am sending this message to the right list.
+
+This is a ?where should I start?? type question.
+
+I am a JavaScript developer, working on ideas for more accessible Maths and Stats coursework.  I have worked with RMarkdown and knitr extensively to create HTML coursework but I?m by no means an R developer!
+
+I recently came across a project called mermaid.js, which is designed for diagrams but has limited charting syntax:
+https://mermaid.js.org/syntax/xyChart.html
+
+This project aims to have plain text representation of graphics in markdown files, which when converted to HTML (either at compile time or at runtime), can turn these ?mermaid? code blocks into a diagram/plot via a JavaScript parser and plotting library.
+
+This has inspired me to attempt to create a proof-of-concept for R along these lines.
+
+For example this R code:
+
+library(ggplot2)
+library(palmerpenguins)
+
+ggplot(data, aes(x=body_mass_g,fill = species)) +
+  geom _histogram()
+
+Could output something like:
+
+title "The body mass (g) of penguin species"
+x-axis "Body mass (g)" 3000 --> 5550
+y-axis "Count" 0 --> 2
+histogram
+  Adelie [3000, 3250, 3400]
+  ChinStrap [3250, 3600]
+  Gentoo [4300, 5050, 5200, 5300, 5450]
+
+How should I go about this in R?  I feel I should be aiming to create a new ?device? or ?output format?, but I haven?t found any examples on how to do this.
+
+One of my colleagues suggested I hook into ggplot_build, but then of course the project would be limited to ggplot plots.
+
+Any help greatly appreciated ?
+
+Thanks,
+
+David McArthur
+School of Mathematics & Statistics
+University of Glasgow
+
+	[[alternative HTML version deleted]]
+
+
+From m@tthew@||d|er @end|ng |rom gm@||@com  Tue Jun 25 11:25:19 2024
+From: m@tthew@||d|er @end|ng |rom gm@||@com (Matthew Fidler)
+Date: Tue, 25 Jun 2024 11:25:19 +0200
+Subject: [Rd] SET_TYPEOF no longer allowed,
+ how should I call R from within C?
+Message-ID: <CAOmN8O77YVnWF0V4f9xt9u20pgL-him29WrdOkfR0bVE7EZ5vA@mail.gmail.com>
+
+Hi,
+
+I have adapted code to run R from within C from the writing R extensions
+here
+
+https://colinfay.me/writing-r-extensions/system-and-foreign-language-interfaces.html
+
+As a more comprehensive example of constructing an R call in C code and
+evaluating, consider the following fragment of printAttributes in
+src/main/print.c.
+
+    /* Need to construct a call to
+
+       print(CAR(a), digits=digits)
+
+       based on the R_print structure, then eval(call, env).
+
+       See do_docall for the template for this sort of thing.
+
+    */
+
+    SEXP s, t;
+
+    t = s = PROTECT(allocList(3));
+
+    SET_TYPEOF(s, LANGSXP);
+
+    SETCAR(t, install("print")); t = CDR(t);
+
+    SETCAR(t, CAR(a)); t = CDR(t);
+
+    SETCAR(t, ScalarInteger(digits));
+
+    SET_TAG(t, install("digits"));
+
+    eval(s, env);
+
+    UNPROTECT(1);
+
+At this point CAR(a) is the R object to be printed, the current attribute.
+There are three steps: the call is constructed as a pairlist of length 3,
+the list is filled in, and the expression represented by the pairlist is
+evaluated.
+
+A pairlist is quite distinct from a generic vector list, the only
+user-visible form of list in R. A pairlist is a linked list (with CDR(t)
+computing the next entry), with items (accessed by CAR(t)) and names or
+tags (set by SET_TAG). In this call there are to be three items, a symbol
+(pointing to the function to be called) and two argument values, the first
+unnamed and the second named. Setting the type to LANGSXP makes this a call
+which can be evaluated.
+
+
+
+New checks  tells me that this is no longer allowed since it was not part
+of the public api any longer.
+
+
+So, how does one call R from C then?
+
+Also should the writing R extensions be updated with the new approved
+approach?
+
+
+Thanks in advance.
+
+Matt
+
+	[[alternative HTML version deleted]]
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue Jun 25 14:35:38 2024
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 25 Jun 2024 14:35:38 +0200
+Subject: [Rd] SET_TYPEOF no longer allowed,
+ how should I call R from within C?
+In-Reply-To: <CAOmN8O77YVnWF0V4f9xt9u20pgL-him29WrdOkfR0bVE7EZ5vA@mail.gmail.com>
+References: <CAOmN8O77YVnWF0V4f9xt9u20pgL-him29WrdOkfR0bVE7EZ5vA@mail.gmail.com>
+Message-ID: <c2b8e0c9-916a-4c71-a5d3-3090d682378e@gmail.com>
+
+
+On 6/25/24 11:25, Matthew Fidler wrote:
+> Hi,
+>
+> I have adapted code to run R from within C from the writing R extensions
+> here
+>
+> https://colinfay.me/writing-r-extensions/system-and-foreign-language-interfaces.html
+>
+> As a more comprehensive example of constructing an R call in C code and
+> evaluating, consider the following fragment of printAttributes in
+> src/main/print.c.
+>
+>      /* Need to construct a call to
+>
+>         print(CAR(a), digits=digits)
+>
+>         based on the R_print structure, then eval(call, env).
+>
+>         See do_docall for the template for this sort of thing.
+>
+>      */
+>
+>      SEXP s, t;
+>
+>      t = s = PROTECT(allocList(3));
+>
+>      SET_TYPEOF(s, LANGSXP);
+>
+>      SETCAR(t, install("print")); t = CDR(t);
+>
+>      SETCAR(t, CAR(a)); t = CDR(t);
+>
+>      SETCAR(t, ScalarInteger(digits));
+>
+>      SET_TAG(t, install("digits"));
+>
+>      eval(s, env);
+>
+>      UNPROTECT(1);
+>
+> At this point CAR(a) is the R object to be printed, the current attribute.
+> There are three steps: the call is constructed as a pairlist of length 3,
+> the list is filled in, and the expression represented by the pairlist is
+> evaluated.
+>
+> A pairlist is quite distinct from a generic vector list, the only
+> user-visible form of list in R. A pairlist is a linked list (with CDR(t)
+> computing the next entry), with items (accessed by CAR(t)) and names or
+> tags (set by SET_TAG). In this call there are to be three items, a symbol
+> (pointing to the function to be called) and two argument values, the first
+> unnamed and the second named. Setting the type to LANGSXP makes this a call
+> which can be evaluated.
+>
+>
+>
+> New checks  tells me that this is no longer allowed since it was not part
+> of the public api any longer.
+>
+>
+> So, how does one call R from C then?
+>
+> Also should the writing R extensions be updated with the new approved
+> approach?
+
+Please check the current Writing R Extensions from the official 
+location. It has an updated version of the example using allocLang.
+
+https://cran.r-project.org/doc/manuals/r-release/R-exts.html#Evaluating-R-expressions-from-C
+https://cran.r-project.org/doc/manuals/r-devel/R-exts.html#Evaluating-R-expressions-from-C
+
+Best
+Tomas
+
+>
+>
+> Thanks in advance.
+>
+> Matt
+>
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From er|cjberger @end|ng |rom gm@||@com  Tue Jun 25 14:42:15 2024
+From: er|cjberger @end|ng |rom gm@||@com (Eric Berger)
+Date: Tue, 25 Jun 2024 15:42:15 +0300
+Subject: [Rd] Creating a text-based device/output format
+In-Reply-To: <CWLP302MB034975D5EFA31892D896E1F3CAD52@CWLP302MB0349.GBRP302.PROD.OUTLOOK.COM>
+References: <CWLP302MB034975D5EFA31892D896E1F3CAD52@CWLP302MB0349.GBRP302.PROD.OUTLOOK.COM>
+Message-ID: <CAGgJW74QK-AgWnCS8+wA4cUxiQODR3rteWhaFqhGFWEV82toBg@mail.gmail.com>
+
+You might get more/additional feedback from the r-help list:
+
+r-help at r-project.org
+
+
+On Tue, Jun 25, 2024 at 2:18?PM David McArthur <
+David.McArthur.2 at glasgow.ac.uk> wrote:
+
+> Hi there, I hope I am sending this message to the right list.
+>
+> This is a ?where should I start?? type question.
+>
+> I am a JavaScript developer, working on ideas for more accessible Maths
+> and Stats coursework.  I have worked with RMarkdown and knitr extensively
+> to create HTML coursework but I?m by no means an R developer!
+>
+> I recently came across a project called mermaid.js, which is designed for
+> diagrams but has limited charting syntax:
+> https://mermaid.js.org/syntax/xyChart.html
+>
+> This project aims to have plain text representation of graphics in
+> markdown files, which when converted to HTML (either at compile time or at
+> runtime), can turn these ?mermaid? code blocks into a diagram/plot via a
+> JavaScript parser and plotting library.
+>
+> This has inspired me to attempt to create a proof-of-concept for R along
+> these lines.
+>
+> For example this R code:
+>
+> library(ggplot2)
+> library(palmerpenguins)
+>
+> ggplot(data, aes(x=body_mass_g,fill = species)) +
+>   geom _histogram()
+>
+> Could output something like:
+>
+> title "The body mass (g) of penguin species"
+> x-axis "Body mass (g)" 3000 --> 5550
+> y-axis "Count" 0 --> 2
+> histogram
+>   Adelie [3000, 3250, 3400]
+>   ChinStrap [3250, 3600]
+>   Gentoo [4300, 5050, 5200, 5300, 5450]
+>
+> How should I go about this in R?  I feel I should be aiming to create a
+> new ?device? or ?output format?, but I haven?t found any examples on how to
+> do this.
+>
+> One of my colleagues suggested I hook into ggplot_build, but then of
+> course the project would be limited to ggplot plots.
+>
+> Any help greatly appreciated ?
+>
+> Thanks,
+>
+> David McArthur
+> School of Mathematics & Statistics
+> University of Glasgow
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From |kry|ov @end|ng |rom d|@root@org  Tue Jun 25 15:23:25 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Tue, 25 Jun 2024 16:23:25 +0300
+Subject: [Rd] Creating a text-based device/output format
+In-Reply-To: <CWLP302MB034975D5EFA31892D896E1F3CAD52@CWLP302MB0349.GBRP302.PROD.OUTLOOK.COM>
+References: <CWLP302MB034975D5EFA31892D896E1F3CAD52@CWLP302MB0349.GBRP302.PROD.OUTLOOK.COM>
+Message-ID: <20240625162325.0abfa9d9@arachnoid>
+
+? Tue, 25 Jun 2024 09:42:59 +0000
+David McArthur <David.McArthur.2 at glasgow.ac.uk> ?????:
+
+> ggplot(data, aes(x=body_mass_g,fill = species)) +
+>   geom _histogram()
+> 
+> Could output something like:
+> 
+> title "The body mass (g) of penguin species"
+> x-axis "Body mass (g)" 3000 --> 5550
+> y-axis "Count" 0 --> 2
+> histogram
+>   Adelie [3000, 3250, 3400]
+>   ChinStrap [3250, 3600]
+>   Gentoo [4300, 5050, 5200, 5300, 5450]
+> 
+> How should I go about this in R?
+
+R graphics devices are very low-level:
+https://cran.r-project.org/doc/manuals/r-devel/R-ints.html#Graphics-devices
+
+Instead of drawing histograms, they are asked to draw points, lines,
+polygons, and text. If you're curious what it's like to implement such
+a device, packages such as 'devEMF' and 'ragg' will provide examples.
+
+You could instead go the 'txtplot' route and implement your own
+functions that would return text in mermaid syntax, unrelated to
+existing plotting engines. An alternative would be to carefully
+deconstruct 'ggplot2' and 'lattice' objects and translate what you can
+into mermaid diagrams, but that will always be limited to the
+intersection of the source and target featuresets.
+
+-- 
+Best regards,
+Ivan
+
+
+From r|p|ey @end|ng |rom @t@t@@ox@@c@uk  Tue Jun 25 15:24:05 2024
+From: r|p|ey @end|ng |rom @t@t@@ox@@c@uk (Prof Brian Ripley)
+Date: Tue, 25 Jun 2024 14:24:05 +0100
+Subject: [Rd] Creating a text-based device/output format
+In-Reply-To: <CWLP302MB034975D5EFA31892D896E1F3CAD52@CWLP302MB0349.GBRP302.PROD.OUTLOOK.COM>
+References: <CWLP302MB034975D5EFA31892D896E1F3CAD52@CWLP302MB0349.GBRP302.PROD.OUTLOOK.COM>
+Message-ID: <cdfd6f76-4d50-4de6-bccb-4b2d5f2c10be@stats.ox.ac.uk>
+
+On 25/06/2024 10:42, David McArthur wrote:
+> Hi there, I hope I am sending this message to the right list.
+
+This or r-package-devel.
+
+> This is a ?where should I start?? type question.
+
+With the R-Internals manual and the grDevices sources and the examples 
+there.
+
+Another possibility is to translate one of the several 'text-based' 
+graphics formats already supported, including
+
+postscript
+ASCII PDF
+svg
+xfig
+pictex
+
+and others in packages (R2SWF devEMF httpgd tikzDevice ...).
+
+The quality of R graphics depends heavily on the precise positioning of 
+(possibly non-ASCII) text, and so font-handling is by far the hardest 
+part of writing a graphics device (and I have written several). So it 
+makes sense to leverage what is already done, by modifying sources or 
+translating output.  This would have been easier if graphics standards 
+and R-at-the-time supported UTF-8, and the lack of such support is why 
+some of these have been deprecated.
+
+
+> 
+> I am a JavaScript developer, working on ideas for more accessible Maths and Stats coursework.  I have worked with RMarkdown and knitr extensively to create HTML coursework but I?m by no means an R developer!
+> 
+> I recently came across a project called mermaid.js, which is designed for diagrams but has limited charting syntax:
+> https://mermaid.js.org/syntax/xyChart.html
+> 
+> This project aims to have plain text representation of graphics in markdown files, which when converted to HTML (either at compile time or at runtime), can turn these ?mermaid? code blocks into a diagram/plot via a JavaScript parser and plotting library.
+> 
+> This has inspired me to attempt to create a proof-of-concept for R along these lines.
+> 
+> For example this R code:
+> 
+> library(ggplot2)
+> library(palmerpenguins)
+> 
+> ggplot(data, aes(x=body_mass_g,fill = species)) +
+>    geom _histogram()
+> 
+> Could output something like:
+> 
+> title "The body mass (g) of penguin species"
+> x-axis "Body mass (g)" 3000 --> 5550
+> y-axis "Count" 0 --> 2
+> histogram
+>    Adelie [3000, 3250, 3400]
+>    ChinStrap [3250, 3600]
+>    Gentoo [4300, 5050, 5200, 5300, 5450]
+> 
+> How should I go about this in R?  I feel I should be aiming to create a new ?device? or ?output format?, but I haven?t found any examples on how to do this.
+> 
+> One of my colleagues suggested I hook into ggplot_build, but then of course the project would be limited to ggplot plots.
+> 
+> Any help greatly appreciated ?
+> 
+> Thanks,
+> 
+> David McArthur
+> School of Mathematics & Statistics
+> University of Glasgow
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Brian D. Ripley,                  ripley at stats.ox.ac.uk
+Emeritus Professor of Applied Statistics, University of Oxford
+
+
+From jo@|@h@p@rry @end|ng |rom gm@||@com  Tue Jun 25 15:37:06 2024
+From: jo@|@h@p@rry @end|ng |rom gm@||@com (Josiah Parry)
+Date: Tue, 25 Jun 2024 09:37:06 -0400
+Subject: [Rd] Non-API updates
+Message-ID: <CAL3ufUJtix-Qi0DbnJWR-_hVSwb3nuh08qH4rjgzF8KAsUhZcg@mail.gmail.com>
+
+Hey folks,
+
+I'm sure many of you all woke to the same message I did: "Please correct
+before 2024-07-09 to safely retain your package on CRAN" caused by Non-API
+changes to CRAN.
+
+This is quite unexpected as Luke Tierney's June 6th email writes (emphasis
+mine):
+
+ "An *experimental* *effort* is underway to add annotations to the WRE..."
+
+"*Once things have gelled a bit more *I hope to turn this into a blog
+post that will include some examples of moving non-API entry point
+uses into compliance."
+
+Since then there has not been any indication of stabilization of the
+Non-API changes nor has there been a blog post outlining how to migrate. As
+things have been coming and going from the Non-API changes for quite some
+time now, we (the royal we, here) have been waiting for an official
+announcement from CRAN on the stabilizing changes.
+
+*Can we extend this very short notice to handle the Non-API changes before
+removal from CRAN? *
+
+In the case of the 3 packages I have to fix within 2 weeks, these are all
+using Rust. These changes require upstream changes to the extendr library.
+There are other packages that are also affected here. Making these changes
+is a delicate act and requires care and focus. All of the extendr
+developers work full time and cannot make addressing these changes their
+only priority for the next 2 weeks.
+
+Additionally, a blog post with "examples of moving non-API entry point uses
+into compliance" would be very helpful in this endeavor.
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Tue Jun 25 15:57:34 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 25 Jun 2024 09:57:34 -0400
+Subject: [Rd] SET_TYPEOF no longer allowed,
+ how should I call R from within C?
+In-Reply-To: <CAOmN8O77YVnWF0V4f9xt9u20pgL-him29WrdOkfR0bVE7EZ5vA@mail.gmail.com>
+References: <CAOmN8O77YVnWF0V4f9xt9u20pgL-him29WrdOkfR0bVE7EZ5vA@mail.gmail.com>
+Message-ID: <9bf09121-7de1-4b7f-91a6-1784615331b5@gmail.com>
+
+On 2024-06-25 5:25 a.m., Matthew Fidler wrote:
+> Hi,
+> 
+> I have adapted code to run R from within C from the writing R extensions
+> here
+> 
+> https://colinfay.me/writing-r-extensions/system-and-foreign-language-interfaces.html
+
+That was written in 2017.  You should use the one that came with R, or 
+even better, the one that comes with the development version of R.
+
+Duncan Murdoch
+
+> 
+> As a more comprehensive example of constructing an R call in C code and
+> evaluating, consider the following fragment of printAttributes in
+> src/main/print.c.
+> 
+>      /* Need to construct a call to
+> 
+>         print(CAR(a), digits=digits)
+> 
+>         based on the R_print structure, then eval(call, env).
+> 
+>         See do_docall for the template for this sort of thing.
+> 
+>      */
+> 
+>      SEXP s, t;
+> 
+>      t = s = PROTECT(allocList(3));
+> 
+>      SET_TYPEOF(s, LANGSXP);
+> 
+>      SETCAR(t, install("print")); t = CDR(t);
+> 
+>      SETCAR(t, CAR(a)); t = CDR(t);
+> 
+>      SETCAR(t, ScalarInteger(digits));
+> 
+>      SET_TAG(t, install("digits"));
+> 
+>      eval(s, env);
+> 
+>      UNPROTECT(1);
+> 
+> At this point CAR(a) is the R object to be printed, the current attribute.
+> There are three steps: the call is constructed as a pairlist of length 3,
+> the list is filled in, and the expression represented by the pairlist is
+> evaluated.
+> 
+> A pairlist is quite distinct from a generic vector list, the only
+> user-visible form of list in R. A pairlist is a linked list (with CDR(t)
+> computing the next entry), with items (accessed by CAR(t)) and names or
+> tags (set by SET_TAG). In this call there are to be three items, a symbol
+> (pointing to the function to be called) and two argument values, the first
+> unnamed and the second named. Setting the type to LANGSXP makes this a call
+> which can be evaluated.
+> 
+> 
+> 
+> New checks  tells me that this is no longer allowed since it was not part
+> of the public api any longer.
+> 
+> 
+> So, how does one call R from C then?
+> 
+> Also should the writing R extensions be updated with the new approved
+> approach?
+> 
+> 
+> Thanks in advance.
+> 
+> Matt
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From D@v|d@McArthur@2 @end|ng |rom g|@@gow@@c@uk  Tue Jun 25 17:42:38 2024
+From: D@v|d@McArthur@2 @end|ng |rom g|@@gow@@c@uk (David McArthur)
+Date: Tue, 25 Jun 2024 15:42:38 +0000
+Subject: [Rd] Creating a text-based device/output format
+In-Reply-To: <cdfd6f76-4d50-4de6-bccb-4b2d5f2c10be@stats.ox.ac.uk>
+References: <CWLP302MB034975D5EFA31892D896E1F3CAD52@CWLP302MB0349.GBRP302.PROD.OUTLOOK.COM>
+ <cdfd6f76-4d50-4de6-bccb-4b2d5f2c10be@stats.ox.ac.uk>
+Message-ID: <CWLP302MB034925F497F1989062B4A42ACAD52@CWLP302MB0349.GBRP302.PROD.OUTLOOK.COM>
+
+Many thanks for your reply, Brian.
+
+Ivan has suggested an R device is probably not where I should aim to make this mermaid plain text syntax as by this point I would be dealing with shape primitives instead of, eg. a histogram and its values.  This makes sense to me, but if you have other ideas please let me know.
+
+I?ll aim to write something to output mermaid-like syntax from ggplot2 as an initial experiment, probably in toml format for ease of serialising and parsing.  If this concept works, and I get feedback that it is a helpful addition to accessibility from visually impaired students in my research group, I?ll report back here with some demos.
+
+Thanks again,
+
+David McArthur
+School of Mathematics & Statistics
+University of Glasgow
+
+From: Prof Brian Ripley <ripley at stats.ox.ac.uk>
+Date: Tuesday, 25 June 2024 at 14:24
+To: David McArthur <David.McArthur.2 at glasgow.ac.uk>, r-devel at r-project.org <r-devel at r-project.org>
+Subject: Re: [Rd] Creating a text-based device/output format
+On 25/06/2024 10:42, David McArthur wrote:
+> Hi there, I hope I am sending this message to the right list.
+
+This or r-package-devel.
+
+> This is a ?where should I start?? type question.
+
+With the R-Internals manual and the grDevices sources and the examples
+there.
+
+Another possibility is to translate one of the several 'text-based'
+graphics formats already supported, including
+
+postscript
+ASCII PDF
+svg
+xfig
+pictex
+
+and others in packages (R2SWF devEMF httpgd tikzDevice ...).
+
+The quality of R graphics depends heavily on the precise positioning of
+(possibly non-ASCII) text, and so font-handling is by far the hardest
+part of writing a graphics device (and I have written several). So it
+makes sense to leverage what is already done, by modifying sources or
+translating output.  This would have been easier if graphics standards
+and R-at-the-time supported UTF-8, and the lack of such support is why
+some of these have been deprecated.
+
+
+>
+> I am a JavaScript developer, working on ideas for more accessible Maths and Stats coursework.  I have worked with RMarkdown and knitr extensively to create HTML coursework but I?m by no means an R developer!
+>
+> I recently came across a project called mermaid.js, which is designed for diagrams but has limited charting syntax:
+> https://eur03.safelinks.protection.outlook.com/?url=https%3A%2F%2Fmermaid.js.org%2Fsyntax%2FxyChart.html&data=05%7C02%7CDavid.McArthur.2%40glasgow.ac.uk%7Cc73e08abcba743458fd708dc951a1786%7C6e725c29763a4f5081f22e254f0133c8%7C1%7C0%7C638549186500457747%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C0%7C%7C%7C&sdata=oHSSn%2BhGl7TFKT91TWsQB8MtDoSMplY8l8GJmv%2Bd8B4%3D&reserved=0<https://mermaid.js.org/syntax/xyChart.html>
+>
+> This project aims to have plain text representation of graphics in markdown files, which when converted to HTML (either at compile time or at runtime), can turn these ?mermaid? code blocks into a diagram/plot via a JavaScript parser and plotting library.
+>
+> This has inspired me to attempt to create a proof-of-concept for R along these lines.
+>
+> For example this R code:
+>
+> library(ggplot2)
+> library(palmerpenguins)
+>
+> ggplot(data, aes(x=body_mass_g,fill = species)) +
+>    geom _histogram()
+>
+> Could output something like:
+>
+> title "The body mass (g) of penguin species"
+> x-axis "Body mass (g)" 3000 --> 5550
+> y-axis "Count" 0 --> 2
+> histogram
+>    Adelie [3000, 3250, 3400]
+>    ChinStrap [3250, 3600]
+>    Gentoo [4300, 5050, 5200, 5300, 5450]
+>
+> How should I go about this in R?  I feel I should be aiming to create a new ?device? or ?output format?, but I haven?t found any examples on how to do this.
+>
+> One of my colleagues suggested I hook into ggplot_build, but then of course the project would be limited to ggplot plots.
+>
+> Any help greatly appreciated ?
+>
+> Thanks,
+>
+> David McArthur
+> School of Mathematics & Statistics
+> University of Glasgow
+>
+>        [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://eur03.safelinks.protection.outlook.com/?url=https%3A%2F%2Fstat.ethz.ch%2Fmailman%2Flistinfo%2Fr-devel&data=05%7C02%7CDavid.McArthur.2%40glasgow.ac.uk%7Cc73e08abcba743458fd708dc951a1786%7C6e725c29763a4f5081f22e254f0133c8%7C1%7C0%7C638549186500467131%7CUnknown%7CTWFpbGZsb3d8eyJWIjoiMC4wLjAwMDAiLCJQIjoiV2luMzIiLCJBTiI6Ik1haWwiLCJXVCI6Mn0%3D%7C0%7C%7C%7C&sdata=Km8OqjoWeDXhBsKild%2Brr4ZgRCId2nmZARzSItxkN7Y%3D&reserved=0<https://stat.ethz.ch/mailman/listinfo/r-devel>
+
+--
+Brian D. Ripley,                  ripley at stats.ox.ac.uk
+Emeritus Professor of Applied Statistics, University of Oxford
+
+	[[alternative HTML version deleted]]
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Tue Jun 25 18:10:55 2024
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Tue, 25 Jun 2024 11:10:55 -0500 (CDT)
+Subject: [Rd] [External]  Non-API updates
+In-Reply-To: <CAL3ufUJtix-Qi0DbnJWR-_hVSwb3nuh08qH4rjgzF8KAsUhZcg@mail.gmail.com>
+References: <CAL3ufUJtix-Qi0DbnJWR-_hVSwb3nuh08qH4rjgzF8KAsUhZcg@mail.gmail.com>
+Message-ID: <ac39a99e-c853-52bb-f0bd-82ea755ddc3@uiowa.edu>
+
+On Tue, 25 Jun 2024, Josiah Parry wrote:
+
+> Hey folks,
+>
+> I'm sure many of you all woke to the same message I did: "Please correct
+> before 2024-07-09 to safely retain your package on CRAN" caused by Non-API
+> changes to CRAN.
+>
+> This is quite unexpected as Luke Tierney's June 6th email writes (emphasis
+> mine):
+>
+> "An *experimental* *effort* is underway to add annotations to the WRE..."
+>
+> "*Once things have gelled a bit more *I hope to turn this into a blog
+> post that will include some examples of moving non-API entry point
+> uses into compliance."
+>
+> Since then there has not been any indication of stabilization of the
+> Non-API changes nor has there been a blog post outlining how to migrate. As
+> things have been coming and going from the Non-API changes for quite some
+> time now, we (the royal we, here) have been waiting for an official
+> announcement from CRAN on the stabilizing changes.
+
+I posted an update to this list a few days ago. If you missed it you
+can find it in the archive.
+
+> *Can we extend this very short notice to handle the Non-API changes before
+> removal from CRAN? *
+
+Timing decisions are up to CRAN.
+
+> In the case of the 3 packages I have to fix within 2 weeks, these are all
+> using Rust. These changes require upstream changes to the extendr library.
+> There are other packages that are also affected here. Making these changes
+> is a delicate act and requires care and focus. All of the extendr
+> developers work full time and cannot make addressing these changes their
+> only priority for the next 2 weeks.
+
+Using non-API entry points is a choice that comes with risks. The ones
+leading to WARNINGs for your packages (PRSEEN and SYMVALUE)have been
+receiving NOTEs in check results for several weeks. Using
+tools:::checkPkgAPI you can see that your packages are referencing a
+lot of non-API entry points. Some of these may be added to the API,
+but most will not. This may be a good time to look into that.
+
+To minimize disruption we have been adding entry points to the API as
+long as it is safe to do so, in some cases against our better
+judgment. But ones that are unsafe to use will not be
+added. Eventually their declarations will be removed from public
+header files and they will be hidden when that is possible. Packages
+that have chosen to use these non-API entry points will have to adapt
+if they want to pass R CMD check. For now, we will try to first have
+use of these entry points result in NOTEs, and then WARNINGs. Once
+their declarations are removed and they are hidden, packages using
+them will fail to install.
+
+> Additionally, a blog post with "examples of moving non-API entry point uses
+> into compliance" would be very helpful in this endeavor.
+
+WRE now contains a section 'Moving into C API compliance'; that seems
+a better option for the moment given that things are still very much
+in flux. We will try to add to this section as needed. For the
+specific entry points generating WARNINGs for your packages the advice
+is simple: stop using them.
+
+Best,
+
+luke
+
+>
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu/
+
+
+From jo@|@h@p@rry @end|ng |rom gm@||@com  Tue Jun 25 18:25:21 2024
+From: jo@|@h@p@rry @end|ng |rom gm@||@com (Josiah Parry)
+Date: Tue, 25 Jun 2024 12:25:21 -0400
+Subject: [Rd] [External]  Non-API updates
+In-Reply-To: <ac39a99e-c853-52bb-f0bd-82ea755ddc3@uiowa.edu>
+References: <CAL3ufUJtix-Qi0DbnJWR-_hVSwb3nuh08qH4rjgzF8KAsUhZcg@mail.gmail.com>
+ <ac39a99e-c853-52bb-f0bd-82ea755ddc3@uiowa.edu>
+Message-ID: <CAL3ufUKcj00Mo2RDZfeN72aDDsnO4Y_TRyXzA6wrJ7Cp=nco8w@mail.gmail.com>
+
+"Stop using them" is pithy advice but far easier said than done!
+
+With respect to NOTES and WARN on CRAN, these do not result in any
+package maintainer notifications. The only notification that the developers
+receive is the threatening one that states that the packages will be
+removed
+from CRAN with a very short timeline.
+
+Is there a link you can provide regarding the "Moving into C compliance?" It
+cannot be found at https://cran.r-project.org/doc/manuals/R-exts.html.
+
+Given that there hasn't been a stable release with these changes, how are
+we
+to know these changes have been stabilized and begin working towards
+remedying them? These WARNs come from R-devel which is, as its name
+suggests,
+a development version which is vacillating daily.
+
+
+
+
+On Tue, Jun 25, 2024 at 12:10?PM <luke-tierney at uiowa.edu> wrote:
+
+> On Tue, 25 Jun 2024, Josiah Parry wrote:
+>
+> > Hey folks,
+> >
+> > I'm sure many of you all woke to the same message I did: "Please correct
+> > before 2024-07-09 to safely retain your package on CRAN" caused by
+> Non-API
+> > changes to CRAN.
+> >
+> > This is quite unexpected as Luke Tierney's June 6th email writes
+> (emphasis
+> > mine):
+> >
+> > "An *experimental* *effort* is underway to add annotations to the WRE..."
+> >
+> > "*Once things have gelled a bit more *I hope to turn this into a blog
+> > post that will include some examples of moving non-API entry point
+> > uses into compliance."
+> >
+> > Since then there has not been any indication of stabilization of the
+> > Non-API changes nor has there been a blog post outlining how to migrate.
+> As
+> > things have been coming and going from the Non-API changes for quite some
+> > time now, we (the royal we, here) have been waiting for an official
+> > announcement from CRAN on the stabilizing changes.
+>
+> I posted an update to this list a few days ago. If you missed it you
+> can find it in the archive.
+>
+> > *Can we extend this very short notice to handle the Non-API changes
+> before
+> > removal from CRAN? *
+>
+> Timing decisions are up to CRAN.
+>
+> > In the case of the 3 packages I have to fix within 2 weeks, these are all
+> > using Rust. These changes require upstream changes to the extendr
+> library.
+> > There are other packages that are also affected here. Making these
+> changes
+> > is a delicate act and requires care and focus. All of the extendr
+> > developers work full time and cannot make addressing these changes their
+> > only priority for the next 2 weeks.
+>
+> Using non-API entry points is a choice that comes with risks. The ones
+> leading to WARNINGs for your packages (PRSEEN and SYMVALUE)have been
+> receiving NOTEs in check results for several weeks. Using
+> tools:::checkPkgAPI you can see that your packages are referencing a
+> lot of non-API entry points. Some of these may be added to the API,
+> but most will not. This may be a good time to look into that.
+>
+> To minimize disruption we have been adding entry points to the API as
+> long as it is safe to do so, in some cases against our better
+> judgment. But ones that are unsafe to use will not be
+> added. Eventually their declarations will be removed from public
+> header files and they will be hidden when that is possible. Packages
+> that have chosen to use these non-API entry points will have to adapt
+> if they want to pass R CMD check. For now, we will try to first have
+> use of these entry points result in NOTEs, and then WARNINGs. Once
+> their declarations are removed and they are hidden, packages using
+> them will fail to install.
+>
+> > Additionally, a blog post with "examples of moving non-API entry point
+> uses
+> > into compliance" would be very helpful in this endeavor.
+>
+> WRE now contains a section 'Moving into C API compliance'; that seems
+> a better option for the moment given that things are still very much
+> in flux. We will try to add to this section as needed. For the
+> specific entry points generating WARNINGs for your packages the advice
+> is simple: stop using them.
+>
+> Best,
+>
+> luke
+>
+> >
+> >       [[alternative HTML version deleted]]
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+>
+> --
+> Luke Tierney
+> Ralph E. Wareham Professor of Mathematical Sciences
+> University of Iowa                  Phone:             319-335-3386
+> Department of Statistics and        Fax:               319-335-3017
+>     Actuarial Science
+> 241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+> Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu/
+>
+
+	[[alternative HTML version deleted]]
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue Jun 25 18:31:35 2024
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 25 Jun 2024 18:31:35 +0200
+Subject: [Rd] [External] Non-API updates
+In-Reply-To: <CAL3ufUKcj00Mo2RDZfeN72aDDsnO4Y_TRyXzA6wrJ7Cp=nco8w@mail.gmail.com>
+References: <CAL3ufUJtix-Qi0DbnJWR-_hVSwb3nuh08qH4rjgzF8KAsUhZcg@mail.gmail.com>
+ <ac39a99e-c853-52bb-f0bd-82ea755ddc3@uiowa.edu>
+ <CAL3ufUKcj00Mo2RDZfeN72aDDsnO4Y_TRyXzA6wrJ7Cp=nco8w@mail.gmail.com>
+Message-ID: <18bd6e57-cdcd-4d23-babd-6892ed0f517c@gmail.com>
+
+
+On 6/25/24 18:25, Josiah Parry wrote:
+> "Stop using them" is pithy advice but far easier said than done!
+>
+> With respect to NOTES and WARN on CRAN, these do not result in any
+> package maintainer notifications. The only notification that the developers
+> receive is the threatening one that states that the packages will be
+> removed
+> from CRAN with a very short timeline.
+>
+> Is there a link you can provide regarding the "Moving into C compliance?" It
+> cannot be found at https://cran.r-project.org/doc/manuals/R-exts.html.
+
+https://cran.r-project.org/doc/manuals/r-devel/R-exts.html#Moving-into-C-API-compliance
+
+Tomas
+
+> Given that there hasn't been a stable release with these changes, how are
+> we
+> to know these changes have been stabilized and begin working towards
+> remedying them? These WARNs come from R-devel which is, as its name
+> suggests,
+> a development version which is vacillating daily.
+>
+>
+>
+>
+> On Tue, Jun 25, 2024 at 12:10?PM <luke-tierney at uiowa.edu> wrote:
+>
+>> On Tue, 25 Jun 2024, Josiah Parry wrote:
+>>
+>>> Hey folks,
+>>>
+>>> I'm sure many of you all woke to the same message I did: "Please correct
+>>> before 2024-07-09 to safely retain your package on CRAN" caused by
+>> Non-API
+>>> changes to CRAN.
+>>>
+>>> This is quite unexpected as Luke Tierney's June 6th email writes
+>> (emphasis
+>>> mine):
+>>>
+>>> "An *experimental* *effort* is underway to add annotations to the WRE..."
+>>>
+>>> "*Once things have gelled a bit more *I hope to turn this into a blog
+>>> post that will include some examples of moving non-API entry point
+>>> uses into compliance."
+>>>
+>>> Since then there has not been any indication of stabilization of the
+>>> Non-API changes nor has there been a blog post outlining how to migrate.
+>> As
+>>> things have been coming and going from the Non-API changes for quite some
+>>> time now, we (the royal we, here) have been waiting for an official
+>>> announcement from CRAN on the stabilizing changes.
+>> I posted an update to this list a few days ago. If you missed it you
+>> can find it in the archive.
+>>
+>>> *Can we extend this very short notice to handle the Non-API changes
+>> before
+>>> removal from CRAN? *
+>> Timing decisions are up to CRAN.
+>>
+>>> In the case of the 3 packages I have to fix within 2 weeks, these are all
+>>> using Rust. These changes require upstream changes to the extendr
+>> library.
+>>> There are other packages that are also affected here. Making these
+>> changes
+>>> is a delicate act and requires care and focus. All of the extendr
+>>> developers work full time and cannot make addressing these changes their
+>>> only priority for the next 2 weeks.
+>> Using non-API entry points is a choice that comes with risks. The ones
+>> leading to WARNINGs for your packages (PRSEEN and SYMVALUE)have been
+>> receiving NOTEs in check results for several weeks. Using
+>> tools:::checkPkgAPI you can see that your packages are referencing a
+>> lot of non-API entry points. Some of these may be added to the API,
+>> but most will not. This may be a good time to look into that.
+>>
+>> To minimize disruption we have been adding entry points to the API as
+>> long as it is safe to do so, in some cases against our better
+>> judgment. But ones that are unsafe to use will not be
+>> added. Eventually their declarations will be removed from public
+>> header files and they will be hidden when that is possible. Packages
+>> that have chosen to use these non-API entry points will have to adapt
+>> if they want to pass R CMD check. For now, we will try to first have
+>> use of these entry points result in NOTEs, and then WARNINGs. Once
+>> their declarations are removed and they are hidden, packages using
+>> them will fail to install.
+>>
+>>> Additionally, a blog post with "examples of moving non-API entry point
+>> uses
+>>> into compliance" would be very helpful in this endeavor.
+>> WRE now contains a section 'Moving into C API compliance'; that seems
+>> a better option for the moment given that things are still very much
+>> in flux. We will try to add to this section as needed. For the
+>> specific entry points generating WARNINGs for your packages the advice
+>> is simple: stop using them.
+>>
+>> Best,
+>>
+>> luke
+>>
+>>>        [[alternative HTML version deleted]]
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>
+>> --
+>> Luke Tierney
+>> Ralph E. Wareham Professor of Mathematical Sciences
+>> University of Iowa                  Phone:             319-335-3386
+>> Department of Statistics and        Fax:               319-335-3017
+>>      Actuarial Science
+>> 241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+>> Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu/
+>>
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From pro|jcn@@h @end|ng |rom gm@||@com  Tue Jun 25 18:36:11 2024
+From: pro|jcn@@h @end|ng |rom gm@||@com (J C Nash)
+Date: Tue, 25 Jun 2024 12:36:11 -0400
+Subject: [Rd] [External] Non-API updates
+In-Reply-To: <CAL3ufUKcj00Mo2RDZfeN72aDDsnO4Y_TRyXzA6wrJ7Cp=nco8w@mail.gmail.com>
+References: <CAL3ufUJtix-Qi0DbnJWR-_hVSwb3nuh08qH4rjgzF8KAsUhZcg@mail.gmail.com>
+ <ac39a99e-c853-52bb-f0bd-82ea755ddc3@uiowa.edu>
+ <CAL3ufUKcj00Mo2RDZfeN72aDDsnO4Y_TRyXzA6wrJ7Cp=nco8w@mail.gmail.com>
+Message-ID: <0c548d50-8af7-4989-9c28-c477dab87783@gmail.com>
+
+
+
+On 2024-06-25 12:25, Josiah Parry wrote:
+> "Stop using them" is pithy advice but far easier said than done!
+> 
+> With respect to NOTES and WARN on CRAN, these do not result in any
+> package maintainer notifications. The only notification that the developers
+> receive is the threatening one that states that the packages will be
+> removed
+> from CRAN with a very short timeline.
+> 
+> Is there a link you can provide regarding the "Moving into C compliance?" It
+> cannot be found at https://cran.r-project.org/doc/manuals/R-exts.html.
+> 
+> Given that there hasn't been a stable release with these changes, how are
+> we
+> to know these changes have been stabilized and begin working towards
+> remedying them? These WARNs come from R-devel which is, as its name
+> suggests,
+> a development version which is vacillating daily.
+> 
+> 
+> 
+> 
+> On Tue, Jun 25, 2024 at 12:10?PM <luke-tierney at uiowa.edu> wrote:
+> 
+>> On Tue, 25 Jun 2024, Josiah Parry wrote:
+>>
+>>> Hey folks,
+>>>
+>>> I'm sure many of you all woke to the same message I did: "Please correct
+>>> before 2024-07-09 to safely retain your package on CRAN" caused by
+>> Non-API
+>>> changes to CRAN.
+>>>
+>>> This is quite unexpected as Luke Tierney's June 6th email writes
+>> (emphasis
+>>> mine):
+>>>
+>>> "An *experimental* *effort* is underway to add annotations to the WRE..."
+>>>
+>>> "*Once things have gelled a bit more *I hope to turn this into a blog
+>>> post that will include some examples of moving non-API entry point
+>>> uses into compliance."
+>>>
+>>> Since then there has not been any indication of stabilization of the
+>>> Non-API changes nor has there been a blog post outlining how to migrate.
+>> As
+>>> things have been coming and going from the Non-API changes for quite some
+>>> time now, we (the royal we, here) have been waiting for an official
+>>> announcement from CRAN on the stabilizing changes.
+>>
+>> I posted an update to this list a few days ago. If you missed it you
+>> can find it in the archive.
+>>
+>>> *Can we extend this very short notice to handle the Non-API changes
+>> before
+>>> removal from CRAN? *
+>>
+>> Timing decisions are up to CRAN.
+>>
+>>> In the case of the 3 packages I have to fix within 2 weeks, these are all
+>>> using Rust. These changes require upstream changes to the extendr
+>> library.
+>>> There are other packages that are also affected here. Making these
+>> changes
+>>> is a delicate act and requires care and focus. All of the extendr
+>>> developers work full time and cannot make addressing these changes their
+>>> only priority for the next 2 weeks.
+>>
+>> Using non-API entry points is a choice that comes with risks. The ones
+>> leading to WARNINGs for your packages (PRSEEN and SYMVALUE)have been
+>> receiving NOTEs in check results for several weeks. Using
+>> tools:::checkPkgAPI you can see that your packages are referencing a
+>> lot of non-API entry points. Some of these may be added to the API,
+>> but most will not. This may be a good time to look into that.
+>>
+>> To minimize disruption we have been adding entry points to the API as
+>> long as it is safe to do so, in some cases against our better
+>> judgment. But ones that are unsafe to use will not be
+>> added. Eventually their declarations will be removed from public
+>> header files and they will be hidden when that is possible. Packages
+>> that have chosen to use these non-API entry points will have to adapt
+>> if they want to pass R CMD check. For now, we will try to first have
+>> use of these entry points result in NOTEs, and then WARNINGs. Once
+>> their declarations are removed and they are hidden, packages using
+>> them will fail to install.
+>>
+>>> Additionally, a blog post with "examples of moving non-API entry point
+>> uses
+>>> into compliance" would be very helpful in this endeavor.
+>>
+>> WRE now contains a section 'Moving into C API compliance'; that seems
+>> a better option for the moment given that things are still very much
+>> in flux. We will try to add to this section as needed. For the
+>> specific entry points generating WARNINGs for your packages the advice
+>> is simple: stop using them.
+>>
+>> Best,
+>>
+>> luke
+>>
+>>>
+>>>        [[alternative HTML version deleted]]
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>>
+>>
+>> --
+>> Luke Tierney
+>> Ralph E. Wareham Professor of Mathematical Sciences
+>> University of Iowa                  Phone:             319-335-3386
+>> Department of Statistics and        Fax:               319-335-3017
+>>      Actuarial Science
+>> 241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+>> Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu/
+>>
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From pro|jcn@@h @end|ng |rom gm@||@com  Tue Jun 25 18:37:20 2024
+From: pro|jcn@@h @end|ng |rom gm@||@com (J C Nash)
+Date: Tue, 25 Jun 2024 12:37:20 -0400
+Subject: [Rd] [External] Non-API updates
+In-Reply-To: <ac39a99e-c853-52bb-f0bd-82ea755ddc3@uiowa.edu>
+References: <CAL3ufUJtix-Qi0DbnJWR-_hVSwb3nuh08qH4rjgzF8KAsUhZcg@mail.gmail.com>
+ <ac39a99e-c853-52bb-f0bd-82ea755ddc3@uiowa.edu>
+Message-ID: <e796cea6-b228-4308-9d07-b1dec555264e@gmail.com>
+
+It is probably important to note that the WRE with the new section on C API compliance is
+in the R-Devel docs, not the current ones.
+
+JN
+
+On 2024-06-25 12:10, luke-tierney--- via R-devel wrote:
+> On Tue, 25 Jun 2024, Josiah Parry wrote:
+> 
+>> Hey folks,
+>>
+>> I'm sure many of you all woke to the same message I did: "Please correct
+>> before 2024-07-09 to safely retain your package on CRAN" caused by Non-API
+>> changes to CRAN.
+>>
+>> This is quite unexpected as Luke Tierney's June 6th email writes (emphasis
+>> mine):
+>>
+>> "An *experimental* *effort* is underway to add annotations to the WRE..."
+>>
+>> "*Once things have gelled a bit more *I hope to turn this into a blog
+>> post that will include some examples of moving non-API entry point
+>> uses into compliance."
+>>
+>> Since then there has not been any indication of stabilization of the
+>> Non-API changes nor has there been a blog post outlining how to migrate. As
+>> things have been coming and going from the Non-API changes for quite some
+>> time now, we (the royal we, here) have been waiting for an official
+>> announcement from CRAN on the stabilizing changes.
+> 
+> I posted an update to this list a few days ago. If you missed it you
+> can find it in the archive.
+> 
+>> *Can we extend this very short notice to handle the Non-API changes before
+>> removal from CRAN? *
+> 
+> Timing decisions are up to CRAN.
+> 
+>> In the case of the 3 packages I have to fix within 2 weeks, these are all
+>> using Rust. These changes require upstream changes to the extendr library.
+>> There are other packages that are also affected here. Making these changes
+>> is a delicate act and requires care and focus. All of the extendr
+>> developers work full time and cannot make addressing these changes their
+>> only priority for the next 2 weeks.
+> 
+> Using non-API entry points is a choice that comes with risks. The ones
+> leading to WARNINGs for your packages (PRSEEN and SYMVALUE)have been
+> receiving NOTEs in check results for several weeks. Using
+> tools:::checkPkgAPI you can see that your packages are referencing a
+> lot of non-API entry points. Some of these may be added to the API,
+> but most will not. This may be a good time to look into that.
+> 
+> To minimize disruption we have been adding entry points to the API as
+> long as it is safe to do so, in some cases against our better
+> judgment. But ones that are unsafe to use will not be
+> added. Eventually their declarations will be removed from public
+> header files and they will be hidden when that is possible. Packages
+> that have chosen to use these non-API entry points will have to adapt
+> if they want to pass R CMD check. For now, we will try to first have
+> use of these entry points result in NOTEs, and then WARNINGs. Once
+> their declarations are removed and they are hidden, packages using
+> them will fail to install.
+> 
+>> Additionally, a blog post with "examples of moving non-API entry point uses
+>> into compliance" would be very helpful in this endeavor.
+> 
+> WRE now contains a section 'Moving into C API compliance'; that seems
+> a better option for the moment given that things are still very much
+> in flux. We will try to add to this section as needed. For the
+> specific entry points generating WARNINGs for your packages the advice
+> is simple: stop using them.
+> 
+> Best,
+> 
+> luke
+> 
+>>
+>> ????[[alternative HTML version deleted]]
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+
+
+From t|m@t@y|or @end|ng |rom h|ddene|eph@nt@@co@uk  Tue Jun 25 18:43:11 2024
+From: t|m@t@y|or @end|ng |rom h|ddene|eph@nt@@co@uk (Tim Taylor)
+Date: Tue, 25 Jun 2024 17:43:11 +0100
+Subject: [Rd] [External] Non-API updates
+In-Reply-To: <CAL3ufUKcj00Mo2RDZfeN72aDDsnO4Y_TRyXzA6wrJ7Cp=nco8w@mail.gmail.com>
+References: <CAL3ufUJtix-Qi0DbnJWR-_hVSwb3nuh08qH4rjgzF8KAsUhZcg@mail.gmail.com>
+ <ac39a99e-c853-52bb-f0bd-82ea755ddc3@uiowa.edu>
+ <CAL3ufUKcj00Mo2RDZfeN72aDDsnO4Y_TRyXzA6wrJ7Cp=nco8w@mail.gmail.com>
+Message-ID: <3a4b91af-88e0-4900-aee4-697143fb5164@hiddenelephants.co.uk>
+
+
+On 25/06/2024 17:25, Josiah Parry wrote:
+> With respect to NOTES and WARN on CRAN, these do not result in any
+> package maintainer notifications. The only notification that the developers
+> receive is the threatening one that states that the packages will be
+> removed
+> from CRAN with a very short timeline.
+
+I'd recommend regularly checking 
+https://cran.r-project.org/web//checks/check_results_josiah.parry_at_gmail.com.html 
+on a regular basis or better still automating said checking. I use 
+dang::checkCRANStatus() in my .Rprofile? to stay up to date ...
+
+R> dang::checkCRANStatus("josiah.parry at gmail.com")
+ ??????? Package WARN NOTE OK
+1??????? arcgis?????????? 13
+2 arcgisgeocode???????? 8? 5
+3? arcgislayers?????????? 13
+4? arcgisplaces???????? 9? 4
+5?? arcgisutils??????? 13
+6??????? arcpbf??? 2??? 7? 4
+7?????????? b64??? 2??? 7? 4
+8???????? rsgeo??? 2??? 7? 4
+9?????? trendyy?????????? 13
+
+
+Tim
+
+
+From edd @end|ng |rom deb|@n@org  Tue Jun 25 18:51:08 2024
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Tue, 25 Jun 2024 11:51:08 -0500
+Subject: [Rd] [External]  Non-API updates
+In-Reply-To: <CAL3ufUKcj00Mo2RDZfeN72aDDsnO4Y_TRyXzA6wrJ7Cp=nco8w@mail.gmail.com>
+References: <CAL3ufUJtix-Qi0DbnJWR-_hVSwb3nuh08qH4rjgzF8KAsUhZcg@mail.gmail.com>
+ <ac39a99e-c853-52bb-f0bd-82ea755ddc3@uiowa.edu>
+ <CAL3ufUKcj00Mo2RDZfeN72aDDsnO4Y_TRyXzA6wrJ7Cp=nco8w@mail.gmail.com>
+Message-ID: <26234.62844.466415.124809@rob.eddelbuettel.com>
+
+
+On 25 June 2024 at 12:25, Josiah Parry wrote:
+| Is there a link you can provide regarding the "Moving into C compliance?" It
+| cannot be found at https://cran.r-project.org/doc/manuals/R-exts.html.
+
+https://rstudio.github.io/r-manuals/r-exts/The-R-API.html#moving-into-c-api-compliance
+
+That's the prettified quarto rendering, and it uses the dev version, so
+Luke's new section is there. Of course, the R Projects also has a site with
+the manuals rendered for r-release and r-devel.
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From m@tthew@||d|er @end|ng |rom gm@||@com  Tue Jun 25 19:58:40 2024
+From: m@tthew@||d|er @end|ng |rom gm@||@com (Matthew Fidler)
+Date: Tue, 25 Jun 2024 19:58:40 +0200
+Subject: [Rd] SET_TYPEOF no longer allowed,
+ how should I call R from within C?
+In-Reply-To: <9bf09121-7de1-4b7f-91a6-1784615331b5@gmail.com>
+References: <CAOmN8O77YVnWF0V4f9xt9u20pgL-him29WrdOkfR0bVE7EZ5vA@mail.gmail.com>
+ <9bf09121-7de1-4b7f-91a6-1784615331b5@gmail.com>
+Message-ID: <CAOmN8O4AJa4k9aZhCJpVAc-ZtBytapL=GtQYBVPznCd6RYB_Tg@mail.gmail.com>
+
+Thank yiou
+
+On Tue, Jun 25, 2024, 3:57?PM Duncan Murdoch <murdoch.duncan at gmail.com>
+wrote:
+
+> On 2024-06-25 5:25 a.m., Matthew Fidler wrote:
+> > Hi,
+> >
+> > I have adapted code to run R from within C from the writing R extensions
+> > here
+> >
+> >
+> https://colinfay.me/writing-r-extensions/system-and-foreign-language-interfaces.html
+>
+> That was written in 2017.  You should use the one that came with R, or
+> even better, the one that comes with the development version of R.
+>
+> Duncan Murdoch
+>
+> >
+> > As a more comprehensive example of constructing an R call in C code and
+> > evaluating, consider the following fragment of printAttributes in
+> > src/main/print.c.
+> >
+> >      /* Need to construct a call to
+> >
+> >         print(CAR(a), digits=digits)
+> >
+> >         based on the R_print structure, then eval(call, env).
+> >
+> >         See do_docall for the template for this sort of thing.
+> >
+> >      */
+> >
+> >      SEXP s, t;
+> >
+> >      t = s = PROTECT(allocList(3));
+> >
+> >      SET_TYPEOF(s, LANGSXP);
+> >
+> >      SETCAR(t, install("print")); t = CDR(t);
+> >
+> >      SETCAR(t, CAR(a)); t = CDR(t);
+> >
+> >      SETCAR(t, ScalarInteger(digits));
+> >
+> >      SET_TAG(t, install("digits"));
+> >
+> >      eval(s, env);
+> >
+> >      UNPROTECT(1);
+> >
+> > At this point CAR(a) is the R object to be printed, the current
+> attribute.
+> > There are three steps: the call is constructed as a pairlist of length 3,
+> > the list is filled in, and the expression represented by the pairlist is
+> > evaluated.
+> >
+> > A pairlist is quite distinct from a generic vector list, the only
+> > user-visible form of list in R. A pairlist is a linked list (with CDR(t)
+> > computing the next entry), with items (accessed by CAR(t)) and names or
+> > tags (set by SET_TAG). In this call there are to be three items, a symbol
+> > (pointing to the function to be called) and two argument values, the
+> first
+> > unnamed and the second named. Setting the type to LANGSXP makes this a
+> call
+> > which can be evaluated.
+> >
+> >
+> >
+> > New checks  tells me that this is no longer allowed since it was not part
+> > of the public api any longer.
+> >
+> >
+> > So, how does one call R from C then?
+> >
+> > Also should the writing R extensions be updated with the new approved
+> > approach?
+> >
+> >
+> > Thanks in advance.
+> >
+> > Matt
+> >
+> >       [[alternative HTML version deleted]]
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+>
+
+	[[alternative HTML version deleted]]
+
+
