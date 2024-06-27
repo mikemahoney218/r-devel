@@ -7375,3 +7375,253 @@ wrote:
 	[[alternative HTML version deleted]]
 
 
+From |kry|ov @end|ng |rom d|@root@org  Wed Jun 26 10:43:32 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Wed, 26 Jun 2024 11:43:32 +0300
+Subject: [Rd] API documentation for R
+In-Reply-To: <CAJXgQP2Lt2tgfZzASxKeodN7a7XNX4fkmihA+FdqdnEdUSpkgw@mail.gmail.com>
+References: <CALyqOb8VS+z-1c4r-NAGvg9EfTgSL_1MqbQkSWb+7jQZdJWQ1Q@mail.gmail.com>
+ <000a01da9452$c6f8bc70$54ea3550$@gmail.com>
+ <CALyqOb-vcs3RfB5SEOnk-f72N9WuAv6fRRUQmvO+Cyuh+x+bWQ@mail.gmail.com>
+ <CAD4oTHGp0CmnZV1-T+vOrEP7ekMsRJ8PQA3nn9KxqM7WX7oPdw@mail.gmail.com>
+ <7567536C-3B54-4568-996B-108670F55AAC@R-project.org>
+ <CABdHhvGiWFjTVMfcjowoO1QKATeTc0jw2EpMC=CYSwY+ZHs36A@mail.gmail.com>
+ <C13AAB3A-0189-4959-83E0-3E3B1392717D@R-project.org>
+ <CABdHhvFpVJMMQD7CubomzCKC4HDGkbWfD-t6OaRSxZfcKcRZ6g@mail.gmail.com>
+ <EBBB96A0-D6CA-4003-BF55-8F5344B18892@R-project.org>
+ <CABdHhvHqUZ=HAQyfQVfrUbnKBM6dKagbMCojU6xnwoyXJ0dgqA@mail.gmail.com>
+ <dc1e6797-0ec-1061-7ce3-88a384d7ee8c@uiowa.edu>
+ <20240425142418.6b78c7ed@arachnoid>
+ <CAJXgQP2Lt2tgfZzASxKeodN7a7XNX4fkmihA+FdqdnEdUSpkgw@mail.gmail.com>
+Message-ID: <20240626114332.130840b5@Tarkus>
+
+? Thu, 25 Apr 2024 10:10:44 -0700
+Kevin Ushey <kevinushey at gmail.com> ?????:
+
+> I'm guessing the most welcome kinds of contributions would be
+> documentation? IMHO, "documenting an API" and "describing how an API
+> can be used" are somewhat separate endeavors. I believe R-exts does an
+> excellent job of the latter, but may not be the right vehicle for the
+> former. To that end, I believe it would be helpful to have some
+> structured API documentation as a separate R-api document.
+
+Now that we have a machine-readable list of APIs in the form of
+system.file('wre.txt', package = 'tools') (which is not yet an API
+itself, but I trust we'll be able to adapt to ongoing changes), it's
+possible to work on such an R-api document.
+
+I've put a proof of concept that checks its Texinfo indices against the
+list of @apifun entries in wre.txt at <https://codeberg.org/aitap/R-api>
+with a rendered version at <https://aitap.codeberg.page/R-api/>. I've
+tried to address Agner's concerns [*] about R_NO_REMAP by showing the
+declarations available with or without this preprocessor symbol
+defined.
+
+34 vaguely documented entry points out of 538 lines in wre.txt is
+obviously not enough, but I'm curious whether this is the right
+direction. Should we keep to a strict structure, like in Rd files, with
+a table for every argument and the return value? Can we group functions
+together, or should there be a separate @node for every function and
+variable? Is Rd (and Henrik's earlier work [**]) a better format than
+Texinfo for a searchable C API reference?
+
+-- 
+Best regards,
+Ivan
+
+[*] https://stat.ethz.ch/pipermail/r-package-devel/2024q2/010913.html
+
+[**] https://github.com/HenrikBengtsson/RNativeAPI
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Wed Jun 26 15:30:37 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Wed, 26 Jun 2024 09:30:37 -0400
+Subject: [Rd] rbind() on zero row matrices is inconsistent
+Message-ID: <857ec376-f48d-4fdb-a02e-6500460536dd@gmail.com>
+
+The help for cbind() and rbind() says
+
+"For cbind (rbind), vectors of zero length (including NULL) are ignored 
+unless the result would have zero rows (columns), for S compatibility. 
+(Zero-extent matrices do not occur in S3 and are not ignored in R.)"
+
+This leads to an inconsistency.
+
+
+   M <- matrix(NA, 0, 0)  # Make a 0x0 matrix
+   N <- matrix(NA, 0, 1)  # Make a 0x1 matrix
+
+
+   dim(rbind(M, NULL, NULL)) # adds 2 rows to M
+   #> [1] 2 0
+   dim(rbind(N, NULL, NULL)) # leaves N unchanged
+   #> [1] 0 1
+
+
+You get an extra row on the 0x0 matrix for each NULL value that is bound 
+to it, but the 0xn matrix is unchanged for n > 0.
+
+Clearly from the help this is intentional, but is it desirable? 
+Wouldn't it make more sense for NULL to be ignored by rbind() and cbind()?
+
+Duncan Murdoch
+
+
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Wed Jun 26 15:32:30 2024
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Wed, 26 Jun 2024 15:32:30 +0200
+Subject: [Rd] rbind() on zero row matrices is inconsistent
+In-Reply-To: <857ec376-f48d-4fdb-a02e-6500460536dd@gmail.com>
+References: <857ec376-f48d-4fdb-a02e-6500460536dd@gmail.com>
+Message-ID: <26236.6254.890228.351763@hornik.net>
+
+>>>>> Duncan Murdoch writes:
+
+> The help for cbind() and rbind() says
+> "For cbind (rbind), vectors of zero length (including NULL) are ignored 
+> unless the result would have zero rows (columns), for S compatibility. 
+> (Zero-extent matrices do not occur in S3 and are not ignored in R.)"
+
+> This leads to an inconsistency.
+
+
+>    M <- matrix(NA, 0, 0)  # Make a 0x0 matrix
+>    N <- matrix(NA, 0, 1)  # Make a 0x1 matrix
+
+
+>    dim(rbind(M, NULL, NULL)) # adds 2 rows to M
+>    #> [1] 2 0
+>    dim(rbind(N, NULL, NULL)) # leaves N unchanged
+>    #> [1] 0 1
+
+
+> You get an extra row on the 0x0 matrix for each NULL value that is bound 
+> to it, but the 0xn matrix is unchanged for n > 0.
+
+> Clearly from the help this is intentional, but is it desirable?
+> Wouldn't it make more sense for NULL to be ignored by rbind() and
+> cbind()?
+
+I would agree :-)
+
+Best
+-k
+
+> Duncan Murdoch
+
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From therne@u @end|ng |rom m@yo@edu  Wed Jun 26 15:42:39 2024
+From: therne@u @end|ng |rom m@yo@edu (Therneau, Terry M., Ph.D.)
+Date: Wed, 26 Jun 2024 08:42:39 -0500
+Subject: [Rd] Fixing a CRAN note
+Message-ID: <f50ddc$mfdf69@ironport10.mayo.edu>
+
+I am trying to clear up all the "NOTE"s before a CRAN submission, but am a bit confused 
+about this one.?? What is it complaining about -- that it doesn't like my name?
+
+...
+* checking for file ?deming/DESCRIPTION? ... OK
+* this is package ?deming? version ?1.4-1?
+* checking CRAN incoming feasibility ... [7s/18s] NOTE
+Maintainer: ?Terry Therneau <therneau.terry at mayo.edu>?
+
+Found the following \keyword or \concept entries
+which likely give several index terms:
+ ? File ?deming.Rd?:
+ ??? \keyword{models, regression}
+* checking package namespace information ... OK
+* checking package dependencies ... OK
+...
+
+-- 
+Terry M Therneau, PhD
+Department of Quantitative Health Sciences
+Mayo Clinic
+therneau at mayo.edu
+
+"TERR-ree THUR-noh"
+
+	[[alternative HTML version deleted]]
+
+
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Wed Jun 26 15:59:10 2024
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Wed, 26 Jun 2024 15:59:10 +0200
+Subject: [Rd] Fixing a CRAN note
+In-Reply-To: <f50ddc$mfdf69@ironport10.mayo.edu>
+References: <f50ddc$mfdf69@ironport10.mayo.edu>
+Message-ID: <26236.7854.986327.786747@hornik.net>
+
+>>>>> Therneau, Terry M , Ph D via R-devel writes:
+
+> I am trying to clear up all the "NOTE"s before a CRAN submission, but am a bit confused 
+> about this one.?? What is it complaining about -- that it doesn't like my name?
+
+> ...
+> * checking for file ?deming/DESCRIPTION? ... OK
+> * this is package ?deming? version ?1.4-1?
+> * checking CRAN incoming feasibility ... [7s/18s] NOTE
+> Maintainer: ?Terry Therneau <therneau.terry at mayo.edu>?
+
+> Found the following \keyword or \concept entries
+> which likely give several index terms:
+>  ? File ?deming.Rd?:
+>  ??? \keyword{models, regression}
+
+Use
+
+  \keyword{models}
+  \keyword{regression}
+
+Hth
+-k
+
+> * checking package namespace information ... OK
+> * checking package dependencies ... OK
+> ...
+
+> -- 
+> Terry M Therneau, PhD
+> Department of Quantitative Health Sciences
+> Mayo Clinic
+> therneau at mayo.edu
+
+> "TERR-ree THUR-noh"
+
+> 	[[alternative HTML version deleted]]
+
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From |kry|ov @end|ng |rom d|@root@org  Wed Jun 26 16:03:09 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Wed, 26 Jun 2024 17:03:09 +0300
+Subject: [Rd] Fixing a CRAN note
+In-Reply-To: <f50ddc$mfdf69@ironport10.mayo.edu>
+References: <f50ddc$mfdf69@ironport10.mayo.edu>
+Message-ID: <C89767EA-8C39-4B71-8B6C-AB2E58D02E1B@disroot.org>
+
+26 ???? 2024 ?. 16:42:39 GMT+03:00, "Therneau, Terry M., Ph.D. via R-devel" <r-devel at r-project.org> ?????:
+>What is it complaining about -- that it doesn't like my name?
+
+>* checking CRAN incoming feasibility ... [7s/18s] NOTE
+>Maintainer: ?Terry Therneau <therneau.terry at mayo.edu>?
+>
+>Found the following \keyword or \concept entries
+>which likely give several index terms:
+> ? File ?deming.Rd?:
+> ??? \keyword{models, regression}
+I think that the check points out that in order to specify multiple keywords, you need to use \keyword{models} and \keyword{regression} separately, not \keyword{models, regression} in one Rd command.
+
+-- 
+Best regards,
+Ivan
+
+
