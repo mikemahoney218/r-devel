@@ -7625,3 +7625,474 @@ Best regards,
 Ivan
 
 
+From @pencer@gr@ve@ @end|ng |rom prod@y@e@com  Fri Jun 28 18:02:12 2024
+From: @pencer@gr@ve@ @end|ng |rom prod@y@e@com (Spencer Graves)
+Date: Fri, 28 Jun 2024 11:02:12 -0500
+Subject: [Rd] write.csv problems
+Message-ID: <c95e3be1-822f-4b0b-9b01-105d558affc7@prodsyse.com>
+
+Hello, All:
+
+
+	  I'm getting strange errors with write.csv with some objects of class 
+c('findFn', 'data.frame'). Consider the following:
+
+
+df1 <- data.frame(x=1)
+class(df1) <- c('findFn', 'data.frame')
+write.csv(df1, 'df1.csv')
+# Error in x$Package : $ operator is invalid for atomic vectors
+
+df2 <- data.frame(a=letters[1:2],
+       b=as.POSIXct('2024-06-28'))
+class(df2) <- c('findFn', 'data.frame')
+write.csv(df2, 'df1.csv')
+# Error in tapply(rep(1, nrow(x)), xP, length) :
+#  arguments must have same length
+
+
+	  "write.csv" works with some objects of class c('findFn', 
+'data.frame') but not others. I have 'findFn' object with 5264 rows that 
+fails with the following error:
+
+
+Error in `[<-.data.frame`(`*tmp*`, needconv, value = list(Count = 
+c("83",  :
+   replacement element 1 has 526 rows, need 5264
+
+
+	  I have NOT yet been able to reproduce this error with a smaller 
+example. However, starting 'write.csv' with something like the following 
+should fix all these problems:
+
+
+if(is.data.frame(x)) class(x) <- 'data.frame'
+
+
+	  Comments?
+	  Thanks for all your work to help improve the quality of statistical 
+software available to the world.
+
+
+	  Spencer Graves
+
+
+From |kry|ov @end|ng |rom d|@root@org  Fri Jun 28 18:19:39 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Fri, 28 Jun 2024 19:19:39 +0300
+Subject: [Rd] write.csv problems
+In-Reply-To: <c95e3be1-822f-4b0b-9b01-105d558affc7@prodsyse.com>
+References: <c95e3be1-822f-4b0b-9b01-105d558affc7@prodsyse.com>
+Message-ID: <20240628191939.671b8e7e@arachnoid>
+
+? Fri, 28 Jun 2024 11:02:12 -0500
+Spencer Graves <spencer.graves at prodsyse.com> ?????:
+
+> df1 <- data.frame(x=1)
+> class(df1) <- c('findFn', 'data.frame')
+> write.csv(df1, 'df1.csv')
+> # Error in x$Package : $ operator is invalid for atomic vectors
+
+Judging by the traceback, only data frames that have a Package column
+should have a findFn class:
+
+9: PackageSummary(xi)
+8: `[.findFn`(x, needconv)
+7: x[needconv]
+6: lapply(x[needconv], as.character)
+5: utils::write.table(df1, "df1.csv", col.names = NA, sep = ",",
+       dec = ".", qmethod = "double")
+
+write.table sees columns that aren't of type character yet and tries to
+convert them one by one, subsetting the data frame as a list. The call
+lands in sos:::`[.findFn`
+
+    if (missing(j)) {
+        xi <- x[i, ]
+        attr(xi, "PackageSummary") <- PackageSummary(xi)
+        class(xi) <- c("findFn", "data.frame")
+        return(xi)
+    }
+
+Subsetting methods are hard. For complex structures like data.frames,
+`[.class` must handle all of x[rows,cols]; x[rows,]; x[,cols];
+x[columns]; x[], and also respect the drop argument:
+https://stat.ethz.ch/pipermail/r-help/2021-December/473207.html
+
+I think that the `[.findFn` method mistakes x[needconv] for
+x[needconv,] when it should instead perform x[,needconv].
+
+-- 
+Best regards,
+Ivan
+
+
+From ru|pb@rr@d@@ @end|ng |rom @@po@pt  Sat Jun 29 21:24:52 2024
+From: ru|pb@rr@d@@ @end|ng |rom @@po@pt (Rui Barradas)
+Date: Sat, 29 Jun 2024 20:24:52 +0100
+Subject: [Rd] write.csv problems
+In-Reply-To: <c95e3be1-822f-4b0b-9b01-105d558affc7@prodsyse.com>
+References: <c95e3be1-822f-4b0b-9b01-105d558affc7@prodsyse.com>
+Message-ID: <eae91f70-7dc7-44b6-b996-7d12bb7e298a@sapo.pt>
+
+?s 17:02 de 28/06/2024, Spencer Graves escreveu:
+> Hello, All:
+> 
+> 
+>  ????? I'm getting strange errors with write.csv with some objects of 
+> class c('findFn', 'data.frame'). Consider the following:
+> 
+> 
+> df1 <- data.frame(x=1)
+> class(df1) <- c('findFn', 'data.frame')
+> write.csv(df1, 'df1.csv')
+> # Error in x$Package : $ operator is invalid for atomic vectors
+> 
+> df2 <- data.frame(a=letters[1:2],
+>  ????? b=as.POSIXct('2024-06-28'))
+> class(df2) <- c('findFn', 'data.frame')
+> write.csv(df2, 'df1.csv')
+> # Error in tapply(rep(1, nrow(x)), xP, length) :
+> #? arguments must have same length
+> 
+> 
+>  ????? "write.csv" works with some objects of class c('findFn', 
+> 'data.frame') but not others. I have 'findFn' object with 5264 rows that 
+> fails with the following error:
+> 
+> 
+> Error in `[<-.data.frame`(`*tmp*`, needconv, value = list(Count = 
+> c("83",? :
+>  ? replacement element 1 has 526 rows, need 5264
+> 
+> 
+>  ????? I have NOT yet been able to reproduce this error with a smaller 
+> example. However, starting 'write.csv' with something like the following 
+> should fix all these problems:
+> 
+> 
+> if(is.data.frame(x)) class(x) <- 'data.frame'
+> 
+> 
+>  ????? Comments?
+>  ????? Thanks for all your work to help improve the quality of 
+> statistical software available to the world.
+> 
+> 
+>  ????? Spencer Graves
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+Hello,
+
+I don't know if this answers to question.
+I wasn't able to reproduce errors but warnings, yes I was.
+
+A way of not giving errors or warnings is to call write.csv at the end 
+of a pipe such as the following.
+
+
+df1 <- findFn("mean")
+df1 |> as.data.frame() |> write.csv("df1.csv")
+
+
+This solution is equivalent to the code proposed in the OP without the 
+need for a change in base R.
+
+Hope this helps,
+
+Rui Barradas
+
+
+-- 
+Este e-mail foi analisado pelo software antiv?rus AVG para verificar a presen?a de v?rus.
+www.avg.com
+
+
+From @pencer@gr@ve@ @end|ng |rom prod@y@e@com  Sat Jun 29 21:37:42 2024
+From: @pencer@gr@ve@ @end|ng |rom prod@y@e@com (Spencer Graves)
+Date: Sat, 29 Jun 2024 14:37:42 -0500
+Subject: [Rd] write.csv problems
+In-Reply-To: <eae91f70-7dc7-44b6-b996-7d12bb7e298a@sapo.pt>
+References: <c95e3be1-822f-4b0b-9b01-105d558affc7@prodsyse.com>
+ <eae91f70-7dc7-44b6-b996-7d12bb7e298a@sapo.pt>
+Message-ID: <675ff1c3-cf14-4882-ac24-69766bad7245@prodsyse.com>
+
+Hi, Rui et al.:
+
+
+On 6/29/24 14:24, Rui Barradas wrote:
+> ?s 17:02 de 28/06/2024, Spencer Graves escreveu:
+>> Hello, All:
+>>
+>>
+>> ?????? I'm getting strange errors with write.csv with some objects of 
+>> class c('findFn', 'data.frame'). Consider the following:
+>>
+>>
+>> df1 <- data.frame(x=1)
+>> class(df1) <- c('findFn', 'data.frame')
+>> write.csv(df1, 'df1.csv')
+>> # Error in x$Package : $ operator is invalid for atomic vectors
+>>
+>> df2 <- data.frame(a=letters[1:2],
+>> ?????? b=as.POSIXct('2024-06-28'))
+>> class(df2) <- c('findFn', 'data.frame')
+>> write.csv(df2, 'df1.csv')
+>> # Error in tapply(rep(1, nrow(x)), xP, length) :
+>> #? arguments must have same length
+>>
+>>
+>> ?????? "write.csv" works with some objects of class c('findFn', 
+>> 'data.frame') but not others. I have 'findFn' object with 5264 rows 
+>> that fails with the following error:
+>>
+>>
+>> Error in `[<-.data.frame`(`*tmp*`, needconv, value = list(Count = 
+>> c("83",? :
+>> ?? replacement element 1 has 526 rows, need 5264
+>>
+>>
+>> ?????? I have NOT yet been able to reproduce this error with a smaller 
+>> example. However, starting 'write.csv' with something like the 
+>> following should fix all these problems:
+>>
+>>
+>> if(is.data.frame(x)) class(x) <- 'data.frame'
+>>
+>>
+>> ?????? Comments?
+>> ?????? Thanks for all your work to help improve the quality of 
+>> statistical software available to the world.
+>>
+>>
+>> ?????? Spencer Graves
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> Hello,
+> 
+> I don't know if this answers to question.
+> I wasn't able to reproduce errors but warnings, yes I was.
+> 
+> A way of not giving errors or warnings is to call write.csv at the end 
+> of a pipe such as the following.
+> 
+> 
+> df1 <- findFn("mean")
+> df1 |> as.data.frame() |> write.csv("df1.csv")
+> 
+> 
+> This solution is equivalent to the code proposed in the OP without the 
+> need for a change in base R.
+
+
+	  Thanks for this. Ivan Krylov informed me that this was NOT a problem 
+with base R but with "[.findFn". I fixed that and got help from Ivan 
+fixing another problem with "sos". Now it is officially "on its way to 
+CRAN."
+
+> 
+> Hope this helps,
+
+
+	  Yes. I'm not yet facile with "|>", but I'm learning.
+
+
+	  Spencer Graves
+
+> 
+> Rui Barradas
+> 
+>
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sun Jun 30 00:24:38 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sat, 29 Jun 2024 18:24:38 -0400
+Subject: [Rd] \>
+In-Reply-To: <675ff1c3-cf14-4882-ac24-69766bad7245@prodsyse.com>
+References: <c95e3be1-822f-4b0b-9b01-105d558affc7@prodsyse.com>
+ <eae91f70-7dc7-44b6-b996-7d12bb7e298a@sapo.pt>
+ <675ff1c3-cf14-4882-ac24-69766bad7245@prodsyse.com>
+Message-ID: <ee5697d9-600a-4a7a-ac7c-92c5ed03fe42@gmail.com>
+
+
+> 	  Yes. I'm not yet facile with "|>", but I'm learning.
+> 
+> 
+> 	  Spencer Graves
+
+There's very little to know.  This:
+
+      x |> f() |> g()
+
+is just a different way of writing
+
+     g(f(x))
+
+If f() or g() have extra arguments, just add them afterwards:
+
+     x |> f(a = 1) |> g(b = 2)
+
+is just
+
+     g(f(x, a = 1), b = 2)
+
+This isn't quite true of the magrittr pipe, but it is exactly true of 
+the base pipe.
+
+Duncan Murdoch
+
+
+From @pencer@gr@ve@ @end|ng |rom prod@y@e@com  Sun Jun 30 00:57:28 2024
+From: @pencer@gr@ve@ @end|ng |rom prod@y@e@com (Spencer Graves)
+Date: Sat, 29 Jun 2024 17:57:28 -0500
+Subject: [Rd] \>
+In-Reply-To: <ee5697d9-600a-4a7a-ac7c-92c5ed03fe42@gmail.com>
+References: <c95e3be1-822f-4b0b-9b01-105d558affc7@prodsyse.com>
+ <eae91f70-7dc7-44b6-b996-7d12bb7e298a@sapo.pt>
+ <675ff1c3-cf14-4882-ac24-69766bad7245@prodsyse.com>
+ <ee5697d9-600a-4a7a-ac7c-92c5ed03fe42@gmail.com>
+Message-ID: <97901fd9-82ba-4d19-86a6-ab0a60944a45@prodsyse.com>
+
+Hi, Duncan:
+
+
+On 6/29/24 17:24, Duncan Murdoch wrote:
+> 
+>> ????? Yes. I'm not yet facile with "|>", but I'm learning.
+>>
+>>
+>> ????? Spencer Graves
+> 
+> There's very little to know.? This:
+> 
+>  ???? x |> f() |> g()
+> 
+> is just a different way of writing
+> 
+>  ??? g(f(x))
+> 
+> If f() or g() have extra arguments, just add them afterwards:
+> 
+>  ??? x |> f(a = 1) |> g(b = 2)
+> 
+> is just
+> 
+>  ??? g(f(x, a = 1), b = 2)
+
+
+	  Agreed. If I understand correctly, the supporters of the former think 
+it's easier to highlight and execute a subset of the earlier character 
+string, e.g., "x |> f(a = 1)" than the corresponding subset of the 
+latter, "f(x, a = 1)". I remain unconvinced.
+
+
+	  For debugging, I prefer the following:
+
+
+	  fx1 <- f(x, a = 1)
+	  g(fx1, b=2)
+
+
+	  Yes, "fx1" occupies storage space that the other two do not. Ir you 
+are writing code for an 8086, the difference in important. However, for 
+my work, ease of debugging is important, which is why I prefer, "fx1 <- 
+f(x, a = 1); g(fx1, b=2)".
+
+
+	  Thanks, again, for the reply.
+	  Spencer Graves
+
+> 
+> This isn't quite true of the magrittr pipe, but it is exactly true of 
+> the base pipe.
+> 
+> Duncan Murdoch
+>
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Sun Jun 30 01:31:59 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Sat, 29 Jun 2024 19:31:59 -0400
+Subject: [Rd] \>
+In-Reply-To: <97901fd9-82ba-4d19-86a6-ab0a60944a45@prodsyse.com>
+References: <c95e3be1-822f-4b0b-9b01-105d558affc7@prodsyse.com>
+ <eae91f70-7dc7-44b6-b996-7d12bb7e298a@sapo.pt>
+ <675ff1c3-cf14-4882-ac24-69766bad7245@prodsyse.com>
+ <ee5697d9-600a-4a7a-ac7c-92c5ed03fe42@gmail.com>
+ <97901fd9-82ba-4d19-86a6-ab0a60944a45@prodsyse.com>
+Message-ID: <4b3cdd3d-49ac-4d11-acab-b90b88a54599@gmail.com>
+
+I agree with you (I think we may be similarly aged), but there is the 
+`magrittr::debug_pipe()` function, which can be inserted anywhere into 
+either kind of pipe.  It will call `debug()` at that point, and let you 
+examine the current value, before passing it on to the next entry.
+
+You can't single step through a pipe (as far as I know), but with that 
+modification, you can see what you've got at any point.
+
+Duncan Murdoch
+
+
+On 2024-06-29 6:57 p.m., Spencer Graves wrote:
+> Hi, Duncan:
+> 
+> 
+> On 6/29/24 17:24, Duncan Murdoch wrote:
+>>
+>>>  ????? Yes. I'm not yet facile with "|>", but I'm learning.
+>>>
+>>>
+>>>  ????? Spencer Graves
+>>
+>> There's very little to know.? This:
+>>
+>>   ???? x |> f() |> g()
+>>
+>> is just a different way of writing
+>>
+>>   ??? g(f(x))
+>>
+>> If f() or g() have extra arguments, just add them afterwards:
+>>
+>>   ??? x |> f(a = 1) |> g(b = 2)
+>>
+>> is just
+>>
+>>   ??? g(f(x, a = 1), b = 2)
+> 
+> 
+> 	  Agreed. If I understand correctly, the supporters of the former think
+> it's easier to highlight and execute a subset of the earlier character
+> string, e.g., "x |> f(a = 1)" than the corresponding subset of the
+> latter, "f(x, a = 1)". I remain unconvinced.
+> 
+> 
+> 	  For debugging, I prefer the following:
+> 
+> 
+> 	  fx1 <- f(x, a = 1)
+> 	  g(fx1, b=2)
+> 
+> 
+> 	  Yes, "fx1" occupies storage space that the other two do not. Ir you
+> are writing code for an 8086, the difference in important. However, for
+> my work, ease of debugging is important, which is why I prefer, "fx1 <-
+> f(x, a = 1); g(fx1, b=2)".
+> 
+> 
+> 	  Thanks, again, for the reply.
+> 	  Spencer Graves
+> 
+>>
+>> This isn't quite true of the magrittr pipe, but it is exactly true of
+>> the base pipe.
+>>
+>> Duncan Murdoch
+>>
+
+
