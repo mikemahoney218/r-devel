@@ -8096,3 +8096,235 @@ On 2024-06-29 6:57 p.m., Spencer Graves wrote:
 >>
 
 
+From @vi@e@gross m@iii@g oii gm@ii@com  Sun Jun 30 05:09:14 2024
+From: @vi@e@gross m@iii@g oii gm@ii@com (@vi@e@gross m@iii@g oii gm@ii@com)
+Date: Sat, 29 Jun 2024 23:09:14 -0400
+Subject: [Rd] \>
+In-Reply-To: <97901fd9-82ba-4d19-86a6-ab0a60944a45@prodsyse.com>
+References: <c95e3be1-822f-4b0b-9b01-105d558affc7@prodsyse.com>
+ <eae91f70-7dc7-44b6-b996-7d12bb7e298a@sapo.pt>
+ <675ff1c3-cf14-4882-ac24-69766bad7245@prodsyse.com>
+ <ee5697d9-600a-4a7a-ac7c-92c5ed03fe42@gmail.com>
+ <97901fd9-82ba-4d19-86a6-ab0a60944a45@prodsyse.com>
+Message-ID: <005d01daca9a$e3841730$aa8c4590$@gmail.com>
+
+I suggest there is actually quite a lot to know about piping, albeit you can use it fine while knowing little.
+
+For those who can happily write complex lines of code containing nested function calls and never have to explain it to anyone, feel free. I can do that and sometimes months later I only figure out what I did in ten minutes and then check to see if I got it right!
+
+But for people who are used to features vaguely similar in other languages, pipes are a great way to visualize data and process flow as they show a sort of sequence.
+
+No, they are not at all the same as a UNIX pipe but that is not a bad model as it lets you write shell scripts that do one conceptual step at a time and pass along data to the input of another program that processes it further and passes it along until you reach some goal.
+
+Many languages, such as ones using variations on Object Oriented, have a sort of pipeline that can look like:
+
+a.method_a(args).method_b(args)
+
+And in some languages, that can be spread across multiple lines to look a bit more like a pipeline. This too is an inexact analogy as what really happens is that the underlying object can return perhaps another object when you call a method and then you can call a method in that object and so on. This can make it limited in some ways or quite powerful.
+
+The many versions that have been created of an R pipe can be variations on many themes. As an example, you could take the multiple lines in a pipeline and rearrange them to look like the nested code with function calls as arguments in other functions and then evaluate it. It would, in effect, be a sort of syntactic sugar that makes it easier for SOME programmers.
+
+But the topic now shifts to debugging and indeed, the underlying implementation of a pipeline can impact on one debugs.
+
+The simplest case is trivial to debug. No visible pipes:
+
+Temp1 <- f1(x, args)
+Temp2 <- f2(Temp1,  args)
+Result <- f3(Temp2, args)
+rm(Temp1, Temp2)
+
+So one form of piping does something like this under the table:
+
+For code like:
+X PIPED f1(args) PIPED f2(args) -> Result
+
+It simply does something like this:
+
+. <- x
+. <- f1(., args)
+.  <- f2(.,  args)
+Result <- f3(., args)
+
+The variable "." just gets re-used repeatedly. But as this code swap is done outside normal view, can a debugger follow it? And "." keeps changing. As a nice feature, some implementations may actually check and if you place "." as an argument past the beginning as in f3(args, ., more_args) allow you to pipe in not just to the first argument for the many functions that may want the data second or third or ...
+
+There are other implementations possible that allow syntactic sugar without necessarily being run as shown. I am not sure how the native pipe that was added is implemented but it seems quite a bit faster than many other implementations and has some quirks such as requiring all functions to include parentheses, even if empty like piping to head(), and the way to do some things using anonymous functions is a tad annoying.
+
+I think the focus for many people is the HUMAN who is programming and sees a logical way to describe what they want without much ambiguity. Of course, if you want to keep playing with your code, don't use pipes except perhaps when it is pretty much done.
+
+An analogy to consider is another variant of piping used by ggplot where "+" is overloaded and:
+
+ggplot(args) +
+  geom_point(args) +
+  geom_line(args) +
+  xlab(args) +
+  theme_bw() +
+  coord_flip() +
+  ...
+
+Is a common way of writing a fairly complex set of operations. But what is being piped there is a growing object that each step modifies and an the end, the object is rendered into a graph based on whatever complex contents it contains. And, yes, that can be painful to debug and a simple option is:
+
+P <- ggplot(args)
+P <- P + geom_point(args)
+P <- P + geom_line(args)
+...
+print(P)
+
+Being able to declare incremental changes and layers to a graph this way is more intuitive to some. Not using a pipelined approach allows you to comment out parts easily, such as not making it black/white sometimes, albeit you can as easily comment out the other version.
+
+What some people need to understand is that adding pipes of any of the varieties has never taken away to write the code in other ways. It is not in any way required. And for some people, it aligns better with how they can reason. Yet, if you need lots of debugging in your programs, writing them differently may be a better idea, at least until it is debugged.
+
+I have written code for my clients with quite elegant pipelines as well as functions like the dplyr mutate() that allow me to do many things in one function call, and formatted it beautifully with varying levels of indentation so you can see at a glance where things line up. Parts of the code are nested function calls and when it all leads to a ggplot structure like above, it can be a tad hard for many people to appreciate what it is doing. But then, I get some requests to change things, add or subtract features, allow some parts to be commented/documented close to where the code does things, or allow parameters to be set next to where they are called. What I sometimes do is go back to the linear style of code above where each new section does mostly one thing with a comment before it and a setting of changeable parameters like colors that the customer can tune. The code can get much longer but can be absorbed step by step, and unless we remove variables no longer needed, can have some performance issues if it is processing lots of data! LOL!
+
+There is plenty more to know, but unless you have to read other people's code and modify it, it may be optional.
+
+
+-----Original Message-----
+From: R-devel <r-devel-bounces at r-project.org> On Behalf Of Spencer Graves
+Sent: Saturday, June 29, 2024 6:57 PM
+To: Duncan Murdoch <murdoch.duncan at gmail.com>; Rui Barradas <ruipbarradas at sapo.pt>; r-devel <r-devel at r-project.org>
+Subject: Re: [Rd] \>
+
+Hi, Duncan:
+
+
+On 6/29/24 17:24, Duncan Murdoch wrote:
+> 
+>>       Yes. I'm not yet facile with "|>", but I'm learning.
+>>
+>>
+>>       Spencer Graves
+> 
+> There's very little to know.  This:
+> 
+>       x |> f() |> g()
+> 
+> is just a different way of writing
+> 
+>      g(f(x))
+> 
+> If f() or g() have extra arguments, just add them afterwards:
+> 
+>      x |> f(a = 1) |> g(b = 2)
+> 
+> is just
+> 
+>      g(f(x, a = 1), b = 2)
+
+
+	  Agreed. If I understand correctly, the supporters of the former think 
+it's easier to highlight and execute a subset of the earlier character 
+string, e.g., "x |> f(a = 1)" than the corresponding subset of the 
+latter, "f(x, a = 1)". I remain unconvinced.
+
+
+	  For debugging, I prefer the following:
+
+
+	  fx1 <- f(x, a = 1)
+	  g(fx1, b=2)
+
+
+	  Yes, "fx1" occupies storage space that the other two do not. Ir you 
+are writing code for an 8086, the difference in important. However, for 
+my work, ease of debugging is important, which is why I prefer, "fx1 <- 
+f(x, a = 1); g(fx1, b=2)".
+
+
+	  Thanks, again, for the reply.
+	  Spencer Graves
+
+> 
+> This isn't quite true of the magrittr pipe, but it is exactly true of 
+> the base pipe.
+> 
+> Duncan Murdoch
+>
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From |kry|ov @end|ng |rom d|@root@org  Sun Jun 30 15:19:47 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Sun, 30 Jun 2024 16:19:47 +0300
+Subject: [Rd] Making use of win32_segv
+Message-ID: <20240630161947.5c10949e@trisector>
+
+Hello R-devel,
+
+When checking packages on Windows, a crash of the process looks like a
+sudden stop in the output of the child process, which can be very
+perplexing for package maintainers (e.g. [1,2]), especially if the
+stars are only right on Win-Builder but not on the maintainer's PC.
+
+On Unix-like systems, we get a loud message from the SIGSEGV handler
+and (if we're lucky and the memory manager is still mostly intact) an
+R-level traceback. A similar signal handler, win32_segv(), is defined
+in src/main.c for use on Windows, but I am not seeing a way it could be
+called in the current codebase. The file src/gnuwin32/psignal.c that's
+responsible for signals on Windows handles Ctrl+C but does not emit
+SIGSEGV or SIGILL. Can we make use of vectored exception handling [3]
+to globally catch unhandled exceptions in the Win32 process and
+transform them into raise(SIGSEGV)?
+
+One potential source of problems is threading. The normal Unix-like
+sigactionSegv(...) doesn't care; if a non-main thread causes a crash
+with SIGSEGV unblocked, it will run in that thread's context and call R
+API from there. On Windows, where a simple REprintf() may go into a GUI
+window, the crash handler may be written in a more cautious manner:
+
+ - Only set up the crash handler in Rterm, because this is mostly for
+   the benefit of the people reading the R CMD check output
+ - Compare GetCurrentThreadId() against a saved value and don't call
+   R_Traceback() if it doesn't match
+ - Rewrite win32_segv in terms of StringCcbPrintf to static storage and
+   WriteFile(GetStdHandle(STD_ERROR_HANDLE), ...), which may be too much
+
+Attached is a crude first draft to see if the approach is viable. If it
+turns out to be a good idea, I can add the Rterm or thread ID checks, a
+reentrancy guard, declare and export a special struct win32_segvinfo
+from psignal.c, put all the crash reporting in win32_segv(), and move
+the VEH setup into psignal.c's signal(). (Just don't want to waste the
+effort if this proves ill-advised.)
+
+Without the patch:
+User at WIN-LGTSPJA3F1V MSYS /c/R/R-svn/src/gnuwin32
+$ cat crash.c
+void crash(void) { *(double*)42 = 42; }
+
+User at WIN-LGTSPJA3F1V MSYS /c/R/R-svn/src/gnuwin32
+$ ../../bin/R -q -s -e 'dyn.load("crash.dll"); .C("crash")'
+Segmentation fault # <-- printed by MSYS2 shell
+
+With the patch:
+User at WIN-LGTSPJA3F1V MSYS /c/R/R-svn/src/gnuwin32
+$ ../../bin/R -q -s -e 'dyn.load("crash.dll"); .C("crash")'
+*** caught access violation at program counter 0x00007ff911c61387 ***
+accessing address 0x000000000000002a, action: write
+
+Traceback:
+ 1: .C("crash")
+Segmentation fault
+
+With the patch applied, I am not seeing changes in make check-devel or
+package checks for V8. Couldn't test rJava yet. 
+
+-- 
+Best regards,
+Ivan
+
+[1]
+https://stat.ethz.ch/pipermail/r-package-devel/2024q2/010919.html
+
+[2]
+https://stat.ethz.ch/pipermail/r-package-devel/2024q2/010872.html
+
+[3]
+https://learn.microsoft.com/en-us/windows/win32/debug/vectored-exception-handling
+
+-------------- next part --------------
+An embedded and charset-unspecified text was scrubbed...
+Name: veh-segv.patch
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20240630/b0d8fbd1/attachment.ksh>
+
