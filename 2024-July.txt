@@ -1,0 +1,125 @@
+From |kry|ov @end|ng |rom d|@root@org  Tue Jul  2 16:04:44 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Tue, 2 Jul 2024 17:04:44 +0300
+Subject: [Rd] Large vector support in data.frames
+In-Reply-To: <b3c5fa5d-1ef0-4c39-a9a9-a86e198059f9@eoos.dds.nl>
+References: <b3c5fa5d-1ef0-4c39-a9a9-a86e198059f9@eoos.dds.nl>
+Message-ID: <20240702170444.5c43761e@arachnoid>
+
+? Wed, 19 Jun 2024 09:52:20 +0200
+Jan van der Laan <rhelp at eoos.dds.nl> ?????:
+
+> What is the status of supporting long vectors in data.frames (e.g. 
+> data.frames with more than 2^31 records)? Is this something that is 
+> being worked on? Is there a time line for this? Is this something I
+> can contribute to?
+
+Apologies if you've already received a better answer off-list.
+
+From from my limited understanding, the problem with supporting
+larger-than-(2^31-1) dimensions has multiple facets:
+
+ - In many parts of R code, there's the assumption that dim() is
+   of integer type. That wouldn't be a problem by itself, except...
+
+ - R currently lacks a native 64-bit integer type. About a year ago
+   Gabe Becker mentioned that Luke Tierney has been considering
+   improvements in this direction, but it's hard to introduce 64-bit
+   integers without making the user worry even more about data types
+   (numeric != integer != 64-bit integer) or introducing a lot of
+   overhead (64-bit integers being twice as large as 32-bit ones and,
+   depending on the workload, frequently redundant).
+
+ - Two-dimensional objects eventually get transformed into matrices and
+   handed to LAPACK for linear algebra operations. Currently, the
+   interface used by R to talk to BLAS and LAPACK only supports 32-bit
+   signed integers for lengths. 64-bit BLASes and LAPACKs do exist
+   (e.g. OpenBLAS can be compiled with 64-bit lengths), but we haven't
+   taught R to use them.
+
+   (This isn't limited to array dimensions, by the way. If you try to
+   svd() a 40000 by 40000 matrix, it'll try to ask for temporary memory
+   with length that overflows a signed 32-bit integer, get a much
+   shorter allocation instead, promptly overflow the buffer and
+   crash the process.)
+
+As you see, it's interconnected; work on one thing will involve the
+other two.
+
+-- 
+Best regards,
+Ivan
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Wed Jul  3 09:22:25 2024
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Wed, 3 Jul 2024 09:22:25 +0200
+Subject: [Rd] Large vector support in data.frames
+In-Reply-To: <20240702170444.5c43761e@arachnoid>
+References: <b3c5fa5d-1ef0-4c39-a9a9-a86e198059f9@eoos.dds.nl>
+ <20240702170444.5c43761e@arachnoid>
+Message-ID: <289AC72B-2A0B-4087-B2E7-74C9E61BBB34@R-project.org>
+
+The second point is not really an issue - R already uses numerics for larger-than-32-bit indexing at R level and it works just fine for objects up to ca. 72 petabytes.
+
+However, the first one is a bit more relevant than one would think. At one point I have experimented with allowing data frames with more than 2^31 rows, but it breaks in many places - some quite unexpected. Beside dim() there is also the issue with (non-expanded) row names. Overall, it is a lot more work - some would have to be done in R but some would require changes to packages as well.
+
+(In practice I use sharded data frames for large data which removes the limit and allows parallel processing - but requires support from the methods that will be applied to them).
+
+Cheers,
+Simon
+
+
+
+> On Jul 2, 2024, at 16:04, Ivan Krylov via R-devel <r-devel at r-project.org> wrote:
+> 
+> ? Wed, 19 Jun 2024 09:52:20 +0200
+> Jan van der Laan <rhelp at eoos.dds.nl> ?????:
+> 
+>> What is the status of supporting long vectors in data.frames (e.g. 
+>> data.frames with more than 2^31 records)? Is this something that is 
+>> being worked on? Is there a time line for this? Is this something I
+>> can contribute to?
+> 
+> Apologies if you've already received a better answer off-list.
+> 
+> From from my limited understanding, the problem with supporting
+> larger-than-(2^31-1) dimensions has multiple facets:
+> 
+> - In many parts of R code, there's the assumption that dim() is
+>   of integer type. That wouldn't be a problem by itself, except...
+> 
+> - R currently lacks a native 64-bit integer type. About a year ago
+>   Gabe Becker mentioned that Luke Tierney has been considering
+>   improvements in this direction, but it's hard to introduce 64-bit
+>   integers without making the user worry even more about data types
+>   (numeric != integer != 64-bit integer) or introducing a lot of
+>   overhead (64-bit integers being twice as large as 32-bit ones and,
+>   depending on the workload, frequently redundant).
+> 
+> - Two-dimensional objects eventually get transformed into matrices and
+>   handed to LAPACK for linear algebra operations. Currently, the
+>   interface used by R to talk to BLAS and LAPACK only supports 32-bit
+>   signed integers for lengths. 64-bit BLASes and LAPACKs do exist
+>   (e.g. OpenBLAS can be compiled with 64-bit lengths), but we haven't
+>   taught R to use them.
+> 
+>   (This isn't limited to array dimensions, by the way. If you try to
+>   svd() a 40000 by 40000 matrix, it'll try to ask for temporary memory
+>   with length that overflows a signed 32-bit integer, get a much
+>   shorter allocation instead, promptly overflow the buffer and
+>   crash the process.)
+> 
+> As you see, it's interconnected; work on one thing will involve the
+> other two.
+> 
+> -- 
+> Best regards,
+> Ivan
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
