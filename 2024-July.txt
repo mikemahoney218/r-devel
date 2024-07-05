@@ -123,3 +123,388 @@ Simon
 > 
 
 
+From rhe|p @end|ng |rom eoo@@dd@@n|  Thu Jul  4 08:38:01 2024
+From: rhe|p @end|ng |rom eoo@@dd@@n| (Jan van der Laan)
+Date: Thu, 4 Jul 2024 08:38:01 +0200
+Subject: [Rd] Large vector support in data.frames
+In-Reply-To: <289AC72B-2A0B-4087-B2E7-74C9E61BBB34@R-project.org>
+References: <b3c5fa5d-1ef0-4c39-a9a9-a86e198059f9@eoos.dds.nl>
+ <20240702170444.5c43761e@arachnoid>
+ <289AC72B-2A0B-4087-B2E7-74C9E61BBB34@R-project.org>
+Message-ID: <628f7453-e37c-484c-aff5-2b72dba8e61d@eoos.dds.nl>
+
+Ivan, Simon,
+
+Thanks for the replies.
+
+I can work around the limitation. I currently either divide the data 
+into shards or use a list with (long) vectors depending on what I am 
+trying to do. But I have to transform between the two representations 
+which takes time and memory and often need more code than I would have 
+if I could have used data.frames.
+
+Being able to create large (> 2^31-1 rows) data.frames and doing some 
+basic things like selecting rows and columns, would already be really 
+nice. That would also allow package maintainers to start supporting 
+these data.frames. I imagine getting large data.frames working in 
+functions like lm, is not trivial and lm might not support this any time 
+soon. However, a package like biglm might.
+
+But from what you are saying, I get the impression that this is not 
+something that is being actively worked on. I must say, my hands a kind 
+of itching to try.
+
+Best,
+Jan
+
+
+
+On 03-07-2024 09:22, Simon Urbanek wrote:
+> The second point is not really an issue - R already uses numerics for larger-than-32-bit indexing at R level and it works just fine for objects up to ca. 72 petabytes.
+> 
+> However, the first one is a bit more relevant than one would think. At one point I have experimented with allowing data frames with more than 2^31 rows, but it breaks in many places - some quite unexpected. Beside dim() there is also the issue with (non-expanded) row names. Overall, it is a lot more work - some would have to be done in R but some would require changes to packages as well.
+> 
+> (In practice I use sharded data frames for large data which removes the limit and allows parallel processing - but requires support from the methods that will be applied to them).
+> 
+> Cheers,
+> Simon
+> 
+> 
+> 
+>> On Jul 2, 2024, at 16:04, Ivan Krylov via R-devel <r-devel at r-project.org> wrote:
+>>
+>> ? Wed, 19 Jun 2024 09:52:20 +0200
+>> Jan van der Laan <rhelp at eoos.dds.nl> ?????:
+>>
+>>> What is the status of supporting long vectors in data.frames (e.g.
+>>> data.frames with more than 2^31 records)? Is this something that is
+>>> being worked on? Is there a time line for this? Is this something I
+>>> can contribute to?
+>>
+>> Apologies if you've already received a better answer off-list.
+>>
+>>  From from my limited understanding, the problem with supporting
+>> larger-than-(2^31-1) dimensions has multiple facets:
+>>
+>> - In many parts of R code, there's the assumption that dim() is
+>>    of integer type. That wouldn't be a problem by itself, except...
+>>
+>> - R currently lacks a native 64-bit integer type. About a year ago
+>>    Gabe Becker mentioned that Luke Tierney has been considering
+>>    improvements in this direction, but it's hard to introduce 64-bit
+>>    integers without making the user worry even more about data types
+>>    (numeric != integer != 64-bit integer) or introducing a lot of
+>>    overhead (64-bit integers being twice as large as 32-bit ones and,
+>>    depending on the workload, frequently redundant).
+>>
+>> - Two-dimensional objects eventually get transformed into matrices and
+>>    handed to LAPACK for linear algebra operations. Currently, the
+>>    interface used by R to talk to BLAS and LAPACK only supports 32-bit
+>>    signed integers for lengths. 64-bit BLASes and LAPACKs do exist
+>>    (e.g. OpenBLAS can be compiled with 64-bit lengths), but we haven't
+>>    taught R to use them.
+>>
+>>    (This isn't limited to array dimensions, by the way. If you try to
+>>    svd() a 40000 by 40000 matrix, it'll try to ask for temporary memory
+>>    with length that overflows a signed 32-bit integer, get a much
+>>    shorter allocation instead, promptly overflow the buffer and
+>>    crash the process.)
+>>
+>> As you see, it's interconnected; work on one thing will involve the
+>> other two.
+>>
+>> -- 
+>> Best regards,
+>> Ivan
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+
+
+From |kry|ov @end|ng |rom d|@root@org  Thu Jul  4 11:43:06 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Thu, 4 Jul 2024 12:43:06 +0300
+Subject: [Rd] R FAQ 2.6, 7.21
+Message-ID: <20240704124306.41fb029f@trisector>
+
+Hello R-devel,
+
+I would like to suggest a couple of updates for the R FAQ.
+
+https://CRAN.R-project.org/bin/linux/suse is currently empty and the
+directory has mtime from 2012, so it probably doesn't help to reference
+it in FAQ 2.6.
+
+There seems to be increased interest in using variables as variable
+names [1,2], so it might be useful to expand 7.21 a little. Can an R
+FAQ entry link to R-intro section 6.1?
+
+Index: doc/manual/R-FAQ.texi
+===================================================================
+--- doc/manual/R-FAQ.texi	(revision 86871)
++++ doc/manual/R-FAQ.texi	(working copy)
+@@ -503,9 +503,6 @@
+ @abbr{RPM}s for @I{RedHat Enterprise Linux} and compatible distributions (e.g.,
+ @I{Centos}, Scientific Linux, Oracle Linux).
+ 
+-See @url{https://CRAN.R-project.org/bin/linux/suse/README.html} for
+-information about @abbr{RPM}s for openSUSE.
+-
+ No other binary distributions are currently publicly available via
+ @CRAN{}.
+ 
+@@ -2624,8 +2621,31 @@
+ @end example
+ 
+ @noindent
+-without any of this messing about.
++without any of this messing about. This becomes especially true if you
++are finding yourself creating and trying to programmatically access
++groups of related variables such as @code{result1}, @code{result2},
++ at code{result3}, and so on: instead of fighting against the language to
++use
+ 
++ at example
++# 'i'th result <- process('i'th dataset)
++assign(paste0("result", i), process(get(paste0("dataset", i))))
++ at end example
++
++it is much easier to put the related variables in lists and use
++
++ at example
++result[[i]] <- process(dataset[[i]])
++ at end example
++
++and, eventually,
++
++ at example
++result <- lapply(dataset, process)
++ at end example
++
++which is easy to replace with @code{parLapply} for parallel processing.
++
+ @node Why do lattice/trellis graphics not work?
+ @section Why do lattice/trellis graphics not work?
+ 
+
+
+-- 
+Best regards,
+Ivan
+
+
+From |uc@r @end|ng |rom |edor@project@org  Thu Jul  4 11:52:35 2024
+From: |uc@r @end|ng |rom |edor@project@org (=?UTF-8?Q?I=C3=B1aki_Ucar?=)
+Date: Thu, 4 Jul 2024 11:52:35 +0200
+Subject: [Rd] R FAQ 2.6, 7.21
+In-Reply-To: <20240704124306.41fb029f@trisector>
+References: <20240704124306.41fb029f@trisector>
+Message-ID: <CALEXWq3qOGUqkTh2apDR8ZLRmtQH+4MwConcYEs-pqEY=POFrw@mail.gmail.com>
+
+On Thu, 4 Jul 2024 at 11:44, Ivan Krylov via R-devel <r-devel at r-project.org>
+wrote:
+
+> Hello R-devel,
+>
+> I would like to suggest a couple of updates for the R FAQ.
+>
+> https://CRAN.R-project.org/bin/linux/suse is currently empty and the
+> directory has mtime from 2012, so it probably doesn't help to reference
+> it in FAQ 2.6.
+>
+
+And now that we are at it, I would like to suggest also a mention to
+https://cran.r-project.org/bin/linux/fedora/
+
+I?aki
+
+
+> There seems to be increased interest in using variables as variable
+> names [1,2], so it might be useful to expand 7.21 a little. Can an R
+> FAQ entry link to R-intro section 6.1?
+>
+> Index: doc/manual/R-FAQ.texi
+> ===================================================================
+> --- doc/manual/R-FAQ.texi       (revision 86871)
+> +++ doc/manual/R-FAQ.texi       (working copy)
+> @@ -503,9 +503,6 @@
+>  @abbr{RPM}s for @I{RedHat Enterprise Linux} and compatible distributions
+> (e.g.,
+>  @I{Centos}, Scientific Linux, Oracle Linux).
+>
+> -See @url{https://CRAN.R-project.org/bin/linux/suse/README.html} for
+> -information about @abbr{RPM}s for openSUSE.
+> -
+>  No other binary distributions are currently publicly available via
+>  @CRAN{}.
+>
+> @@ -2624,8 +2621,31 @@
+>  @end example
+>
+>  @noindent
+> -without any of this messing about.
+> +without any of this messing about. This becomes especially true if you
+> +are finding yourself creating and trying to programmatically access
+> +groups of related variables such as @code{result1}, @code{result2},
+> + at code{result3}, and so on: instead of fighting against the language to
+> +use
+>
+> + at example
+> +# 'i'th result <- process('i'th dataset)
+> +assign(paste0("result", i), process(get(paste0("dataset", i))))
+> + at end example
+> +
+> +it is much easier to put the related variables in lists and use
+> +
+> + at example
+> +result[[i]] <- process(dataset[[i]])
+> + at end example
+> +
+> +and, eventually,
+> +
+> + at example
+> +result <- lapply(dataset, process)
+> + at end example
+> +
+> +which is easy to replace with @code{parLapply} for parallel processing.
+> +
+>  @node Why do lattice/trellis graphics not work?
+>  @section Why do lattice/trellis graphics not work?
+>
+>
+>
+> --
+> Best regards,
+> Ivan
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+-- 
+I?aki ?car
+
+	[[alternative HTML version deleted]]
+
+
+From @vi@e@gross m@iii@g oii gm@ii@com  Thu Jul  4 15:35:15 2024
+From: @vi@e@gross m@iii@g oii gm@ii@com (@vi@e@gross m@iii@g oii gm@ii@com)
+Date: Thu, 4 Jul 2024 09:35:15 -0400
+Subject: [Rd] Large vector support in data.frames
+In-Reply-To: <628f7453-e37c-484c-aff5-2b72dba8e61d@eoos.dds.nl>
+References: <b3c5fa5d-1ef0-4c39-a9a9-a86e198059f9@eoos.dds.nl>
+ <20240702170444.5c43761e@arachnoid>
+ <289AC72B-2A0B-4087-B2E7-74C9E61BBB34@R-project.org>
+ <628f7453-e37c-484c-aff5-2b72dba8e61d@eoos.dds.nl>
+Message-ID: <002e01dace17$0141f380$03c5da80$@gmail.com>
+
+Unfortunately, as has been noted, some changes require many parties to change at once and can cause huge problems when an unchanged part is reached. If integers are a fixed size, an implementation can be straightforward and you can patch in libraries and parts already used and tested and in languages like C.
+
+Python is an example where they went another way and the built-in integer type has an indefinite length integer. But that can mess with efficiency so some extensions commonly used for their versions of Dataframe often allow you to specify one of several types of fixed length integer for efficiency.
+
+-----Original Message-----
+From: R-devel <r-devel-bounces at r-project.org> On Behalf Of Jan van der Laan
+Sent: Thursday, July 4, 2024 2:38 AM
+To: r-devel at r-project.org
+Subject: Re: [Rd] Large vector support in data.frames
+
+Ivan, Simon,
+
+Thanks for the replies.
+
+I can work around the limitation. I currently either divide the data 
+into shards or use a list with (long) vectors depending on what I am 
+trying to do. But I have to transform between the two representations 
+which takes time and memory and often need more code than I would have 
+if I could have used data.frames.
+
+Being able to create large (> 2^31-1 rows) data.frames and doing some 
+basic things like selecting rows and columns, would already be really 
+nice. That would also allow package maintainers to start supporting 
+these data.frames. I imagine getting large data.frames working in 
+functions like lm, is not trivial and lm might not support this any time 
+soon. However, a package like biglm might.
+
+But from what you are saying, I get the impression that this is not 
+something that is being actively worked on. I must say, my hands a kind 
+of itching to try.
+
+Best,
+Jan
+
+
+
+On 03-07-2024 09:22, Simon Urbanek wrote:
+> The second point is not really an issue - R already uses numerics for larger-than-32-bit indexing at R level and it works just fine for objects up to ca. 72 petabytes.
+> 
+> However, the first one is a bit more relevant than one would think. At one point I have experimented with allowing data frames with more than 2^31 rows, but it breaks in many places - some quite unexpected. Beside dim() there is also the issue with (non-expanded) row names. Overall, it is a lot more work - some would have to be done in R but some would require changes to packages as well.
+> 
+> (In practice I use sharded data frames for large data which removes the limit and allows parallel processing - but requires support from the methods that will be applied to them).
+> 
+> Cheers,
+> Simon
+> 
+> 
+> 
+>> On Jul 2, 2024, at 16:04, Ivan Krylov via R-devel <r-devel at r-project.org> wrote:
+>>
+>> ? Wed, 19 Jun 2024 09:52:20 +0200
+>> Jan van der Laan <rhelp at eoos.dds.nl> ?????:
+>>
+>>> What is the status of supporting long vectors in data.frames (e.g.
+>>> data.frames with more than 2^31 records)? Is this something that is
+>>> being worked on? Is there a time line for this? Is this something I
+>>> can contribute to?
+>>
+>> Apologies if you've already received a better answer off-list.
+>>
+>>  From from my limited understanding, the problem with supporting
+>> larger-than-(2^31-1) dimensions has multiple facets:
+>>
+>> - In many parts of R code, there's the assumption that dim() is
+>>    of integer type. That wouldn't be a problem by itself, except...
+>>
+>> - R currently lacks a native 64-bit integer type. About a year ago
+>>    Gabe Becker mentioned that Luke Tierney has been considering
+>>    improvements in this direction, but it's hard to introduce 64-bit
+>>    integers without making the user worry even more about data types
+>>    (numeric != integer != 64-bit integer) or introducing a lot of
+>>    overhead (64-bit integers being twice as large as 32-bit ones and,
+>>    depending on the workload, frequently redundant).
+>>
+>> - Two-dimensional objects eventually get transformed into matrices and
+>>    handed to LAPACK for linear algebra operations. Currently, the
+>>    interface used by R to talk to BLAS and LAPACK only supports 32-bit
+>>    signed integers for lengths. 64-bit BLASes and LAPACKs do exist
+>>    (e.g. OpenBLAS can be compiled with 64-bit lengths), but we haven't
+>>    taught R to use them.
+>>
+>>    (This isn't limited to array dimensions, by the way. If you try to
+>>    svd() a 40000 by 40000 matrix, it'll try to ask for temporary memory
+>>    with length that overflows a signed 32-bit integer, get a much
+>>    shorter allocation instead, promptly overflow the buffer and
+>>    crash the process.)
+>>
+>> As you see, it's interconnected; work on one thing will involve the
+>> other two.
+>>
+>> -- 
+>> Best regards,
+>> Ivan
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
