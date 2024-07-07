@@ -508,3 +508,161 @@ R-devel at r-project.org mailing list
 https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From kev|nu@hey @end|ng |rom gm@||@com  Fri Jul  5 09:27:50 2024
+From: kev|nu@hey @end|ng |rom gm@||@com (Kevin Ushey)
+Date: Fri, 5 Jul 2024 15:27:50 +0800
+Subject: [Rd] API for converting LANGSXP to LISTSXP?
+Message-ID: <CAJXgQP3+OucVzfX9fHk+-4rW1Ks1=rwpvb7WM=oSv0H8YQex_Q@mail.gmail.com>
+
+Hi,
+
+A common idiom in the R sources is to convert objects between LANGSXP
+and LISTSXP by using SET_TYPEOF. However, this is soon going to be
+disallowed in packages. From what I can see, there isn't currently a
+direct way to convert between these two object types using the
+available API. At the R level, one can convert calls to pairlists
+with:
+
+> as.call(pairlist(as.symbol("rnorm"), 42))
+rnorm(42)
+
+However, the reverse is not possible:
+
+> as.pairlist(call("rnorm", 42))
+Error in as.pairlist(call("rnorm", 42)) :
+  'language' object cannot be coerced to type 'pairlist'
+
+One can do such a conversion via conversion to e.g. an intermediate R
+list (VECSXP), but that seems wasteful. Would it make sense to permit
+this coercion? Or, is there some other relevant API I'm missing?
+
+For completeness, Rf_coerceVector() also emits the same error above
+since it uses the same code path.
+
+Thanks,
+Kevin
+
+
+From neon|r@ @end|ng |rom gm@||@com  Fri Jul  5 16:30:41 2024
+From: neon|r@ @end|ng |rom gm@||@com (neonira Arinoem)
+Date: Fri, 5 Jul 2024 16:30:41 +0200
+Subject: [Rd] quarto list of figures
+Message-ID: <CAN--Dz3Q0VQXAKMbf96=rc2-koYA+EaKWCoGR=TuDjE21vaePw@mail.gmail.com>
+
+I am struggling to get Quarto producing a list of figures from a Quarto
+book.
+
+Where may I find a working sample to get inspiration from?
+
+	[[alternative HTML version deleted]]
+
+
+From m|ch@|2992 @end|ng |rom gm@||@com  Fri Jul  5 16:47:35 2024
+From: m|ch@|2992 @end|ng |rom gm@||@com (=?UTF-8?Q?Micha=C5=82_Bojanowski?=)
+Date: Fri, 5 Jul 2024 16:47:35 +0200
+Subject: [Rd] quarto list of figures
+In-Reply-To: <CAN--Dz3Q0VQXAKMbf96=rc2-koYA+EaKWCoGR=TuDjE21vaePw@mail.gmail.com>
+References: <CAN--Dz3Q0VQXAKMbf96=rc2-koYA+EaKWCoGR=TuDjE21vaePw@mail.gmail.com>
+Message-ID: <CAByPayFmGwnZHkr3gQveetG1pkWEqHioAmoReSjJ2=8MhMY_Lg@mail.gmail.com>
+
+> I am struggling to get Quarto producing a list of figures from a Quarto
+> book.
+>
+> Where may I find a working sample to get inspiration from?
+
+You will have more luck asking at
+https://github.com/quarto-dev/quarto-cli/discussions
+
+
+From |kry|ov @end|ng |rom d|@root@org  Sat Jul  6 14:10:09 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Sat, 6 Jul 2024 15:10:09 +0300
+Subject: [Rd] API for converting LANGSXP to LISTSXP?
+In-Reply-To: <CAJXgQP3+OucVzfX9fHk+-4rW1Ks1=rwpvb7WM=oSv0H8YQex_Q@mail.gmail.com>
+References: <CAJXgQP3+OucVzfX9fHk+-4rW1Ks1=rwpvb7WM=oSv0H8YQex_Q@mail.gmail.com>
+Message-ID: <20240706151009.4071a55b@parabola>
+
+On Fri, 5 Jul 2024 15:27:50 +0800
+Kevin Ushey <kevinushey at gmail.com> wrote:
+
+> A common idiom in the R sources is to convert objects between LANGSXP
+> and LISTSXP by using SET_TYPEOF. However, this is soon going to be
+> disallowed in packages.
+
+Would you mind providing an example where a package needs to take an
+existing LISTSXP and convert it to a LANGSXP (or vice versa)? I think
+that Luke Tierney intended to replace the uses of
+SET_TYPEOF(allocList(...), LANGSXP) with allocLang(...).
+
+At least it's easy to manually convert between the two by replacing the
+head of the list using LCONS(CAR(list), CDR(list)) or CONS(CAR(lang),
+CDR(lang)): in a call, the rest of the arguments are ordinary LISTSXPs.
+
+-- 
+Best regards,
+Ivan
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Sat Jul  6 15:59:11 2024
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Sat, 6 Jul 2024 08:59:11 -0500 (CDT)
+Subject: [Rd] [External]  API for converting LANGSXP to LISTSXP?
+In-Reply-To: <CAJXgQP3+OucVzfX9fHk+-4rW1Ks1=rwpvb7WM=oSv0H8YQex_Q@mail.gmail.com>
+References: <CAJXgQP3+OucVzfX9fHk+-4rW1Ks1=rwpvb7WM=oSv0H8YQex_Q@mail.gmail.com>
+Message-ID: <ba6081a2-4f80-cf8f-f3d9-b925fdc4f117@uiowa.edu>
+
+We have long been discouraging the use of pairlists. So no, we will
+not do anything to facilitate this conversion; if anything the
+opposite. SET_TYPEOF is used more than it should be in the sources.
+It is something I would like us to fix sometime, but isn't high
+priority.
+
+Best,
+
+luke
+
+On Fri, 5 Jul 2024, Kevin Ushey wrote:
+
+> Hi,
+>
+> A common idiom in the R sources is to convert objects between LANGSXP
+> and LISTSXP by using SET_TYPEOF. However, this is soon going to be
+> disallowed in packages. From what I can see, there isn't currently a
+> direct way to convert between these two object types using the
+> available API. At the R level, one can convert calls to pairlists
+> with:
+>
+>> as.call(pairlist(as.symbol("rnorm"), 42))
+> rnorm(42)
+>
+> However, the reverse is not possible:
+>
+>> as.pairlist(call("rnorm", 42))
+> Error in as.pairlist(call("rnorm", 42)) :
+>  'language' object cannot be coerced to type 'pairlist'
+>
+> One can do such a conversion via conversion to e.g. an intermediate R
+> list (VECSXP), but that seems wasteful. Would it make sense to permit
+> this coercion? Or, is there some other relevant API I'm missing?
+>
+> For completeness, Rf_coerceVector() also emits the same error above
+> since it uses the same code path.
+>
+> Thanks,
+> Kevin
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu/
+
+
