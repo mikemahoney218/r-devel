@@ -704,3 +704,84 @@ On Sat, Jul 6, 2024 at 8:09?PM Ivan Krylov <ikrylov at disroot.org> wrote:
 > Ivan
 
 
+From h||m@r@berger @end|ng |rom gmx@de  Fri Jul 12 17:35:19 2024
+From: h||m@r@berger @end|ng |rom gmx@de (Hilmar Berger)
+Date: Fri, 12 Jul 2024 17:35:19 +0200
+Subject: [Rd] xftrm is more than 100x slower for AsIs than for character
+ vectors
+Message-ID: <557b02ff-7632-4440-9b0b-8373d40a3c0f@gmx.de>
+
+Good evening,
+
+I recently have observed slow merges when combining multiple data frames
+derived from DataFrame and base::data.frame. I observed that the index
+column of intermediate tables was of class <AsIs> (automatically
+converted from character). The problem occurred mainly when using the
+sorted = T option in base::merge.
+
+This can be traced to xtfrm.AsIs being more than 100 times slower than
+the comparable function for character vectors.
+
+x = paste0("A_", 1:1e5)
+system.time({o <- xtfrm(x)})
+
+#? user? system elapsed
+#? 0.325?? 0.005?? 0.332
+
+x <- I(x)
+system.time({o <- xtfrm(x)}) # this calls xtfrm.AsIs
+
+# user? system elapsed
+# 26.153?? 0.016? 26.388
+
+This can be finally traced to base::rank() (called from xtfrm.default),
+where I found that
+
+"NB: rank is not itself generic but xtfrm is, and rank(xtfrm(x), ....)
+will have the desired result if there is a xtfrm method. Otherwise, rank
+will make use of ==, >, is.na and extraction methods for classed
+objects, possibly rather slowly. "
+
+This *sounds* like the existence of xtfrm.AsIs should already be able to
+accelerate the ranking, but this does not seem to work. xtfrm.AsIs does
+not do anything for my case of class(x) == "AsIs" and just delegates to
+xtfrm.default.
+
+As a quick solution (and if there is no other fix), could we possibly
+add a note to the help page of I() that sorting/ordering/ranking of AsIs
+columns will be rather slow?
+
+Thanks a lot!
+
+Best regards
+
+Hilmar
+
+ > sessionInfo()
+R version 4.4.1 (2024-06-14)
+Platform: x86_64-pc-linux-gnu
+Running under: Ubuntu 20.04.6 LTS
+
+Matrix products: default
+BLAS:?? /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3
+LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/liblapack.so.3;?
+LAPACK version 3.9.0
+
+locale:
+ ?[1] LC_CTYPE=en_US.UTF-8?????? LC_NUMERIC=C
+ ?[3] LC_TIME=de_DE.UTF-8??????? LC_COLLATE=en_US.UTF-8
+ ?[5] LC_MONETARY=de_DE.UTF-8??? LC_MESSAGES=en_US.UTF-8
+ ?[7] LC_PAPER=de_DE.UTF-8?????? LC_NAME=C
+ ?[9] LC_ADDRESS=C?????????????? LC_TELEPHONE=C
+[11] LC_MEASUREMENT=de_DE.UTF-8 LC_IDENTIFICATION=C
+
+time zone: Europe/Berlin
+tzcode source: system (glibc)
+
+attached base packages:
+[1] stats???? graphics? grDevices utils???? datasets? methods base
+
+loaded via a namespace (and not attached):
+[1] compiler_4.4.1
+
+
