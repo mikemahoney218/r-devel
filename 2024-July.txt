@@ -785,3 +785,85 @@ loaded via a namespace (and not attached):
 [1] compiler_4.4.1
 
 
+From |kry|ov @end|ng |rom d|@root@org  Sun Jul 14 11:24:29 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Sun, 14 Jul 2024 12:24:29 +0300
+Subject: [Rd] xftrm is more than 100x slower for AsIs than for character
+ vectors
+In-Reply-To: <557b02ff-7632-4440-9b0b-8373d40a3c0f@gmx.de>
+References: <557b02ff-7632-4440-9b0b-8373d40a3c0f@gmx.de>
+Message-ID: <20240714122429.760f4183@trisector>
+
+? Fri, 12 Jul 2024 17:35:19 +0200
+Hilmar Berger via R-devel <r-devel at r-project.org> ?????:
+
+> This can be finally traced to base::rank() (called from
+> xtfrm.default), where I found that
+> 
+> "NB: rank is not itself generic but xtfrm is, and rank(xtfrm(x), ....)
+> will have the desired result if there is a xtfrm method. Otherwise,
+> rank will make use of ==, >, is.na and extraction methods for classed
+> objects, possibly rather slowly. "
+
+The problem is indeed that the vector reaches base::rank in both cases,
+but since it has a class, the function has to construct and evaluate a
+call to .gt every time it wants to compare two elements.
+
+xtfrm.AsIs even tries to remove the 'AsIs' class before continuing the
+method dispatch process:
+
+>> if (length(cl <- class(x)) > 1) oldClass(x) <- cl[-1L]
+
+It doesn't work in the (very contrived) case when 'AsIs' is not the
+first class and it doesn't remove 'AsIs' as the only class (making
+static int equal(...) take the slower branch). What's going to break if
+we allow removing the class attribute altogether? This seems to speed
+up xtfrm(I(x)) and survive LC_ALL=C.UTF-8 make check-devel:
+
+Index: src/library/base/R/sort.R
+===================================================================
+--- src/library/base/R/sort.R	(revision 86895)
++++ src/library/base/R/sort.R	(working copy)
+@@ -297,7 +297,8 @@
+ 
+ xtfrm.AsIs <- function(x)
+ {
+-    if(length(cl <- class(x)) > 1) oldClass(x) <- cl[-1L]
++    cl <- oldClass(x)
++    oldClass(x) <- cl[cl != 'AsIs']
+     NextMethod("xtfrm")
+ }
+ 
+
+-- 
+Best regards,
+Ivan
+
+
+From ju0815nk @end|ng |rom gmx@net  Sun Jul 14 19:09:34 2024
+From: ju0815nk @end|ng |rom gmx@net (HB)
+Date: Sun, 14 Jul 2024 19:09:34 +0200
+Subject: [Rd] xftrm is more than 100x slower for AsIs than for character
+ vectors
+In-Reply-To: <20240714122429.760f4183@trisector>
+References: <557b02ff-7632-4440-9b0b-8373d40a3c0f@gmx.de>
+ <20240714122429.760f4183@trisector>
+Message-ID: <B85D3F49-3EF2-4F56-A0C7-21C044C1FE37@gmx.net>
+
+Dear Ivan, 
+
+thanks for the confirmation and the proposed patch. 
+
+I just wanted to add some notes regarding the relevance of this: base::merge using by.x=0 or by.y=0 (i.e. matching on row.names) will automatically add a column Row.names which is I(row.names(x)) to the corresponding input table (using I() since  revision 39026 to avoid conversion of character to factor). When this column is used for sorting (sort=TRUE by default in merge; should happen at least if all.x=T or all.y=T), this will result in slower execution. 
+
+xtfrm.AsIs is unchanged since its addition in r50992 (likely unrelated to the former). 
+
+So I guess that this just went unnoticed since it will not cause problems on small data frames.
+
+Best regards
+
+Hilmar
+ 
+	[[alternative HTML version deleted]]
+
+
