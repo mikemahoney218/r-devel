@@ -867,3 +867,184 @@ Hilmar
 	[[alternative HTML version deleted]]
 
 
+From peter@|@ng|e|der @end|ng |rom gm@||@com  Mon Jul 15 07:08:01 2024
+From: peter@|@ng|e|der @end|ng |rom gm@||@com (Peter Langfelder)
+Date: Mon, 15 Jul 2024 13:08:01 +0800
+Subject: [Rd] R-patched on CRAN is R-4.3.3
+Message-ID: <CA+hbrhWeSLh+RhrC5FgRhbG396SNrCVbdsY0CfL4Ut387t896Q@mail.gmail.com>
+
+Hi all,
+
+apologies if I missed something here. Just downloaded and compiled
+R-patched from https://stat.ethz.ch/R/daily/ but it reports as R-4.3.3
+(2024-04-09 r86895) -- "Angel Food Cake". The last dated R-patched is
+from 2024-04-09, about 3 months old. Are R-patched not updated
+anymore, am I looking at a wrong directory or even a wrong server? The
+current R Installation and Administration manual
+(https://cran.r-project.org/doc/manuals/r-patched/R-admin.html#Getting-patched-and-development-versions)
+suggests that the current R-patched should be where I looked for it:
+
+A patched version of the current release, ?r-patched?, and the current
+development version, ?r-devel?, are available as daily tarballs and
+via access to the R Subversion repository. (For the two weeks prior to
+the release of a minor (4.x.0) version, ?r-patched? tarballs may refer
+to beta/release candidates of the upcoming release, the patched
+version of the current release being available via Subversion.)
+
+The tarballs are available from https://stat.ethz.ch/R/daily/.
+Download R-patched.tar.gz or R-devel.tar.gz (or the .tar.bz2 versions)
+and unpack as described in the previous section. They are built in
+exactly the same way as distributions of R releases.
+
+Thanks,
+
+Peter
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Mon Jul 15 09:56:53 2024
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Mon, 15 Jul 2024 09:56:53 +0200
+Subject: [Rd] R-patched on CRAN is R-4.3.3
+In-Reply-To: <CA+hbrhWeSLh+RhrC5FgRhbG396SNrCVbdsY0CfL4Ut387t896Q@mail.gmail.com>
+References: <CA+hbrhWeSLh+RhrC5FgRhbG396SNrCVbdsY0CfL4Ut387t896Q@mail.gmail.com>
+Message-ID: <f50fcfef-86df-4ca8-9d83-20d472ed8aaf@gmail.com>
+
+
+On 7/15/24 07:08, Peter Langfelder wrote:
+> Hi all,
+>
+> apologies if I missed something here. Just downloaded and compiled
+> R-patched from https://stat.ethz.ch/R/daily/ but it reports as R-4.3.3
+> (2024-04-09 r86895) -- "Angel Food Cake". The last dated R-patched is
+> from 2024-04-09, about 3 months old. Are R-patched not updated
+> anymore, am I looking at a wrong directory or even a wrong server? The
+> current R Installation and Administration manual
+> (https://cran.r-project.org/doc/manuals/r-patched/R-admin.html#Getting-patched-and-development-versions)
+> suggests that the current R-patched should be where I looked for it:
+>
+> A patched version of the current release, ?r-patched?, and the current
+> development version, ?r-devel?, are available as daily tarballs and
+> via access to the R Subversion repository. (For the two weeks prior to
+> the release of a minor (4.x.0) version, ?r-patched? tarballs may refer
+> to beta/release candidates of the upcoming release, the patched
+> version of the current release being available via Subversion.)
+>
+> The tarballs are available from https://stat.ethz.ch/R/daily/.
+> Download R-patched.tar.gz or R-devel.tar.gz (or the .tar.bz2 versions)
+> and unpack as described in the previous section. They are built in
+> exactly the same way as distributions of R releases.
+
+Before this gets resolved, you can get the latest version of R-patched 
+from svn:
+
+https://svn.r-project.org/R/branches/R-4-4-branch
+
+(and the current R release from 
+https://cran.r-project.org/src/base/R-4/R-4.4.1.tar.gz)
+
+Tomas
+
+>
+> Thanks,
+>
+> Peter
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From |kry|ov @end|ng |rom d|@root@org  Mon Jul 15 16:31:31 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Mon, 15 Jul 2024 17:31:31 +0300
+Subject: [Rd] Minor inconsistencies in tools:::funAPI()
+Message-ID: <20240715173131.0ca30ba5@arachnoid>
+
+Hi all,
+
+I've noticed some peculiarities in the tools:::funAPI output that
+complicate its programmatic use a bit.
+
+ - Is it for remapped symbol names (with Rf_ or the Fortran
+   underscore), or for unmapped names (without Rf_ or the underscore)?
+
+I see that the functions marked in WRE are almost all (except
+Rf_installChar and Rf_installTrChar) unmapped. This makes a lot of
+sense because some of those interfaces (e.g. CONS(), CHAR(),
+NOT_SHARED()) are C preprocessor macros, not functions. I also see that
+installTrChar is not explicitly marked.
+
+Are we allowed to call tools:::unmap(tools:::funAPI()$name) and
+consider the return value to be the list of all unmapped APIs, despite,
+e.g., installTrChar not being explicitly marked?
+
+ - Should R_PV be an @apifun if it's currently caught by checks in
+   sotools.R?
+
+ - Should R_FindSymbol be commented /* Not API */ if it's marked as
+   @apifun in WRE and not caught by sotools.R? It is currently used by 8
+   CRAN packages.
+
+ - The names 'select', 'delztg' from R_ext/Lapack.h are function
+   pointer arguments, not functions or type declarations. They are
+   being found because funcRegexp is written to match incomplete
+   function declarations (e.g. when they end up being split over
+   multiple lines, like in R_ext/Lapack.h), and function pointer
+   argument declarations look sufficiently similar.
+
+A relatively compact (but still brittle) way to match function
+declarations in C header files is shown at the end of this message. I
+have confirmed that compared to tools:::getFunsHdr, the only extraneous
+symbols that it finds in preprocessed headers are "R_SetWin32",
+"user_unif_rand", "user_unif_init", "user_unif_nseed",
+"user_unif_seedloc" "user_norm_rand", which are special-cased in
+tools:::getFunsHdr, and the only symbols it doesn't find are "select"
+and "delztg" in R_ext/Lapack.h, which we should not be finding.
+
+# "Bird's eye" view, gives unmapped names on non-preprocessed headers
+getdecl <- function(file, lines = readLines(file)) {
+	# have to combine to perform multi-line matches
+	lines <- paste(c(lines, ''), collapse = '\n')
+	# first eat the C comments, dotall but non-greedy match
+	lines <- gsub('(?s)/\\*.*?\\*/', '', lines, perl = TRUE)
+	# C++-style comments too, multiline not dotall
+	lines <- gsub('(?m)//.*$', '', lines, perl = TRUE)
+	# drop all preprocessor directives
+	lines <- gsub('(?m)^\\s*#.*$', '', lines, perl = TRUE)
+
+	rx <- r"{(?xs)
+		(?!typedef)(?<!\w) # please no typedefs
+		# return type with attributes
+		(
+			# words followed by whitespace or stars
+			(?: \w+ (?:\s+ | \*)+)+
+		)
+		# function name, assumes no extra whitespace
+		(
+			\w+\(\w+\) # macro call
+			| \(\w+\)  # in parentheses
+			| \w+      # a plain name
+		)
+		# arguments: non-greedy match inside parentheses
+		\s* \( (.*?) \) \s* # using dotall here
+		# will include R_PRINTF_FORMAT(1,2 but we don't care
+		# finally terminated by semicolon
+		;
+	}"
+
+	regmatches(lines, gregexec(rx, lines, perl = TRUE))[[1]][3,]
+}
+
+# Preprocess then extract remapped function names like getFunsHdr
+getdecl2 <- function(file)
+	file |>
+	readLines() |>
+	grep('^\\s*#\\s*error', x = _, value = TRUE, invert = TRUE) |>
+	tools:::ccE() |>
+	getdecl(lines = _)
+
+-- 
+Best regards,
+Ivan
+
+
