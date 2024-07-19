@@ -1094,3 +1094,338 @@ On 14.07.24 19:09, HB via R-devel wrote:
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From mu@che|||j2 @end|ng |rom gm@||@com  Thu Jul 18 18:14:27 2024
+From: mu@che|||j2 @end|ng |rom gm@||@com (John Muschelli)
+Date: Thu, 18 Jul 2024 12:14:27 -0400
+Subject: [Rd] Printing digits.secs on data.frame?
+Message-ID: <CAFsq6G9C0ue-mQXv6RLFZAyNcKF6HAUihPY3HnHFXba4-MMCVw@mail.gmail.com>
+
+Is there a way to have printing data.frames with POSIXct to display
+milliseconds if digits.secs is set as a default?
+
+You can use the digits argument in print, such as print(df, digits = 3) to
+get the intended output, but I assumed it was done with the option
+digits.secs set.  Tibbles by default do this printing, which is shown
+below, but I was unsure if digits.secs should affect printing data.frames,
+as we see below it affects printing POSIXct outside of a data.frame.
+
+``` r
+df = structure(list(time = structure(c(1509375600, 1509375600.03333,
+                                       1509375600.06667, 1509375600.1,
+1509375600.13333, 1509375600.16667
+), class = c("POSIXct", "POSIXt"), tzone = "GMT"),
+X = c(0.188,
+      0.18, 0.184, 0.184, 0.184, 0.184),
+Y = c(0.145, 0.125, 0.121,
+      0.121, 0.117, 0.125),
+Z = c(-0.984, -0.988, -0.984, -0.992, -0.988,
+      -0.988)), row.names = c(NA, 6L), class = "data.frame")
+options(digits.secs = NULL)
+getOption("digits.secs")
+#> NULL
+df
+#>                  time     X     Y      Z
+#> 1 2017-10-30 15:00:00 0.188 0.145 -0.984
+#> 2 *2017-10-30 15:00:00* 0.180 0.125 -0.988
+#> 3 2017-10-30 15:00:00 0.184 0.121 -0.984
+#> 4 2017-10-30 15:00:00 0.184 0.121 -0.992
+#> 5 2017-10-30 15:00:00 0.184 0.117 -0.988
+#> 6 2017-10-30 15:00:00 0.184 0.125 -0.988
+print(df)
+#>                  time     X     Y      Z
+#> 1 2017-10-30 15:00:00 0.188 0.145 -0.984
+#> 2 *2017-10-30 15:00:00* 0.180 0.125 -0.988
+#> 3 2017-10-30 15:00:00 0.184 0.121 -0.984
+#> 4 2017-10-30 15:00:00 0.184 0.121 -0.992
+#> 5 2017-10-30 15:00:00 0.184 0.117 -0.988
+#> 6 2017-10-30 15:00:00 0.184 0.125 -0.988
+df$time
+#> [1] "2017-10-30 15:00:00 GMT" "*2017-10-30 15:00:00 GMT*"
+#> [3] "2017-10-30 15:00:00 GMT" "2017-10-30 15:00:00 GMT"
+#> [5] "2017-10-30 15:00:00 GMT" "2017-10-30 15:00:00 GMT"
+
+print(df, digits = 3)
+#>                      time     X     Y      Z
+#> 1 2017-10-30 15:00:00.000 0.188 0.145 -0.984
+#> 2 *2017-10-30 15:00:00.033* 0.180 0.125 -0.988
+#> 3 2017-10-30 15:00:00.066 0.184 0.121 -0.984
+#> 4 2017-10-30 15:00:00.099 0.184 0.121 -0.992
+#> 5 2017-10-30 15:00:00.133 0.184 0.117 -0.988
+#> 6 2017-10-30 15:00:00.166 0.184 0.125 -0.988
+tibble::as_tibble(df)
+#> # A tibble: 6 ? 4
+#>   time                    X     Y      Z
+#>   <dttm>              <dbl> <dbl>  <dbl>
+#> 1 2017-10-30 15:00:00 0.188 0.145 -0.984
+#> 2 *2017-10-30 15:00:00* 0.18  0.125 -0.988
+#> 3 2017-10-30 15:00:00 0.184 0.121 -0.984
+#> 4 2017-10-30 15:00:00 0.184 0.121 -0.992
+#> 5 2017-10-30 15:00:00 0.184 0.117 -0.988
+#> 6 2017-10-30 15:00:00 0.184 0.125 -0.988
+```
+
+We see by default tibbles do this printing
+
+``` r
+options(digits.secs = 3)
+getOption("digits.secs")
+#> [1] 3
+df
+#>                  time     X     Y      Z
+#> 1 2017-10-30 15:00:00 0.188 0.145 -0.984
+#> 2 *2017-10-30 15:00:00* 0.180 0.125 -0.988
+#> 3 2017-10-30 15:00:00 0.184 0.121 -0.984
+#> 4 2017-10-30 15:00:00 0.184 0.121 -0.992
+#> 5 2017-10-30 15:00:00 0.184 0.117 -0.988
+#> 6 2017-10-30 15:00:00 0.184 0.125 -0.988
+print(df)
+#>                  time     X     Y      Z
+#> 1 2017-10-30 15:00:00 0.188 0.145 -0.984
+#> 2* 2017-10-30 15:00:00* 0.180 0.125 -0.988
+#> 3 2017-10-30 15:00:00 0.184 0.121 -0.984
+#> 4 2017-10-30 15:00:00 0.184 0.121 -0.992
+#> 5 2017-10-30 15:00:00 0.184 0.117 -0.988
+#> 6 2017-10-30 15:00:00 0.184 0.125 -0.988
+```
+
+We see that this affects printing POSIXct outside of a data.frame
+
+``` r
+df$time
+#> [1] "2017-10-30 15:00:00.000 GMT" "*2017-10-30 15:00:00.033 GMT*"
+#> [3] "2017-10-30 15:00:00.066 GMT" "2017-10-30 15:00:00.099 GMT"
+#> [5] "2017-10-30 15:00:00.133 GMT" "2017-10-30 15:00:00.166 GMT"
+print(df, digits = 3)
+#>                      time     X     Y      Z
+#> 1 2017-10-30 15:00:00.000 0.188 0.145 -0.984
+#> 2 *2017-10-30 15:00:00.033* 0.180 0.125 -0.988
+#> 3 2017-10-30 15:00:00.066 0.184 0.121 -0.984
+#> 4 2017-10-30 15:00:00.099 0.184 0.121 -0.992
+#> 5 2017-10-30 15:00:00.133 0.184 0.117 -0.988
+#> 6 2017-10-30 15:00:00.166 0.184 0.125 -0.988
+tibble::as_tibble(df)
+#> # A tibble: 6 ? 4
+#>   time                        X     Y      Z
+#>   <dttm>                  <dbl> <dbl>  <dbl>
+#> 1 2017-10-30 15:00:00.000 0.188 0.145 -0.984
+#> 2 *2017-10-30 15:00:00.033* 0.18  0.125 -0.988
+#> 3 2017-10-30 15:00:00.066 0.184 0.121 -0.984
+#> 4 2017-10-30 15:00:00.099 0.184 0.121 -0.992
+#> 5 2017-10-30 15:00:00.133 0.184 0.117 -0.988
+#> 6 2017-10-30 15:00:00.166 0.184 0.125 -0.988
+```
+
+<sup>Created on 2024-07-18 with [reprex v2.1.0](https://reprex.tidyverse.org
+)</sup>
+
+<details style="margin-bottom:10px;">
+<summary>
+Session info
+</summary>
+
+``` r
+sessioninfo::session_info()
+#> ? Session info
+???????????????????????????????????????????????????????????????
+#>  setting  value
+#>  version  R version 4.4.0 (2024-04-24)
+#>  os       macOS Sonoma 14.4.1
+#>  system   x86_64, darwin20
+#>  ui       X11
+#>  language (EN)
+#>  collate  en_US.UTF-8
+#>  ctype    en_US.UTF-8
+#>  tz       America/New_York
+#>  date     2024-07-18
+#>  pandoc   3.2 @ /usr/local/bin/ (via rmarkdown)
+#>
+```
+
+</details>
+
+	[[alternative HTML version deleted]]
+
+
+From edd @end|ng |rom deb|@n@org  Thu Jul 18 18:51:47 2024
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Thu, 18 Jul 2024 11:51:47 -0500
+Subject: [Rd] Printing digits.secs on data.frame?
+In-Reply-To: <CAFsq6G9C0ue-mQXv6RLFZAyNcKF6HAUihPY3HnHFXba4-MMCVw@mail.gmail.com>
+References: <CAFsq6G9C0ue-mQXv6RLFZAyNcKF6HAUihPY3HnHFXba4-MMCVw@mail.gmail.com>
+Message-ID: <26265.18467.512175.893418@rob.eddelbuettel.com>
+
+
+On 18 July 2024 at 12:14, John Muschelli wrote:
+| Is there a way to have printing data.frames with POSIXct to display
+| milliseconds if digits.secs is set as a default?
+
+I suspect this would require a change to the corresonding print method.
+ 
+| You can use the digits argument in print, such as print(df, digits = 3) to
+| get the intended output, but I assumed it was done with the option
+| digits.secs set.  Tibbles by default do this printing, which is shown
+| below, but I was unsure if digits.secs should affect printing data.frames,
+| as we see below it affects printing POSIXct outside of a data.frame.
+| 
+| ``` r
+| df = structure(list(time = structure(c(1509375600, 1509375600.03333,
+|                                        1509375600.06667, 1509375600.1,
+| 1509375600.13333, 1509375600.16667
+| ), class = c("POSIXct", "POSIXt"), tzone = "GMT"),
+| X = c(0.188,
+|       0.18, 0.184, 0.184, 0.184, 0.184),
+| Y = c(0.145, 0.125, 0.121,
+|       0.121, 0.117, 0.125),
+| Z = c(-0.984, -0.988, -0.984, -0.992, -0.988,
+|       -0.988)), row.names = c(NA, 6L), class = "data.frame")
+
+I like data.table as a (well-behaved) generalisation of data.frame and use it
+in cases like this (and others). It does what you desire (and I also default
+to digits.secs=6 in my startup code, and may have another data.table
+formating option enabled)
+
+> data.table::data.table(df)
+                        time     X     Y      Z
+                      <POSc> <num> <num>  <num>
+1: 2017-10-30 15:00:00.00000 0.188 0.145 -0.984
+2: 2017-10-30 15:00:00.03332 0.180 0.125 -0.988
+3: 2017-10-30 15:00:00.06666 0.184 0.121 -0.984
+4: 2017-10-30 15:00:00.09999 0.184 0.121 -0.992
+5: 2017-10-30 15:00:00.13333 0.184 0.117 -0.988
+6: 2017-10-30 15:00:00.16667 0.184 0.125 -0.988
+>
+
+But I concur that it would be nice to potentially have this for data.frame
+too.  Given the amount of code out there that might be affected a change may
+have to be conditional on another option.
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Thu Jul 18 23:14:02 2024
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Thu, 18 Jul 2024 23:14:02 +0200
+Subject: [Rd] xftrm is more than 100x slower for AsIs than for character
+ vectors
+In-Reply-To: <20240714122429.760f4183@trisector>
+References: <557b02ff-7632-4440-9b0b-8373d40a3c0f@gmx.de>
+ <20240714122429.760f4183@trisector>
+Message-ID: <26265.34202.232589.270942@hornik.net>
+
+>>>>> Ivan Krylov via R-devel writes:
+
+Thanks: I just changed xtfrm.AsIs() as suggested.
+
+Best
+-k
+
+> ? Fri, 12 Jul 2024 17:35:19 +0200
+> Hilmar Berger via R-devel <r-devel at r-project.org> ?????:
+
+>> This can be finally traced to base::rank() (called from
+>> xtfrm.default), where I found that
+>> 
+>> "NB: rank is not itself generic but xtfrm is, and rank(xtfrm(x), ....)
+>> will have the desired result if there is a xtfrm method. Otherwise,
+>> rank will make use of ==, >, is.na and extraction methods for classed
+>> objects, possibly rather slowly. "
+
+> The problem is indeed that the vector reaches base::rank in both cases,
+> but since it has a class, the function has to construct and evaluate a
+> call to .gt every time it wants to compare two elements.
+
+> xtfrm.AsIs even tries to remove the 'AsIs' class before continuing the
+> method dispatch process:
+
+>>> if (length(cl <- class(x)) > 1) oldClass(x) <- cl[-1L]
+
+> It doesn't work in the (very contrived) case when 'AsIs' is not the
+> first class and it doesn't remove 'AsIs' as the only class (making
+> static int equal(...) take the slower branch). What's going to break if
+> we allow removing the class attribute altogether? This seems to speed
+> up xtfrm(I(x)) and survive LC_ALL=C.UTF-8 make check-devel:
+
+> Index: src/library/base/R/sort.R
+> ===================================================================
+> --- src/library/base/R/sort.R	(revision 86895)
+> +++ src/library/base/R/sort.R	(working copy)
+> @@ -297,7 +297,8 @@
+ 
+>  xtfrm.AsIs <- function(x)
+>  {
+> -    if(length(cl <- class(x)) > 1) oldClass(x) <- cl[-1L]
+> +    cl <- oldClass(x)
+> +    oldClass(x) <- cl[cl != 'AsIs']
+>      NextMethod("xtfrm")
+>  }
+ 
+
+> -- 
+> Best regards,
+> Ivan
+
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Thu Jul 18 23:14:29 2024
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Thu, 18 Jul 2024 23:14:29 +0200
+Subject: [Rd] I() in merge (was: Re: xftrm is more than 100x slower for AsIs
+ than for character vectors)
+In-Reply-To: <a539be8b-64a8-4e1b-8676-f79157db3d8d@gmx.de>
+References: <557b02ff-7632-4440-9b0b-8373d40a3c0f@gmx.de>
+ <20240714122429.760f4183@trisector>
+ <B85D3F49-3EF2-4F56-A0C7-21C044C1FE37@gmx.net>
+ <a539be8b-64a8-4e1b-8676-f79157db3d8d@gmx.de>
+Message-ID: <26265.34229.480354.602541@hornik.net>
+
+>>>>> Hilmar Berger via R-devel writes:
+
+Thanks.  I just removed the I() as suggested.
+
+Best
+-k
+
+> Dear all,
+> actually, it is not clear to me why there is still a protection of the
+> added Row.names column in merge using I(). This seems to stem from a
+> time when R would automatically convert character vectors to factor in
+> data.frame on insert. However, I can't reproduce this behaviour even in
+> data.frames generated with stringsAsFactors = T in current versions of
+> R. Maybe the I() inserted in r 39026 can be removed altogether?
+
+> Best regards
+
+> Hilmar
+
+> On 14.07.24 19:09, HB via R-devel wrote:
+>> Dear Ivan,
+>> 
+>> thanks for the confirmation and the proposed patch.
+>> 
+>> I just wanted to add some notes regarding the relevance of this: base::merge using by.x=0 or by.y=0 (i.e. matching on row.names) will automatically add a column Row.names which is I(row.names(x)) to the corresponding input table (using I() since  revision 39026 to avoid conversion of character to factor). When this column is used for sorting (sort=TRUE by default in merge; should happen at least if all.x=T or all.y=T), this will result in slower execution.
+>> 
+>> xtfrm.AsIs is unchanged since its addition in r50992 (likely unrelated to the former).
+>> 
+>> So I guess that this just went unnoticed since it will not cause problems on small data frames.
+>> 
+>> Best regards
+>> 
+>> Hilmar
+>> 
+>> [[alternative HTML version deleted]]
+>> 
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
