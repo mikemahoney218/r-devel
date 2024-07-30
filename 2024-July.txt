@@ -1486,3 +1486,184 @@ Is any of this worth fixing?
 Duncan Murdoch
 
 
+From |kry|ov @end|ng |rom d|@root@org  Mon Jul 29 09:37:57 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Mon, 29 Jul 2024 10:37:57 +0300
+Subject: [Rd] Question about regexp edge case
+In-Reply-To: <497933d4-d8f5-4242-99aa-3c335d694ebd@gmail.com>
+References: <497933d4-d8f5-4242-99aa-3c335d694ebd@gmail.com>
+Message-ID: <20240729103757.11201601@Tarkus>
+
+? Sun, 28 Jul 2024 20:02:21 -0400
+Duncan Murdoch <murdoch.duncan at gmail.com> ?????:
+
+> gsub("^([0-9]{,5}).*","\\1","123456789")  
+> [1] "123456"
+
+This is in TRE itself: for "^([0-9]{,1})" tre_regexecb returns {.rm_so
+= 0, .rm_eo = 1}, matching "1", but for "^([0-9]{,2})" and above it
+returns an off-by-one result, {.rm_so = 0, .rm_eo = 3}.
+
+Compiling with TRE_DEBUG, I see it parsed correctly:
+
+catenation, sub 0, 0 tags
+  assertions: bol
+  iteration {-1, 2}, sub -1, 0 tags, greedy
+    literal (0, 9) (48, 57), pos 0, sub -1, 0 tags
+
+...but after tre_expand_ast I see
+
+catenation, sub 0, 1 tags
+  assertions: bol
+  catenation, sub -1, 1 tags
+    tag 0
+    union, sub -1, 0 tags
+      literal empty
+      catenation, sub -1, 0 tags
+        literal (0, 9) (48, 57), pos 2, sub -1, 0 tags
+        union, sub -1, 0 tags
+          literal empty
+          catenation, sub -1, 0 tags
+            literal (0, 9) (48, 57), pos 1, sub -1, 0 tags
+            union, sub -1, 0 tags
+              literal empty
+              literal (0, 9) (48, 57), pos 0, sub -1, 0 tags
+
+...which has one too many copies of "literal (0,9)". I think it's due
+to the expansion loop on line 942 of src/extra/tre/tre-compile.c being
+
+for (j = iter->min; j < iter->max; j++)
+
+...where 'min' is -1 to denote no minimum. This is further confirmed by
+"{0,3}", "{1,3}", "{2,3}", "{3,3}" all working correctly.
+
+Neither TRE documentation [1] nor POSIX [2] specify the {,n} syntax:
+from my reading, it looks like if the upper boundary is specified, the
+lower boundary must be specified too. But if we do want to fix this, it
+will have to be a special case for iter->min == -1.
+
+-- 
+Best regards,
+Ivan
+
+[1]
+https://laurikari.net/tre/documentation/regex-syntax/
+
+[2]
+https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/V1_chap09.html#tag_09_03_06
+
+
+From tdhock5 @end|ng |rom gm@||@com  Mon Jul 29 22:29:42 2024
+From: tdhock5 @end|ng |rom gm@||@com (Toby Hocking)
+Date: Mon, 29 Jul 2024 16:29:42 -0400
+Subject: [Rd] Minor inconsistencies in tools:::funAPI()
+In-Reply-To: <20240715173131.0ca30ba5@arachnoid>
+References: <20240715173131.0ca30ba5@arachnoid>
+Message-ID: <CALK03d0oSaiHQb1iLoJ-=qQ2RqmhE4Pm3Adj-9LHhsTt+SJgWg@mail.gmail.com>
+
+Hi Ivan
+Can you please clarify what input files should be used with your
+proposed function? I tried a few files in r-svn/src/include and one of
+them gave me an error.
+
+> getdecl("~/R/r-svn/src/include/R.h")
+[1] "R_FlushConsole"  "R_ProcessEvents" "R_WaitEvent"
+> getdecl("~/R/r-svn/src/include/Rdefines.h")
+Error in regmatches(lines, gregexec(rx, lines, perl = TRUE))[[1]][3, ] :
+  incorrect number of dimensions
+
+On Mon, Jul 15, 2024 at 10:32?AM Ivan Krylov via R-devel
+<r-devel at r-project.org> wrote:
+>
+> Hi all,
+>
+> I've noticed some peculiarities in the tools:::funAPI output that
+> complicate its programmatic use a bit.
+>
+>  - Is it for remapped symbol names (with Rf_ or the Fortran
+>    underscore), or for unmapped names (without Rf_ or the underscore)?
+>
+> I see that the functions marked in WRE are almost all (except
+> Rf_installChar and Rf_installTrChar) unmapped. This makes a lot of
+> sense because some of those interfaces (e.g. CONS(), CHAR(),
+> NOT_SHARED()) are C preprocessor macros, not functions. I also see that
+> installTrChar is not explicitly marked.
+>
+> Are we allowed to call tools:::unmap(tools:::funAPI()$name) and
+> consider the return value to be the list of all unmapped APIs, despite,
+> e.g., installTrChar not being explicitly marked?
+>
+>  - Should R_PV be an @apifun if it's currently caught by checks in
+>    sotools.R?
+>
+>  - Should R_FindSymbol be commented /* Not API */ if it's marked as
+>    @apifun in WRE and not caught by sotools.R? It is currently used by 8
+>    CRAN packages.
+>
+>  - The names 'select', 'delztg' from R_ext/Lapack.h are function
+>    pointer arguments, not functions or type declarations. They are
+>    being found because funcRegexp is written to match incomplete
+>    function declarations (e.g. when they end up being split over
+>    multiple lines, like in R_ext/Lapack.h), and function pointer
+>    argument declarations look sufficiently similar.
+>
+> A relatively compact (but still brittle) way to match function
+> declarations in C header files is shown at the end of this message. I
+> have confirmed that compared to tools:::getFunsHdr, the only extraneous
+> symbols that it finds in preprocessed headers are "R_SetWin32",
+> "user_unif_rand", "user_unif_init", "user_unif_nseed",
+> "user_unif_seedloc" "user_norm_rand", which are special-cased in
+> tools:::getFunsHdr, and the only symbols it doesn't find are "select"
+> and "delztg" in R_ext/Lapack.h, which we should not be finding.
+>
+> # "Bird's eye" view, gives unmapped names on non-preprocessed headers
+> getdecl <- function(file, lines = readLines(file)) {
+>         # have to combine to perform multi-line matches
+>         lines <- paste(c(lines, ''), collapse = '\n')
+>         # first eat the C comments, dotall but non-greedy match
+>         lines <- gsub('(?s)/\\*.*?\\*/', '', lines, perl = TRUE)
+>         # C++-style comments too, multiline not dotall
+>         lines <- gsub('(?m)//.*$', '', lines, perl = TRUE)
+>         # drop all preprocessor directives
+>         lines <- gsub('(?m)^\\s*#.*$', '', lines, perl = TRUE)
+>
+>         rx <- r"{(?xs)
+>                 (?!typedef)(?<!\w) # please no typedefs
+>                 # return type with attributes
+>                 (
+>                         # words followed by whitespace or stars
+>                         (?: \w+ (?:\s+ | \*)+)+
+>                 )
+>                 # function name, assumes no extra whitespace
+>                 (
+>                         \w+\(\w+\) # macro call
+>                         | \(\w+\)  # in parentheses
+>                         | \w+      # a plain name
+>                 )
+>                 # arguments: non-greedy match inside parentheses
+>                 \s* \( (.*?) \) \s* # using dotall here
+>                 # will include R_PRINTF_FORMAT(1,2 but we don't care
+>                 # finally terminated by semicolon
+>                 ;
+>         }"
+>
+>         regmatches(lines, gregexec(rx, lines, perl = TRUE))[[1]][3,]
+> }
+>
+> # Preprocess then extract remapped function names like getFunsHdr
+> getdecl2 <- function(file)
+>         file |>
+>         readLines() |>
+>         grep('^\\s*#\\s*error', x = _, value = TRUE, invert = TRUE) |>
+>         tools:::ccE() |>
+>         getdecl(lines = _)
+>
+> --
+> Best regards,
+> Ivan
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
