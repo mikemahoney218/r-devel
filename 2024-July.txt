@@ -1667,3 +1667,78 @@ On Mon, Jul 15, 2024 at 10:32?AM Ivan Krylov via R-devel
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From |kry|ov @end|ng |rom d|@root@org  Tue Jul 30 19:10:26 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Tue, 30 Jul 2024 20:10:26 +0300
+Subject: [Rd] Minor inconsistencies in tools:::funAPI()
+In-Reply-To: <CALK03d0oSaiHQb1iLoJ-=qQ2RqmhE4Pm3Adj-9LHhsTt+SJgWg@mail.gmail.com>
+References: <20240715173131.0ca30ba5@arachnoid>
+ <CALK03d0oSaiHQb1iLoJ-=qQ2RqmhE4Pm3Adj-9LHhsTt+SJgWg@mail.gmail.com>
+Message-ID: <20240730201026.40c1b2e9@arachnoid>
+
+? Mon, 29 Jul 2024 16:29:42 -0400
+Toby Hocking <tdhock5 at gmail.com> ?????:
+
+> Can you please clarify what input files should be used with your
+> proposed function? I tried a few files in r-svn/src/include and one of
+> them gave me an error.
+
+This is a good illustration of the brittleness of the regexp approach.
+I focused on the header files marked as API: 
+
+> tools:::funAPI()$loc |> unique() |> setdiff('WRE')
+ [1] "R_ext/GraphicsDevice.h" "Rmath.h"
+ [3] "R_ext/GraphicsEngine.h" "R_ext/BLAS.h"
+ [5] "R_ext/Lapack.h"         "R_ext/Linpack.h"
+ [7] "Rembedded.h"            "Rinterface.h"
+ [9] "R_ext/Altrep.h"         "R_ext/Memory.h"
+[11] "R_ext/RStartup.h"       "R_ext/Arith.h"
+[13] "R_ext/Random.h"         "R_ext/Error.h"
+
+I also wanted the function not to crash with Rinternals.h, but getdecl
+/ getdecl2 / tools:::getFunsHdr all give different answers for it.
+
+I think this can be done in a more reliable manner using a recursive
+descent parser, but that would take some screenfuls of R that will need
+to be very carefully written.
+
+Speaking of discrepancies, here are a few functions declared in API
+headers but marked with attribute_hidden:
+
+R_ext/Error.h:NORET void WrongArgCount(const char *);
+R_ext/Memory.h:int      R_gc_running(void);
+
+And some minor headaches for people who would like a full
+programmatic list of entry points:
+
+ - The functions [dpq]norm are unconditionally remapped to dnorm4,
+   pnorm5, qnorm5, and the header file parser only picks up the
+   numbered function names.
+
+ - 'optimfn', 'optimgr', 'integr_fn' are marked in WRE as @apifun
+   despite not directly being functions or symbol names exported by R
+   binaries. May I suggest a separate category for types?
+
+-- 
+Best regards,
+Ivan
+
+
+From t|m@t@y|or @end|ng |rom h|ddene|eph@nt@@co@uk  Wed Jul 31 09:42:44 2024
+From: t|m@t@y|or @end|ng |rom h|ddene|eph@nt@@co@uk (Tim Taylor)
+Date: Wed, 31 Jul 2024 08:42:44 +0100
+Subject: [Rd] Consider exporting some of the .Rd_get_xxx functions in tools
+Message-ID: <d3ac5cba-903d-43d0-aae8-bc189c645bb9@hiddenelephants.co.uk>
+
+Would R-core consider exporting some of the .Rd_get_ family of functions 
+within tools (e.g. tools:::.Rd_get_section(), tools:::.Rd_get_metadata())?
+
+Whilst these are currently internal there is some use of them within 
+documentation (e.g. help("Rd_db") uses tools:::.Rd_get_metadata() in 
+it's examples) which hopefully gives some justification for exporting.
+
+Best
+
+Tim
+
+
