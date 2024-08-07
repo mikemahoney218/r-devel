@@ -218,3 +218,64 @@ Office: A 4.23
 Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
 
 
+From rob@tee|e @end|ng |rom y@hoo@com  Tue Aug  6 16:19:25 2024
+From: rob@tee|e @end|ng |rom y@hoo@com (Rob Steele)
+Date: Tue, 6 Aug 2024 10:19:25 -0400
+Subject: [Rd] Another issue using multi-processing linear algebra libraries
+References: <BE21EBCB-E162-4E1A-BC7A-13779832D311.ref@yahoo.com>
+Message-ID: <BE21EBCB-E162-4E1A-BC7A-13779832D311@yahoo.com>
+
+From the R Installation and Admin manual:
+
+	"There is a tendency for re-distributors of R to use ?enhanced? linear algebra libraries without explaining their downsides.?
+
+There?s a downside not mentioned in the manual that caught and baffled me for a while. I was using all 64 cores of an AWS instance via parallel::mclapply() and doing matrix multiplications in the parallelized function. If the matrices were big enough the linked BLAS or LAPACK would try to use all 64 cores for each multiplication, which meant 64^2 processes or threads in some combination and that was the end of all useful work. I worked around the problem by rewriting the matrix multiply as ?colSums(x * t(y))?. It also worked to build R from source, which I guess uses the built-in BLAS and LAPACK.
+
+Would it make sense to add a parameter somewhere, to mclapply(), say, telling R to not use multiprocessing libraries? Does R even know whether a linked library is doing multi-processing? Does R build its own BLAS and LAPACK if its also linking external ones?
+
+Thanks,
+Rob
+	[[alternative HTML version deleted]]
+
+
+From |kry|ov @end|ng |rom d|@root@org  Tue Aug  6 17:09:05 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Tue, 6 Aug 2024 18:09:05 +0300
+Subject: [Rd] 
+ Another issue using multi-processing linear algebra libraries
+In-Reply-To: <BE21EBCB-E162-4E1A-BC7A-13779832D311@yahoo.com>
+References: <BE21EBCB-E162-4E1A-BC7A-13779832D311.ref@yahoo.com>
+ <BE21EBCB-E162-4E1A-BC7A-13779832D311@yahoo.com>
+Message-ID: <20240806180905.2b4dab31@arachnoid>
+
+? Tue, 6 Aug 2024 10:19:25 -0400
+Rob Steele via R-devel <r-devel at r-project.org> ?????:
+
+> Would it make sense to add a parameter somewhere, to mclapply(), say,
+> telling R to not use multiprocessing libraries?
+
+It would be great if we had a way to limit all kinds of multiprocessing
+(child processes, OpenMP threads, pthreads, forks, MPI, PVM, 'parallel'
+clusters, <insert many more methods here>) in a single setting, but
+there is currently no such setting, and it may be impossible to
+implement. Particularly problematic may be nested parallellism:
+sometimes desirable (e.g. 4-machine cluster, each machine in it using
+OpenMP threads), sometimes undesired (e.g. your case). A single setting
+is probably far from enough.
+
+> Does R even know whether a linked library is doing multi-processing?
+
+Unfortunately, no, there is no standard interface for that. Best I can
+recommend is to link your R installation with FlexiBLAS and then use the
+'flexiblas' CRAN package to talk to it.
+
+> Does R build its own BLAS and LAPACK if its also linking external
+> ones?
+
+I think it doesn't.
+
+-- 
+Best regards,
+Ivan
+
+
