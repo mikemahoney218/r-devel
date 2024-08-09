@@ -316,3 +316,95 @@ It doesn't have to be mandatory for now, but at least package maintainers can ha
 	[[alternative HTML version deleted]]
 
 
+From merv|n@|@n@|er @end|ng |rom br|c@ku@dk  Thu Aug  8 10:45:40 2024
+From: merv|n@|@n@|er @end|ng |rom br|c@ku@dk (Mervin Milton Fansler Iv)
+Date: Thu, 8 Aug 2024 08:45:40 +0000
+Subject: [Rd] Another issue using multi-processing linear algebra libraries
+Message-ID: <D4ACBE0A-2DF6-4B07-B787-EC1F8FF29965@contoso.com>
+
+> "There?s a downside not mentioned in the manual that caught and baffled me for a while. I was using all 64 cores of an AWS instance via parallel::mclapply() and doing matrix multiplications in the parallelized function. If the matrices were big enough the linked BLAS or LAPACK would try to use all 64 cores for each multiplication, which meant 64^2 processes or threads in some combination and that was the end of all useful work. I worked around the problem by rewriting the matrix multiply as ?colSums(x * t(y))?. It also worked to build R from source, which I guess uses the built-in BLAS and LAPACK."
+
+I believe one can control the number of BLAS threads via the `RhpcBLASctl` package: https://cran.r-project.org/package=RhpcBLASctl I?ve definitely used it in the other direction, when `betareg` was *not* multiprocessing. https://stackoverflow.com/a/66540693/570918
+
+> "Does R build its own BLAS and LAPACK if it's also linking external ones?"
+
+No, it will not. On Conda Forge, there was even some trickery on certain platforms (osx-arm64) where external BLAS/LAPACK were used, but symlinks were used to fill in the typical R delivered ones (Rblas.dylib, Rlapack.dylib) to allow previously built packages using rpath links to support the swap.
+
+BTW, one can easily select the Conda Forge BLAS/LAPACK implementation. It doesn't provide the R-vendored ones, but the reference standard is Netlib, e.g., `conda install 'blas=*=netlib'`. But that's also the slowest by all metrics and on all platforms.
+
+	[[alternative HTML version deleted]]
+
+
+From |kry|ov @end|ng |rom d|@root@org  Thu Aug  8 12:43:08 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Thu, 8 Aug 2024 13:43:08 +0300
+Subject: [Rd] 
+ Another issue using multi-processing linear algebra libraries
+In-Reply-To: <8A410D3E-CE79-4151-99AC-9F7D574B31A4@gmail.com>
+References: <mailman.54426.5.1723024802.5780.r-devel@r-project.org>
+ <8A410D3E-CE79-4151-99AC-9F7D574B31A4@gmail.com>
+Message-ID: <20240808134308.56ca8be5@arachnoid>
+
+? Wed, 7 Aug 2024 07:47:38 -0400
+Dipterix Wang <dipterix.wang at gmail.com> ?????:
+
+> I wonder if R initiates a system environment or options to instruct
+> the packages on the number of cores to use?
+
+A lot of thought and experience with various HPC systems went into
+availableCores(), a function from the zero-dependency 'parallelly'
+package by Henrik Bengtsson:
+https://search.r-project.org/CRAN/refmans/parallelly/html/availableCores.html
+If you cannot accept a pre-created cluster object or 'future' plan or
+'BiocParallel' parameters or the number of OpenMP threads from the
+user, this must be a safer default than parallel::detectCores().
+
+Building such a limiter into R poses a number of problems. Here is a
+summary from a previous discussion on R-pkg-devel [1] with wise
+contributions from Dirk Eddelbuettel, Reed A. Cartwright, Vladimir
+Dergachev, and Andrew Robbins.
+
+ - R is responsible for the BLAS it is linked to and therefore must
+   actively manage the BLAS threads when the user sets the thread
+   limit. This requires writing BLAS-specific code to talk to the
+   libraries, like done in FlexiBLAS and the RhpcBLASctl package. Some
+   BLASes (like ATLAS) only have a compile-time thread limit. R should
+   somehow give all threads to BLAS by default but take them away when
+   some other form of parallelism is requested.
+
+ - Should R be managing the OpenMP thread limit by itself? If not,
+   that's a lot of extra work for every OpenMP-using package developer.
+   If yes, R is now responsible for initialising OpenMP.
+
+ - Managing the BLAS and OpenMP thread limits is already a hard problem
+   because some BLASes may or may not be following the OpenMP thread
+   limits.
+
+ - What if two packages both consult the thread limit and create N^2
+   processes as a result of one calling the other? Dividing a single
+   computer between BLAS threads, OpenMP threads, child processes and
+   their threads needs a very reliable global inter-process semaphore.
+   R would have to grow a jobserver like in GNU Make, a separate
+   process because the main R thread will be blocked waiting for the
+   computation result, especially if we want to automatically recover
+   job slots from crashed processes. That's probably not impossible,
+   but involves a lot of OS-specific code.
+
+ - What happens with the thread limit when starting remote R processes?
+   It's best to avoid having to set it manually. If multiple people
+   unknowingly start R on a shared server, how to avoid the R instances
+   competing for the CPU (or the ownership of the semaphore)?
+
+ - It will take a lot of political power to actually make this scheme
+   work. The limiter can only be cooperative (unless you override the
+   clone() syscall and make it fail? I expect everything to crash after
+   that), so it takes one piece of software to unknowingly ignore the
+   limit and break everything.
+
+-- 
+Best regards,
+Ivan
+
+[1] https://stat.ethz.ch/pipermail/r-package-devel/2023q4/009956.html
+
+
