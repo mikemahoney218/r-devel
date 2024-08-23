@@ -1932,3 +1932,171 @@ https://stat.ethz.ch/mailman/listinfo/r-devel
 	[[alternative HTML version deleted]]
 
 
+From @th@@n @end|ng |rom edu@@@u@@t  Thu Aug 22 16:03:09 2024
+From: @th@@n @end|ng |rom edu@@@u@@t (Haan, Stefan)
+Date: Thu, 22 Aug 2024 14:03:09 +0000
+Subject: [Rd] Make factanal accept functions for rotation parameter
+Message-ID: <6993086d488b554efa1c7f5d9a6863d1af49b0ce.camel@edu.aau.at>
+
+Dear R developers,
+
+Would it be possible to make `factanal` to also accept functions and
+not just function names for its `rotation` parameter? If I understand
+correctly, `do.call` also supports this.
+
+Best greetings,
+Stefan
+
+-------------- next part --------------
+A non-text attachment was scrubbed...
+Name: patch.diff
+Type: text/x-patch
+Size: 568 bytes
+Desc: patch.diff
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20240822/1e44bee6/attachment.bin>
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Aug 22 18:09:45 2024
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 22 Aug 2024 18:09:45 +0200
+Subject: [Rd] Make factanal accept functions for rotation parameter
+In-Reply-To: <6993086d488b554efa1c7f5d9a6863d1af49b0ce.camel@edu.aau.at>
+References: <6993086d488b554efa1c7f5d9a6863d1af49b0ce.camel@edu.aau.at>
+Message-ID: <26311.25289.119466.797669@stat.math.ethz.ch>
+
+>>>>> Haan, Stefan via R-devel 
+>>>>>     on Thu, 22 Aug 2024 14:03:09 +0000 writes:
+
+    > Dear R developers,
+    > Would it be possible to make `factanal` to also accept functions and
+    > not just function names for its `rotation` parameter? If I understand
+    > correctly, `do.call` also supports this.
+
+    > Best greetings,
+    > Stefan
+
+> Index: src/library/stats/R/factanal.R
+> ===================================================================
+> --- src/library/stats/R/factanal.R	(revision 87038)
+> +++ src/library/stats/R/factanal.R	(working copy)
+> @@ -137,7 +137,7 @@
+>                        "unable to optimize from these starting values"),
+>               domain = NA)
+>      load <- fit$loadings
+> -    if(rotation != "none") {
+> +    if(rotation != "none" || is.function(rotation)) {
+>          rot <- do.call(rotation, c(list(load), cn$rotate))
+>          load <- if (is.list(rot)) {
+>            load <- rot$loadings
+
+I'm not a factanal user myself, but I think this is a very good,
+even "obvious" (in hindsight)  suggestion.
+.... unless I'm forgetting something.
+
+Can you please provide useful (but *small*) example,  which I
+then also could add to the help page ?
+
+Best regards,
+Martin
+
+--
+Martin Maechler
+ETH Zurich  and   R Core team
+
+
+From @th@@n @end|ng |rom edu@@@u@@t  Thu Aug 22 18:31:07 2024
+From: @th@@n @end|ng |rom edu@@@u@@t (Haan, Stefan)
+Date: Thu, 22 Aug 2024 16:31:07 +0000
+Subject: [Rd] Make factanal accept functions for rotation parameter
+In-Reply-To: <26311.25289.119466.797669@stat.math.ethz.ch>
+References: <6993086d488b554efa1c7f5d9a6863d1af49b0ce.camel@edu.aau.at>
+ <26311.25289.119466.797669@stat.math.ethz.ch>
+Message-ID: <35efd7ba073ab16401ac2b118b97a701051d6dfa.camel@edu.aau.at>
+
+Dear Martin,
+
+The thing I was trying to do, when I tried to pass a function for the
+rotation parameter was to call factanal repeatedly with different
+rotations to see which factor model would give the best
+interpretability.
+
+```R
+rotate <- function(phi) {
+	G <- matrix(c(cos(phi), sin(phi), -sin(phi), cos(phi)),
+nrow=2, ncol=2)
+	function(loadings) loadings %*% G
+}
+
+phi <- seq(0, pi/2, length.out=10)
+
+par(mfcol=c(2,5))
+for (i in 1:10) {
+	model <- factanal(x=mydata, factors=2,
+rotation=rotate(phi[i]), scores="regression")
+	plot(model$scores[,1], model$scores[,2], type="n",
+xlab="Factor 1", ylab="Factor 2", sub=paste("phi #",i,sep=""))
+	text(model$scores[,1], model$scores[,2],
+labels=rownames(mydata))
+}
+```
+
+However thinking about it, I don't really want this to be an example in
+the documentation as it quite wastefully recomputes the estimates for
+the loadings and scores for each phi, when I could just fit the model
+once and then multiply the loadings and scores with G(phi) and
+t(G(phi)) respectively for each phi before plotting them.
+
+Also, as Duncan Murdoch helpfully pointed out, the condition should
+really be
+```
+is.function(rotation) || rotation != "none"
+```
+as != would fail before is.function(rotation) is evaluated.
+
+Best greetings,
+Stefan
+
+On Thu, 2024-08-22 at 18:09 +0200, Martin Maechler wrote:
+> > > > > > Haan, Stefan via R-devel 
+> > > > > > ??? on Thu, 22 Aug 2024 14:03:09 +0000 writes:
+> 
+> ??? > Dear R developers,
+> ??? > Would it be possible to make `factanal` to also accept
+> functions and
+> ??? > not just function names for its `rotation` parameter? If I
+> understand
+> ??? > correctly, `do.call` also supports this.
+> 
+> ??? > Best greetings,
+> ??? > Stefan
+> 
+> > Index: src/library/stats/R/factanal.R
+> > ===================================================================
+> > --- src/library/stats/R/factanal.R	(revision 87038)
+> > +++ src/library/stats/R/factanal.R	(working copy)
+> > @@ -137,7 +137,7 @@
+> > ?????????????????????? "unable to optimize from these starting
+> > values"),
+> > ????????????? domain = NA)
+> > ???? load <- fit$loadings
+> > -??? if(rotation != "none") {
+> > +??? if(rotation != "none" || is.function(rotation)) {
+> > ???????? rot <- do.call(rotation, c(list(load), cn$rotate))
+> > ???????? load <- if (is.list(rot)) {
+> > ?????????? load <- rot$loadings
+> 
+> I'm not a factanal user myself, but I think this is a very good,
+> even "obvious" (in hindsight)? suggestion.
+> .... unless I'm forgetting something.
+> 
+> Can you please provide useful (but *small*) example,? which I
+> then also could add to the help page ?
+> 
+> Best regards,
+> Martin
+> 
+> --
+> Martin Maechler
+> ETH Zurich? and?? R Core team
+> 
+
+
