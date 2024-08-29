@@ -4179,3 +4179,282 @@ wrote:
 	[[alternative HTML version deleted]]
 
 
+From @|@ergbox @end|ng |rom gm@||@com  Wed Aug 28 23:59:51 2024
+From: @|@ergbox @end|ng |rom gm@||@com (Alexey Sergushichev)
+Date: Wed, 28 Aug 2024 16:59:51 -0500
+Subject: [Rd] Apply .Rbuildignore before copying files in R CMD build
+Message-ID: <CAMGHQ97WmxeRc+qmrV7Mr5WWciU=08DOTBqK8zE334zbCJ40cA@mail.gmail.com>
+
+Hi,
+
+Is there any reason why .Rbuildignore is not used before copying package
+files in R CMD build?
+
+For some of the packages I develop I have rather large directories with
+miscellaneous files for testing and other purposes. They are in my
+.Rbuildignore (and .gitignore) file, but that doesn't prevent R CMD build
+from trying to copy them on the build process. Having them copied either
+breaks the build completely because /tmp directory gets out of space, or
+just slows it down a lot. So I wonder if there is a specific reason for
+this behavior and whether it could be change or controlled by some
+parameter.
+
+There is some discussion in the context of pkgbuild package:
+https://github.com/r-lib/pkgbuild/issues/59 It provides a hackish
+workaround for that, which also does not work on Windows.
+
+Best,
+Alexey
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Thu Aug 29 00:11:52 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Wed, 28 Aug 2024 18:11:52 -0400
+Subject: [Rd] Apply .Rbuildignore before copying files in R CMD build
+In-Reply-To: <CAMGHQ97WmxeRc+qmrV7Mr5WWciU=08DOTBqK8zE334zbCJ40cA@mail.gmail.com>
+References: <CAMGHQ97WmxeRc+qmrV7Mr5WWciU=08DOTBqK8zE334zbCJ40cA@mail.gmail.com>
+Message-ID: <adf96f17-54a4-4670-8b2f-ad36e02b749f@gmail.com>
+
+On 2024-08-28 5:59 p.m., Alexey Sergushichev wrote:
+> Hi,
+> 
+> Is there any reason why .Rbuildignore is not used before copying package
+> files in R CMD build?
+> 
+> For some of the packages I develop I have rather large directories with
+> miscellaneous files for testing and other purposes. They are in my
+> .Rbuildignore (and .gitignore) file, but that doesn't prevent R CMD build
+> from trying to copy them on the build process. Having them copied either
+> breaks the build completely because /tmp directory gets out of space, or
+> just slows it down a lot. So I wonder if there is a specific reason for
+> this behavior and whether it could be change or controlled by some
+> parameter.
+> 
+> There is some discussion in the context of pkgbuild package:
+> https://github.com/r-lib/pkgbuild/issues/59 It provides a hackish
+> workaround for that, which also does not work on Windows.
+
+I think the reason is simplicity.  The build process can add, delete or 
+modify files.  You wouldn't want that to happen on the original source 
+files, so R copies the files to a temporary location to run things.
+
+If it applied .Rbuildignore first, then important files for the build 
+might not be available, and the build could fail.
+
+Having an R package that needs so much data that you can't fit two 
+copies of it on your disk is a really unusual situation.  I think it 
+will have to be up to you to fix it (by increasing your temp space, or 
+decreasing the size of some of those files, or something else).
+
+Duncan Murdoch
+
+
+From kev|nu@hey @end|ng |rom gm@||@com  Thu Aug 29 00:12:43 2024
+From: kev|nu@hey @end|ng |rom gm@||@com (Kevin Ushey)
+Date: Wed, 28 Aug 2024 15:12:43 -0700
+Subject: [Rd] Apply .Rbuildignore before copying files in R CMD build
+In-Reply-To: <CAMGHQ97WmxeRc+qmrV7Mr5WWciU=08DOTBqK8zE334zbCJ40cA@mail.gmail.com>
+References: <CAMGHQ97WmxeRc+qmrV7Mr5WWciU=08DOTBqK8zE334zbCJ40cA@mail.gmail.com>
+Message-ID: <CAJXgQP2Zmg3sEO5=Ts+Wh5mWbfL9BR1BLWHpmz-s2eiRk4N9-g@mail.gmail.com>
+
+Hi Alexey,
+
+It's kind of gross, but if you need a local solution, you could put
+your own executable `cp` script on your PATH somewhere, and have that
+do something "smart" when it's invoked by R. One way to detect that
+would be to check if the `R_CMD` environment variable is set. For
+example:
+
+https://gist.github.com/kevinushey/2351194ba540627831fa2d58073c097a
+
+For posterity, this was filed some time ago on R's bug tracker at:
+
+https://bugs.r-project.org/show_bug.cgi?id=17549
+
+Best,
+Kevin
+
+
+On Wed, Aug 28, 2024 at 3:00?PM Alexey Sergushichev <alsergbox at gmail.com> wrote:
+>
+> Hi,
+>
+> Is there any reason why .Rbuildignore is not used before copying package
+> files in R CMD build?
+>
+> For some of the packages I develop I have rather large directories with
+> miscellaneous files for testing and other purposes. They are in my
+> .Rbuildignore (and .gitignore) file, but that doesn't prevent R CMD build
+> from trying to copy them on the build process. Having them copied either
+> breaks the build completely because /tmp directory gets out of space, or
+> just slows it down a lot. So I wonder if there is a specific reason for
+> this behavior and whether it could be change or controlled by some
+> parameter.
+>
+> There is some discussion in the context of pkgbuild package:
+> https://github.com/r-lib/pkgbuild/issues/59 It provides a hackish
+> workaround for that, which also does not work on Windows.
+>
+> Best,
+> Alexey
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @|@ergbox @end|ng |rom gm@||@com  Thu Aug 29 00:24:24 2024
+From: @|@ergbox @end|ng |rom gm@||@com (Alexey Sergushichev)
+Date: Wed, 28 Aug 2024 17:24:24 -0500
+Subject: [Rd] Apply .Rbuildignore before copying files in R CMD build
+In-Reply-To: <adf96f17-54a4-4670-8b2f-ad36e02b749f@gmail.com>
+References: <CAMGHQ97WmxeRc+qmrV7Mr5WWciU=08DOTBqK8zE334zbCJ40cA@mail.gmail.com>
+ <adf96f17-54a4-4670-8b2f-ad36e02b749f@gmail.com>
+Message-ID: <CAMGHQ96LRNgWcMMK9ioZUFx1OQ9Ebhpjd8vjWsVQCpCrNDLzTA@mail.gmail.com>
+
+> I think the reason is simplicity.  The build process can add, delete or
+modify files.  You wouldn't want that to happen on the original source
+files, so R copies the files to a temporary location to run things.
+
+> If it applied .Rbuildignore first, then important files for the build
+might not be available, and the build could fail.
+
+Yeah, I guess that makes sense. Thanks, I didn't realize that.
+
+> Having an R package that needs so much data that you can't fit two
+copies of it on your disk is a really unusual situation.  I think it
+will have to be up to you to fix it (by increasing your temp space, or
+decreasing the size of some of those files, or something else).
+
+These files are not required, but help to run and test some things. But I
+guess I have to deal with that.
+
+--
+Alexey
+
+
+On Wed, Aug 28, 2024 at 5:11?PM Duncan Murdoch <murdoch.duncan at gmail.com>
+wrote:
+
+> On 2024-08-28 5:59 p.m., Alexey Sergushichev wrote:
+> > Hi,
+> >
+> > Is there any reason why .Rbuildignore is not used before copying package
+> > files in R CMD build?
+> >
+> > For some of the packages I develop I have rather large directories with
+> > miscellaneous files for testing and other purposes. They are in my
+> > .Rbuildignore (and .gitignore) file, but that doesn't prevent R CMD build
+> > from trying to copy them on the build process. Having them copied either
+> > breaks the build completely because /tmp directory gets out of space, or
+> > just slows it down a lot. So I wonder if there is a specific reason for
+> > this behavior and whether it could be change or controlled by some
+> > parameter.
+> >
+> > There is some discussion in the context of pkgbuild package:
+> > https://github.com/r-lib/pkgbuild/issues/59 It provides a hackish
+> > workaround for that, which also does not work on Windows.
+>
+> I think the reason is simplicity.  The build process can add, delete or
+> modify files.  You wouldn't want that to happen on the original source
+> files, so R copies the files to a temporary location to run things.
+>
+> If it applied .Rbuildignore first, then important files for the build
+> might not be available, and the build could fail.
+>
+> Having an R package that needs so much data that you can't fit two
+> copies of it on your disk is a really unusual situation.  I think it
+> will have to be up to you to fix it (by increasing your temp space, or
+> decreasing the size of some of those files, or something else).
+>
+> Duncan Murdoch
+>
+>
+
+	[[alternative HTML version deleted]]
+
+
+From @|@ergbox @end|ng |rom gm@||@com  Thu Aug 29 00:28:20 2024
+From: @|@ergbox @end|ng |rom gm@||@com (Alexey Sergushichev)
+Date: Wed, 28 Aug 2024 17:28:20 -0500
+Subject: [Rd] Apply .Rbuildignore before copying files in R CMD build
+In-Reply-To: <CAJXgQP2Zmg3sEO5=Ts+Wh5mWbfL9BR1BLWHpmz-s2eiRk4N9-g@mail.gmail.com>
+References: <CAMGHQ97WmxeRc+qmrV7Mr5WWciU=08DOTBqK8zE334zbCJ40cA@mail.gmail.com>
+ <CAJXgQP2Zmg3sEO5=Ts+Wh5mWbfL9BR1BLWHpmz-s2eiRk4N9-g@mail.gmail.com>
+Message-ID: <CAMGHQ97cYEHRZ=wKEo_uGYB0NKuEe7yUYjGpAt4-8jPzMOBC9w@mail.gmail.com>
+
+> It's kind of gross, but if you need a local solution, you could put
+your own executable `cp` script on your PATH somewhere, and have that
+do something "smart" when it's invoked by R.
+
+Hah! Currently I opted out to using pkgbuild functions and specified
+`Config/build/copy-method: link` in my DESCRIPTION file (
+https://pkgbuild.r-lib.org/reference/build.html). It's also a bit weird,
+but at least easy to do now.
+
+> For posterity, this was filed some time ago on R's bug tracker at:
+https://bugs.r-project.org/show_bug.cgi?id=17549
+
+Thanks for the link!
+
+--
+ALexey
+
+On Wed, Aug 28, 2024 at 5:13?PM Kevin Ushey <kevinushey at gmail.com> wrote:
+
+> Hi Alexey,
+>
+> It's kind of gross, but if you need a local solution, you could put
+> your own executable `cp` script on your PATH somewhere, and have that
+> do something "smart" when it's invoked by R. One way to detect that
+> would be to check if the `R_CMD` environment variable is set. For
+> example:
+>
+> https://gist.github.com/kevinushey/2351194ba540627831fa2d58073c097a
+>
+> For posterity, this was filed some time ago on R's bug tracker at:
+>
+> https://bugs.r-project.org/show_bug.cgi?id=17549
+>
+> Best,
+> Kevin
+>
+>
+> On Wed, Aug 28, 2024 at 3:00?PM Alexey Sergushichev <alsergbox at gmail.com>
+> wrote:
+> >
+> > Hi,
+> >
+> > Is there any reason why .Rbuildignore is not used before copying package
+> > files in R CMD build?
+> >
+> > For some of the packages I develop I have rather large directories with
+> > miscellaneous files for testing and other purposes. They are in my
+> > .Rbuildignore (and .gitignore) file, but that doesn't prevent R CMD build
+> > from trying to copy them on the build process. Having them copied either
+> > breaks the build completely because /tmp directory gets out of space, or
+> > just slows it down a lot. So I wonder if there is a specific reason for
+> > this behavior and whether it could be change or controlled by some
+> > parameter.
+> >
+> > There is some discussion in the context of pkgbuild package:
+> > https://github.com/r-lib/pkgbuild/issues/59 It provides a hackish
+> > workaround for that, which also does not work on Windows.
+> >
+> > Best,
+> > Alexey
+> >
+> >         [[alternative HTML version deleted]]
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
