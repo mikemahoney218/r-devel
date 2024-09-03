@@ -1,0 +1,160 @@
+From m@rk@c|ement@ @end|ng |rom k|@@e  Sun Sep  1 14:42:35 2024
+From: m@rk@c|ement@ @end|ng |rom k|@@e (Mark Clements)
+Date: Sun, 1 Sep 2024 12:42:35 +0000
+Subject: [Rd] R compilation (revision 87083) failed after upgrade to Ubuntu
+ 24.04 (libtirpc missing)
+Message-ID: <MM0P280MB0008F1C95663520452BBDEB1F0912@MM0P280MB0008.SWEP280.PROD.OUTLOOK.COM>
+
+Following an upgrade from Ubuntu 22.04 LTS to 24.04.1, revision 87083 failed to compile with an error:
+
+"No rule to make target '/usr/include/tirpc/rpc/types.h', needed by 'saveload.o'"
+
+where the file /usr/include/tirpc/rpc/types.h did not exist. After installing libtirpc-dev:
+
+> sudo apt install libtirpc-dev
+
+compilation proceeded smoothly. I understand that this may be local to my system.
+
+Sincerely, Mark.
+
+
+
+N?r du skickar e-post till Karolinska Institutet (KI) inneb?r detta att KI kommer att behandla dina personuppgifter. H?r finns information om hur KI behandlar personuppgifter<https://ki.se/om-ki/integritetsskyddspolicy>.
+
+
+Sending email to Karolinska Institutet (KI) will result in KI processing your personal data. You can read more about KI's processing of personal data here<https://staff.ki.se/data-protection-policy>.
+
+	[[alternative HTML version deleted]]
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Mon Sep  2 16:04:43 2024
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Mon, 2 Sep 2024 16:04:43 +0200
+Subject: [Rd] Big speedup in install.packages() by re-using connections
+In-Reply-To: <20240425180109.418ca5f4@arachnoid>
+References: <CABFfbXtpXChZLeLREEWFHFWP24cvD8Ox-7xfBGj0p+N0Rjzwbg@mail.gmail.com>
+ <CABFfbXtnteY=_qRz8ZBQ4aAPi-j+HjasRvU-fcLPJm2nu+QwLQ@mail.gmail.com>
+ <20240425180109.418ca5f4@arachnoid>
+Message-ID: <248ad6c4-ec50-4a3c-b9e4-05346840dbf0@gmail.com>
+
+
+On 4/25/24 17:01, Ivan Krylov via R-devel wrote:
+> On Thu, 25 Apr 2024 14:45:04 +0200
+> Jeroen Ooms <jeroenooms at gmail.com> wrote:
+>
+>> Thoughts?
+> How verboten would it be to create an empty external pointer object,
+> add it to the preserved list, and set an on-exit finalizer to clean up
+> the curl multi-handle? As far as I can tell, the internet module is not
+> supposed to be unloaded, so this would not introduce an opportunity to
+> jump to an unmapped address. This makes it possible to avoid adding a
+> CurlCleanup() function to the internet module:
+
+Cleaning up this way in principle would probably be fine, but R already 
+has support for re-using connections. Even more, R can download files in 
+parallel (in a single thread), which particularly helps with bigger 
+latencies (e.g. typically users connecting from home, etc). See 
+?download.file(), look for "simultaneous".
+
+I've improved the existing support in R-devel and made it the default in 
+install.packages() and download.packages(). I am seeing speedups 
+somewhere between 2x and 9x on several systems (with quiet=TRUE) when 
+downloading many packages.
+
+Sequential downloads by default (quiet=FALSE) show a progress bar, which 
+can be rather slow, particularly on Windows. Turning that off can help 
+with slow downloads in already released versions of R. Consequently, via 
+disabling the progress bar, the speedups with R-devel could seem even 
+bigger than the range.
+
+A common practice when installing/checking say all packages from CRAN or 
+Bioconductor is to set up a local mirror of the repositories and 
+download/update it with "rsync". When R then "downloads" packages from 
+the local mirror using the "file://" protocol, it completely avoids 
+these problems. The increased performance of download in R-devel cannot 
+beat this setup.
+
+However, the improvement should help a little bit users installing 
+binary packages (on Windows, macOS), where the download time can play a 
+visible role, when they install packages with many (uninstalled) 
+dependencies. Users installing from source, particularly with packages 
+needing compilation, would probably not notice.
+
+Tomas
+
+
+>
+> Index: src/modules/internet/libcurl.c
+> ===================================================================
+> --- src/modules/internet/libcurl.c	(revision 86484)
+> +++ src/modules/internet/libcurl.c	(working copy)
+> @@ -55,6 +55,47 @@
+>   
+>   static int current_timeout = 0;
+>   
+> +// The multi-handle is shared between downloads for reusing connections
+> +static CURLM *shared_mhnd = NULL;
+> +static SEXP mhnd_sentinel = NULL;
+> +
+> +static void cleanup_mhnd(SEXP ignored)
+> +{
+> +    if(shared_mhnd){
+> +        curl_multi_cleanup(shared_mhnd);
+> +        shared_mhnd = NULL;
+> +    }
+> +    curl_global_cleanup();
+> +}
+> +static void rollback_mhnd_sentinel(void* sentinel) {
+> +    // Failed to allocate memory while registering a finalizer,
+> +    // therefore must release the object
+> +    R_ReleaseObject((SEXP)sentinel);
+> +}
+> +static CURLM *get_mhnd(void)
+> +{
+> +    if (!mhnd_sentinel) {
+> +      SEXP sentinel = PROTECT(R_MakeExternalPtr(NULL, R_NilValue, R_NilValue));
+> +      R_PreserveObject(sentinel);
+> +      UNPROTECT(1);
+> +      // Avoid leaking the sentinel before setting the finalizer
+> +      RCNTXT cntxt;
+> +      begincontext(&cntxt, CTXT_CCODE, R_NilValue, R_BaseEnv, R_BaseEnv,
+> +                   R_NilValue, R_NilValue);
+> +      cntxt.cend = &rollback_mhnd_sentinel;
+> +      cntxt.cenddata = sentinel;
+> +      R_RegisterCFinalizerEx(sentinel, cleanup_mhnd, TRUE);
+> +      // Succeeded, no need to clean up if endcontext() fails allocation
+> +      mhnd_sentinel = sentinel;
+> +      cntxt.cend = NULL;
+> +      endcontext(&cntxt);
+> +    }
+> +    if(!shared_mhnd) {
+> +      shared_mhnd = curl_multi_init();
+> +    }
+> +    return shared_mhnd;
+> +}
+> +
+>   # if LIBCURL_VERSION_MAJOR < 7 || (LIBCURL_VERSION_MAJOR == 7 && LIBCURL_VERSION_MINOR < 28)
+>   
+>   // curl/curl.h includes <sys/select.h> and headers it requires.
+> @@ -565,8 +606,6 @@
+>   	if (c->hnd && c->hnd[i])
+>   	    curl_easy_cleanup(c->hnd[i]);
+>       }
+> -    if (c->mhnd)
+> -	curl_multi_cleanup(c->mhnd);
+>       if (c->headers)
+>   	curl_slist_free_all(c->headers);
+>   
+> @@ -668,7 +707,7 @@
+>   	c.headers = headers = tmp;
+>       }
+>   
+> -    CURLM *mhnd = curl_multi_init();
+> +    CURLM *mhnd = get_mhnd();
+>       if (!mhnd)
+>   	error(_("could not create curl handle"));
+>       c.mhnd = mhnd;
+>
+>
+
+
