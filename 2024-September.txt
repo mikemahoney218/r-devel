@@ -740,3 +740,247 @@ R-devel at r-project.org mailing list
 https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From ||u|@@rev|||@ @end|ng |rom gm@||@com  Mon Sep  9 08:00:00 2024
+From: ||u|@@rev|||@ @end|ng |rom gm@||@com (=?UTF-8?Q?Llu=C3=ADs_Revilla?=)
+Date: Mon, 9 Sep 2024 08:00:00 +0200
+Subject: [Rd] Documentation cross references
+Message-ID: <CAN+W6_sBbuyThDTJX27rYAxwyrZLBsm1FKYtDtRnttAYP+6Ltg@mail.gmail.com>
+
+Hi all,
+
+I am checking the cross references at CRAN and base R, and I am having
+trouble understanding how to reconcile the documentation and how R
+help links work.
+
+Checking the documentation [1] it seems that in a cross reference such
+as \link[pkg:x]{text} x should be a topic (created with \alias{topic}
+in R documentation).
+But I found some cases exploring the output of
+tools::base_rdxrefs_db() where it is a file name (without the .Rd
+extension).
+For instance, ?print has a link with text (Target as named by the
+output) ".print.via.format" and the anchor "tools:print.via.format".
+The topic would be print.via.format, but if one uses:
+help(topic = "print.via.format", package = "tools"):
+     No documentation for 'print.via.format' in specified packages and
+libraries:
+     you could try '??print.via.format'
+
+However, if one accesses the html help page and clicks
+.print.via.format, is redirected to the right help page (found in the
+REPL too with help(topic = ".print.via.format", package = "tools") ).
+
+I see a paragraph in R 4.1 NEWS about a change in behaviour [2] (also
+hinted in WRE), where it is described as:
+... "and fall back to a file link only if the topic is not found in
+the target package. The earlier rule which prioritized file names over
+topics can be restored by setting the environment variable
+_R_HELP_LINKS_TO_TOPICS_ to a false value."
+
+The internal variable _R_HELP_LINKS_TO_TOPICS_ isn't mentioned on
+R-internals and this behaviour of html pages is not mentioned on WRE.
+ - Perhaps documentation at R-internals and WRE could be updated to
+show how html page links are created?
+ - And/or the behaviour could continue the path started on R 4.1 and
+start complaining about anchors pointing to files?
+
+In the second case, ~10 links in base R would be affected but on CRAN
+this could affect ~1700 more packages than those currently with "Rd
+cross-references" notes.
+
+Regards,
+
+Llu?s
+
+[1]: https://cran.r-project.org/doc/manuals/r-devel/R-exts.html#Cross_002dreferences
+[2]: https://developer.r-project.org/blosxom.cgi/R-4-1-branch/NEWS/2021/04/20#n2021-04-21
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Mon Sep  9 11:11:02 2024
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Mon, 9 Sep 2024 11:11:02 +0200
+Subject: [Rd] Big speedup in install.packages() by re-using connections
+In-Reply-To: <CABFfbXs8n4Okup+8y2zt-P_f7WymoknBP4WAYuQ8dTwNgMAeLg@mail.gmail.com>
+References: <CABFfbXtpXChZLeLREEWFHFWP24cvD8Ox-7xfBGj0p+N0Rjzwbg@mail.gmail.com>
+ <CABFfbXtnteY=_qRz8ZBQ4aAPi-j+HjasRvU-fcLPJm2nu+QwLQ@mail.gmail.com>
+ <20240425180109.418ca5f4@arachnoid>
+ <248ad6c4-ec50-4a3c-b9e4-05346840dbf0@gmail.com>
+ <CABFfbXs8n4Okup+8y2zt-P_f7WymoknBP4WAYuQ8dTwNgMAeLg@mail.gmail.com>
+Message-ID: <905cd9c7-5c1f-43eb-b104-d540a5598d96@gmail.com>
+
+
+On 9/8/24 23:14, Jeroen Ooms wrote:
+> On Mon, Sep 2, 2024 at 10:05?AM Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+>>
+>> On 4/25/24 17:01, Ivan Krylov via R-devel wrote:
+>>> On Thu, 25 Apr 2024 14:45:04 +0200
+>>> Jeroen Ooms <jeroenooms at gmail.com> wrote:
+>>>
+>>>> Thoughts?
+>>> How verboten would it be to create an empty external pointer object,
+>>> add it to the preserved list, and set an on-exit finalizer to clean up
+>>> the curl multi-handle? As far as I can tell, the internet module is not
+>>> supposed to be unloaded, so this would not introduce an opportunity to
+>>> jump to an unmapped address. This makes it possible to avoid adding a
+>>> CurlCleanup() function to the internet module:
+>> Cleaning up this way in principle would probably be fine, but R already
+>> has support for re-using connections. Even more, R can download files in
+>> parallel (in a single thread), which particularly helps with bigger
+>> latencies (e.g. typically users connecting from home, etc). See
+>> ?download.file(), look for "simultaneous".
+> Thank you for looking at this. A few ideas wrt parallel downloading:
+>
+> Additional improvement on Windows can be achieved by enabling the
+> nghttp2 driver in libcurl in rtools, such that it takes advantage of
+> http2 multiplexing for parallel downloads
+> (https://bugs.r-project.org/show_bug.cgi?id=18664).
+
+Anyone who wants to cooperate and help is more than welcome to 
+contribute patches to upstream MXE.
+
+In case of nghttp2, thanks to Andrew Johnson, who contributed nghttp2 
+support to upstream MXE. It will be part of the next Rtools (probably 
+Rtools45).
+
+> Moreover, one concern is that install.packages() may fail more
+> frequently on low bandwidth connections due to reaching the "download
+> timeout" when downloading files in parallel:
+>
+> R has an unusual definition of the http timeout, which by default
+> aborts in-progress downloads after 60 seconds for no obvious reason.
+> (by contrast, browsers enforce a timeout on unresponsive/stalled
+> downloads only, which can be achieved in libcurl by setting
+> CURLOPT_CONNECTTIMEOUT or CURLOPT_LOW_SPEED_TIME).
+>
+> The above is already a problem on slow networks, where large packages
+> can fail to install with a timeout error in the download stage. Users
+> may assume there must be a problem with the network, as it is not
+> obvious that machines on slower internet connection need to work
+> around R's defaults and modify options(timeout) before
+> install.packages(). This problem could become more prevalent when
+> using parallel downloads while still enforcing the same total timeout.
+>
+> For example: the MacOS binary for package "sf" is close to 90mb, hence
+> currently, under the default R settings of options(timeout=60),
+> install.packages will error with a download timeout on clients with
+> less than 1.5MB/s bandwidth. But with the parallel implementation,
+> install.packages() will share the bandwidth on 6 parallel downloads,
+> so if "sf" is downloaded with all its dependencies, we need at least
+> 9MB/s (i.e. a 100mbit connection) for the default settings to not
+> cause a timeout.
+>
+> Hopefully this can be revised to enforce the timeout on stalled
+> downloads only, as is common practice.
+
+Yes, this is work in progress, I am aware that the timeout could use 
+some thought re simultaneous downloads.
+
+If anyone wants to help with testing the current implementation of 
+simultaneous download and report any bugs found, that would be nice.
+
+Best
+Tomas
+
+
+From jeroenoom@ @end|ng |rom gm@||@com  Mon Sep  9 18:19:12 2024
+From: jeroenoom@ @end|ng |rom gm@||@com (Jeroen Ooms)
+Date: Mon, 9 Sep 2024 18:19:12 +0200
+Subject: [Rd] Big speedup in install.packages() by re-using connections
+In-Reply-To: <905cd9c7-5c1f-43eb-b104-d540a5598d96@gmail.com>
+References: <CABFfbXtpXChZLeLREEWFHFWP24cvD8Ox-7xfBGj0p+N0Rjzwbg@mail.gmail.com>
+ <CABFfbXtnteY=_qRz8ZBQ4aAPi-j+HjasRvU-fcLPJm2nu+QwLQ@mail.gmail.com>
+ <20240425180109.418ca5f4@arachnoid>
+ <248ad6c4-ec50-4a3c-b9e4-05346840dbf0@gmail.com>
+ <CABFfbXs8n4Okup+8y2zt-P_f7WymoknBP4WAYuQ8dTwNgMAeLg@mail.gmail.com>
+ <905cd9c7-5c1f-43eb-b104-d540a5598d96@gmail.com>
+Message-ID: <CABFfbXtxuX+7JqQ0ZSc=JaVs-1sOH_JtDHEpNBHQd76trPA2sg@mail.gmail.com>
+
+On Mon, Sep 9, 2024 at 11:11?AM Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+>
+>
+> On 9/8/24 23:14, Jeroen Ooms wrote:
+> > On Mon, Sep 2, 2024 at 10:05?AM Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+> >>
+> >> On 4/25/24 17:01, Ivan Krylov via R-devel wrote:
+> >>> On Thu, 25 Apr 2024 14:45:04 +0200
+> >>> Jeroen Ooms <jeroenooms at gmail.com> wrote:
+> >>>
+> >>>> Thoughts?
+> >>> How verboten would it be to create an empty external pointer object,
+> >>> add it to the preserved list, and set an on-exit finalizer to clean up
+> >>> the curl multi-handle? As far as I can tell, the internet module is not
+> >>> supposed to be unloaded, so this would not introduce an opportunity to
+> >>> jump to an unmapped address. This makes it possible to avoid adding a
+> >>> CurlCleanup() function to the internet module:
+> >> Cleaning up this way in principle would probably be fine, but R already
+> >> has support for re-using connections. Even more, R can download files in
+> >> parallel (in a single thread), which particularly helps with bigger
+> >> latencies (e.g. typically users connecting from home, etc). See
+> >> ?download.file(), look for "simultaneous".
+> > Thank you for looking at this. A few ideas wrt parallel downloading:
+> >
+> > Additional improvement on Windows can be achieved by enabling the
+> > nghttp2 driver in libcurl in rtools, such that it takes advantage of
+> > http2 multiplexing for parallel downloads
+> > (https://bugs.r-project.org/show_bug.cgi?id=18664).
+>
+> Anyone who wants to cooperate and help is more than welcome to
+> contribute patches to upstream MXE.
+>
+> In case of nghttp2, thanks to Andrew Johnson, who contributed nghttp2
+> support to upstream MXE. It will be part of the next Rtools (probably
+> Rtools45).
+>
+> > Moreover, one concern is that install.packages() may fail more
+> > frequently on low bandwidth connections due to reaching the "download
+> > timeout" when downloading files in parallel:
+> >
+> > R has an unusual definition of the http timeout, which by default
+> > aborts in-progress downloads after 60 seconds for no obvious reason.
+> > (by contrast, browsers enforce a timeout on unresponsive/stalled
+> > downloads only, which can be achieved in libcurl by setting
+> > CURLOPT_CONNECTTIMEOUT or CURLOPT_LOW_SPEED_TIME).
+> >
+> > The above is already a problem on slow networks, where large packages
+> > can fail to install with a timeout error in the download stage. Users
+> > may assume there must be a problem with the network, as it is not
+> > obvious that machines on slower internet connection need to work
+> > around R's defaults and modify options(timeout) before
+> > install.packages(). This problem could become more prevalent when
+> > using parallel downloads while still enforcing the same total timeout.
+> >
+> > For example: the MacOS binary for package "sf" is close to 90mb, hence
+> > currently, under the default R settings of options(timeout=60),
+> > install.packages will error with a download timeout on clients with
+> > less than 1.5MB/s bandwidth. But with the parallel implementation,
+> > install.packages() will share the bandwidth on 6 parallel downloads,
+> > so if "sf" is downloaded with all its dependencies, we need at least
+> > 9MB/s (i.e. a 100mbit connection) for the default settings to not
+> > cause a timeout.
+> >
+> > Hopefully this can be revised to enforce the timeout on stalled
+> > downloads only, as is common practice.
+>
+> Yes, this is work in progress, I am aware that the timeout could use
+> some thought re simultaneous downloads.
+
+OK that is good to hear.
+
+
+> If anyone wants to help with testing the current implementation of
+> simultaneous download and report any bugs found, that would be nice.
+
+R-universe has ran this a few thousand times to recheck packages on
+r-devel on both linux and windows, and it works well. It reduces the
+CI process by a few seconds, and there are less random connection
+failures. If you want to inspect some recent logs for yourself, click
+the rightmost column on https://r-universe.dev/builds and then on the
+GitHub Actions page, look under the "Build R-devel for Windows /
+Linux" runs to see the log files.
+
+I was also able to confirm an edge case that install.packages() does
+not abort if any of the dependencies fails to download with http-404,
+which I think is desired behavior. If there is anything else
+specifically that you would like to see tested I can look at that.
+
+
