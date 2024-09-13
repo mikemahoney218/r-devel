@@ -984,3 +984,291 @@ which I think is desired behavior. If there is anything else
 specifically that you would like to see tested I can look at that.
 
 
+From @|mon@@ndrew@ @end|ng |rom b@br@h@m@@c@uk  Thu Sep 12 14:01:54 2024
+From: @|mon@@ndrew@ @end|ng |rom b@br@h@m@@c@uk (Simon Andrews)
+Date: Thu, 12 Sep 2024 12:01:54 +0000
+Subject: [Rd] Can gzfile be given the same method option as file
+Message-ID: <CWXP123MB619012B710931D02CF91B812D0642@CWXP123MB6190.GBRP123.PROD.OUTLOOK.COM>
+
+Recently my employer has introduced a security system which generates SSL certificates on the fly to be able to see the content of https connections.  To make this work they add a new root certificate to the windows certificate store.
+
+In R this causes problems because the default library used to download data from URLs doesn't look at this store, however the "wininet" download method works so where this is used then things work (albeit with a warning about future deprecation).
+
+For functions like download.file this works great, but it fails when running readRDS:
+
+readRDS('https://seurat.nygenome.org/azimuth/references/homologs.rds')
+Error in gzfile(file, "rb") : cannot open the connection
+In addition: Warning message:
+In gzfile(file, "rb") :
+  cannot open compressed file 'https://seurat.nygenome.org/azimuth/references/homologs.rds', probable reason 'Invalid argument'
+
+After some debugging I see that the root cause is from the gzfile function.
+
+> gzfile('https://seurat.nygenome.org/azimuth/references/homologs.rds') -> g
+> open(g, open="r")
+Error in open.connection(g, open = "r") : cannot open the connection
+In addition: Warning message:
+In open.connection(g, open = "r") :
+  cannot open compressed file 'https://seurat.nygenome.org/azimuth/references/homologs.rds', probable reason 'Invalid argument'
+
+If this was not a compressed file then using file rather than gzfile we can make this work by setting the url.method option:
+
+> options("url.method"="wininet")
+> file('https://seurat.nygenome.org/azimuth/references/homologs.rds') -> g
+> open(g, open="r")
+Warning message:
+In open.connection(g, open = "r") :
+  the 'wininet' method of url() is deprecated for http:// and https:// URLs
+
+So I get a warning, but it works.
+
+I guess this boils down to two questions:
+
+
+  1.  Is it possible to add the same "method" argument to gzfile that file uses so that people in my situation have a work round?
+  2.  Given the warnings we're getting when using wininet, are their plans to make windows certficates be supported in another way?
+
+Thanks
+
+Simon.
+
+
+
+
+
+
+
+
+
+
+
+
+	[[alternative HTML version deleted]]
+
+
+From |kry|ov @end|ng |rom d|@root@org  Thu Sep 12 16:27:37 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Thu, 12 Sep 2024 17:27:37 +0300
+Subject: [Rd] Can gzfile be given the same method option as file
+In-Reply-To: <CWXP123MB619012B710931D02CF91B812D0642@CWXP123MB6190.GBRP123.PROD.OUTLOOK.COM>
+References: <CWXP123MB619012B710931D02CF91B812D0642@CWXP123MB6190.GBRP123.PROD.OUTLOOK.COM>
+Message-ID: <20240912172737.1202b2bd@arachnoid>
+
+? Thu, 12 Sep 2024 12:01:54 +0000
+Simon Andrews via R-devel <r-devel at r-project.org> ?????:
+
+> readRDS('https://seurat.nygenome.org/azimuth/references/homologs.rds')
+> Error in gzfile(file, "rb") : cannot open the connection
+
+I don't think that gzfile works with URLs. gzcon(), on the other hand,
+does work with url() connections, which accepts the 'method' argument
+and the getOption('url.method') default.
+
+h <- readRDS(url(
+ 'https://seurat.nygenome.org/azimuth/references/homologs.rds'
+))
+
+But that only works with gzip-compressed files. For example, CRAN's
+PACKAGES.rds is xz-compressed, and I don't see a way to read it the
+same way:
+
+readBin(
+ index <- file.path(
+  contrib.url(getOption('repos')['CRAN']),
+  'PACKAGES.rds'
+ ), raw(), 5
+) |> rawToChar()
+# [1] "\xfd7zXZ" <-- note the "7zXZ" header
+readRDS(url(index))
+# Error in readRDS(url(index)) : unknown input format
+
+>   2.  Given the warnings we're getting when using wininet, are their
+> plans to make windows certficates be supported in another way?
+
+What does libcurlVersion() return for you? In theory, it should be
+possible to make libcurl use schannel and therefore the system
+certificate store for TLS verification purposes.
+
+-- 
+Best regards,
+Ivan
+
+
+From @|mon@@ndrew@ @end|ng |rom b@br@h@m@@c@uk  Thu Sep 12 17:06:50 2024
+From: @|mon@@ndrew@ @end|ng |rom b@br@h@m@@c@uk (Simon Andrews)
+Date: Thu, 12 Sep 2024 15:06:50 +0000
+Subject: [Rd] Can gzfile be given the same method option as file
+In-Reply-To: <20240912172737.1202b2bd@arachnoid>
+References: <CWXP123MB619012B710931D02CF91B812D0642@CWXP123MB6190.GBRP123.PROD.OUTLOOK.COM>
+ <20240912172737.1202b2bd@arachnoid>
+Message-ID: <CWXP123MB6190D38EB374D47862DC5E52D0642@CWXP123MB6190.GBRP123.PROD.OUTLOOK.COM>
+
+Thankyou!  This helped a lot.  I had mis-understood some of the chain of functions which got to the eventual failure.  I can confirm that it does indeed work if you create a url() first and it picks the appropriate back end as long as the url.method option is set.
+
+For the schannel back end I have:
+
+> libcurlVersion()
+[1] "8.6.0"
+attr(,"ssl_version")
+[1] "(OpenSSL/3.2.1) Schannel"
+attr(,"libssh_version")
+[1] "libssh2/1.11.0"
+
+However I can't get either of the curl related methods to work.
+
+> download.file('https://seurat.nygenome.org/azimuth/references/homologs.rds', destfile = "c:/Users/andrewss/homologs.rds", method="libcurl")
+trying URL 'https://seurat.nygenome.org/azimuth/references/homologs.rds'
+Error in download.file("https://seurat.nygenome.org/azimuth/references/homologs.rds",  : 
+  cannot open URL 'https://seurat.nygenome.org/azimuth/references/homologs.rds'
+In addition: Warning message:
+In download.file("https://seurat.nygenome.org/azimuth/references/homologs.rds",  :
+  URL 'https://seurat.nygenome.org/azimuth/references/homologs.rds': status was 'SSL connect error'
+
+> download.file('https://seurat.nygenome.org/azimuth/references/homologs.rds', destfile = "c:/Users/andrewss/homologs.rds", method="curl")
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+  0     0    0     0    0     0      0      0 --:--:-- --:--:-- --:--:--     0
+curl: (35) schannel: next InitializeSecurityContext failed: CRYPT_E_NO_REVOCATION_CHECK (0x80092012) - The revocation function was unable to check revocation for the certificate.
+Error in download.file("https://seurat.nygenome.org/azimuth/references/homologs.rds",  : 
+  'curl' call had nonzero exit status
+
+I realise that this may not be as simple as the certificate not being seen, and that the system here may not fake the revocation infrastructure too, but I don't see that this is going to change, and it's only the winet method which actually allows anything to connect.
+
+Simon.
+
+
+
+
+-----Original Message-----
+From: Ivan Krylov <ikrylov at disroot.org> 
+Sent: 12 September 2024 15:28
+To: Simon Andrews via R-devel <r-devel at r-project.org>
+Cc: Simon Andrews <simon.andrews at babraham.ac.uk>
+Subject: Re: [Rd] Can gzfile be given the same method option as file
+
+? Thu, 12 Sep 2024 12:01:54 +0000
+Simon Andrews via R-devel <r-devel at r-project.org> ?????:
+
+> readRDS('https://seurat.nygenome.org/azimuth/references/homologs.rds')
+> Error in gzfile(file, "rb") : cannot open the connection
+
+I don't think that gzfile works with URLs. gzcon(), on the other hand, does work with url() connections, which accepts the 'method' argument and the getOption('url.method') default.
+
+h <- readRDS(url(
+ 'https://seurat.nygenome.org/azimuth/references/homologs.rds'
+))
+
+But that only works with gzip-compressed files. For example, CRAN's PACKAGES.rds is xz-compressed, and I don't see a way to read it the same way:
+
+readBin(
+ index <- file.path(
+  contrib.url(getOption('repos')['CRAN']),
+  'PACKAGES.rds'
+ ), raw(), 5
+) |> rawToChar()
+# [1] "\xfd7zXZ" <-- note the "7zXZ" header
+readRDS(url(index))
+# Error in readRDS(url(index)) : unknown input format
+
+>   2.  Given the warnings we're getting when using wininet, are their 
+> plans to make windows certficates be supported in another way?
+
+What does libcurlVersion() return for you? In theory, it should be possible to make libcurl use schannel and therefore the system certificate store for TLS verification purposes.
+
+--
+Best regards,
+Ivan
+
+------------------------------------
+This email has been scanned for spam & viruses. If you believe this email should have been stopped by our filters, click the following link to report it (https://portal-uk.mailanyone.net/index.html#/outer/reportspam?token=dXNlcj1zaW1vbi5hbmRyZXdzQGJhYnJhaGFtLmFjLnVrO3RzPTE3MjYxNTEyNjU7dXVpZD02NkUyRkE2MDJDNjczRjRCREUwOTMxQUM4NTdCNkY3Nzt0b2tlbj1lNWI5MzU2NGJmOWE1MTcwYmM4ZmY2YjNhNTYwMWQ5ZmFkOTU2YWE1Ow%3D%3D).
+
+
+From |kry|ov @end|ng |rom d|@root@org  Thu Sep 12 17:23:02 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Thu, 12 Sep 2024 18:23:02 +0300
+Subject: [Rd] Can gzfile be given the same method option as file
+In-Reply-To: <CWXP123MB6190D38EB374D47862DC5E52D0642@CWXP123MB6190.GBRP123.PROD.OUTLOOK.COM>
+References: <CWXP123MB619012B710931D02CF91B812D0642@CWXP123MB6190.GBRP123.PROD.OUTLOOK.COM>
+ <20240912172737.1202b2bd@arachnoid>
+ <CWXP123MB6190D38EB374D47862DC5E52D0642@CWXP123MB6190.GBRP123.PROD.OUTLOOK.COM>
+Message-ID: <20240912182302.5ddbe5a8@arachnoid>
+
+? Thu, 12 Sep 2024 15:06:50 +0000
+Simon Andrews <simon.andrews at babraham.ac.uk> ?????:
+
+> > download.file('https://seurat.nygenome.org/azimuth/references/homologs.rds',
+> > destfile = "c:/Users/andrewss/homologs.rds", method="libcurl")  
+<...>
+> status was 'SSL connect error'
+> 
+> > download.file('https://seurat.nygenome.org/azimuth/references/homologs.rds',
+> > destfile = "c:/Users/andrewss/homologs.rds", method="curl")  
+<...>
+> curl: (35) schannel: next InitializeSecurityContext
+> failed: CRYPT_E_NO_REVOCATION_CHECK (0x80092012) - The revocation
+> function was unable to check revocation for the certificate.
+
+This extra error code is useful, thank you for trying the "curl"
+method. https://github.com/curl/curl/issues/14315 suggests a libcurl
+option and a curl command line option.
+
+Does download.file(method = 'curl', extra = '--ssl-no-revoke') work for
+you?
+
+Since R-4.2.2, R understands the R_LIBCURL_SSL_REVOKE_BEST_EFFORT
+environment variable. Does it help to set it to "TRUE" (e.g. in the
+.Renviron file) before invoking download.file(method = "libcurl")?
+
+Some extra context can be found in
+news(grepl('R_LIBCURL_SSL_REVOKE_BEST_EFFORT', Text)) and
+<https://bugs.r-project.org/show_bug.cgi?id=18379>.
+
+-- 
+Best regards,
+Ivan
+
+
+From @|mon@@ndrew@ @end|ng |rom b@br@h@m@@c@uk  Thu Sep 12 17:36:32 2024
+From: @|mon@@ndrew@ @end|ng |rom b@br@h@m@@c@uk (Simon Andrews)
+Date: Thu, 12 Sep 2024 15:36:32 +0000
+Subject: [Rd] Can gzfile be given the same method option as file
+In-Reply-To: <20240912182302.5ddbe5a8@arachnoid>
+References: <CWXP123MB619012B710931D02CF91B812D0642@CWXP123MB6190.GBRP123.PROD.OUTLOOK.COM>
+ <20240912172737.1202b2bd@arachnoid>
+ <CWXP123MB6190D38EB374D47862DC5E52D0642@CWXP123MB6190.GBRP123.PROD.OUTLOOK.COM>
+ <20240912182302.5ddbe5a8@arachnoid>
+Message-ID: <CWXP123MB6190EF5BCE48303117C82AA4D0642@CWXP123MB6190.GBRP123.PROD.OUTLOOK.COM>
+
+? Thu, 12 Sep 2024 15:06:50 +0000
+Simon Andrews <simon.andrews at babraham.ac.uk> ?????:
+
+> > > download.file('https://seurat.nygenome.org/azimuth/references/homolo
+> > > gs.rds', destfile = "c:/Users/andrewss/homologs.rds", method="curl")
+<...>
+> > curl: (35) schannel: next InitializeSecurityContext
+> > failed: CRYPT_E_NO_REVOCATION_CHECK (0x80092012) - The revocation 
+> > function was unable to check revocation for the certificate.
+
+> This extra error code is useful, thank you for trying the "curl"
+> method. https://github.com/curl/curl/issues/14315 suggests a libcurl option and a curl command line option.
+> 
+> Does download.file(method = 'curl', extra = '--ssl-no-revoke') work for you?
+
+Yes!  Adding that option does indeed work and generates no warnings.
+
+> Since R-4.2.2, R understands the R_LIBCURL_SSL_REVOKE_BEST_EFFORT environment variable. Does it help to set it > to "TRUE" (e.g. in the .Renviron file) before invoking download.file(method = "libcurl")?
+
+Yes, this also works and will provide a workable solution for our environment
+
+> Sys.getenv("R_LIBCURL_SSL_REVOKE_BEST_EFFORT")
+[1] "TRUE"
+> download.file('https://seurat.nygenome.org/azimuth/references/homologs.rds', destfile = "c:/Users/andrewss/homologs.rds", method="libcurl")
+trying URL 'https://seurat.nygenome.org/azimuth/references/homologs.rds'
+Content type 'application/octet-stream' length 3458249 bytes (3.3 MB)
+downloaded 3.3 MB
+
+Thank you so much for your help with this.  I shall implement this for the rest of our organisation.
+
+Simon.
+
+
