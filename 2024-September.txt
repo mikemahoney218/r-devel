@@ -1272,3 +1272,33 @@ Thank you so much for your help with this.  I shall implement this for the rest 
 Simon.
 
 
+From therne@u @end|ng |rom m@yo@edu  Sun Sep 15 02:43:31 2024
+From: therne@u @end|ng |rom m@yo@edu (Therneau, Terry M., Ph.D.)
+Date: Sun, 15 Sep 2024 00:43:31 +0000
+Subject: [Rd] Possible update to survival
+Message-ID: <BL0PR01MB4658BCF7EF86EAD903545CD7AE672@BL0PR01MB4658.prod.exchangelabs.com>
+
+I got good feedback from the list about a scope issue, so I am coming back for more.
+Prior issue:   users who type survival::coxph(survival::Surv(time, status) ~ x1 + x2 + surv ival::strata(group), data=mydata)
+This messes up the character string matching for strata, done via   tt <- terms(formula, specials= ?strata?).  The code runs, and gives the wrong answer (group is treated as an ordinary covariate).
+
+The solution
+
+  1.  Add code very early that rewrites the formula without the offendinge survival:: string
+  2.  Before calling model.frame(), insert my copy of strata into the calling chain
+    coxenv <- new.env(parent= environment(formula))
+    assign("strata", survival::strata, envir= coxenv)
+    environment(formula) <- coxenv
+
+The second part of this deals with those who want to use survival functions but not use library(survival).
+
+
+Now to the question.
+I had always (naively) assumed that the Surv(), strata(), etc calls within a coxph formula would be resolved first within the survival namespace.  I realize now that this is not true: they get resoloved within model.frame.  If a user has their own Surv, it will get used.
+For ultimate safety, I am thinking of extending the above to all of the internal survival functions that might be used in a formula: Surv, strata, pspline, cluster, ratetable  (I think that?s all).   An intitial limited test looks okay, but before anything migrates to CRAN I am looking for any feedback.   The current test version also prints a warning when removing the extraneous ?survival::? modifier, which I will retain for at least a little while although I personally detest receiving such messages.
+
+Terry T.
+
+	[[alternative HTML version deleted]]
+
+
