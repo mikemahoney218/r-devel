@@ -1302,3 +1302,620 @@ Terry T.
 	[[alternative HTML version deleted]]
 
 
+From tdhock5 @end|ng |rom gm@||@com  Mon Sep 16 16:47:20 2024
+From: tdhock5 @end|ng |rom gm@||@com (Toby Hocking)
+Date: Mon, 16 Sep 2024 10:47:20 -0400
+Subject: [Rd] numerical issue with t.test
+Message-ID: <CALK03d1EgjSDw69yKHyqO2y=-7-NVW58LikosoxrNqJhUmZ8OQ@mail.gmail.com>
+
+Hi! I expected that t.test should report a very large p-value (close
+to 1), even when using paired=TRUE, for the data below (which are very
+similar). However, I observe p-value = 0.02503 which indicates a
+significant difference, even though there is none. Can this be fixed
+please? This is with R-4.4.1. For reference below I use paired=FALSE
+with the same data, and I get p-value = 1 as expected.
+
+> err1 = c(-1.6076199373862132, -1.658521185520103, -1.6549424312339873, -1.5887767975086149, -1.634129577540383, -1.7442711937982249)
+> err2 = c(-1.6076199373862132, -1.6585211855201032, -1.6549424312339875, -1.5887767975086149, -1.6341295775403832, -1.7442711937982252)
+> t.test(err1,err2,paired=TRUE)
+
+    Paired t-test
+
+data:  err1 and err2
+t = 3.1623, df = 5, p-value = 0.02503
+alternative hypothesis: true mean difference is not equal to 0
+95 percent confidence interval:
+ 2.769794e-17 2.683615e-16
+sample estimates:
+mean difference
+   1.480297e-16
+
+> t.test(err1,err2,paired=FALSE)
+
+    Welch Two Sample t-test
+
+data:  err1 and err2
+t = 0, df = 10, p-value = 1
+alternative hypothesis: true difference in means is not equal to 0
+95 percent confidence interval:
+ -0.06988771  0.06988771
+sample estimates:
+mean of x mean of y
+-1.648044 -1.648044
+
+
+From ||@t@ @end|ng |rom dewey@myzen@co@uk  Mon Sep 16 16:54:11 2024
+From: ||@t@ @end|ng |rom dewey@myzen@co@uk (Michael Dewey)
+Date: Mon, 16 Sep 2024 15:54:11 +0100
+Subject: [Rd] numerical issue with t.test
+In-Reply-To: <CALK03d1EgjSDw69yKHyqO2y=-7-NVW58LikosoxrNqJhUmZ8OQ@mail.gmail.com>
+References: <CALK03d1EgjSDw69yKHyqO2y=-7-NVW58LikosoxrNqJhUmZ8OQ@mail.gmail.com>
+Message-ID: <2e646d2d-5ad3-052f-3b24-1de9d3eb8596@dewey.myzen.co.uk>
+
+Dear Toby
+
+I see no problem there. If you compute the mean and variance of err1 - 
+err2 which is what the paired test is working on then that might help to 
+see what is going on.
+
+Michael
+
+On 16/09/2024 15:47, Toby Hocking wrote:
+> Hi! I expected that t.test should report a very large p-value (close
+> to 1), even when using paired=TRUE, for the data below (which are very
+> similar). However, I observe p-value = 0.02503 which indicates a
+> significant difference, even though there is none. Can this be fixed
+> please? This is with R-4.4.1. For reference below I use paired=FALSE
+> with the same data, and I get p-value = 1 as expected.
+> 
+>> err1 = c(-1.6076199373862132, -1.658521185520103, -1.6549424312339873, -1.5887767975086149, -1.634129577540383, -1.7442711937982249)
+>> err2 = c(-1.6076199373862132, -1.6585211855201032, -1.6549424312339875, -1.5887767975086149, -1.6341295775403832, -1.7442711937982252)
+>> t.test(err1,err2,paired=TRUE)
+> 
+>      Paired t-test
+> 
+> data:  err1 and err2
+> t = 3.1623, df = 5, p-value = 0.02503
+> alternative hypothesis: true mean difference is not equal to 0
+> 95 percent confidence interval:
+>   2.769794e-17 2.683615e-16
+> sample estimates:
+> mean difference
+>     1.480297e-16
+> 
+>> t.test(err1,err2,paired=FALSE)
+> 
+>      Welch Two Sample t-test
+> 
+> data:  err1 and err2
+> t = 0, df = 10, p-value = 1
+> alternative hypothesis: true difference in means is not equal to 0
+> 95 percent confidence interval:
+>   -0.06988771  0.06988771
+> sample estimates:
+> mean of x mean of y
+> -1.648044 -1.648044
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+-- 
+Michael
+
+
+From bbo|ker @end|ng |rom gm@||@com  Mon Sep 16 16:57:29 2024
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Mon, 16 Sep 2024 10:57:29 -0400
+Subject: [Rd] numerical issue with t.test
+In-Reply-To: <2e646d2d-5ad3-052f-3b24-1de9d3eb8596@dewey.myzen.co.uk>
+References: <CALK03d1EgjSDw69yKHyqO2y=-7-NVW58LikosoxrNqJhUmZ8OQ@mail.gmail.com>
+ <2e646d2d-5ad3-052f-3b24-1de9d3eb8596@dewey.myzen.co.uk>
+Message-ID: <0af3164f-c5f5-4dfb-b1b8-c950fef3b925@gmail.com>
+
+   To be more specific, this replicates the computations that t.test is 
+doing (stripped of all the different cases that stats:::t.test.default 
+handles)
+
+z <- err1-err2
+se <- sqrt(var(z)/length(z))
+mz <- mean(z)
+tstat <- mz/se
+2*pt(tstat, df= length(z)-1, lower.tail = FALSE)
+
+On 2024-09-16 10:54 a.m., Michael Dewey wrote:
+> Dear Toby
+> 
+> I see no problem there. If you compute the mean and variance of err1 - 
+> err2 which is what the paired test is working on then that might help to 
+> see what is going on.
+> 
+> Michael
+> 
+> On 16/09/2024 15:47, Toby Hocking wrote:
+>> Hi! I expected that t.test should report a very large p-value (close
+>> to 1), even when using paired=TRUE, for the data below (which are very
+>> similar). However, I observe p-value = 0.02503 which indicates a
+>> significant difference, even though there is none. Can this be fixed
+>> please? This is with R-4.4.1. For reference below I use paired=FALSE
+>> with the same data, and I get p-value = 1 as expected.
+>>
+>>> err1 = c(-1.6076199373862132, -1.658521185520103, 
+>>> -1.6549424312339873, -1.5887767975086149, -1.634129577540383, 
+>>> -1.7442711937982249)
+>>> err2 = c(-1.6076199373862132, -1.6585211855201032, 
+>>> -1.6549424312339875, -1.5887767975086149, -1.6341295775403832, 
+>>> -1.7442711937982252)
+>>> t.test(err1,err2,paired=TRUE)
+>>
+>> ???? Paired t-test
+>>
+>> data:? err1 and err2
+>> t = 3.1623, df = 5, p-value = 0.02503
+>> alternative hypothesis: true mean difference is not equal to 0
+>> 95 percent confidence interval:
+>> ? 2.769794e-17 2.683615e-16
+>> sample estimates:
+>> mean difference
+>> ??? 1.480297e-16
+>>
+>>> t.test(err1,err2,paired=FALSE)
+>>
+>> ???? Welch Two Sample t-test
+>>
+>> data:? err1 and err2
+>> t = 0, df = 10, p-value = 1
+>> alternative hypothesis: true difference in means is not equal to 0
+>> 95 percent confidence interval:
+>> ? -0.06988771? 0.06988771
+>> sample estimates:
+>> mean of x mean of y
+>> -1.648044 -1.648044
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+> 
+
+-- 
+Dr. Benjamin Bolker
+Professor, Mathematics & Statistics and Biology, McMaster University
+Director, School of Computational Science and Engineering
+ > E-mail is sent at my convenience; I don't expect replies outside of 
+working hours.
+
+
+From ggrothend|eck @end|ng |rom gm@||@com  Mon Sep 16 17:21:55 2024
+From: ggrothend|eck @end|ng |rom gm@||@com (Gabor Grothendieck)
+Date: Mon, 16 Sep 2024 11:21:55 -0400
+Subject: [Rd] findInterval
+Message-ID: <CAP01uRk6m9yzFBRNwybY85-XFMjq850+MREtAF_Oo=4TdshEVw@mail.gmail.com>
+
+Suppose we have `dat` shown below and we want to find the the `y` value
+corresponding to the last value in `x` equal to the corresponding component
+of `seek` and we wish to return an output the same length as `seek` using
+`findInterval` to perform  the search.  This returns the correct result:
+
+  dat <- data.frame(x = c(2, 2, 3, 4, 4, 4),
+    y = c(37, 12, 19, 30, 6, 15),
+    seek = 1:6)
+
+  zero2na <- function(x) replace(x, x == 0, NA)
+  dat |>
+    transform(dat, result = y[ zero2na(findInterval(seek, x)) ] ) |>
+    _$result
+   ## [1] NA 12 19 15 15 15
+
+Since `findInterval` returns an index it is natural that the next step be
+to use the index and it is also common that we want a result that is the
+same length as the input.
+
+The extra step here is to convert the 0 which `findInterval`
+hard codes as missing to NA.
+
+If, like `match`, the `findInterval` function had a `nomatch=` argument we
+could have written this as follows which is shorter, more understandable
+and avoids the need for zero2na:
+
+  # if nomatch= were implemented
+  seek |>
+    transform(result = y[ findInterval(x, nomatch = NA) ] ) |>
+    _$result
+
+-- 
+Statistics & Software Consulting
+GKX Group, GKX Associates Inc.
+tel: 1-877-GKX-GROUP
+email: ggrothendieck at gmail.com
+
+
+From |jj0731 @end|ng |rom gm@||@com  Tue Sep 17 04:58:25 2024
+From: |jj0731 @end|ng |rom gm@||@com (LJJ)
+Date: Tue, 17 Sep 2024 10:58:25 +0800
+Subject: [Rd] Degree of freedom issue on chi-square test of goodness of fit
+Message-ID: <CAJnvaVdz31unfGmMbcX6_4Ta17mO0Q_rhdFttHEmW10xib+vGw@mail.gmail.com>
+
+I am running chi-square test of goodness of fit, the observation data was
+well groupped to observation freq. I assume the data obey the normal
+distribution N(? ?^2), while ? and ?^2 are unknown. So I use their
+estimation. Consequently, I calculated out the probabilities and input in
+vector p
+
+>x<-c(6,13,14,27,25,19,10,6)  #observation freq>p<-c(0.0505, 0.0874, 0.1533, 0.2088, 0.2088, 0.1533, 0.0874, 0.0505)
+                                 #probabilities from normal distribution
+test_result<-chisq.test(x=x,p=p)
+test_result
+
+    Chi-squared test for given probabilities
+
+data:  x
+X-squared = 1.8468, df = 7, p-value = 0.9678
+
+
+from the out put, the degree of freedon is 7 (df=7),  because the data
+was in 8 groups so df=8-1=7
+
+That is perfect if the parameters (? and ?^2) in normal distribution is
+precise. However, in this case, they are unknow and I used ther
+estimations.
+
+ If the observation group is n, number of unknow parameters in distribution
+is r, then in chi-square test, the degree of freedom should be n-r-1. But
+in chisq.test() output, it is always n-1.
+
+In this case, the degree of freedom should be 8-2-1=5 (there are two unknow
+parameters). I have to run function pchisq() for rest calculation manually.
+
+I propose to enhance function chisq.test() in degree of freedom. In
+practice, there are unknow parameters in distribution function.
+
+	[[alternative HTML version deleted]]
+
+
+From |@go@bonn|c| @end|ng |rom umontpe|||er@|r  Tue Sep 17 12:28:19 2024
+From: |@go@bonn|c| @end|ng |rom umontpe|||er@|r (Iago Bonnici)
+Date: Tue, 17 Sep 2024 12:28:19 +0200
+Subject: [Rd] Wrong/incomplete documentation regarding the 100-bytes path
+ length limit.
+Message-ID: <070e35bd-8f13-4a54-b76a-cedf003f5a25@umontpellier.fr>
+
+Hello @r-devel,
+
+ ??? From what I read in the following thread:
+
+https://stat.ethz.ch/pipermail/r-package-devel/2023q4/010197.html
+
+ ??? The major reason to limit paths lengths in R packages is to help 
+support MS Windows 260-chars paths lengths limit (pre-W10).
+
+ ??? However, the official documentation at this address:
+
+https://cran.r-project.org/doc/manuals/R-exts.html#Package-structure-1
+
+ ??? States:
+
+ > /packages are normally distributed as tarballs, and these have a 
+limit on path lengths: for maximal portability 100 bytes.
+
+/??? This is the wrong explanation. Tar has been supporting 256-chars 
+paths since POSIX.1-1988 and unlimited paths since POSIX.1-2001. The 
+limitation should be deferred to MS Windows instead of tar.
+
+ ??? Considering that the manuals are ? /edited by the R Development 
+Core Team /? <https://cran.r-project.org/manuals.html>, I suppose that 
+this is the right list to point out this inconsistency? How can I help 
+in fixing this? Should I open a bug at R Bugzilla?
+
+ ??? Note: I am not discussing whether the limit itself should be 
+reconsidered. That discussion seems yet covered by the aforementioned 
+thread (but it's non-official), and by bug #18637 
+<https://bugs.r-project.org/show_bug.cgi?id=18637> (but it's stale). In 
+any case, I think there is no blocker to clarifying the situation in the 
+documentation.
+
+ ??? Best regards,
+
+--
+Iago-lito
+	[[alternative HTML version deleted]]
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue Sep 17 14:45:01 2024
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 17 Sep 2024 14:45:01 +0200
+Subject: [Rd] 
+ Wrong/incomplete documentation regarding the 100-bytes path
+ length limit.
+In-Reply-To: <070e35bd-8f13-4a54-b76a-cedf003f5a25@umontpellier.fr>
+References: <070e35bd-8f13-4a54-b76a-cedf003f5a25@umontpellier.fr>
+Message-ID: <c296a460-0a8e-473a-849a-3b40687cd40c@gmail.com>
+
+On 9/17/24 12:28, Iago Bonnici via R-devel wrote:
+> Hello @r-devel,
+>
+>   ??? From what I read in the following thread:
+>
+> https://stat.ethz.ch/pipermail/r-package-devel/2023q4/010197.html
+>
+>   ??? The major reason to limit paths lengths in R packages is to help
+> support MS Windows 260-chars paths lengths limit (pre-W10).
+Not really, the limit on Windows is a reason why path length is a scarce 
+resource in portable applications. And it exists also on Windows 10 and 
+newer - it is a limitation now in Windows applications, inherited by a 
+limit in early versions of Windows operating system. R itself doesn't 
+have this limitation anymore.
+>   ??? However, the official documentation at this address:
+>
+> https://cran.r-project.org/doc/manuals/R-exts.html#Package-structure-1
+>
+>   ??? States:
+>
+>   > /packages are normally distributed as tarballs, and these have a
+> limit on path lengths: for maximal portability 100 bytes.
+>
+> /??? This is the wrong explanation. Tar has been supporting 256-chars
+> paths since POSIX.1-1988 and unlimited paths since POSIX.1-2001. The
+> limitation should be deferred to MS Windows instead of tar.
+>
+>   ??? Considering that the manuals are ? /edited by the R Development
+> Core Team /? <https://cran.r-project.org/manuals.html>, I suppose that
+> this is the right list to point out this inconsistency? How can I help
+> in fixing this? Should I open a bug at R Bugzilla?
+>
+>   ??? Note: I am not discussing whether the limit itself should be
+> reconsidered. That discussion seems yet covered by the aforementioned
+> thread (but it's non-official), and by bug #18637
+> <https://bugs.r-project.org/show_bug.cgi?id=18637> (but it's stale). In
+> any case, I think there is no blocker to clarifying the situation in the
+> documentation.
+
+I have added a sentence to R-exts mentioning Windows is also a reason 
+why it makes sense to keep paths short.
+
+Best
+Tomas
+
+>
+>   ??? Best regards,
+>
+> --
+> Iago-lito
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Tue Sep 17 18:14:56 2024
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Tue, 17 Sep 2024 18:14:56 +0200
+Subject: [Rd] findInterval
+In-Reply-To: <CAP01uRk6m9yzFBRNwybY85-XFMjq850+MREtAF_Oo=4TdshEVw@mail.gmail.com>
+References: <CAP01uRk6m9yzFBRNwybY85-XFMjq850+MREtAF_Oo=4TdshEVw@mail.gmail.com>
+Message-ID: <26345.43776.640449.934216@stat.math.ethz.ch>
+
+>>>>> Gabor Grothendieck 
+>>>>>     on Mon, 16 Sep 2024 11:21:55 -0400 writes:
+
+    > Suppose we have `dat` shown below and we want to find the the `y` value
+    > corresponding to the last value in `x` equal to the corresponding component
+    > of `seek` and we wish to return an output the same length as `seek` using
+    > `findInterval` to perform  the search.  This returns the correct result:
+
+    > dat <- data.frame(x = c(2, 2, 3, 4, 4, 4),
+    > 	     		y = c(37, 12, 19, 30, 6, 15),
+    >                  seek = 1:6)
+
+    > zero2na <- function(x) replace(x, x == 0, NA)
+
+    > dat |>
+    > transform(dat, result = y[ zero2na(findInterval(seek, x)) ] ) |>
+    > _$result
+    > ## [1] NA 12 19 15 15 15
+
+I'd write that as
+
+    with(dat, y[ zero2na(findInterval(seek, x)) ] )
+
+so I can read it with jumping hoops and stand on my head ...
+
+    > Since `findInterval` returns an index it is natural that the next step be
+    > to use the index and it is also common that we want a result that is the
+    > same length as the input.
+
+I think your example where x and y are of the same length
+not typical.
+
+Not that the design of   findInterval(x, vec, ..)  is indeed to always return
+an index, but there isn't any "nomatch", but rather a
+- "left of the leftmost", i.e.,  an x[i] < vec[1]  (as 'vec' must be
+  sorted increasingly) or
+- "right of rightmost"  , i.e.,  an x[i] > vec[length(vec)]
+
+and these should give *different* results (and not both the
+same).
+
+I don't think 'nomatch' would improve the relatively clean  findInterval()
+behavior.
+
+There are  three logical switches  ... which allow   2^3
+variants of which I now guess only 6  differ:
+
+Here's some R code showing the possibilities:
+
+
+(argsTF <- names(formals(findInterval))[-(1:2)]) # "rightmost.closed"  "all.inside" "left.open"       
+FT <- c(FALSE, TRUE)
+allFT <- as.matrix(expand.grid(rightmost.closed = FT,
+                               all.inside       = FT,
+                               left.open        = FT))
+allFT
+(cn <- substr(colnames(allFT), 1,1)) #  "r" "a" "l"
+
+x <- 2:18
+v <- c(5, 10, 15) # create two bins [5,10) and [10,15)
+
+fiAll <- apply(allFT, 1, function(r.a.f)
+    do.call(findInterval, c(list(x, v), as.list(r.a.f))))
+
+cbind(x, fiAll) # has all info
+
+## must find cool 'column names' for fiAll: construct from r.., a.., l.. = F / T
+(cn1 <- apply(`dim<-`(c(".","|")[allFT+1L], dim(allFT)), 1, paste0, collapse=""))
+##  "..." "|.." ".|." "||." "..|" "|.|" ".||" "|||"
+colnames(fiAll) <- cn1
+cbind(x, fiAll) ## --> col. 3 == 4  and  7 == 8
+##==> show only unique columns:
+cbind(x, t(unique(t(fiAll))))
+ ##  x ... |.. .|. ..| |.| .||
+ ##  2   0   0   1   0   0   1
+ ##  3   0   0   1   0   0   1
+ ##  4   0   0   1   0   0   1
+ ##  5   1   1   1   0   1   1
+ ##  6   1   1   1   1   1   1
+ ##  7   1   1   1   1   1   1
+ ##  8   1   1   1   1   1   1
+ ##  9   1   1   1   1   1   1
+ ## 10   2   2   2   1   1   1
+ ## 11   2   2   2   2   2   2
+ ## 12   2   2   2   2   2   2
+ ## 13   2   2   2   2   2   2
+ ## 14   2   2   2   2   2   2
+ ## 15   3   2   2   2   2   2
+ ## 16   3   3   2   3   3   2
+ ## 17   3   3   2   3   3   2
+ ## 18   3   3   2   3   3   2
+  
+
+Martin
+
+
+From ggrothend|eck @end|ng |rom gm@||@com  Tue Sep 17 19:27:35 2024
+From: ggrothend|eck @end|ng |rom gm@||@com (Gabor Grothendieck)
+Date: Tue, 17 Sep 2024 13:27:35 -0400
+Subject: [Rd] findInterval
+In-Reply-To: <26345.43776.640449.934216@stat.math.ethz.ch>
+References: <CAP01uRk6m9yzFBRNwybY85-XFMjq850+MREtAF_Oo=4TdshEVw@mail.gmail.com>
+ <26345.43776.640449.934216@stat.math.ethz.ch>
+Message-ID: <CAP01uRnhW1XebRd5TaQd-C24KhepRX++weMwaJW5oyEhwMr1Yg@mail.gmail.com>
+
+The other problem in this example is setting NA's.
+
+   replace(x, x == 0, NA)
+
+requires two instances of x making it not very pipe friendly.  In
+dplyr there is na_if
+to address that problem and base R might have something that addresses this
+so we don't have to define our own zero2na as the base of R now has pipes.
+
+
+On Tue, Sep 17, 2024 at 12:14?PM Martin Maechler
+<maechler at stat.math.ethz.ch> wrote:
+>
+> >>>>> Gabor Grothendieck
+> >>>>>     on Mon, 16 Sep 2024 11:21:55 -0400 writes:
+>
+>     > Suppose we have `dat` shown below and we want to find the the `y` value
+>     > corresponding to the last value in `x` equal to the corresponding component
+>     > of `seek` and we wish to return an output the same length as `seek` using
+>     > `findInterval` to perform  the search.  This returns the correct result:
+>
+>     > dat <- data.frame(x = c(2, 2, 3, 4, 4, 4),
+>     >                   y = c(37, 12, 19, 30, 6, 15),
+>     >                  seek = 1:6)
+>
+>     > zero2na <- function(x) replace(x, x == 0, NA)
+>
+>     > dat |>
+>     > transform(dat, result = y[ zero2na(findInterval(seek, x)) ] ) |>
+>     > _$result
+>     > ## [1] NA 12 19 15 15 15
+>
+> I'd write that as
+>
+>     with(dat, y[ zero2na(findInterval(seek, x)) ] )
+>
+> so I can read it with jumping hoops and stand on my head ...
+>
+>     > Since `findInterval` returns an index it is natural that the next step be
+>     > to use the index and it is also common that we want a result that is the
+>     > same length as the input.
+>
+> I think your example where x and y are of the same length
+> not typical.
+>
+> Not that the design of   findInterval(x, vec, ..)  is indeed to always return
+> an index, but there isn't any "nomatch", but rather a
+> - "left of the leftmost", i.e.,  an x[i] < vec[1]  (as 'vec' must be
+>   sorted increasingly) or
+> - "right of rightmost"  , i.e.,  an x[i] > vec[length(vec)]
+>
+> and these should give *different* results (and not both the
+> same).
+>
+> I don't think 'nomatch' would improve the relatively clean  findInterval()
+> behavior.
+>
+> There are  three logical switches  ... which allow   2^3
+> variants of which I now guess only 6  differ:
+>
+> Here's some R code showing the possibilities:
+>
+>
+> (argsTF <- names(formals(findInterval))[-(1:2)]) # "rightmost.closed"  "all.inside" "left.open"
+> FT <- c(FALSE, TRUE)
+> allFT <- as.matrix(expand.grid(rightmost.closed = FT,
+>                                all.inside       = FT,
+>                                left.open        = FT))
+> allFT
+> (cn <- substr(colnames(allFT), 1,1)) #  "r" "a" "l"
+>
+> x <- 2:18
+> v <- c(5, 10, 15) # create two bins [5,10) and [10,15)
+>
+> fiAll <- apply(allFT, 1, function(r.a.f)
+>     do.call(findInterval, c(list(x, v), as.list(r.a.f))))
+>
+> cbind(x, fiAll) # has all info
+>
+> ## must find cool 'column names' for fiAll: construct from r.., a.., l.. = F / T
+> (cn1 <- apply(`dim<-`(c(".","|")[allFT+1L], dim(allFT)), 1, paste0, collapse=""))
+> ##  "..." "|.." ".|." "||." "..|" "|.|" ".||" "|||"
+> colnames(fiAll) <- cn1
+> cbind(x, fiAll) ## --> col. 3 == 4  and  7 == 8
+> ##==> show only unique columns:
+> cbind(x, t(unique(t(fiAll))))
+>  ##  x ... |.. .|. ..| |.| .||
+>  ##  2   0   0   1   0   0   1
+>  ##  3   0   0   1   0   0   1
+>  ##  4   0   0   1   0   0   1
+>  ##  5   1   1   1   0   1   1
+>  ##  6   1   1   1   1   1   1
+>  ##  7   1   1   1   1   1   1
+>  ##  8   1   1   1   1   1   1
+>  ##  9   1   1   1   1   1   1
+>  ## 10   2   2   2   1   1   1
+>  ## 11   2   2   2   2   2   2
+>  ## 12   2   2   2   2   2   2
+>  ## 13   2   2   2   2   2   2
+>  ## 14   2   2   2   2   2   2
+>  ## 15   3   2   2   2   2   2
+>  ## 16   3   3   2   3   3   2
+>  ## 17   3   3   2   3   3   2
+>  ## 18   3   3   2   3   3   2
+>
+>
+> Martin
+
+
+
+-- 
+Statistics & Software Consulting
+GKX Group, GKX Associates Inc.
+tel: 1-877-GKX-GROUP
+email: ggrothendieck at gmail.com
+
+
