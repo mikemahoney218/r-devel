@@ -2128,3 +2128,347 @@ web: https://www.john-fox.ca/
 --
 
 
+From j|ox @end|ng |rom mcm@@ter@c@  Sat Sep 21 18:47:49 2024
+From: j|ox @end|ng |rom mcm@@ter@c@ (John Fox)
+Date: Sat, 21 Sep 2024 12:47:49 -0400
+Subject: [Rd] model.matrix() may be misleading for "lme" models
+In-Reply-To: <a7d44ccb-10b4-4fbb-b34c-154aaa687ef7@mcmaster.ca>
+References: <a7d44ccb-10b4-4fbb-b34c-154aaa687ef7@mcmaster.ca>
+Message-ID: <b60df077-eab0-451c-a8c5-67e5e333b2da@mcmaster.ca>
+
+Dear list members,
+
+After further testing, I found that the following simplified version of 
+model.matrix.lme(), which omits passing xlev to the default method, is 
+more robust. The previous version generated spurious warnings in some 
+circumstances.
+
+model.matrix.lme <- function(object, ...){
+   data <- object$data
+   if (is.null(data)){
+     NextMethod(formula(object),  data=eval(object$call$data),
+                contrasts.arg=object$contrasts)
+   } else {
+     NextMethod(formula(object), data=data,
+                contrasts.arg=object$contrasts)
+   }
+}
+
+Best,
+  John
+
+
+On 2024-09-20 12:49 p.m., John Fox wrote:
+> Caution: External email.
+> 
+> 
+> Dear r-devel list members,
+> 
+> I'm posting this message here because it concerns the nlme package,
+> which is maintained by R-core. The problem I'm about to describe is
+> somewhere between a bug and a feature request, and so I thought it a
+> good idea to ask here rather posting a bug report to the R bugzilla.
+> 
+> I was made aware (by Ben Bolker) that the car::Anova() method for "lme"
+> models reports unreasonable results and warnings for mixed models in
+> which non-default contrasts are used for factors. I traced the problem
+> to a call to model.matrix() on "lme" objects, which was introduced into
+> car:::Anova.lme() a couple of years ago to check for problems in the
+> model matrix. That invokes model.matrix.default(), which ignores the
+> contrasts defined in a call to lme().
+> 
+> Here's a simple direct example:
+> 
+> ------- snip -------
+> 
+>  > library(nlme)
+>  > m <- lme(distance ~ Sex, random = ~ 1 | Subject,
+> +????????? data=Orthodont, contrasts=list(Sex = "contr.sum"))
+>  > m
+> 
+> Linear mixed-effects model fit by REML
+>  ? Data: Orthodont
+>  ? Log-restricted-likelihood: -253.629
+>  ? Fixed: distance ~ Sex
+> (Intercept)??????? Sex1
+>  ? 23.808239??? 1.160511
+> 
+> Random effects:
+>  ?Formula: ~1 | Subject
+>  ??????? (Intercept) Residual
+> StdDev:??? 1.595838 2.220312
+> 
+> Number of Observations: 108
+> Number of Groups: 27
+> 
+>  > model.matrix(m, data=Orthodont)
+> 
+>  ??? (Intercept) SexFemale
+> 1???????????? 1???????? 0
+> 2???????????? 1???????? 0
+> 3???????????? 1???????? 0
+> 
+> . . .
+> 
+> 106?????????? 1???????? 1
+> 107?????????? 1???????? 1
+> 108?????????? 1???????? 1
+> attr(,"assign")
+> [1] 0 1
+> attr(,"contrasts")
+> attr(,"contrasts")$Sex
+> [1] "contr.treatment"
+> 
+> --------- snip ---------
+> 
+> So model.matrix() constructs the model matrix using contr.treatment()
+> even though contr.sum() was used by lme() to fit the model.
+> 
+> In contrast (pun intended), model.matrix() works as expected with an
+> "lm" model (via model.matrix.lm()):
+> 
+> --------- snip ---------
+> 
+>  > m.lm <- lm(distance ~ Sex, data=Orthodont,
+> +??????????? contrasts=list(Sex = "contr.sum"))
+>  > m.lm
+> 
+> Call:
+> lm(formula = distance ~ Sex, data = Orthodont,
+>  ?? contrasts = list(Sex = "contr.sum"))
+> 
+> Coefficients:
+> (Intercept)???????? Sex1
+>  ???? 23.808??????? 1.161
+> 
+>  > model.matrix(m.lm)
+>  ??? (Intercept) Sex1
+> 1???????????? 1??? 1
+> 2???????????? 1??? 1
+> 3???????????? 1??? 1
+> 
+> . . .
+> 
+> 106?????????? 1?? -1
+> 107?????????? 1?? -1
+> 108?????????? 1?? -1
+> attr(,"assign")
+> [1] 0 1
+> attr(,"contrasts")
+> attr(,"contrasts")$Sex
+> [1] "contr.sum"
+> 
+> --------- snip ---------
+> 
+> I was able to get around this problem by defining a model.matrix.lme()
+> method, which is used internally in the car package but not registered:
+> 
+> --------- snip ---------
+> 
+> model.matrix.lme <- function(object, ...){
+> 
+>  ? data <- object$data
+>  ? contrasts <- object$contrasts
+> 
+>  ? if (length(contrasts) == 0) {
+>  ??? xlev <- NULL
+>  ? } else {
+>  ??? xlev <- vector(length(contrasts), mode="list")
+>  ??? names(xlev) <- names <- names(contrasts)
+>  ??? for (name in names){
+>  ????? xlev[[name]] <- rownames(contrasts[[name]])
+>  ??? }
+>  ? }
+> 
+>  ? if (is.null(data)){
+>  ??? NextMethod(formula(object), data=eval(object$call$data),
+>  ???????????????? contrasts.arg=contrasts, xlev=xlev, ...)
+>  ? } else {
+>  ??? NextMethod(formula(object), data=data,
+>  ??????????????????? contrasts.arg=contrasts, xlev=xlev, ...)
+>  ? }
+> }
+> 
+> --------- snip ---------
+> 
+> This function is a bit awkward, particularly the part that constructs
+> the xlev argument, but it does appear to work as intended (note,
+> however, that the contrast matrix for Sex rather than "contr.sum" is
+> reported in the "contrasts" attribute):
+> 
+> --------- snip ---------
+> 
+>  > model.matrix(m)
+>  ??? (Intercept) Sex1
+> 1???????????? 1??? 1
+> 2???????????? 1??? 1
+> 3???????????? 1??? 1
+> 
+> . . .
+> 
+> 106?????????? 1?? -1
+> 107?????????? 1?? -1
+> 108?????????? 1?? -1
+> attr(,"assign")
+> [1] 0 1
+> attr(,"contrasts")
+> attr(,"contrasts")$Sex
+>  ?????? [,1]
+> Male????? 1
+> Female?? -1
+> 
+>  > sessionInfo()
+> R version 4.4.1 (2024-06-14)
+> Platform: aarch64-apple-darwin20
+> Running under: macOS Sonoma 14.6.1
+> 
+> Matrix products: default
+> BLAS:
+> /System/Library/Frameworks/Accelerate.framework/Versions/A/Frameworks/ 
+> vecLib.framework/Versions/A/libBLAS.dylib
+> 
+> LAPACK:
+> /Library/Frameworks/R.framework/Versions/4.4-arm64/Resources/lib/ 
+> libRlapack.dylib;
+>  ?LAPACK version 3.12.0
+> 
+> locale:
+> [1] en_US.UTF-8/en_US.UTF-8/en_US.UTF-8/C/en_US.UTF-8/en_US.UTF-8
+> 
+> time zone: America/Toronto
+> tzcode source: internal
+> 
+> attached base packages:
+> [1] stats???? graphics? grDevices utils???? datasets? methods?? base
+> 
+> other attached packages:
+> [1] nlme_3.1-165
+> 
+> loaded via a namespace (and not attached):
+> [1] compiler_4.4.1 tools_4.4.1??? grid_4.4.1???? lattice_0.22-6
+> 
+> --------- snip ---------
+> 
+> Although this apparently solves the problem for car::Anova(), the
+> problem is likely more general. For example, insight::get_modelmatrix()
+> also reports the wrong model matrix for the "lme" model m above.
+> 
+> My suggestion: Include a correct model.matrix.lme() method in the nlme
+> package. That could be my version, but I expect that R-core could come
+> up with something better.
+> 
+> Thank you,
+>  ?John
+> -- 
+> John Fox, Professor Emeritus
+> McMaster University
+> Hamilton, Ontario, Canada
+> web: https://www.john-fox.ca/
+> -- 
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From |kry|ov @end|ng |rom d|@root@org  Sat Sep 21 20:51:56 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Sat, 21 Sep 2024 21:51:56 +0300
+Subject: [Rd] model.matrix() may be misleading for "lme" models
+In-Reply-To: <b60df077-eab0-451c-a8c5-67e5e333b2da@mcmaster.ca>
+References: <a7d44ccb-10b4-4fbb-b34c-154aaa687ef7@mcmaster.ca>
+ <b60df077-eab0-451c-a8c5-67e5e333b2da@mcmaster.ca>
+Message-ID: <20240921215156.1c65b61a@trisector>
+
+Dear Prof. John Fox,
+
+? Sat, 21 Sep 2024 12:47:49 -0400
+John Fox <jfox at mcmaster.ca> ?????:
+
+>      NextMethod(formula(object),  data=eval(object$call$data),
+>                 contrasts.arg=object$contrasts)
+
+The use of NextMethod worries me a bit. It will work as intended as
+long as everyone gives fully-named arguments to the generic, without
+relying on positional or partial matching, but may give unexpected
+results otherwise:
+
+foo <- \(x, ...) UseMethod('foo')
+foo.default <- \(x, foo = 'default', baz = 'baz', ...)
+ list(foo = foo, baz = baz, '...' = list(...))
+# try to override the argument to the default method
+foo.bar <- \(x, ...) NextMethod(x, foo = 'override')
+x <- structure(list(), class = 'bar')
+foo(x) # works, gives the right argument to foo.default
+# $foo
+# [1] "override"
+# 
+# $baz
+# [1] "baz"
+# 
+# $...
+# list()
+
+# this used to work with foo.default, but now doesn't:
+foo(x, fo = 'bar') # not matched to foo=
+# $foo
+# [1] "override"
+# 
+# $baz
+# [1] "baz"
+# 
+# $...
+# $...$fo
+# [1] "bar"
+
+foo(x, 'bar') # not matched to foo=, given to baz=
+# $foo
+# [1] "override"
+# 
+# $baz
+# [1] "bar"
+# 
+# $...
+# list()
+
+This happens because NextMethod() overwrites named arguments already
+present in the call, but any other arguments just get appended, without
+any regard to whether they had already matched an argument before the
+call was modified. In fact, I'm not seeing a way to safely override
+some of the arguments for the next S3 method. The "attempt 4" described
+by Henrik Bengtsson at [1] seems to work only if an argument is given
+as part of the call:
+
+foo.bar <- \(x, foo, ...) { foo <- 'override'; NextMethod() }
+foo(x) # doesn't work
+# $foo
+# [1] "default"
+# 
+# $baz
+# [1] "baz"
+# 
+# $...
+# list()
+
+foo(x, 1) # does work
+# $foo
+# [1] "override"
+# 
+# $baz
+# [1] "baz"
+#
+# $...
+# list()
+
+Evaluating object$call$data in the environment of the suggested
+nlme:::model.matrix.lme function may also not work right. Without an
+explicit copy of the data, the best environment to evaluate it in would
+be parent.frame().
+
+-- 
+Best regards,
+Ivan
+
+[1] https://github.com/HenrikBengtsson/Wishlist-for-R/issues/44
+
+
