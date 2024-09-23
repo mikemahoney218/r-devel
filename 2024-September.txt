@@ -2472,3 +2472,93 @@ Ivan
 [1] https://github.com/HenrikBengtsson/Wishlist-for-R/issues/44
 
 
+From j|ox @end|ng |rom mcm@@ter@c@  Sun Sep 22 16:23:50 2024
+From: j|ox @end|ng |rom mcm@@ter@c@ (John Fox)
+Date: Sun, 22 Sep 2024 10:23:50 -0400
+Subject: [Rd] model.matrix() may be misleading for "lme" models
+In-Reply-To: <20240921215156.1c65b61a@trisector>
+References: <a7d44ccb-10b4-4fbb-b34c-154aaa687ef7@mcmaster.ca>
+ <b60df077-eab0-451c-a8c5-67e5e333b2da@mcmaster.ca>
+ <20240921215156.1c65b61a@trisector>
+Message-ID: <ee50e3bd-364a-4f37-ba03-62aed1df5a8e@mcmaster.ca>
+
+Dear Ivan,
+
+Thank you for addressing my questions with your usual thoroughness. 
+Please see below:
+
+On 2024-09-21 2:51 p.m., Ivan Krylov wrote:
+> [You don't often get email from ikrylov at disroot.org. Learn why this is important at https://aka.ms/LearnAboutSenderIdentification ]
+> 
+> Caution: External email.
+> 
+> 
+> Dear Prof. John Fox,
+> 
+> ? Sat, 21 Sep 2024 12:47:49 -0400
+> John Fox <jfox at mcmaster.ca> ?????:
+> 
+>>       NextMethod(formula(object),  data=eval(object$call$data),
+>>                  contrasts.arg=object$contrasts)
+> 
+> The use of NextMethod worries me a bit. It will work as intended as
+> long as everyone gives fully-named arguments to the generic, without
+> relying on positional or partial matching, but may give unexpected
+> results otherwise:
+
+That's not an issue for car:::model.matrix.lme(), which isn't registered 
+and so isn't accessible to users, but could be a problem if 
+model.matrix.lme() is incorporated in the nlme package, as I suggested. 
+An alternative that I think should work would be to call
+
+     model.matrix(formula(object),  data=eval(object$call$data), 
+
+                  contrasts.arg=object$contrasts, ...)
+
+rather than NextMethod() from model.matrix.lme().
+
+. . .
+
+> Evaluating object$call$data in the environment of the suggested
+> nlme:::model.matrix.lme function may also not work right. Without an
+> explicit copy of the data, the best environment to evaluate it in would
+> be parent.frame().
+
+I'm afraid that I don't understand the suggestion. Isn't parent.frame() 
+the default for the envir argument of eval()? Do you mean the parent 
+frame of the call to model.matrix.lme()?
+
+I tested car:::Anova.lme()/model.matrix.lme() with models fit to data in 
+the global environment, in an attach()ed data frame, and within another 
+function(), and didn't encounter any problems. For example:
+
+------ snip -----
+
+ > f <- function(){
++   OD <- Orthodont
++   m7 <- with(OD, lme(distance ~ Sex, random = ~ 1 | Subject,
++                      contrasts=list(Sex=contr.sum)))
++   Anova(m7, type=3)
++ }
+
+ > f()
+Analysis of Deviance Table (Type III tests)
+
+Response: distance
+                 Chisq Df Pr(>Chisq)
+(Intercept) 3910.8377  1  < 2.2e-16
+Sex            9.2921  1   0.002301
+
+------ snip -----
+
+Best,
+  John
+
+> 
+> --
+> Best regards,
+> Ivan
+> 
+> [1] https://github.com/HenrikBengtsson/Wishlist-for-R/issues/44
+
+
