@@ -2562,3 +2562,234 @@ Best,
 > [1] https://github.com/HenrikBengtsson/Wishlist-for-R/issues/44
 
 
+From |kry|ov @end|ng |rom d|@root@org  Mon Sep 23 21:54:17 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Mon, 23 Sep 2024 22:54:17 +0300
+Subject: [Rd] model.matrix() may be misleading for "lme" models
+In-Reply-To: <ee50e3bd-364a-4f37-ba03-62aed1df5a8e@mcmaster.ca>
+References: <a7d44ccb-10b4-4fbb-b34c-154aaa687ef7@mcmaster.ca>
+ <b60df077-eab0-451c-a8c5-67e5e333b2da@mcmaster.ca>
+ <20240921215156.1c65b61a@trisector>
+ <ee50e3bd-364a-4f37-ba03-62aed1df5a8e@mcmaster.ca>
+Message-ID: <20240923225417.08fef4c1@Tarkus>
+
+? Sun, 22 Sep 2024 10:23:50 -0400
+John Fox <jfox at mcmaster.ca> ?????:
+
+> > Evaluating object$call$data in the environment of the suggested
+> > nlme:::model.matrix.lme function may also not work right. Without an
+> > explicit copy of the data, the best environment to evaluate it in
+> > would be parent.frame().  
+> 
+> I'm afraid that I don't understand the suggestion. Isn't
+> parent.frame() the default for the envir argument of eval()? Do you
+> mean the parent frame of the call to model.matrix.lme()?
+
+Yes, I do mean the parent frame of the model.matrix.lme() function
+call. While eval()'s default for the 'envir' argument is
+parent.frame(), this default value is evaluated in the context of the
+eval() call. Letting model.matrix.lme() call eval() results in the
+'envir' being the eval()'s parent, the model.matrix.lme() call frame.
+
+In most cases, model.matrix.lme() works as intended: either lme() has
+been given the 'data' argument, so object$data is not NULL and the
+branch to eval() is not taken, or 'data' has not been given, so both
+object$data and object$call$data are NULL, and NULL doesn't cause any
+harm when evaluated in any environment. In the latter case
+model.matrix.default() can access the variables in the environment of
+the formula.
+
+With keep.data = FALSE, the function may evaluate object$call$data in
+the wrong environment:
+
+maybe_model_matrix <- function(X)
+ model.matrix(lme(distance ~ Sex, random = ~ 1 | Subject, X,
+                  contrasts=list(Sex=contr.sum), keep.data=FALSE))
+
+maybe_model_matrix(Orthodont)
+# Error in eval(object$call$data) : object 'X' not found
+
+...but then model.matrix.default doesn't work on such objects either,
+and if the user wanted the data to be accessible, they could have set
+keep.data = TRUE. I can't tell whether evaluating object$call$data in
+environment(object$formula) is a better or worse idea than
+parent.frame().
+
+-- 
+Best regards,
+Ivan
+
+
+From bbo|ker @end|ng |rom gm@||@com  Mon Sep 23 22:25:46 2024
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Mon, 23 Sep 2024 16:25:46 -0400
+Subject: [Rd] model.matrix() may be misleading for "lme" models
+In-Reply-To: <20240923225417.08fef4c1@Tarkus>
+References: <a7d44ccb-10b4-4fbb-b34c-154aaa687ef7@mcmaster.ca>
+ <b60df077-eab0-451c-a8c5-67e5e333b2da@mcmaster.ca>
+ <20240921215156.1c65b61a@trisector>
+ <ee50e3bd-364a-4f37-ba03-62aed1df5a8e@mcmaster.ca>
+ <20240923225417.08fef4c1@Tarkus>
+Message-ID: <CABghstTfAjaU+D-GkN19J6eb-V=6Sc234jEV085PgQR2vTc+qg@mail.gmail.com>
+
+>  I can't tell whether evaluating object$call$data in
+environment(object$formula) is a better or worse idea than parent.frame().
+
+I have struggled with this a lot over the years. There is a bunch of
+wonky code in lme4, e.g. here
+<https://github.com/lme4/lme4/blob/master/R/lmer.R#L814-L838>, that
+tries to look for data in different possible locations, but I don't
+think anything works perfectly/robustly.
+
+https://stackoverflow.com/questions/14945274/determine-whether-evaluation-of-an-argument-will-fail-due-to-non-existence
+
+On Mon, Sep 23, 2024 at 3:54?PM Ivan Krylov via R-devel
+<r-devel at r-project.org> wrote:
+>
+> ? Sun, 22 Sep 2024 10:23:50 -0400
+> John Fox <jfox at mcmaster.ca> ?????:
+>
+> > > Evaluating object$call$data in the environment of the suggested
+> > > nlme:::model.matrix.lme function may also not work right. Without an
+> > > explicit copy of the data, the best environment to evaluate it in
+> > > would be parent.frame().
+> >
+> > I'm afraid that I don't understand the suggestion. Isn't
+> > parent.frame() the default for the envir argument of eval()? Do you
+> > mean the parent frame of the call to model.matrix.lme()?
+>
+> Yes, I do mean the parent frame of the model.matrix.lme() function
+> call. While eval()'s default for the 'envir' argument is
+> parent.frame(), this default value is evaluated in the context of the
+> eval() call. Letting model.matrix.lme() call eval() results in the
+> 'envir' being the eval()'s parent, the model.matrix.lme() call frame.
+>
+> In most cases, model.matrix.lme() works as intended: either lme() has
+> been given the 'data' argument, so object$data is not NULL and the
+> branch to eval() is not taken, or 'data' has not been given, so both
+> object$data and object$call$data are NULL, and NULL doesn't cause any
+> harm when evaluated in any environment. In the latter case
+> model.matrix.default() can access the variables in the environment of
+> the formula.
+>
+> With keep.data = FALSE, the function may evaluate object$call$data in
+> the wrong environment:
+>
+> maybe_model_matrix <- function(X)
+>  model.matrix(lme(distance ~ Sex, random = ~ 1 | Subject, X,
+>                   contrasts=list(Sex=contr.sum), keep.data=FALSE))
+>
+> maybe_model_matrix(Orthodont)
+> # Error in eval(object$call$data) : object 'X' not found
+>
+> ...but then model.matrix.default doesn't work on such objects either,
+> and if the user wanted the data to be accessible, they could have set
+> keep.data = TRUE. I can't tell whether evaluating object$call$data in
+> environment(object$formula) is a better or worse idea than
+> parent.frame().
+>
+> --
+> Best regards,
+> Ivan
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From j|ox @end|ng |rom mcm@@ter@c@  Mon Sep 23 23:31:10 2024
+From: j|ox @end|ng |rom mcm@@ter@c@ (John Fox)
+Date: Mon, 23 Sep 2024 17:31:10 -0400
+Subject: [Rd] model.matrix() may be misleading for "lme" models
+In-Reply-To: <CABghstTfAjaU+D-GkN19J6eb-V=6Sc234jEV085PgQR2vTc+qg@mail.gmail.com>
+References: <a7d44ccb-10b4-4fbb-b34c-154aaa687ef7@mcmaster.ca>
+ <b60df077-eab0-451c-a8c5-67e5e333b2da@mcmaster.ca>
+ <20240921215156.1c65b61a@trisector>
+ <ee50e3bd-364a-4f37-ba03-62aed1df5a8e@mcmaster.ca>
+ <20240923225417.08fef4c1@Tarkus>
+ <CABghstTfAjaU+D-GkN19J6eb-V=6Sc234jEV085PgQR2vTc+qg@mail.gmail.com>
+Message-ID: <dbef8aa6-8e59-43bd-ae6f-7f127c1f5756@mcmaster.ca>
+
+Thank you Ivan and Ben for your recent further comments.
+
+I think that the current code for the unregistered model.matrix.lme() in 
+the development version of the car package is pretty robust and 
+certainly an improvement over what was there before (which returned 
+incorrect results for non-default contrasts!).
+
+I expect that if someone in R-core picks up the task of writing a 
+model.matrix.lme() for the nlme package, they would do a better job than 
+I did, and I'd then be able to retire the version in the car package.
+
+Again, thanks,
+  John
+
+On 2024-09-23 4:25 p.m., Ben Bolker wrote:
+> Caution: External email.
+> 
+> 
+>>   I can't tell whether evaluating object$call$data in
+> environment(object$formula) is a better or worse idea than parent.frame().
+> 
+> I have struggled with this a lot over the years. There is a bunch of
+> wonky code in lme4, e.g. here
+> <https://github.com/lme4/lme4/blob/master/R/lmer.R#L814-L838>, that
+> tries to look for data in different possible locations, but I don't
+> think anything works perfectly/robustly.
+> 
+> https://stackoverflow.com/questions/14945274/determine-whether-evaluation-of-an-argument-will-fail-due-to-non-existence
+> 
+> On Mon, Sep 23, 2024 at 3:54?PM Ivan Krylov via R-devel
+> <r-devel at r-project.org> wrote:
+>>
+>> ? Sun, 22 Sep 2024 10:23:50 -0400
+>> John Fox <jfox at mcmaster.ca> ?????:
+>>
+>>>> Evaluating object$call$data in the environment of the suggested
+>>>> nlme:::model.matrix.lme function may also not work right. Without an
+>>>> explicit copy of the data, the best environment to evaluate it in
+>>>> would be parent.frame().
+>>>
+>>> I'm afraid that I don't understand the suggestion. Isn't
+>>> parent.frame() the default for the envir argument of eval()? Do you
+>>> mean the parent frame of the call to model.matrix.lme()?
+>>
+>> Yes, I do mean the parent frame of the model.matrix.lme() function
+>> call. While eval()'s default for the 'envir' argument is
+>> parent.frame(), this default value is evaluated in the context of the
+>> eval() call. Letting model.matrix.lme() call eval() results in the
+>> 'envir' being the eval()'s parent, the model.matrix.lme() call frame.
+>>
+>> In most cases, model.matrix.lme() works as intended: either lme() has
+>> been given the 'data' argument, so object$data is not NULL and the
+>> branch to eval() is not taken, or 'data' has not been given, so both
+>> object$data and object$call$data are NULL, and NULL doesn't cause any
+>> harm when evaluated in any environment. In the latter case
+>> model.matrix.default() can access the variables in the environment of
+>> the formula.
+>>
+>> With keep.data = FALSE, the function may evaluate object$call$data in
+>> the wrong environment:
+>>
+>> maybe_model_matrix <- function(X)
+>>   model.matrix(lme(distance ~ Sex, random = ~ 1 | Subject, X,
+>>                    contrasts=list(Sex=contr.sum), keep.data=FALSE))
+>>
+>> maybe_model_matrix(Orthodont)
+>> # Error in eval(object$call$data) : object 'X' not found
+>>
+>> ...but then model.matrix.default doesn't work on such objects either,
+>> and if the user wanted the data to be accessible, they could have set
+>> keep.data = TRUE. I can't tell whether evaluating object$call$data in
+>> environment(object$formula) is a better or worse idea than
+>> parent.frame().
+>>
+>> --
+>> Best regards,
+>> Ivan
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
