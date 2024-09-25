@@ -2793,3 +2793,50 @@ On 2024-09-23 4:25 p.m., Ben Bolker wrote:
 >> https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From |kry|ov @end|ng |rom d|@root@org  Tue Sep 24 16:11:30 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Tue, 24 Sep 2024 17:11:30 +0300
+Subject: [Rd] Possible update to survival
+In-Reply-To: <BL0PR01MB4658BCF7EF86EAD903545CD7AE672@BL0PR01MB4658.prod.exchangelabs.com>
+References: <BL0PR01MB4658BCF7EF86EAD903545CD7AE672@BL0PR01MB4658.prod.exchangelabs.com>
+Message-ID: <20240924171130.4627a70e@arachnoid>
+
+? Sun, 15 Sep 2024 00:43:31 +0000
+"Therneau, Terry M., Ph.D. via R-devel" <r-devel at r-project.org> ?????:
+
+>   2.  Before calling model.frame(), insert my copy of strata into the
+> calling chain coxenv <- new.env(parent= environment(formula))
+>     assign("strata", survival::strata, envir= coxenv)
+>     environment(formula) <- coxenv
+
+<...>
+
+> For ultimate safety, I am thinking of extending the above to all of
+> the internal survival functions that might be used in a formula:
+> Surv, strata, pspline, cluster, ratetable  (I think that_s all).   An
+> intitial limited test looks okay, but before anything migrates to
+> CRAN I am looking for any feedback.
+
+What do you think of the following approach?
+
+When changing the environment of the formula, construct the following
+environment chain:
+
+1. Top: your 'coxenv' environment with the special survival functions
+2. Enclosing environment: list2env(data)
+3. Enclosing^2 environment: original environment(formula)
+
+Since the environment chain constructed by eval() when called by
+model.frame() looks different (top: data -> enclosure:
+environment(formula)), someone truly determined to shoot themselves in
+the foot could still sneak a 'strata' function inside their 'data'
+argument.
+
+Having said that, what you are planning to implement may be already
+reliable enough.
+
+-- 
+Best regards,
+Ivan
+
+
