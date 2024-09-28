@@ -2840,3 +2840,167 @@ Best regards,
 Ivan
 
 
+From |kry|ov @end|ng |rom d|@root@org  Fri Sep 27 12:32:27 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Fri, 27 Sep 2024 13:32:27 +0300
+Subject: [Rd] Disabling S4 primitive dispatch during method resolution
+ affects namespace load actions
+Message-ID: <20240927133227.46546cd3@arachnoid>
+
+Hello,
+
+This problem originally surfaced as an interaction between 'brms',
+'rstan' and 'Rcpp' [1]: a call to dimnames() from the 'brms' package on
+an object of an S4 class owned by the 'rstan' package tried to load its
+namespace. rstan:::.onLoad needs to load Rcpp modules, which uses load
+actions and reference classes. Since methods:::.findInheritedMethods
+temporarily disables primitive S4 dispatch [2], reference classes break
+and the namespace fails to load. I have prepared a small reproduction
+package [3], which will need to be installed to show the problem:
+
+R -q -s -e "saveRDS(repro::mk_external(), 'foo.rds')"
+R -q -s -e "readRDS('foo.rds')"
+# Loading required package: repro
+# Error: package or namespace load failed for ?repro? in
+# .doLoadActions(where, attach):
+#  error in load action .__A__.1 for package repro: bar$foo(): attempt
+#  to apply non-function
+# Error in .requirePackage(package) : unable to find required package
+# ?repro?
+# Calls: <Anonymous> ... .findInheritedMethods -> getClass ->
+# getClassDef -> .requirePackage
+# Execution halted
+
+(Here it has to be a show() call to trigger the package load, not just
+dimnames().)
+
+I have verified that the following patch prevents the failure in
+loading the namespace, but which other problems could it introduce?
+
+Index: src/library/methods/R/RClassUtils.R
+===================================================================
+--- src/library/methods/R/RClassUtils.R	(revision 87194)
++++ src/library/methods/R/RClassUtils.R	(working copy)
+@@ -1812,6 +1812,9 @@
+ 
+ ## real version of .requirePackage
+ ..requirePackage <- function(package, mustFind = TRUE) {
++    # we may be called from .findInheritedMethods, which disables S4 primitive dispatch
++    primMethods <- .allowPrimitiveMethods(TRUE)
++    on.exit(.allowPrimitiveMethods(primMethods))
+     value <- package
+     if(nzchar(package)) {
+         ## lookup as lightning fast as possible:
+
+The original change to disable S4 primitive dispatch during method
+resolution was done in r50609 (2009); this may be the first documented
+instance of it causing a problem. The comment says "At the moment, this
+is just for efficiency, but in principle it could be needed to avoid
+recursive calls to findInheritedMethods."
+
+-- 
+Best regards,
+Ivan
+
+[1]
+https://stat.ethz.ch/pipermail/r-package-devel/2024q3/011097.html
+
+[2]
+https://github.com/r-devel/r-svn/blob/776045d4601ed3ac7b8041e94c665bbfe9709191/src/library/methods/R/methodsTable.R#L457
+
+[3]
+https://codeberg.org/aitap/S4_vs_onLoad
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Fri Sep 27 18:47:06 2024
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Fri, 27 Sep 2024 18:47:06 +0200
+Subject: [Rd] Disabling S4 primitive dispatch during method resolution
+ affects namespace load actions
+In-Reply-To: <20240927133227.46546cd3@arachnoid>
+References: <20240927133227.46546cd3@arachnoid>
+Message-ID: <26358.57738.160660.753206@stat.math.ethz.ch>
+
+>>>>> Ivan Krylov via R-devel 
+>>>>>     on Fri, 27 Sep 2024 13:32:27 +0300 writes:
+
+    > Hello,
+    > This problem originally surfaced as an interaction between 'brms',
+    > 'rstan' and 'Rcpp' [1]: a call to dimnames() from the 'brms' package on
+    > an object of an S4 class owned by the 'rstan' package tried to load its
+    > namespace. rstan:::.onLoad needs to load Rcpp modules, which uses load
+    > actions and reference classes. Since methods:::.findInheritedMethods
+    > temporarily disables primitive S4 dispatch [2], reference classes break
+    > and the namespace fails to load. I have prepared a small reproduction
+    > package [3], which will need to be installed to show the problem:
+
+    > R -q -s -e "saveRDS(repro::mk_external(), 'foo.rds')"
+    > R -q -s -e "readRDS('foo.rds')"
+    > # Loading required package: repro
+    > # Error: package or namespace load failed for ?repro? in
+    > # .doLoadActions(where, attach):
+    > #  error in load action .__A__.1 for package repro: bar$foo(): attempt
+    > #  to apply non-function
+    > # Error in .requirePackage(package) : unable to find required package
+    > # ?repro?
+    > # Calls: <Anonymous> ... .findInheritedMethods -> getClass ->
+    > # getClassDef -> .requirePackage
+    > # Execution halted
+
+    > (Here it has to be a show() call to trigger the package load, not just
+    > dimnames().)
+
+    > I have verified that the following patch prevents the failure in
+    > loading the namespace, but which other problems could it introduce?
+
+    > Index: src/library/methods/R/RClassUtils.R
+    > ===================================================================
+    > --- src/library/methods/R/RClassUtils.R	(revision 87194)
+    > +++ src/library/methods/R/RClassUtils.R	(working copy)
+    > @@ -1812,6 +1812,9 @@
+ 
+    > ## real version of .requirePackage
+    > ..requirePackage <- function(package, mustFind = TRUE) {
+    > +    # we may be called from .findInheritedMethods, which disables S4 primitive dispatch
+    > +    primMethods <- .allowPrimitiveMethods(TRUE)
+    > +    on.exit(.allowPrimitiveMethods(primMethods))
+    > value <- package
+    > if(nzchar(package)) {
+    > ## lookup as lightning fast as possible:
+
+    > The original change to disable S4 primitive dispatch during method
+    > resolution was done in r50609 (2009); this may be the first documented
+    > instance of it causing a problem. The comment says "At the moment, this
+    > is just for efficiency, but in principle it could be needed to avoid
+    > recursive calls to findInheritedMethods."
+
+    > -- 
+    > Best regards,
+    > Ivan
+
+Thank you, Ivan.
+Your patch makes sense indeed, given your previous findings on
+the R-package-devel list ([1]). It is short and looks ok.
+As you mention, speed loss may still be an issue, for S4/methods
+(including reference classes) - using R code.
+
+I was additionally interested to see your 'repro' package ([3]) and
+try if it does reproduce the problem  ...  and then if the patch
+resolves it.... and confirm that it does this nicely.
+
+I think we will get some speed if your new code is replaced by
+
+   if(!.allowPrimitiveMethods(TRUE))
+       on.exit(.allowPrimitiveMethods(FALSE))
+
+which is correct as we know that the argument and return value
+are both either TRUE or FALSE.
+
+Martin
+
+
+    > [1] https://stat.ethz.ch/pipermail/r-package-devel/2024q3/011097.html
+    > [2] https://github.com/r-devel/r-svn/blob/776045d4601ed3ac7b8041e94c665bbfe9709191/src/library/methods/R/methodsTable.R#L457
+    > [3] https://codeberg.org/aitap/S4_vs_onLoad
+
+
