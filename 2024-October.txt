@@ -233,3 +233,268 @@ Am 10.10.24 um 21:53 schrieb Rui Barradas:
 >
 
 
+From pd@|gd @end|ng |rom gm@||@com  Fri Oct 11 10:50:32 2024
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Fri, 11 Oct 2024 10:50:32 +0200
+Subject: [Rd] R 4.4.2 scheduled for October 31
+Message-ID: <7D93F015-8D42-4847-BDF0-88B360816B08@gmail.com>
+
+Full schedule is available on developer.r-project.org (pending update from SVN).
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From wo||g@ng@v|echtb@uer @end|ng |rom m@@@tr|chtun|ver@|ty@n|  Fri Oct 11 12:27:42 2024
+From: wo||g@ng@v|echtb@uer @end|ng |rom m@@@tr|chtun|ver@|ty@n| (Viechtbauer, Wolfgang (NP))
+Date: Fri, 11 Oct 2024 10:27:42 +0000
+Subject: [Rd] Error message when calling t.test() and aov() with a factor
+ variables
+Message-ID: <AS8PR08MB91934F160E97429FAFEB78588B792@AS8PR08MB9193.eurprd08.prod.outlook.com>
+
+Hi all,
+
+Just noticed that the error that arises when calling t.test() with factors could be a bit clearer:
+
+> t.test(factor(c(3,1,2,4,3,5,4,5)), factor(c(2,1,2,3,4,5)))
+Error in var(x) : Calling var(x) on a factor x is defunct.
+  Use something like 'all(duplicated(x)[-1L])' to test for a constant vector.
+In addition: Warning message:
+In mean.default(x) :
+  argument is not numeric or logical: returning NA
+
+Obviously, using factors as input is nonsense, but this might happen on accident and then the error message could be a bit more on point. Similar for aov():
+
+> aov(factor(c(3,1,2,4,3,5,4,5)) ~ factor(c(2,1,2,2,2,1,2,1)))
+Call:
+   aov(formula = factor(c(3, 1, 2, 4, 3, 5, 4, 5)) ~ factor(c(2,
+    1, 2, 2, 2, 1, 2, 1)))
+Error in levels(x)[x] :
+  only 0's may be mixed with negative subscripts
+In addition: Warning messages:
+1: In model.response(mf, "numeric") :
+  using type = "numeric" with a factor response will be ignored
+2: In Ops.factor(y, z$residuals) : '-' not meaningful for factors
+
+Not a big deal and trying to catch all of the silly things users may do is of course impossible, but for this one adding a check that the (response) variable is actually numeric could be useful.
+
+Best,
+Wolfgang
+
+--
+Wolfgang Viechtbauer, PhD, Statistician | Department of Psychiatry and
+Neuropsychology | Maastricht University | PO Box 616 (VIJV1) | 6200 MD
+Maastricht, The Netherlands | +31(43)3884170 | https://www.wvbauer.com
+
+
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Fri Oct 11 14:18:07 2024
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Fri, 11 Oct 2024 14:18:07 +0200
+Subject: [Rd] 
+ Error message when calling t.test() and aov() with a factor
+ variables
+In-Reply-To: <AS8PR08MB91934F160E97429FAFEB78588B792@AS8PR08MB9193.eurprd08.prod.outlook.com>
+References: <AS8PR08MB91934F160E97429FAFEB78588B792@AS8PR08MB9193.eurprd08.prod.outlook.com>
+Message-ID: <26377.6015.100740.392260@hornik.net>
+
+>>>>> Viechtbauer, Wolfgang (NP) writes:
+
+> Hi all,
+> Just noticed that the error that arises when calling t.test() with factors could be a bit clearer:
+
+>> t.test(factor(c(3,1,2,4,3,5,4,5)), factor(c(2,1,2,3,4,5)))
+> Error in var(x) : Calling var(x) on a factor x is defunct.
+>   Use something like 'all(duplicated(x)[-1L])' to test for a constant vector.
+> In addition: Warning message:
+> In mean.default(x) :
+>   argument is not numeric or logical: returning NA
+
+> Obviously, using factors as input is nonsense, but this might happen on accident and then the error message could be a bit more on point. Similar for aov():
+
+>> aov(factor(c(3,1,2,4,3,5,4,5)) ~ factor(c(2,1,2,2,2,1,2,1)))
+> Call:
+>    aov(formula = factor(c(3, 1, 2, 4, 3, 5, 4, 5)) ~ factor(c(2,
+>     1, 2, 2, 2, 1, 2, 1)))
+> Error in levels(x)[x] :
+>   only 0's may be mixed with negative subscripts
+> In addition: Warning messages:
+> 1: In model.response(mf, "numeric") :
+>   using type = "numeric" with a factor response will be ignored
+> 2: In Ops.factor(y, z$residuals) : '-' not meaningful for factors
+
+> Not a big deal and trying to catch all of the silly things users may
+> do is of course impossible, but for this one adding a check that the
+> (response) variable is actually numeric could be useful.
+
+Indeed.
+
+As always, the question is whether we want to give an error unless
+is.numeric, or ensure via as.numeric?
+
+Best
+-k
+
+> Best,
+> Wolfgang
+
+> --
+> Wolfgang Viechtbauer, PhD, Statistician | Department of Psychiatry and
+> Neuropsychology | Maastricht University | PO Box 616 (VIJV1) | 6200 MD
+> Maastricht, The Netherlands | +31(43)3884170 | https://www.wvbauer.com
+
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From wo||g@ng@v|echtb@uer @end|ng |rom m@@@tr|chtun|ver@|ty@n|  Fri Oct 11 15:51:36 2024
+From: wo||g@ng@v|echtb@uer @end|ng |rom m@@@tr|chtun|ver@|ty@n| (Viechtbauer, Wolfgang (NP))
+Date: Fri, 11 Oct 2024 13:51:36 +0000
+Subject: [Rd] 
+ Error message when calling t.test() and aov() with a factor
+ variables
+In-Reply-To: <26377.6015.100740.392260@hornik.net>
+References: <AS8PR08MB91934F160E97429FAFEB78588B792@AS8PR08MB9193.eurprd08.prod.outlook.com>
+ <26377.6015.100740.392260@hornik.net>
+Message-ID: <AS8PR08MB9193F95F26D8FF82DFAC65108B792@AS8PR08MB9193.eurprd08.prod.outlook.com>
+
+> -----Original Message-----
+> From: Kurt Hornik <Kurt.Hornik at wu.ac.at>
+> Sent: Friday, October 11, 2024 14:18
+> To: Viechtbauer, Wolfgang (NP) <wolfgang.viechtbauer at maastrichtuniversity.nl>
+> Cc: r-devel <r-devel at r-project.org>
+> Subject: Re: [Rd] Error message when calling t.test() and aov() with a factor
+> variables
+>
+> >>>>> Viechtbauer, Wolfgang (NP) writes:
+>
+> > Hi all,
+> > Just noticed that the error that arises when calling t.test() with factors
+> could be a bit clearer:
+>
+> >> t.test(factor(c(3,1,2,4,3,5,4,5)), factor(c(2,1,2,3,4,5)))
+> > Error in var(x) : Calling var(x) on a factor x is defunct.
+> >   Use something like 'all(duplicated(x)[-1L])' to test for a constant vector.
+> > In addition: Warning message:
+> > In mean.default(x) :
+> >   argument is not numeric or logical: returning NA
+>
+> > Obviously, using factors as input is nonsense, but this might happen on
+> accident and then the error message could be a bit more on point. Similar for
+> aov():
+>
+> >> aov(factor(c(3,1,2,4,3,5,4,5)) ~ factor(c(2,1,2,2,2,1,2,1)))
+> > Call:
+> >    aov(formula = factor(c(3, 1, 2, 4, 3, 5, 4, 5)) ~ factor(c(2,
+> >     1, 2, 2, 2, 1, 2, 1)))
+> > Error in levels(x)[x] :
+> >   only 0's may be mixed with negative subscripts
+> > In addition: Warning messages:
+> > 1: In model.response(mf, "numeric") :
+> >   using type = "numeric" with a factor response will be ignored
+> > 2: In Ops.factor(y, z$residuals) : '-' not meaningful for factors
+>
+> > Not a big deal and trying to catch all of the silly things users may
+> > do is of course impossible, but for this one adding a check that the
+> > (response) variable is actually numeric could be useful.
+>
+> Indeed.
+>
+> As always, the question is whether we want to give an error unless
+> is.numeric, or ensure via as.numeric?
+
+I would issue an error. Using as.numeric() could lead to totally nonsensical results, for example when:
+
+as.numeric(factor(c("low","high","mid")))
+
+> Best
+> -k
+>
+> > Best,
+> > Wolfgang
+
+
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Fri Oct 11 15:53:00 2024
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Fri, 11 Oct 2024 15:53:00 +0200
+Subject: [Rd] 
+ Error message when calling t.test() and aov() with a factor
+ variables
+In-Reply-To: <AS8PR08MB9193F95F26D8FF82DFAC65108B792@AS8PR08MB9193.eurprd08.prod.outlook.com>
+References: <AS8PR08MB91934F160E97429FAFEB78588B792@AS8PR08MB9193.eurprd08.prod.outlook.com>
+ <26377.6015.100740.392260@hornik.net>
+ <AS8PR08MB9193F95F26D8FF82DFAC65108B792@AS8PR08MB9193.eurprd08.prod.outlook.com>
+Message-ID: <26377.11708.68794.532369@hornik.net>
+
+>>>>> Viechtbauer, Wolfgang (NP) writes:
+
+Thanks.  Patches welcome :-)
+
+Best
+-k
+
+>> -----Original Message-----
+>> From: Kurt Hornik <Kurt.Hornik at wu.ac.at>
+>> Sent: Friday, October 11, 2024 14:18
+>> To: Viechtbauer, Wolfgang (NP) <wolfgang.viechtbauer at maastrichtuniversity.nl>
+>> Cc: r-devel <r-devel at r-project.org>
+>> Subject: Re: [Rd] Error message when calling t.test() and aov() with a factor
+>> variables
+>> 
+>> >>>>> Viechtbauer, Wolfgang (NP) writes:
+>> 
+>> > Hi all,
+>> > Just noticed that the error that arises when calling t.test() with factors
+>> could be a bit clearer:
+>> 
+>> >> t.test(factor(c(3,1,2,4,3,5,4,5)), factor(c(2,1,2,3,4,5)))
+>> > Error in var(x) : Calling var(x) on a factor x is defunct.
+>> >   Use something like 'all(duplicated(x)[-1L])' to test for a constant vector.
+>> > In addition: Warning message:
+>> > In mean.default(x) :
+>> >   argument is not numeric or logical: returning NA
+>> 
+>> > Obviously, using factors as input is nonsense, but this might happen on
+>> accident and then the error message could be a bit more on point. Similar for
+>> aov():
+>> 
+>> >> aov(factor(c(3,1,2,4,3,5,4,5)) ~ factor(c(2,1,2,2,2,1,2,1)))
+>> > Call:
+>> >    aov(formula = factor(c(3, 1, 2, 4, 3, 5, 4, 5)) ~ factor(c(2,
+>> >     1, 2, 2, 2, 1, 2, 1)))
+>> > Error in levels(x)[x] :
+>> >   only 0's may be mixed with negative subscripts
+>> > In addition: Warning messages:
+>> > 1: In model.response(mf, "numeric") :
+>> >   using type = "numeric" with a factor response will be ignored
+>> > 2: In Ops.factor(y, z$residuals) : '-' not meaningful for factors
+>> 
+>> > Not a big deal and trying to catch all of the silly things users may
+>> > do is of course impossible, but for this one adding a check that the
+>> > (response) variable is actually numeric could be useful.
+>> 
+>> Indeed.
+>> 
+>> As always, the question is whether we want to give an error unless
+>> is.numeric, or ensure via as.numeric?
+
+> I would issue an error. Using as.numeric() could lead to totally nonsensical results, for example when:
+
+> as.numeric(factor(c("low","high","mid")))
+
+>> Best
+>> -k
+>> 
+>> > Best,
+>> > Wolfgang
+
+
