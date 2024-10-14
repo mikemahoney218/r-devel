@@ -498,3 +498,217 @@ Best
 >> > Wolfgang
 
 
+From bryce@@@c@r@on @end|ng |rom gm@||@com  Sun Oct 13 02:52:43 2024
+From: bryce@@@c@r@on @end|ng |rom gm@||@com (Bryce Carson)
+Date: Sat, 12 Oct 2024 18:52:43 -0600
+Subject: [Rd] Embedding R in other applications as a scripting language
+Message-ID: <CADPqqnKJ0js9cu2wBcAdXdJafJN1B308GHCh9rEMVmr_OkSYxA@mail.gmail.com>
+
+I am subscribing to r-core because I am spending more and more time reading
+the R implementation itself, but in the meantime I would love to discuss
+the topic of embedding R (or linking against it) with more experienced C
+developers and people who've written C or C++ code for R packages.
+
+I have reached the stage where to make progress with embedding R in the
+target application, TIC-80 (see https://tic80.com/), I need to study how R
+is initialized in a finder detail. At the moment my plans for integrating R
+include bundling the recommended packages in addition to magrittr (more
+than that would be overkill for the integration).
+
+The most relevant information I have seen on embedding R in other
+applications *as a scripting language* comes from the
+tests/Embedding/index.html document included in the R sources. At the
+moment the Internet Archive is down while they deal with a DDOS attack
+(thankfully their data are safe), so I can't access the PostgreSQL + R
+documents linked to from there. No big matter.
+
+I'm not particularly versed in C myself, but I can read it well and I
+understand more each day I read the R implementation itself and expose
+myself to the actual usage of non-trivial C. I read *Narain Gehani's C: an
+Advanced Introduction* over the summer to familiarize myself with the
+aspects of the language which weren't transparent to me from studying other
+languages (Java, R, Emacs LISP, Python).
+
+Anyhow, if anyone has experience playing with this since it was more
+popular twenty years ago (as it seems) please reply!
+
+Regards, and thanks for all the pirate jokes. R!
+
+--- Bryce
+
+	[[alternative HTML version deleted]]
+
+
+From jo@|@h@p@rry @end|ng |rom gm@||@com  Sun Oct 13 19:30:09 2024
+From: jo@|@h@p@rry @end|ng |rom gm@||@com (Josiah Parry)
+Date: Sun, 13 Oct 2024 10:30:09 -0700
+Subject: [Rd] R CMD check and CRAN's rust policy
+Message-ID: <CAL3ufUKAEwf4BCePi710mK=hm7HJc+jj+XpqyegcZDegQNCfWA@mail.gmail.com>
+
+Hi all,
+
+I'm new to contributing to r-devel. The trunk of r-devel right now includes
+a `check_rust()` function for adherence to CRAN's evolving rust policy (see
+commit
+https://github.com/r-devel/r-svn/commit/6114d4126434c056b476cbc5db2657536c153d9a
+).
+
+As it stands R 4.4.2 will codify CRAN policy on Rust as the R language's
+policy and will have deep implications for the language moving forward.  It
+would make *any* package that uses Rust to adhere to their policies.
+
+I've submitted an issue as well as a patch at
+https://bugs.r-project.org/show_bug.cgi?id=18806.
+
+What is the process for submitting the bug and patch for review?
+
+	[[alternative HTML version deleted]]
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Sun Oct 13 22:13:23 2024
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Mon, 14 Oct 2024 09:13:23 +1300
+Subject: [Rd] Embedding R in other applications as a scripting language
+In-Reply-To: <CADPqqnKJ0js9cu2wBcAdXdJafJN1B308GHCh9rEMVmr_OkSYxA@mail.gmail.com>
+References: <CADPqqnKJ0js9cu2wBcAdXdJafJN1B308GHCh9rEMVmr_OkSYxA@mail.gmail.com>
+Message-ID: <3F34F6EC-874E-4D2E-AEFD-8736F4D282EC@R-project.org>
+
+Bryce,
+
+embedding R varies from easy to very complex depending on what you want to do with it. If all you want is to evaluate R commands and get the result values then it is easy: you just initialize R with Rf_initialize_R() and use R_tryEval() to evaluate what you need (making sure you stay on the main thread). However, if you want to run the full event loop or even use the GUI elements then it gets more complicated - you  can have a look at https://github.com/s-u/rJava/blob/master/jri/src/Rinit.c which is short enough to illustrate the entry points and purposes.
+
+If you are willing to use C++ then RInside is a nice package that wraps the R API in C++ classes for easier use: https://github.com/eddelbuettel/rinside simplifying it quite a bit.
+
+Cheers,
+Simon
+
+PS: this list is for the discussions on *development* of R itself, please consider using the R-help mailing list instead which is where users discuss the *use* of R in various scenarios.
+
+
+> On 13 Oct 2024, at 13:52, Bryce Carson <bryce.a.carson at gmail.com> wrote:
+> 
+> I am subscribing to r-core because I am spending more and more time reading
+> the R implementation itself, but in the meantime I would love to discuss
+> the topic of embedding R (or linking against it) with more experienced C
+> developers and people who've written C or C++ code for R packages.
+> 
+> I have reached the stage where to make progress with embedding R in the
+> target application, TIC-80 (see https://tic80.com/), I need to study how R
+> is initialized in a finder detail. At the moment my plans for integrating R
+> include bundling the recommended packages in addition to magrittr (more
+> than that would be overkill for the integration).
+> 
+> The most relevant information I have seen on embedding R in other
+> applications *as a scripting language* comes from the
+> tests/Embedding/index.html document included in the R sources. At the
+> moment the Internet Archive is down while they deal with a DDOS attack
+> (thankfully their data are safe), so I can't access the PostgreSQL + R
+> documents linked to from there. No big matter.
+> 
+> I'm not particularly versed in C myself, but I can read it well and I
+> understand more each day I read the R implementation itself and expose
+> myself to the actual usage of non-trivial C. I read *Narain Gehani's C: an
+> Advanced Introduction* over the summer to familiarize myself with the
+> aspects of the language which weren't transparent to me from studying other
+> languages (Java, R, Emacs LISP, Python).
+> 
+> Anyhow, if anyone has experience playing with this since it was more
+> popular twenty years ago (as it seems) please reply!
+> 
+> Regards, and thanks for all the pirate jokes. R!
+> 
+> --- Bryce
+> 
+> [[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Sun Oct 13 23:59:03 2024
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Sun, 13 Oct 2024 23:59:03 +0200
+Subject: [Rd] R CMD check and CRAN's rust policy
+In-Reply-To: <CAL3ufUKAEwf4BCePi710mK=hm7HJc+jj+XpqyegcZDegQNCfWA@mail.gmail.com>
+References: <CAL3ufUKAEwf4BCePi710mK=hm7HJc+jj+XpqyegcZDegQNCfWA@mail.gmail.com>
+Message-ID: <c5dde890-b3f0-48ca-ae93-63f6f5526eed@gmail.com>
+
+On 10/13/24 19:30, Josiah Parry wrote:
+> Hi all,
+>
+> I'm new to contributing to r-devel. The trunk of r-devel right now includes
+> a `check_rust()` function for adherence to CRAN's evolving rust policy (see
+> commit
+> https://github.com/r-devel/r-svn/commit/6114d4126434c056b476cbc5db2657536c153d9a
+> ).
+>
+> As it stands R 4.4.2 will codify CRAN policy on Rust as the R language's
+> policy and will have deep implications for the language moving forward.  It
+> would make *any* package that uses Rust to adhere to their policies.
+
+R 4.4.2 will be released from the R-4-4-branch, not from the trunk. The 
+change you have pointed to is only on the trunk, which would eventually 
+become the next minor release, probably 4.5.0. Anything on the trunk is 
+subject to change.
+
+See https://svn.r-project.org/R/branches/R-4-4-branch/src vs 
+https://svn.r-project.org/R/trunk
+
+> I've submitted an issue as well as a patch at
+> https://bugs.r-project.org/show_bug.cgi?id=18806.
+>
+> What is the process for submitting the bug and patch for review?
+
+See https://www.r-project.org/bugs.html
+
+But in short, submitting a PR to bugzilla about this as you have done is 
+fine. Now it is the turn for R Core to consider if this should be a 
+CRAN-only check or not.
+
+Best
+Tomas
+
+>
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From edd @end|ng |rom deb|@n@org  Mon Oct 14 01:43:47 2024
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Sun, 13 Oct 2024 18:43:47 -0500
+Subject: [Rd] Embedding R in other applications as a scripting language
+In-Reply-To: <3F34F6EC-874E-4D2E-AEFD-8736F4D282EC@R-project.org>
+References: <CADPqqnKJ0js9cu2wBcAdXdJafJN1B308GHCh9rEMVmr_OkSYxA@mail.gmail.com>
+ <3F34F6EC-874E-4D2E-AEFD-8736F4D282EC@R-project.org>
+Message-ID: <26380.23347.901412.557101@rob.eddelbuettel.com>
+
+
+Hi Bryce,
+
+On 14 October 2024 at 09:13, Simon Urbanek wrote:
+| If you are willing to use C++ then RInside is a nice package that wraps the R API in C++ classes for easier use: https://github.com/eddelbuettel/rinside simplifying it quite a bit.
+
+Thanks for mention, Simon! And yes, embedding R is remarkably stable. Simon's
+own rServe and rJava were early, and still provide a reference. There was
+also (decades ago !) the embedding of R inside Postgres by Joe Conway. Jeff
+later did RApache, this lead to littler on which I leaned for RInside.
+
+Now, RInside may be of interest for two or three reason. First, it uses C++
+and therefore abstract a few things (including the initialization) away into
+an easy to use C++ class. Second, by being in C++ it can take advantage of
+the templated converters to/from basic C/C++ types and class to R and back
+making the use easier. Lastly, there are a number of examples included in the
+source repo below inst/examples/ in seven different directories:
+  https://github.com/eddelbuettel/rinside/tree/master/inst/examples
+
+Hope this helps,  Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
