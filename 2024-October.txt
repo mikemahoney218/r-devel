@@ -776,3 +776,274 @@ wrote:
 	[[alternative HTML version deleted]]
 
 
+From t|m@t@y|or @end|ng |rom h|ddene|eph@nt@@co@uk  Thu Oct 17 13:38:35 2024
+From: t|m@t@y|or @end|ng |rom h|ddene|eph@nt@@co@uk (Tim Taylor)
+Date: Thu, 17 Oct 2024 12:38:35 +0100
+Subject: [Rd] Consider getNamespaceVersion() returning a numeric_version
+Message-ID: <08cba344-8516-48c3-aa55-1c5e28d5b5e9@hiddenelephants.co.uk>
+
+Would R-Core be receptive to having getNamespaceVersion() return a 
+numeric_version object instead of a named character?
+
+Tim
+
+
+From edd @end|ng |rom deb|@n@org  Thu Oct 17 14:22:57 2024
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Thu, 17 Oct 2024 07:22:57 -0500
+Subject: [Rd] Consider getNamespaceVersion() returning a numeric_version
+In-Reply-To: <08cba344-8516-48c3-aa55-1c5e28d5b5e9@hiddenelephants.co.uk>
+References: <08cba344-8516-48c3-aa55-1c5e28d5b5e9@hiddenelephants.co.uk>
+Message-ID: <26385.417.149300.525448@rob.eddelbuettel.com>
+
+
+On 17 October 2024 at 12:38, Tim Taylor wrote:
+| Would R-Core be receptive to having getNamespaceVersion() return a 
+| numeric_version object instead of a named character?
+
+Is this good enough? What's your actual issue a 'numeric' would address?
+
+   > as.package_version(getNamespaceVersion("base")) < "4.5.0"
+   [1] TRUE
+   > 
+   > as.package_version(getNamespaceVersion("Rcpp")) > "1.0.11"
+   [1] TRUE
+   > as.package_version(getNamespaceVersion("Rcpp")) > "1.0.14"
+   [1] FALSE
+   >
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From t|m@t@y|or @end|ng |rom h|ddene|eph@nt@@co@uk  Thu Oct 17 14:42:05 2024
+From: t|m@t@y|or @end|ng |rom h|ddene|eph@nt@@co@uk (Tim Taylor)
+Date: Thu, 17 Oct 2024 13:42:05 +0100
+Subject: [Rd] Consider getNamespaceVersion() returning a numeric_version
+In-Reply-To: <26385.417.149300.525448@rob.eddelbuettel.com>
+References: <08cba344-8516-48c3-aa55-1c5e28d5b5e9@hiddenelephants.co.uk>
+ <26385.417.149300.525448@rob.eddelbuettel.com>
+Message-ID: <a56006d0-97f8-4fbc-a012-68159f11fbb1@hiddenelephants.co.uk>
+
+I mean the `numeric_version` object not a numeric (double/int). 
+Basically to protect me from myself I'd prefer not to have to remember 
+to wrap `getNamespaceVersion()` with `as.package_version()`.
+
+I suspect a grep of CRAN may highlight others who are erroneously 
+comparing character objects rather than a comparison between a 
+`numeric_version` object and a character.
+
+Tim
+
+
+On 17/10/2024 13:22, Dirk Eddelbuettel wrote:
+> On 17 October 2024 at 12:38, Tim Taylor wrote:
+> | Would R-Core be receptive to having getNamespaceVersion() return a
+> | numeric_version object instead of a named character?
+>
+> Is this good enough? What's your actual issue a 'numeric' would address?
+>
+>     > as.package_version(getNamespaceVersion("base")) < "4.5.0"
+>     [1] TRUE
+>     >
+>     > as.package_version(getNamespaceVersion("Rcpp")) > "1.0.11"
+>     [1] TRUE
+>     > as.package_version(getNamespaceVersion("Rcpp")) > "1.0.14"
+>     [1] FALSE
+>     >
+>
+> Dirk
+>
+
+
+From edd @end|ng |rom deb|@n@org  Thu Oct 17 15:00:01 2024
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Thu, 17 Oct 2024 08:00:01 -0500
+Subject: [Rd] Consider getNamespaceVersion() returning a numeric_version
+In-Reply-To: <a56006d0-97f8-4fbc-a012-68159f11fbb1@hiddenelephants.co.uk>
+References: <08cba344-8516-48c3-aa55-1c5e28d5b5e9@hiddenelephants.co.uk>
+ <26385.417.149300.525448@rob.eddelbuettel.com>
+ <a56006d0-97f8-4fbc-a012-68159f11fbb1@hiddenelephants.co.uk>
+Message-ID: <26385.2641.110684.750519@rob.eddelbuettel.com>
+
+
+On 17 October 2024 at 13:42, Tim Taylor wrote:
+| I mean the `numeric_version` object not a numeric (double/int). 
+| Basically to protect me from myself I'd prefer not to have to remember 
+| to wrap `getNamespaceVersion()` with `as.package_version()`.
+
+That would be a breaking change. I suspect you would need to supply stronger
+motivation.
+
+Note that these days you can add arbitrary fields to DESCRIPTION so you
+already can add a new field that you can the require to be a value from an
+integer sequence (or a numeric if you prefer).
+
+| I suspect a grep of CRAN may highlight others who are erroneously 
+| comparing character objects rather than a comparison between a 
+| `numeric_version` object and a character.
+
+Sure but still a user-level bug though. Usually those get fixed them on that
+side.
+
+(And to be clear, I have nothing against your proposal per se and like it in
+the abstract. I am just trying to help think through what it may entail.)
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From r|p|ey @end|ng |rom @t@t@@ox@@c@uk  Thu Oct 17 16:53:51 2024
+From: r|p|ey @end|ng |rom @t@t@@ox@@c@uk (Prof Brian Ripley)
+Date: Thu, 17 Oct 2024 15:53:51 +0100
+Subject: [Rd] Consider getNamespaceVersion() returning a numeric_version
+In-Reply-To: <a56006d0-97f8-4fbc-a012-68159f11fbb1@hiddenelephants.co.uk>
+References: <08cba344-8516-48c3-aa55-1c5e28d5b5e9@hiddenelephants.co.uk>
+ <26385.417.149300.525448@rob.eddelbuettel.com>
+ <a56006d0-97f8-4fbc-a012-68159f11fbb1@hiddenelephants.co.uk>
+Message-ID: <a3c7fc8e-3814-4298-bac8-b2257fc2b416@stats.ox.ac.uk>
+
+On 17/10/2024 13:42, Tim Taylor wrote:
+> I mean the `numeric_version` object not a numeric (double/int). 
+> Basically to protect me from myself I'd prefer not to have to remember 
+> to wrap `getNamespaceVersion()` with `as.package_version()`.
+> 
+> I suspect a grep of CRAN may highlight others who are erroneously 
+> comparing character objects rather than a comparison between a 
+> `numeric_version` object and a character.
+
+Perhaps you could do that rather than speculating?  Similarly, try out 
+over CRAN the effect of getNamespaceVersion changing its return type.
+
+It seems to be used in less than 40 CRAN packages, many boilerplate code 
+from a single author and most use the version as a printable character 
+string.  A few are clearly wrong: E.g.
+
+if(getNamespaceVersion("reticulate") >= "1.36.0")
+
+will be false it that package ever reaches "1.100.0".  This is what 
+compareVersion() is for ....
+
+> On 17/10/2024 13:22, Dirk Eddelbuettel wrote:
+>> On 17 October 2024 at 12:38, Tim Taylor wrote:
+>> | Would R-Core be receptive to having getNamespaceVersion() return a
+>> | numeric_version object instead of a named character?
+>>
+>> Is this good enough? What's your actual issue a 'numeric' would address?
+>>
+>> ??? > as.package_version(getNamespaceVersion("base")) < "4.5.0"
+>> ??? [1] TRUE
+>> ??? >
+>> ??? > as.package_version(getNamespaceVersion("Rcpp")) > "1.0.11"
+>> ??? [1] TRUE
+>> ??? > as.package_version(getNamespaceVersion("Rcpp")) > "1.0.14"
+>> ??? [1] FALSE
+
+There are differences, e.g.
+
+ > (z <- getNamespaceVersion("MASS"))
+  version
+"7.3-61"
+ > (zz <- as.package_version(z))
+[1] ?7.3.61?
+ > as.character(zz)
+[1] "7.3.61"
+
+and some uses need the first.  That makes changing the return value too 
+disruptive.
+
+If the issue is only comparison, getNamespaceVersion's return value 
+could be given a class and an Ops group method, but the existence of 
+compareVersion() makes that less compelling.
+
+
+-- 
+Brian D. Ripley,                  ripley at stats.ox.ac.uk
+Emeritus Professor of Applied Statistics, University of Oxford
+
+
+From t|m@t@y|or @end|ng |rom h|ddene|eph@nt@@co@uk  Thu Oct 17 17:38:01 2024
+From: t|m@t@y|or @end|ng |rom h|ddene|eph@nt@@co@uk (Tim Taylor)
+Date: Thu, 17 Oct 2024 16:38:01 +0100
+Subject: [Rd] Consider getNamespaceVersion() returning a numeric_version
+In-Reply-To: <a3c7fc8e-3814-4298-bac8-b2257fc2b416@stats.ox.ac.uk>
+References: <08cba344-8516-48c3-aa55-1c5e28d5b5e9@hiddenelephants.co.uk>
+ <26385.417.149300.525448@rob.eddelbuettel.com>
+ <a56006d0-97f8-4fbc-a012-68159f11fbb1@hiddenelephants.co.uk>
+ <a3c7fc8e-3814-4298-bac8-b2257fc2b416@stats.ox.ac.uk>
+Message-ID: <1f3ba01d-c354-4efd-bc00-f5a866482d1f@hiddenelephants.co.uk>
+
+On 17/10/2024 15:53, Prof Brian Ripley wrote:
+> On 17/10/2024 13:42, Tim Taylor wrote:
+>> I mean the `numeric_version` object not a numeric (double/int). 
+>> Basically to protect me from myself I'd prefer not to have to 
+>> remember to wrap `getNamespaceVersion()` with `as.package_version()`.
+>>
+>> I suspect a grep of CRAN may highlight others who are erroneously 
+>> comparing character objects rather than a comparison between a 
+>> `numeric_version` object and a character.
+>
+> Perhaps you could do that rather than speculating?? Similarly, try out 
+> over CRAN the effect of getNamespaceVersion changing its return type.
+>
+> It seems to be used in less than 40 CRAN packages, many boilerplate 
+> code from a single author and most use the version as a printable 
+> character string.? A few are clearly wrong: E.g.
+>
+> if(getNamespaceVersion("reticulate") >= "1.36.0")
+>
+> will be false it that package ever reaches "1.100.0".? This is what 
+> compareVersion() is for ....
+
+I've raised an issue with the package authors of that particular piece 
+of code. I'll try and see what other packages are making similar mistakes.
+
+>
+>> On 17/10/2024 13:22, Dirk Eddelbuettel wrote:
+>>> On 17 October 2024 at 12:38, Tim Taylor wrote:
+>>> | Would R-Core be receptive to having getNamespaceVersion() return a
+>>> | numeric_version object instead of a named character?
+>>>
+>>> Is this good enough? What's your actual issue a 'numeric' would 
+>>> address?
+>>>
+>>> ??? > as.package_version(getNamespaceVersion("base")) < "4.5.0"
+>>> ??? [1] TRUE
+>>> ??? >
+>>> ??? > as.package_version(getNamespaceVersion("Rcpp")) > "1.0.11"
+>>> ??? [1] TRUE
+>>> ??? > as.package_version(getNamespaceVersion("Rcpp")) > "1.0.14"
+>>> ??? [1] FALSE
+>
+> There are differences, e.g.
+>
+> > (z <- getNamespaceVersion("MASS"))
+> ?version
+> "7.3-61"
+> > (zz <- as.package_version(z))
+> [1] ?7.3.61?
+> > as.character(zz)
+> [1] "7.3.61"
+>
+> and some uses need the first.? That makes changing the return value 
+> too disruptive.
+>
+> If the issue is only comparison, getNamespaceVersion's return value 
+> could be given a class and an Ops group method, but the existence of 
+> compareVersion() makes that less compelling.
+
+Yes the issue for me was with a comparison. I think the additional class 
+and Ops method could be worthwhile to prevent others from making a 
+similar mistake to myself. That said I do appreciate it does add more 
+code when there are already alternatives available. If you'd be 
+receptive I'd be happy to submit a patch in this regards.
+
+Many thanks
+
+Tim
+
+
