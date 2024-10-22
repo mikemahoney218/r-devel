@@ -1047,3 +1047,101 @@ Many thanks
 Tim
 
 
+From chr|@ @end|ng |rom ckb|@ck@org  Mon Oct 21 21:28:51 2024
+From: chr|@ @end|ng |rom ckb|@ck@org (Chris Black)
+Date: Mon, 21 Oct 2024 12:28:51 -0700
+Subject: [Rd] 
+ [EXTERNAL] Re: NOTE: multiple local function definitions for
+ ?fun? with different formal arguments
+In-Reply-To: <69df184a-96e5-4d26-9999-fef5dad280c4@gmail.com>
+References: <5jst8ric3j9fg55fkwuhhlyk.1707061436584@email.android.com>
+ <CA+jjkEbwGe-W-gSfds1=4Vzrf=LOitwiE=4Vx0+NCj4t2t09JA@mail.gmail.com>
+ <lo01v1qa61gmseab9ma660ts.1707061568394@email.android.com>
+ <5cb29a06-5b73-4fe4-b8dc-7aa9db6a2cff@gmail.com>
+ <15c10f0d-2c05-4b84-a3f0-0c02fdbb15e2@gmail.com>
+ <SA0PR09MB6955A7EF8CD84520F2FA6D8AE5462@SA0PR09MB6955.namprd09.prod.outlook.com>
+ <33b6ee55-1caa-461b-a132-42e22f41dd1a@gmail.com>
+ <SA0PR09MB69552A24686B60186A86BEC3E5462@SA0PR09MB6955.namprd09.prod.outlook.com>
+ <CAFDcVCTsEMwRhR6qFw1m7g0852XdeeNKALXhGNd2ZVzaMutoVA@mail.gmail.com>
+ <DS7PR10MB727772ADF2D69B769FC88A1BFA462@DS7PR10MB7277.namprd10.prod.outlook.com>
+ <CE0833FD-CE89-4F59-91C7-68C7F3C788FA@ckblack.org>
+ <abc59a72-a38b-4d73-b858-2efc150e62f3@gmail.com>
+ <69df184a-96e5-4d26-9999-fef5dad280c4@gmail.com>
+Message-ID: <9CFE472D-71BC-4B97-8575-DD57ECBBEACB@ckblack.org>
+
+I?m replying 8 months later to say a proper thanks to Duncan for the function below. It?s been helping me clean up duplicate (and not-quite duplicate!) function definitions in amateur code ever since, and I?m reminded to say so now because I just passed it along to Ben Zipperer in response to a very similar question[1] on Mastodon. 
+
+In the Mastodon thread there were several R experts expecting the existing package checks to catch this and being surprised to realize they don't, which I think mostly goes to highlight that it really is a corner case? but in any case thank you for your help to keep the ?bitten by function redefinition? club a small one.
+
+Thanks,
+Chris
+
+[1] https://mastodon.social/@benzipperer/113328761897124440
+
+
+
+> On Feb 7, 2024, at 11:53 AM, Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+> 
+> I put the idea below into a function that gives nicer looking results. Here's the new code:
+> 
+> dupnames <- function(path = ".") {
+> 
+>  Rfiles <- pkgload:::find_code(path)
+>  allnames <- data.frame(names=character(), filename=character(), line = numeric())
+>  result <- NULL
+>  for (f in Rfiles) {
+>    exprs <- parse(f, keep.source = TRUE)
+>    locs <- getSrcLocation(exprs)
+>    names <- character(length(exprs))
+>    lines <- numeric(length(exprs))
+>    for (i in seq_along(exprs)) {
+>      expr <- exprs[[i]]
+>      if (is.name(expr[[1]]) &&
+>          deparse(expr[[1]]) %in% c("<-", "=") &&
+>          is.name(expr[[2]])) {
+>        names[i] <- deparse(expr[[2]])
+>        lines[i] <- locs[i]
+>      }
+>    }
+>    keep <- names != ""
+>    if (any(keep)) {
+>      names <- names[keep]
+>      lines <- lines[keep]
+> 
+>      prev <- nrow(allnames)
+>      allnames <- rbind(allnames, data.frame(name = names, filename = basename(f), line = lines))
+>      dups <- which(duplicated(allnames$name))
+>      dups <- dups[dups > prev]
+>      if (any(dups)) {
+>        origfile <- character(length(dups))
+>        origline <- numeric(length(dups))
+>        for (i in seq_along(dups)) {
+>          prev <- which(allnames$name == allnames$name[dups[i]])[1]
+>          origfile[i] <- allnames$filename[prev]
+>          origline[i] <- allnames$line[prev]
+>        }
+> 
+>        result <- rbind(result,
+>                        data.frame(name = allnames$name[dups],
+>                                   first = paste(origfile, origline, sep=":"),
+>                                   dup = paste(allnames$filename[dups], allnames$line[dups], sep = ":")))
+>      }
+>    }
+>  }
+>  result
+> }
+> 
+> 
+> And here's what I get when I run it on rgl:
+> 
+> dupnames("rgl")
+>  name      first          dup
+> 1  fns knitr.R:12  knitr.R:165
+> 2  fns knitr.R:12 pkgdown.R:14
+> 3  fns knitr.R:12    shiny.R:8
+> 
+> Those are okay; the fns object is a temporary that is later removed in each case.
+> 
+> Duncan Murdoch
+
+
