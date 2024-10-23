@@ -1145,3 +1145,311 @@ Chris
 > Duncan Murdoch
 
 
+From rkoenker @end|ng |rom ||||no|@@edu  Tue Oct 22 11:08:12 2024
+From: rkoenker @end|ng |rom ||||no|@@edu (Koenker, Roger W)
+Date: Tue, 22 Oct 2024 09:08:12 +0000
+Subject: [Rd] invalid permissions
+Message-ID: <6D2E6D4A-C9E7-4845-BA3C-19016F7134B8@illinois.edu>
+
+Gurus:
+
+I have a new version of my quantreg package with minimal changes, mainly to fix some obscure fortran problems.  It fails R CMD check ?as-cran with the error:
+
+Running examples in ?quantreg-Ex.R? failed
+The error most likely occurred in:
+
+> base::assign(".ptime", proc.time(), pos = "CheckExEnv")
+> ### Name: plot.rqss
+> ### Title: Plot Method for rqss Objects
+> ### Aliases: plot.rqss plot.qss1 plot.qts1 plot.qss2 plot.summary.rqss
+> ### Keywords: regression smooth iplot
+>  > ### ** Examples
+>  > n <- 200
+> x <- sort(rchisq(n,4))
+> z <- x + rnorm(n)
+> y <- log(x)+ .1*(log(x))^2 + log(x)*rnorm(n)/4 + z
+> plot(x,y-z)
+> fN <- rqss(y~qss(x,constraint="N")+z)
+
+ *** caught segfault ***
+address 0x0, cause 'invalid permissions?
+
+However, if I install it and run example(plot.rqss) it runs normally.  If some kind soul knows or is willing to dig into this to learn what the problem is, I would be most grateful.  The package is available from  http://www.econ.uiuc.edu/~roger/research/rq/quantreg/quantreg_5.99.tar.gz.
+
+TIA,
+
+
+Roger Koenker
+r.koenker at ucl.ac.uk
+Honorary Professor of Economics
+Department of Economics, UCL
+Emeritus Professor of Economics
+	and Statistics, UIUC
+
+
+
+From |kry|ov @end|ng |rom d|@root@org  Tue Oct 22 11:44:32 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Tue, 22 Oct 2024 12:44:32 +0300
+Subject: [Rd] invalid permissions
+In-Reply-To: <6D2E6D4A-C9E7-4845-BA3C-19016F7134B8@illinois.edu>
+References: <6D2E6D4A-C9E7-4845-BA3C-19016F7134B8@illinois.edu>
+Message-ID: <20241022124432.0ec82307@arachnoid>
+
+Dear Prof. Roger Koenker,
+
+On Tue, 22 Oct 2024 09:08:12 +0000
+"Koenker, Roger W" <rkoenker at illinois.edu> wrote:
+
+> > fN <- rqss(y~qss(x,constraint="N")+z)  
+> 
+>  *** caught segfault ***
+> address 0x0, cause 'invalid permissions?
+
+Given a freshly produced quantreg.Rcheck directory, I was able to
+reproduce this crash by running
+
+R -d gdb
+# make sure that the package version under check will be loaded
+.libPaths(c("quantreg.Rcheck", .libPaths()))
+library(quantreg)
+example(plot.rqss)
+
+The crash happens in the Fortran code:
+
+Thread 1 "R" received signal SIGSEGV, Segmentation fault.
+0x00007ffff3d77bd4 in pchol (m=5, n=1, xpnt=..., x=..., mxdiag=6971508156.8648586, ntiny=0, iflag=0,
+    smxpy=0x7ffff3d75b80 <smxpy8>,
+    tiny=<error reading variable: Cannot access memory at address 0xe00000000>,
+    large=<error reading variable: Cannot access memory at address 0x5b14e898>) at cholesky.f:4927
+4927                IF (DIAG .LE. tiny * MXDIAG) THEN
+(gdb) bt
+#0  0x00007ffff3d77bd4 in pchol
+    (m=5, n=1, xpnt=..., x=..., mxdiag=6971508156.8648586, ntiny=0, iflag=0, smxpy=0x7ffff3d75b80 <smxpy
+8>, tiny=Cannot access memory at address 0xe00000000
+#1  0x00007ffff3d77d7a in chlsup
+    (m=5, n=1, split=..., xpnt=..., x=..., mxdiag=6971508156.8648586, ntiny=0, iflag=0, mmpyn=0x7ffff3d7
+9d90 <mmpy8>, smxpy=0x7ffff3d75b80 <smxpy8>, tiny=Cannot access memory at address 0xe00000000
+#2  0x00007ffff3d7849c in blkfc2
+    (nsuper=<optimized out>, xsuper=..., snode=..., split=..., xlindx=..., lindx=..., xlnz=..., lnz=...,
+ link=..., length=..., indmap=..., relind=..., tmpsiz=10, temp=..., iflag=0, mmpyn=0x7ffff3d79d90 <mmpy8
+>, smxpy=0x7ffff3d75b80 <smxpy8>, tiny=Cannot access memory at address 0xe00000000
+#3  0x00007ffff3d78bad in blkfct
+    (neqns=<optimized out>, nsuper=<optimized out>, xsuper=..., snode=..., split=..., xlindx=..., lindx=
+..., xlnz=..., lnz=..., iwsiz=796, iwork=..., tmpsiz=10, tmpvec=..., iflag=0, mmpyn=0x7ffff3d79d90 <mmpy
+8>, smxpy=0x7ffff3d75b80 <smxpy8>, tiny=Cannot access memory at address 0xe00000000
+#4  0x00007ffff3d7516d in chlfct
+    (m=201, xlindx=..., lindx=..., invp=..., perm=..., iwork=..., nnzdsub=1588, jdsub=..., colcnt=..., n
+super=197, snode=..., xsuper=..., nnzlmax=197231, nsubmax=2615, xlnz=..., lnz=..., id=..., jd=..., d=...
+, cachsz=64, tmpmax=100244, level=8, tmpvec=..., split=..., ierr=0, it=1, timewd=...) at chlfct.f:125
+#5  0x00007ffff3d8bfdf in slpfn
+    (n=398, m=<optimized out>, nnza=1193, a=..., ja=..., ia=..., ao=..., jao=..., iao=..., nnzdmax=1193,
+ d=..., jd=..., id=..., dsub=..., jdsub=..., nsubmax=2615, lindx=..., xlindx=..., nnzlmax=197231, lnz=..
+., xlnz=..., invp=..., perm=..., iwmax=1410, iwork=..., colcnt=..., snode=..., xsuper=..., split=..., tm
+pmax=100244, tmpvec=..., newrhs=..., cachsz=64, level=8, x=..., s=..., u=..., c=..., y=..., b=..., r=...
+, z=..., w=..., q=..., nnzemax=1789, e=..., je=..., ie=..., dy=..., dx=..., ds=..., dz=..., dw=..., dxdz
+=..., dsdw=..., xi=..., xinv=..., sinv=..., ww1=..., ww2=..., small=9.9999999999999995e-07, ierr=0, maxi
+t=100, timewd=...) at srqfn.f:238
+#6  0x00007ffff3d8ccdb in srqfn
+    (n=<optimized out>, m=<optimized out>, nnza=1193, a=..., ja=..., ia=..., ao=..., jao=..., iao=..., n
+nzdmax=1193, d=..., jd=..., id=..., dsub=..., jdsub=..., nnzemax=1789, e=..., je=..., ie=..., nsubmax=26
+15, lindx=..., xlindx=..., nnzlmax=197231, lnz=..., xlnz=..., iw=..., iwmax=1410, iwork=..., xsuper=...,
+ tmpmax=100244, tmpvec=..., wwm=..., wwn=..., cachsz=64, level=8, x=..., s=..., u=..., c=..., y=..., b=.
+.., small=9.9999999999999995e-07, ierr=0, maxit=100, timewd=...) at srqfn.f:27
+#7  0x00007ffff7b037a2 in do_dotCode # <-- R code starts here
+    (call=<optimized out>, op=<optimized out>, args=<optimized out>,
+    env=<optimized out>)
+
+So both TINY and LARGE are invalid pointers at this point, suspiciously
+small ones at that (on my 64-bit Linux, a typical pointer looks like
+0x7fffff?????? or 0x5555????????, with a few more non-zero digits).
+Where do they come from?
+
+At chlfct.f (frame 4 above) lines 124-125 we have a function call:
+
+124              call blkfct(m,nsuper,xsuper,snode,split,xlindx,lindx,xlnz,
+125          &               lnz,iwsiz,iwork,tmpsiz,tmpvec,ierr,mmpy8,smxpy8)
+
+The function is defined in cholesky.f:
+
+623           SUBROUTINE  BLKFCT (  NEQNS , NSUPER, XSUPER, SNODE , SPLIT ,
+624          &                      XLINDX, LINDX , XLNZ  , LNZ   , IWSIZ ,
+625          &                      IWORK , TMPSIZ, TMPVEC, IFLAG , MMPYN ,
+626          &                      SMXPY,  tiny, Large                     )
+
+It has two more arguments (tiny and Large) than chlfct gives to it.
+That must be the source of the error. Adding the missing arguments to
+the function calls avoids the crash:
+
+--- quantreg/src/chlfct.f    2019-08-06 15:30:35.000000000 +0300
++++ quantreg/src/chlfct.f 2024-10-22 12:35:55.000000000 +0300
+@@ -113,16 +113,20 @@
+       timbeg = gtimer()
+       if (level .eq. 1) then
+          call blkfct(m,nsuper,xsuper,snode,split,xlindx,lindx,xlnz,
+-     &               lnz,iwsiz,iwork,tmpsiz,tmpvec,ierr,mmpy1,smxpy1)
++     &               lnz,iwsiz,iwork,tmpsiz,tmpvec,ierr,mmpy1,smxpy1,
++     &               tiny, large)
+       elseif (level .eq. 2) then
+          call blkfct(m,nsuper,xsuper,snode,split,xlindx,lindx,xlnz,
+-     &               lnz,iwsiz,iwork,tmpsiz,tmpvec,ierr,mmpy2,smxpy2)
++     &               lnz,iwsiz,iwork,tmpsiz,tmpvec,ierr,mmpy2,smxpy2,
++     &               tiny, large)
+       elseif (level .eq. 4) then
+          call blkfct(m,nsuper,xsuper,snode,split,xlindx,lindx,xlnz,
+-     &               lnz,iwsiz,iwork,tmpsiz,tmpvec,ierr,mmpy4,smxpy4)
++     &               lnz,iwsiz,iwork,tmpsiz,tmpvec,ierr,mmpy4,smxpy4,
++     &               tiny, large)
+       elseif (level .eq. 8) then
+          call blkfct(m,nsuper,xsuper,snode,split,xlindx,lindx,xlnz,
+-     &               lnz,iwsiz,iwork,tmpsiz,tmpvec,ierr,mmpy8,smxpy8)
++     &               lnz,iwsiz,iwork,tmpsiz,tmpvec,ierr,mmpy8,smxpy8,
++     &               tiny, large)
+       endif
+       if (ierr .eq. -1) then
+          ierr = 10
+
+
+-- 
+Best regards,
+Ivan
+
+
+From rkoenker @end|ng |rom ||||no|@@edu  Tue Oct 22 12:58:36 2024
+From: rkoenker @end|ng |rom ||||no|@@edu (Koenker, Roger W)
+Date: Tue, 22 Oct 2024 10:58:36 +0000
+Subject: [Rd] invalid permissions
+In-Reply-To: <20241022124432.0ec82307@arachnoid>
+References: <6D2E6D4A-C9E7-4845-BA3C-19016F7134B8@illinois.edu>
+ <20241022124432.0ec82307@arachnoid>
+Message-ID: <DB610264-3789-47BE-83E0-2BF608A0F731@illinois.edu>
+
+Ivan,
+
+Many, many thanks!  
+
+Best,
+Roger
+
+
+> On Oct 22, 2024, at 10:44?AM, Ivan Krylov <ikrylov at disroot.org> wrote:
+> 
+> Dear Prof. Roger Koenker,
+> 
+> On Tue, 22 Oct 2024 09:08:12 +0000
+> "Koenker, Roger W" <rkoenker at illinois.edu> wrote:
+> 
+>>> fN <- rqss(y~qss(x,constraint="N")+z)  
+>> 
+>> *** caught segfault ***
+>> address 0x0, cause 'invalid permissions?
+> 
+> Given a freshly produced quantreg.Rcheck directory, I was able to
+> reproduce this crash by running
+> 
+> R -d gdb
+> # make sure that the package version under check will be loaded
+> .libPaths(c("quantreg.Rcheck", .libPaths()))
+> library(quantreg)
+> example(plot.rqss)
+> 
+> The crash happens in the Fortran code:
+> 
+> Thread 1 "R" received signal SIGSEGV, Segmentation fault.
+> 0x00007ffff3d77bd4 in pchol (m=5, n=1, xpnt=..., x=..., mxdiag=6971508156.8648586, ntiny=0, iflag=0,
+>    smxpy=0x7ffff3d75b80 <smxpy8>,
+>    tiny=<error reading variable: Cannot access memory at address 0xe00000000>,
+>    large=<error reading variable: Cannot access memory at address 0x5b14e898>) at cholesky.f:4927
+> 4927                IF (DIAG .LE. tiny * MXDIAG) THEN
+> (gdb) bt
+> #0  0x00007ffff3d77bd4 in pchol
+>    (m=5, n=1, xpnt=..., x=..., mxdiag=6971508156.8648586, ntiny=0, iflag=0, smxpy=0x7ffff3d75b80 <smxpy
+> 8>, tiny=Cannot access memory at address 0xe00000000
+> #1  0x00007ffff3d77d7a in chlsup
+>    (m=5, n=1, split=..., xpnt=..., x=..., mxdiag=6971508156.8648586, ntiny=0, iflag=0, mmpyn=0x7ffff3d7
+> 9d90 <mmpy8>, smxpy=0x7ffff3d75b80 <smxpy8>, tiny=Cannot access memory at address 0xe00000000
+> #2  0x00007ffff3d7849c in blkfc2
+>    (nsuper=<optimized out>, xsuper=..., snode=..., split=..., xlindx=..., lindx=..., xlnz=..., lnz=...,
+> link=..., length=..., indmap=..., relind=..., tmpsiz=10, temp=..., iflag=0, mmpyn=0x7ffff3d79d90 <mmpy8
+>> , smxpy=0x7ffff3d75b80 <smxpy8>, tiny=Cannot access memory at address 0xe00000000
+> #3  0x00007ffff3d78bad in blkfct
+>    (neqns=<optimized out>, nsuper=<optimized out>, xsuper=..., snode=..., split=..., xlindx=..., lindx=
+> ..., xlnz=..., lnz=..., iwsiz=796, iwork=..., tmpsiz=10, tmpvec=..., iflag=0, mmpyn=0x7ffff3d79d90 <mmpy
+> 8>, smxpy=0x7ffff3d75b80 <smxpy8>, tiny=Cannot access memory at address 0xe00000000
+> #4  0x00007ffff3d7516d in chlfct
+>    (m=201, xlindx=..., lindx=..., invp=..., perm=..., iwork=..., nnzdsub=1588, jdsub=..., colcnt=..., n
+> super=197, snode=..., xsuper=..., nnzlmax=197231, nsubmax=2615, xlnz=..., lnz=..., id=..., jd=..., d=...
+> , cachsz=64, tmpmax=100244, level=8, tmpvec=..., split=..., ierr=0, it=1, timewd=...) at chlfct.f:125
+> #5  0x00007ffff3d8bfdf in slpfn
+>    (n=398, m=<optimized out>, nnza=1193, a=..., ja=..., ia=..., ao=..., jao=..., iao=..., nnzdmax=1193,
+> d=..., jd=..., id=..., dsub=..., jdsub=..., nsubmax=2615, lindx=..., xlindx=..., nnzlmax=197231, lnz=..
+> ., xlnz=..., invp=..., perm=..., iwmax=1410, iwork=..., colcnt=..., snode=..., xsuper=..., split=..., tm
+> pmax=100244, tmpvec=..., newrhs=..., cachsz=64, level=8, x=..., s=..., u=..., c=..., y=..., b=..., r=...
+> , z=..., w=..., q=..., nnzemax=1789, e=..., je=..., ie=..., dy=..., dx=..., ds=..., dz=..., dw=..., dxdz
+> =..., dsdw=..., xi=..., xinv=..., sinv=..., ww1=..., ww2=..., small=9.9999999999999995e-07, ierr=0, maxi
+> t=100, timewd=...) at srqfn.f:238
+> #6  0x00007ffff3d8ccdb in srqfn
+>    (n=<optimized out>, m=<optimized out>, nnza=1193, a=..., ja=..., ia=..., ao=..., jao=..., iao=..., n
+> nzdmax=1193, d=..., jd=..., id=..., dsub=..., jdsub=..., nnzemax=1789, e=..., je=..., ie=..., nsubmax=26
+> 15, lindx=..., xlindx=..., nnzlmax=197231, lnz=..., xlnz=..., iw=..., iwmax=1410, iwork=..., xsuper=...,
+> tmpmax=100244, tmpvec=..., wwm=..., wwn=..., cachsz=64, level=8, x=..., s=..., u=..., c=..., y=..., b=.
+> .., small=9.9999999999999995e-07, ierr=0, maxit=100, timewd=...) at srqfn.f:27
+> #7  0x00007ffff7b037a2 in do_dotCode # <-- R code starts here
+>    (call=<optimized out>, op=<optimized out>, args=<optimized out>,
+>    env=<optimized out>)
+> 
+> So both TINY and LARGE are invalid pointers at this point, suspiciously
+> small ones at that (on my 64-bit Linux, a typical pointer looks like
+> 0x7fffff?????? or 0x5555????????, with a few more non-zero digits).
+> Where do they come from?
+> 
+> At chlfct.f (frame 4 above) lines 124-125 we have a function call:
+> 
+> 124              call blkfct(m,nsuper,xsuper,snode,split,xlindx,lindx,xlnz,
+> 125          &               lnz,iwsiz,iwork,tmpsiz,tmpvec,ierr,mmpy8,smxpy8)
+> 
+> The function is defined in cholesky.f:
+> 
+> 623           SUBROUTINE  BLKFCT (  NEQNS , NSUPER, XSUPER, SNODE , SPLIT ,
+> 624          &                      XLINDX, LINDX , XLNZ  , LNZ   , IWSIZ ,
+> 625          &                      IWORK , TMPSIZ, TMPVEC, IFLAG , MMPYN ,
+> 626          &                      SMXPY,  tiny, Large                     )
+> 
+> It has two more arguments (tiny and Large) than chlfct gives to it.
+> That must be the source of the error. Adding the missing arguments to
+> the function calls avoids the crash:
+> 
+> --- quantreg/src/chlfct.f    2019-08-06 15:30:35.000000000 +0300
+> +++ quantreg/src/chlfct.f 2024-10-22 12:35:55.000000000 +0300
+> @@ -113,16 +113,20 @@
+>       timbeg = gtimer()
+>       if (level .eq. 1) then
+>          call blkfct(m,nsuper,xsuper,snode,split,xlindx,lindx,xlnz,
+> -     &               lnz,iwsiz,iwork,tmpsiz,tmpvec,ierr,mmpy1,smxpy1)
+> +     &               lnz,iwsiz,iwork,tmpsiz,tmpvec,ierr,mmpy1,smxpy1,
+> +     &               tiny, large)
+>       elseif (level .eq. 2) then
+>          call blkfct(m,nsuper,xsuper,snode,split,xlindx,lindx,xlnz,
+> -     &               lnz,iwsiz,iwork,tmpsiz,tmpvec,ierr,mmpy2,smxpy2)
+> +     &               lnz,iwsiz,iwork,tmpsiz,tmpvec,ierr,mmpy2,smxpy2,
+> +     &               tiny, large)
+>       elseif (level .eq. 4) then
+>          call blkfct(m,nsuper,xsuper,snode,split,xlindx,lindx,xlnz,
+> -     &               lnz,iwsiz,iwork,tmpsiz,tmpvec,ierr,mmpy4,smxpy4)
+> +     &               lnz,iwsiz,iwork,tmpsiz,tmpvec,ierr,mmpy4,smxpy4,
+> +     &               tiny, large)
+>       elseif (level .eq. 8) then
+>          call blkfct(m,nsuper,xsuper,snode,split,xlindx,lindx,xlnz,
+> -     &               lnz,iwsiz,iwork,tmpsiz,tmpvec,ierr,mmpy8,smxpy8)
+> +     &               lnz,iwsiz,iwork,tmpsiz,tmpvec,ierr,mmpy8,smxpy8,
+> +     &               tiny, large)
+>       endif
+>       if (ierr .eq. -1) then
+>          ierr = 10
+> 
+> 
+> -- 
+> Best regards,
+> Ivan
+
+
