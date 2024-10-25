@@ -1453,3 +1453,129 @@ Roger
 > Ivan
 
 
+From |kry|ov @end|ng |rom d|@root@org  Thu Oct 24 14:48:29 2024
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Thu, 24 Oct 2024 15:48:29 +0300
+Subject: [Rd] Could .Primitive("[") stop forcing R_Visible = TRUE?
+Message-ID: <20241024154829.5283d05a@arachnoid>
+
+Hello,
+
+The "[" primitive operator currently has the 'eval' flag set to 0 in
+src/main/names.c. This means that the result of subsetting, whether
+R-native or implemented by a method, will never be invisible().
+
+This is a very reasonable default: if the user goes as far as to subset
+a value, they probably want to see the result. Unfortunately, there
+also exists at least one counter-example to that: data.table's
+modification by reference using the `:=` operator from inside the `[`
+operator.
+
+If a user creates a data.table object `x` and evaluates x[,foo := bar],
+the desired outcome is to return x invisibly, both to allow chained
+updates by reference (x[,foo := bar][,bar := baz]) and to avoid
+cluttering the screen by printing the whole object after updating a few
+columns. Since .Primitive("[") forces visibility on, the data.table
+developers had to come up with their own visibility flag [1] and check
+it from inside the print() method when it looks like it originates from
+auto-printing [2]. Since the auto-printing detection works by looking
+at the call stack, this recently broke after a knitr update (but can
+be reliably repaired [3]) and doesn't work for sub-classes of
+data.table [4].
+
+Is it feasible for R to consider allowing methods for `[` to set their
+own visibility flag at this point? The change is deceptively small: set
+'eval' to 200 in names.c and R_Visible = TRUE before returning from the
+non-method-dispatch branch in do_subset(). This results in one change
+in the saved output of R's own tests/reg-S4.R [5]. Or is the potential
+breakage for existing code too prohibitive?
+
+-- 
+Best regards,
+Ivan
+
+[1]
+https://github.com/Rdatatable/data.table/blob/e5b845e5cbc6be826558d11d601243240abe7a72/R/print.data.table.R#L164-L169
+
+[2]
+https://github.com/Rdatatable/data.table/blob/e5b845e5cbc6be826558d11d601243240abe7a72/R/print.data.table.R#L24-L41
+
+[3]
+https://github.com/Rdatatable/data.table/pull/6589
+
+[4]
+https://github.com/Rdatatable/data.table/issues/3029
+
+[5] A method for `[` that runs cat() used to return NULL visibly.
+
+
+From tdhock5 @end|ng |rom gm@||@com  Thu Oct 24 19:23:56 2024
+From: tdhock5 @end|ng |rom gm@||@com (Toby Hocking)
+Date: Thu, 24 Oct 2024 13:23:56 -0400
+Subject: [Rd] Could .Primitive("[") stop forcing R_Visible = TRUE?
+In-Reply-To: <20241024154829.5283d05a@arachnoid>
+References: <20241024154829.5283d05a@arachnoid>
+Message-ID: <CALK03d1PL8k8T9dnosiTkv8qqqNQtj5Q_=vTFQCOc6mthWJhdw@mail.gmail.com>
+
+Thanks for the detailed analysis and proposition Ivan. The patch you
+are proposing to base R is
+https://github.com/Rdatatable/data.table/issues/6566#issuecomment-2428912338
+right?
+
+On Thu, Oct 24, 2024 at 8:48?AM Ivan Krylov via R-devel
+<r-devel at r-project.org> wrote:
+>
+> Hello,
+>
+> The "[" primitive operator currently has the 'eval' flag set to 0 in
+> src/main/names.c. This means that the result of subsetting, whether
+> R-native or implemented by a method, will never be invisible().
+>
+> This is a very reasonable default: if the user goes as far as to subset
+> a value, they probably want to see the result. Unfortunately, there
+> also exists at least one counter-example to that: data.table's
+> modification by reference using the `:=` operator from inside the `[`
+> operator.
+>
+> If a user creates a data.table object `x` and evaluates x[,foo := bar],
+> the desired outcome is to return x invisibly, both to allow chained
+> updates by reference (x[,foo := bar][,bar := baz]) and to avoid
+> cluttering the screen by printing the whole object after updating a few
+> columns. Since .Primitive("[") forces visibility on, the data.table
+> developers had to come up with their own visibility flag [1] and check
+> it from inside the print() method when it looks like it originates from
+> auto-printing [2]. Since the auto-printing detection works by looking
+> at the call stack, this recently broke after a knitr update (but can
+> be reliably repaired [3]) and doesn't work for sub-classes of
+> data.table [4].
+>
+> Is it feasible for R to consider allowing methods for `[` to set their
+> own visibility flag at this point? The change is deceptively small: set
+> 'eval' to 200 in names.c and R_Visible = TRUE before returning from the
+> non-method-dispatch branch in do_subset(). This results in one change
+> in the saved output of R's own tests/reg-S4.R [5]. Or is the potential
+> breakage for existing code too prohibitive?
+>
+> --
+> Best regards,
+> Ivan
+>
+> [1]
+> https://github.com/Rdatatable/data.table/blob/e5b845e5cbc6be826558d11d601243240abe7a72/R/print.data.table.R#L164-L169
+>
+> [2]
+> https://github.com/Rdatatable/data.table/blob/e5b845e5cbc6be826558d11d601243240abe7a72/R/print.data.table.R#L24-L41
+>
+> [3]
+> https://github.com/Rdatatable/data.table/pull/6589
+>
+> [4]
+> https://github.com/Rdatatable/data.table/issues/3029
+>
+> [5] A method for `[` that runs cat() used to return NULL visibly.
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
