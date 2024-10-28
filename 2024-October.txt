@@ -1870,3 +1870,67 @@ Best regards,
 Ivan
 
 
+From |h @end|ng |rom |h@rre||@com  Sat Oct 26 13:22:59 2024
+From: |h @end|ng |rom |h@rre||@com (Frank Harrell)
+Date: Sat, 26 Oct 2024 06:22:59 -0500
+Subject: [Rd] Good practice for packages with Fortran and C code
+In-Reply-To: <20241026004847.592dd7e2@Tarkus>
+References: <20241026004847.592dd7e2@Tarkus>
+Message-ID: <8CA29C1D-DB05-4F9A-B8A8-29C83FFB9A79@fharrell.com>
+
+Ivan thank you very much for the exceptionally clear explanations.  I?m convinced.
+Frank
+
+> On Oct 25, 2024, at 4:49?PM, Ivan Krylov <ikrylov at disroot.org> wrote:
+> 
+> ?? Fri, 25 Oct 2024 15:03:54 -0500
+> fh at fharrell.com ?????:
+> 
+>> Now I find that I can get rid of init.c, and  change NAMESPACE to use
+>> useDynLib(package name, list of compiled routine names) (without
+>> .registration and .fixes) after making sure the Fortran and C
+>> routines are not named the same as the package name.  The routines
+>> are called using .Fortran(binary module name, args) or .Call(C binary
+>> module name, ...).
+>> 
+>> Can anyone see any problem with streamlining in this way?
+> 
+> "Writing R Extensions" 1.5.4 says:
+> 
+>>> this approach is nowadays deprecated in favour of supplying
+>>> registration information
+> 
+> ...which is the init.c approach you have been using.
+> 
+> With useDynLib(package name, list of compiled routine names), R has to
+> ask the operating system's dynamic loader to find exported functions in
+> the DLL by their names. With function registration, it is enough for
+> the DLL to export one function (package_name_init) and then directly
+> provide function pointers together with their desired names to R. The
+> latter is considered more reliable than talking to the operating
+> system's dynamic loader. It also provides an opportunity for R to check
+> the number of arguments and their types.
+> 
+>> I'm also using Fortran's dynamic array allocation instead of passing
+>> working vectors from R.
+> 
+> This is quite reasonable, with the following two things to care about:
+> 
+> 1. If the stat= argument is absent from the allocate statement and the
+> allocation is unsuccessful, program execution stops. Stopping the whole
+> R process may lose unsaved data belonging to the user, so it's best to
+> always provide the stat= argument and handle allocation failures
+> somehow.
+> 
+> 2. Calls to R API from within the Fortran program may signal R errors
+> and jump away from the function call without deallocating the memory
+> that R knows nothing about. From Fortran code, it's most simple not to
+> call R API while having allocated memory, although it's not impossible
+> to use Fortran 2003 C interoperability to call R's error handling
+> interfaces (described in Writing R Extensions 6.12).
+> 
+> --
+> Best regards,
+> Ivan
+
+
