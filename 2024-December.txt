@@ -1,0 +1,234 @@
+From j@g@nmn2 @end|ng |rom gm@||@com  Mon Dec  2 16:56:55 2024
+From: j@g@nmn2 @end|ng |rom gm@||@com (Mikael Jagan)
+Date: Mon, 2 Dec 2024 10:56:55 -0500
+Subject: [Rd] 'else' on new line not parsed at top level as part of
+ preceding 'if'
+Message-ID: <2d467cfb-3a83-4bb7-ae73-ac4d1d8d0b70@gmail.com>
+
+I wonder if there is room for improvement here:
+
+     > str2lang("if (a) b1    else b0")
+     if (a) b1 else b0
+     > str2lang("if (a) b1 \n else b0")
+     Error in str2lang("if (a) b1 \n else b0") : <text>:2:2: unexpected 'else'
+     1: if (a) b1
+     2:  else
+         ^
+
+It only occurs at top level.  When the parser knows that it needs to
+"keep reading", e.g., because the call to 'if' is enclosed in braces,
+it detects the 'else':
+
+     > str2lang("{ if (a) b1    else b0 }")
+     {
+         if (a)
+             b1
+         else b0
+     }
+     > str2lang("{ if (a) b1 \n else b0 }")
+     {
+         if (a)
+             b1
+         else b0
+     }
+
+If people agree that the above is a deficiency/bug then I could create a
+formal bug report.  Then others or I could start thinking about a patch
+for the parser.
+
+Apologies if this issue has been seen and discussed before (most likely
+by people like me in the habit of dropping braces in calls to 'if' where
+not strictly necessary).
+
+Mikael
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Mon Dec  2 17:05:00 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Mon, 2 Dec 2024 11:05:00 -0500
+Subject: [Rd] 'else' on new line not parsed at top level as part of
+ preceding 'if'
+In-Reply-To: <2d467cfb-3a83-4bb7-ae73-ac4d1d8d0b70@gmail.com>
+References: <2d467cfb-3a83-4bb7-ae73-ac4d1d8d0b70@gmail.com>
+Message-ID: <594afbf2-c161-4b62-a147-5ac9c6b95d70@gmail.com>
+
+This is well known, and it's necessary for reasonable behaviour in an 
+interactive context.  Imagine typing the code you were parsing.  The 
+first line is
+
+  if (a) b1
+
+At this point, the interpreter can't know that an else clause is coming. 
+  Since the interpreter evaluates statements when they are complete, it 
+will evaluate this and return b1 or NULL.
+
+Putting the full expression in braces solves the issue, because this is 
+clearly incomplete:
+
+   { if (a) b1
+
+Duncan Murdoch
+
+On 2024-12-02 10:56 a.m., Mikael Jagan wrote:
+> I wonder if there is room for improvement here:
+> 
+>       > str2lang("if (a) b1    else b0")
+>       if (a) b1 else b0
+>       > str2lang("if (a) b1 \n else b0")
+>       Error in str2lang("if (a) b1 \n else b0") : <text>:2:2: unexpected 'else'
+>       1: if (a) b1
+>       2:  else
+>           ^
+> 
+> It only occurs at top level.  When the parser knows that it needs to
+> "keep reading", e.g., because the call to 'if' is enclosed in braces,
+> it detects the 'else':
+> 
+>       > str2lang("{ if (a) b1    else b0 }")
+>       {
+>           if (a)
+>               b1
+>           else b0
+>       }
+>       > str2lang("{ if (a) b1 \n else b0 }")
+>       {
+>           if (a)
+>               b1
+>           else b0
+>       }
+> 
+> If people agree that the above is a deficiency/bug then I could create a
+> formal bug report.  Then others or I could start thinking about a patch
+> for the parser.
+> 
+> Apologies if this issue has been seen and discussed before (most likely
+> by people like me in the habit of dropping braces in calls to 'if' where
+> not strictly necessary).
+> 
+> Mikael
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Mon Dec  2 17:09:41 2024
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Mon, 2 Dec 2024 11:09:41 -0500
+Subject: [Rd] 'else' on new line not parsed at top level as part of
+ preceding 'if'
+In-Reply-To: <2d467cfb-3a83-4bb7-ae73-ac4d1d8d0b70@gmail.com>
+References: <2d467cfb-3a83-4bb7-ae73-ac4d1d8d0b70@gmail.com>
+Message-ID: <e6fc0e66-08d1-4581-8de6-930ef24d4ffb@gmail.com>
+
+BTW, this is discussed in section 3.2.1 of "The R Language Definition".
+
+Duncan Murdoch
+
+On 2024-12-02 10:56 a.m., Mikael Jagan wrote:
+> I wonder if there is room for improvement here:
+> 
+>       > str2lang("if (a) b1    else b0")
+>       if (a) b1 else b0
+>       > str2lang("if (a) b1 \n else b0")
+>       Error in str2lang("if (a) b1 \n else b0") : <text>:2:2: unexpected 'else'
+>       1: if (a) b1
+>       2:  else
+>           ^
+> 
+> It only occurs at top level.  When the parser knows that it needs to
+> "keep reading", e.g., because the call to 'if' is enclosed in braces,
+> it detects the 'else':
+> 
+>       > str2lang("{ if (a) b1    else b0 }")
+>       {
+>           if (a)
+>               b1
+>           else b0
+>       }
+>       > str2lang("{ if (a) b1 \n else b0 }")
+>       {
+>           if (a)
+>               b1
+>           else b0
+>       }
+> 
+> If people agree that the above is a deficiency/bug then I could create a
+> formal bug report.  Then others or I could start thinking about a patch
+> for the parser.
+> 
+> Apologies if this issue has been seen and discussed before (most likely
+> by people like me in the habit of dropping braces in calls to 'if' where
+> not strictly necessary).
+> 
+> Mikael
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From j@g@nmn2 @end|ng |rom gm@||@com  Mon Dec  2 17:18:44 2024
+From: j@g@nmn2 @end|ng |rom gm@||@com (Mikael Jagan)
+Date: Mon, 2 Dec 2024 11:18:44 -0500
+Subject: [Rd] 'else' on new line not parsed at top level as part of
+ preceding 'if'
+In-Reply-To: <e6fc0e66-08d1-4581-8de6-930ef24d4ffb@gmail.com>
+References: <2d467cfb-3a83-4bb7-ae73-ac4d1d8d0b70@gmail.com>
+ <e6fc0e66-08d1-4581-8de6-930ef24d4ffb@gmail.com>
+Message-ID: <4065c171-a6a9-49a4-9bad-e78adf1d9db6@gmail.com>
+
+Thanks - that makes sense.  It's also documented in help("if"), so it's
+doubly clear now that I did not do my homework here.
+
+Mikael
+
+On 2024-12-02 11:09 am, Duncan Murdoch wrote:
+> BTW, this is discussed in section 3.2.1 of "The R Language Definition".
+> 
+> Duncan Murdoch
+> 
+> On 2024-12-02 10:56 a.m., Mikael Jagan wrote:
+>> I wonder if there is room for improvement here:
+>>
+>>        > str2lang("if (a) b1    else b0")
+>>        if (a) b1 else b0
+>>        > str2lang("if (a) b1 \n else b0")
+>>        Error in str2lang("if (a) b1 \n else b0") : <text>:2:2: unexpected 'else'
+>>        1: if (a) b1
+>>        2:  else
+>>            ^
+>>
+>> It only occurs at top level.  When the parser knows that it needs to
+>> "keep reading", e.g., because the call to 'if' is enclosed in braces,
+>> it detects the 'else':
+>>
+>>        > str2lang("{ if (a) b1    else b0 }")
+>>        {
+>>            if (a)
+>>                b1
+>>            else b0
+>>        }
+>>        > str2lang("{ if (a) b1 \n else b0 }")
+>>        {
+>>            if (a)
+>>                b1
+>>            else b0
+>>        }
+>>
+>> If people agree that the above is a deficiency/bug then I could create a
+>> formal bug report.  Then others or I could start thinking about a patch
+>> for the parser.
+>>
+>> Apologies if this issue has been seen and discussed before (most likely
+>> by people like me in the habit of dropping braces in calls to 'if' where
+>> not strictly necessary).
+>>
+>> Mikael
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
