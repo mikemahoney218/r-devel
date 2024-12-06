@@ -232,3 +232,89 @@ On 2024-12-02 11:09 am, Duncan Murdoch wrote:
 >
 
 
+From j|r|@c@mor@vec @end|ng |rom gm@||@com  Thu Dec  5 02:43:16 2024
+From: j|r|@c@mor@vec @end|ng |rom gm@||@com (=?UTF-8?B?SmnFmcOtIE1vcmF2ZWM=?=)
+Date: Thu, 5 Dec 2024 14:43:16 +1300
+Subject: [Rd] Exposing native httpd server
+Message-ID: <a7cada24-51e9-4e48-8977-07b913fb40ff@gmail.com>
+
+R has a native HTTP server that is used for serving R help pages 
+interactively, at least on the loopback device (127.0.0.1)
+
+But all of the working are internal, not exposed to user and not documented.
+This is quite shame since the server seems to be fully capable of 
+handling basic tasks,
+be it serving static websites or even interactively processing queries.
+
+This was previously noticed by Jeffry Horner, the author of the Rook 
+package.
+I am just a guy who found it interesting.
+
+The basic working is as follows:
+User needs to either overwrite the internal `tools:::httpd` function or 
+add their hook into the internal environment tools:::.httpd.handlers.env.
+
+In the former case, the user will be of a full control of the server, in 
+the later case, the `app` will be hooked to `/custom/app` instead.
+All that is needed then is to run the interactive help that starts the 
+webserver.
+
+Based on the breadcrumbs left on the way, I was able to write a server 
+that emulates much more complex `servr` package that I have previously 
+used to test locally my blog.
+
+https://gist.github.com/J-Moravec/497d71f4a4b7a204235d093b3fa69cc3
+
+You can see that I am forced to do some illegal procedures:
+ ?* tools:::httpd needs to be replaced
+ ?* the server doesn't have knowledge of a directory so setwd needs to 
+be set
+ ?* the function must not end, otherwise the directory is changed during 
+the server lifetime (and depends on the current working directory)
+
+I would like to suggest and probe for willingness to expose the native 
+http server.
+This would include:
+
+* de-hardcoding the server so that we can register other functions not 
+just httpd
+* exporting many functions and renaming them (such as mime_type)
+* writing better interfaces, `startDynamicHelp` is kind of hard to work 
+with, something like httpd_start(dir, fun, port), httpd_stop(port) and 
+httpd_status(port) would be much cleaner.
+
+I would like to say that I have no idea what I am doing, I don't 
+understand webtech or the internal implementation, so if there are 
+reasons why this isn't a great idea...
+
+I am happy to make a PR for the R part. 
+https://github.com/wch/r-source/blob/trunk/src/library/tools/R/dynamicHelp.R
+The C part with the R's C internals look to me like a black magic and I 
+don't feel confident enough. 
+https://github.com/wch/r-source/blob/trunk/src/modules/internet/Rhttpd.c
+
+See this old stackoverflow answer, where someone was looking for `python 
+-m SimpleHTTPServer 8080`
+
+https://stackoverflow.com/q/12636764/4868692
+
+
+From bbo|ker @end|ng |rom gm@||@com  Thu Dec  5 02:58:36 2024
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Wed, 4 Dec 2024 20:58:36 -0500
+Subject: [Rd] trivial typo
+Message-ID: <135373ea-7d02-41af-99a5-611f1a84c3ac@gmail.com>
+
+   On line 35 of src/library/stats/man/predict.Rd, there is a missing 
+"be": "errors are to [be] returned".
+
+https://github.com/r-devel/r-svn/blob/7b28ae9f8c77c7eb280eee3f4515822bb88e5c4b/src/library/stats/man/predict.Rd#L35
+
+git blame says this has been this way for 21 years ...
+
+   I could submit a patch but that seems like overkill ...
+
+   cheers
+    Ben Bolker
+
+
