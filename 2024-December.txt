@@ -442,3 +442,76 @@ server tooling into base R.
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From @|mon@urb@nek @end|ng |rom R-project@org  Fri Dec  6 08:05:15 2024
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Fri, 6 Dec 2024 20:05:15 +1300
+Subject: [Rd] Exposing native httpd server
+In-Reply-To: <a7cada24-51e9-4e48-8977-07b913fb40ff@gmail.com>
+References: <a7cada24-51e9-4e48-8977-07b913fb40ff@gmail.com>
+Message-ID: <AEAEAAF0-9D88-4392-9085-E5E3F88F0911@R-project.org>
+
+Ji??,
+
+in a sense there are two quite different issue that you are touching upon. On one hand, your request for exposing the http server is something I was pretty much expecting. In order to judge the appetite for it I have included the support for custom handlers back then as inofficial API specifically so that if anyone cares we could work on refining it (really only Jeff and Hadley ever asked and/or provided feedback). But I would argue over time it became more clear that it's probably not the way to go.
+
+The real problem is that we don't really want to "just" expose the server because of the implications that you mentioned indirectly: the server is deliberately run in the current R session - which is pretty much exactly what we want for the help system, but it is something that is in most cases undesirable for several reasons. Firstly, normal R user does not expect http requests to mess with their analysis (e.g. changing the working directory would certainly not be welcome), so we don't want random code to execute and interfere with user's work. Secondly, http services are usually expected to be scalable and not interfere with each other - which is not possible directly here with the server as-is since it is fully serial within the user's session. What is truly desired strongly depends on the use-case: some applications would prefer a forked session for each connection, other may want co-operation in a separate environment. It is all doable, but beyond the scope of R's internal http server.
+
+Moreover the internal http server is based on the Rserve package and you always have much larger flexibility there. There are also higher level abstractions like RestRserve. So if you like the internal server then you can seamlessly use Rserve as the API was derived from there. Of course there are other alternatives in package space like httpuv. We typically don't want to fold things into core R unless it's absolutely necessary - i.e., if they can happily live in package space.
+
+In short, I'm still not convinced that you really want to use the built-in sever. Although it is a fully featured http server, it was included for a very specific purpose, and it's not clear that it would be a good fit for other purposes.
+
+That said, I'm interested in ideas about what users would want to use it for. There may be use-cases which do fit the design so we could make it happen. I would recommend looking at Rserve first, because anything implemented there is trivial to add to R (as it is the same code base) if it would make sense. So I'm open to suggestions, but they should be centered around what cannot be done already.
+
+Cheers,
+Simon
+
+
+
+> On Dec 5, 2024, at 2:43 PM, Ji?? Moravec <jiri.c.moravec at gmail.com> wrote:
+> 
+> R has a native HTTP server that is used for serving R help pages interactively, at least on the loopback device (127.0.0.1)
+> 
+> But all of the working are internal, not exposed to user and not documented.
+> This is quite shame since the server seems to be fully capable of handling basic tasks,
+> be it serving static websites or even interactively processing queries.
+> 
+> This was previously noticed by Jeffry Horner, the author of the Rook package.
+> I am just a guy who found it interesting.
+> 
+> The basic working is as follows:
+> User needs to either overwrite the internal `tools:::httpd` function or add their hook into the internal environment tools:::.httpd.handlers.env.
+> 
+> In the former case, the user will be of a full control of the server, in the later case, the `app` will be hooked to `/custom/app` instead.
+> All that is needed then is to run the interactive help that starts the webserver.
+> 
+> Based on the breadcrumbs left on the way, I was able to write a server that emulates much more complex `servr` package that I have previously used to test locally my blog.
+> 
+> https://gist.github.com/J-Moravec/497d71f4a4b7a204235d093b3fa69cc3
+> 
+> You can see that I am forced to do some illegal procedures:
+>  * tools:::httpd needs to be replaced
+>  * the server doesn't have knowledge of a directory so setwd needs to be set
+>  * the function must not end, otherwise the directory is changed during the server lifetime (and depends on the current working directory)
+> 
+> I would like to suggest and probe for willingness to expose the native http server.
+> This would include:
+> 
+> * de-hardcoding the server so that we can register other functions not just httpd
+> * exporting many functions and renaming them (such as mime_type)
+> * writing better interfaces, `startDynamicHelp` is kind of hard to work with, something like httpd_start(dir, fun, port), httpd_stop(port) and httpd_status(port) would be much cleaner.
+> 
+> I would like to say that I have no idea what I am doing, I don't understand webtech or the internal implementation, so if there are reasons why this isn't a great idea...
+> 
+> I am happy to make a PR for the R part. https://github.com/wch/r-source/blob/trunk/src/library/tools/R/dynamicHelp.R
+> The C part with the R's C internals look to me like a black magic and I don't feel confident enough. https://github.com/wch/r-source/blob/trunk/src/modules/internet/Rhttpd.c
+> 
+> See this old stackoverflow answer, where someone was looking for `python -m SimpleHTTPServer 8080`
+> 
+> https://stackoverflow.com/q/12636764/4868692
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
