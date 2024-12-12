@@ -1207,3 +1207,443 @@ and sometimes they are difficult to avoid (like having a reliable
 internet connection).
 
 
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Tue Dec 10 11:32:58 2024
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Tue, 10 Dec 2024 11:32:58 +0100
+Subject: [Rd] Faster downloads: avoid them if possible
+In-Reply-To: <CAN+W6_uPc6Fc+bWmiSXGJX8z44mG+JR_1oPGtLd-_9iX7uvDHg@mail.gmail.com>
+References: <CAN+W6_uPc6Fc+bWmiSXGJX8z44mG+JR_1oPGtLd-_9iX7uvDHg@mail.gmail.com>
+Message-ID: <9dfd1cde-34cb-4808-97f2-bce15687e540@gmail.com>
+
+On 12/10/24 00:35, Llu?s Revilla wrote:
+> Dear R-devel,
+>
+> I read with interest the recent blog post on how R will have parallel
+> downloads, on blog.r-project.org
+> (https://blog.r-project.org/2024/12/02/faster-downloads/index.html).
+> Thanks Tomas!
+>
+> The blog mentions that one of the areas where this will be observed is
+> while installing them (which I did!). However, I noticed they might be
+> downloaded multiple times:
+> If one interrupts the install.packages (via Ctrl+C), or it fails due
+> to some system dependency missing and I fix that on a different
+> terminal session, or the internet connection is cut and I try again.
+
+Yes, and this has been the case before - it's not new for simultaneous 
+downloads.
+
+> One possible way to make installations/downloads faster and also
+> reduce the bandwidth of repositories (and its mirrors) would be to
+> check if they need to be downloaded (again).
+> PACKAGES file on <repo>/src/contrib includes the MD5sum field that
+> could be used to check packages on the local folder (But it might be
+> faster to first check if any file exists there for the same package).
+>
+> In short, I propose:
+> 1) Checking before downloading packages their existence on the destdir
+> directory used by install.packages.
+> 2) I suppose the most common scenario is to use install.packages with
+> the default destdir parameter (NULL). If 1) is implemented it might be
+> useful to keep the temporary directory common for a single R session.
+
+When destdir is NULL (the default), non-local packages are downloaded to 
+a subdirectory of the temporary session directory (see 
+?install.packages), so the downloaded files would be readily available 
+to further installation attempts done by the same R session.
+
+I think we could once extend download.file() to support re-use of 
+already downloaded files, so that it can continue an interrupted 
+download of a single file or re-use the whole file. This shouldn't be 
+the default because the files in general may change between downloads, 
+and may be even from different URLs, but it could be used by 
+install.packages(), where this shouldn't happen, at least when destdir 
+is NULL.? I think an extra round of checking checksums shouldn't be 
+needed in install.packages().
+
+Best
+Tomas
+
+> I would appreciate feedback on these ideas.
+>
+> Best,
+>
+> Llu?s Revilla
+>
+> PD: New users encountering download & installation issues often keep
+> seeing the progress bar (and in the future "trying URL 'https://...")
+> of the same packages. There are some ways to prevent/avoid repeated
+> downloads, such as, using the system library dependency resolver, or
+> having local mirrors. But they are not easy/available for new useRs,
+> and sometimes they are difficult to avoid (like having a reliable
+> internet connection).
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From m|ch@e|ch|r|co4 @end|ng |rom gm@||@com  Tue Dec 10 17:08:10 2024
+From: m|ch@e|ch|r|co4 @end|ng |rom gm@||@com (Michael Chirico)
+Date: Wed, 11 Dec 2024 00:08:10 +0800
+Subject: [Rd] Is it advisable/possible to default on Linux to an EDITOR that
+ actually exists?
+Message-ID: <CAPRVBcxY_2jZkqtNepDRhLJXMRmgDC61jxYsDCBR2EyEX3e+5g@mail.gmail.com>
+
+It looks like R has defaulted to using 'vi' for file.edit() (via
+EDITOR since ~24 years ago[1][2].
+
+These days I think it is much more common to write code from
+lightweight environments, e.g. Docker files which strip all
+unnecessary commands. On such machines, it is not safe to assume 'vi'
+is installed, and it's not uncommon to encounter an issue like I did
+again today[3] where you or some other tool call file.edit() directly
+or implicitly and hit a clunky error.
+
+Is there something better to do here? A "standard" Linux distribution
+will come with vi, emacs, nano, probably many others. Should
+`file.edit()` iterate over an ordered list to find the first that
+exists? Should it at least error if
+(!nzchar(Sys.which(Sys.getenv("EDITOR"))))?
+
+Mike C
+
+PS I do see some somewhat recent discussion[4] on EDITOR but it
+focuses on the EDITOR default in non-interactive() sessions.
+
+[1] https://github.com/r-devel/r-svn/commit/b294ee2cef3d9292d578b062b80d59f372cf34b2#diff-1cbaac4768fd110525ba9086cb7a684aaf2c6555389c5446c913effbfec90c85
+[2] https://github.com/r-devel/r-svn/blob/71a2e968f4453858aadc1531a3774c011a6f9f49/doc/NEWS.0#L140-L141
+[3] https://github.com/r-lib/usethis/pull/2088
+[4] https://stat.ethz.ch/pipermail/r-devel/2023-July/082720.html
+
+
+From edd @end|ng |rom deb|@n@org  Tue Dec 10 17:46:28 2024
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Tue, 10 Dec 2024 10:46:28 -0600
+Subject: [Rd] 
+ Is it advisable/possible to default on Linux to an EDITOR that
+ actually exists?
+In-Reply-To: <CAPRVBcxY_2jZkqtNepDRhLJXMRmgDC61jxYsDCBR2EyEX3e+5g@mail.gmail.com>
+References: <CAPRVBcxY_2jZkqtNepDRhLJXMRmgDC61jxYsDCBR2EyEX3e+5g@mail.gmail.com>
+Message-ID: <26456.28772.118709.801049@rob.eddelbuettel.com>
+
+
+Michael,
+
+This looks rather like a 'compile-time versus run-time' question to me. If
+you look at etc/Renviron.in in the R sources you see a number of choices,
+some of them with configure-time determined values (which I tend to override
+with values for the Debian package).
+
+For 'EDIT' it is
+
+   ## Default editor
+   EDITOR=${EDITOR-${VISUAL-vi}}
+
+giving us two env vars to override eg in 'degenerate' situations such as the
+forcefully minimized docker setup without other commands.
+
+Otherwise, a generalization that would be possible might be to do something
+similar to 'R CMD javareconf' to allow a later run-time call to affect the
+encoded values---which would then be read at startup.  On the other hand,
+environment variables already give customization so ...
+
+Linux distributions can also have their mechanism. For example, Debian has
+/etc/alternatives which for 'editor' defaults to nano even when vi, emacs,
+mg, atom, code, ... are installed.  So you could also have the environment
+variable EDITOR point to a script you control which then runs over possible
+alternatives.
+
+As for the conjecture 'it is much more common to write code from ...'  I
+would love to see some empirics across a properly surveyed R user base. The
+love of some power users for codespaces / devcontainers notwithstanding, 'the
+most common' environment for writing R code is likely still what it always
+was, a single windows desktop.
+
+Anyway, thanks for raising this. I can look into making the Debian (and hence
+Ubuntu) package switch to 'editor' over the vi fallback. 
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From m|ch@e|ch|r|co4 @end|ng |rom gm@||@com  Tue Dec 10 18:02:33 2024
+From: m|ch@e|ch|r|co4 @end|ng |rom gm@||@com (Michael Chirico)
+Date: Wed, 11 Dec 2024 01:02:33 +0800
+Subject: [Rd] 
+ Is it advisable/possible to default on Linux to an EDITOR that
+ actually exists?
+In-Reply-To: <26456.28772.118709.801049@rob.eddelbuettel.com>
+References: <CAPRVBcxY_2jZkqtNepDRhLJXMRmgDC61jxYsDCBR2EyEX3e+5g@mail.gmail.com>
+ <26456.28772.118709.801049@rob.eddelbuettel.com>
+Message-ID: <CAPRVBcz1KH4xxLc2btXo9CwYe5yDn3MQQcM61PZnDFM2=bpr1A@mail.gmail.com>
+
+> As for the conjecture
+
+To quickly clarify, I mean "it is much more common to write code from
+lightweight environments [now as compared to the year 2000 when the
+EDITOR default was set to 'vi']". We agree about where most code is
+written still today.
+
+And yes, we can set VISUAL/EDITOR (as my personal .Rprofile does), but
+doing something at run time still seems prudent. If I don't own the
+Docker image, it's easy to forget this until we trip over file.edit()
+much later. Onn the Docker image I use most often (for GitHub
+Codespaces), there is no (command-line) editor by default -- VSCode
+does the bulk of the work & I only install 'nano' to do things outside
+the "current" repo. In short, there are very many ways EDITOR can wind
+up un-set/incorrect.
+
+On Wed, Dec 11, 2024 at 12:46?AM Dirk Eddelbuettel <edd at debian.org> wrote:
+>
+>
+> Michael,
+>
+> This looks rather like a 'compile-time versus run-time' question to me. If
+> you look at etc/Renviron.in in the R sources you see a number of choices,
+> some of them with configure-time determined values (which I tend to override
+> with values for the Debian package).
+>
+> For 'EDIT' it is
+>
+>    ## Default editor
+>    EDITOR=${EDITOR-${VISUAL-vi}}
+>
+> giving us two env vars to override eg in 'degenerate' situations such as the
+> forcefully minimized docker setup without other commands.
+>
+> Otherwise, a generalization that would be possible might be to do something
+> similar to 'R CMD javareconf' to allow a later run-time call to affect the
+> encoded values---which would then be read at startup.  On the other hand,
+> environment variables already give customization so ...
+>
+> Linux distributions can also have their mechanism. For example, Debian has
+> /etc/alternatives which for 'editor' defaults to nano even when vi, emacs,
+> mg, atom, code, ... are installed.  So you could also have the environment
+> variable EDITOR point to a script you control which then runs over possible
+> alternatives.
+>
+> As for the conjecture 'it is much more common to write code from ...'  I
+> would love to see some empirics across a properly surveyed R user base. The
+> love of some power users for codespaces / devcontainers notwithstanding, 'the
+> most common' environment for writing R code is likely still what it always
+> was, a single windows desktop.
+>
+> Anyway, thanks for raising this. I can look into making the Debian (and hence
+> Ubuntu) package switch to 'editor' over the vi fallback.
+>
+> Dirk
+>
+> --
+> dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From ||u|@@rev|||@ @end|ng |rom gm@||@com  Tue Dec 10 22:21:35 2024
+From: ||u|@@rev|||@ @end|ng |rom gm@||@com (=?UTF-8?Q?Llu=C3=ADs_Revilla?=)
+Date: Tue, 10 Dec 2024 22:21:35 +0100
+Subject: [Rd] Faster downloads: avoid them if possible
+In-Reply-To: <9dfd1cde-34cb-4808-97f2-bce15687e540@gmail.com>
+References: <CAN+W6_uPc6Fc+bWmiSXGJX8z44mG+JR_1oPGtLd-_9iX7uvDHg@mail.gmail.com>
+ <9dfd1cde-34cb-4808-97f2-bce15687e540@gmail.com>
+Message-ID: <CAN+W6_vAuFsRYoZ6wYE1MdDjm88VvsHn0XPmSq-Tv5+ghCuw=g@mail.gmail.com>
+
+Dear Tomas and list,
+
+El mar., 10 dic. 2024 11:33, Tomas Kalibera <tomas.kalibera at gmail.com> escribi?:
+>
+> On 12/10/24 00:35, Llu?s Revilla wrote:
+> > Dear R-devel,
+> >
+> > I read with interest the recent blog post on how R will have parallel
+> > downloads, on blog.r-project.org
+> > (https://blog.r-project.org/2024/12/02/faster-downloads/index.html).
+> > Thanks Tomas!
+> >
+> > The blog mentions that one of the areas where this will be observed is
+> > while installing them (which I did!). However, I noticed they might be
+> > downloaded multiple times:
+> > If one interrupts the install.packages (via Ctrl+C), or it fails due
+> > to some system dependency missing and I fix that on a different
+> > terminal session, or the internet connection is cut and I try again.
+>
+> Yes, and this has been the case before - it's not new for simultaneous
+> downloads.
+
+Indeed, this behavior has been present before this recent change, the
+post just reminded me to look into this.
+The change described in the post will help when there is good internet
+connections and this is the bottleneck.
+My proposal could help those without good internet connection or other issues.
+
+> > One possible way to make installations/downloads faster and also
+> > reduce the bandwidth of repositories (and its mirrors) would be to
+> > check if they need to be downloaded (again).
+> > PACKAGES file on <repo>/src/contrib includes the MD5sum field that
+> > could be used to check packages on the local folder (But it might be
+> > faster to first check if any file exists there for the same package).
+> >
+> > In short, I propose:
+> > 1) Checking before downloading packages their existence on the destdir
+> > directory used by install.packages.
+> > 2) I suppose the most common scenario is to use install.packages with
+> > the default destdir parameter (NULL). If 1) is implemented it might be
+> > useful to keep the temporary directory common for a single R session.
+>
+> When destdir is NULL (the default), non-local packages are downloaded to
+> a subdirectory of the temporary session directory (see
+> ?install.packages), so the downloaded files would be readily available
+> to further installation attempts done by the same R session.
+
+Perhaps the following test reinstalling the same package it is more
+illustrative as we can see the package is downloaded again:
+
+# R Under development (unstable) (2024-12-07 r87428)
+td <- tempdir()
+install.packages("BaseSet", destdir = td, lib = tempdir())
+# trying URL 'https://ftp.cixug.es/CRAN/src/contrib/BaseSet_0.9.0.tar.gz'
+# Content type 'application/octet-stream' length 784108 bytes (765 KB)
+# ==================================================
+# downloaded 765 KB
+#....
+list.files(td)
+# [1] "BaseSet"                  "BaseSet_0.9.0.tar.gz"
+file.info(file.path(td, "BaseSet"))
+#                         size isdir mode               mtime
+     ctime
+# /tmp/RtmpO6DpoV/BaseSet 4096  TRUE  755 2024-12-10 17:32:50
+2024-12-10 17:32:52
+#                                       atime  uid  gid uname grname
+# /tmp/RtmpO6DpoV/BaseSet 2024-12-10 17:32:52 1000 1000 lluis  lluis
+install.packages("BaseSet", destdir = td, lib = tempdir())
+# trying URL 'https://ftp.cixug.es/CRAN/src/contrib/BaseSet_0.9.0.tar.gz'
+# Content type 'application/octet-stream' length 784108 bytes (765 KB)
+# ==================================================
+# downloaded 765 KB
+#....
+list.files(td)
+# [1] "BaseSet"                  "BaseSet_0.9.0.tar.gz"
+file.info(file.path(td, "BaseSet"))
+#                         size isdir mode               mtime
+     ctime
+# /tmp/RtmpO6DpoV/BaseSet 4096  TRUE  755 2024-12-10 17:41:18
+2024-12-10 17:41:20
+#                                       atime  uid  gid uname grname
+# /tmp/RtmpO6DpoV/BaseSet 2024-12-10 17:41:20 1000 1000 lluis  lluis
+
+Note the progres bar to download the package even if there is already
+present on destdir and the change on mtime on the folder showing the
+updated hour.
+By default install.packages uses a different temporary folder, set
+internally which changes for each call which results in the same
+behaviour: packages are downloaded again even if it's not needed
+(there is no new BaseSet release between these two calls).
+
+>
+> I think we could once extend download.file() to support re-use of
+> already downloaded files, so that it can continue an i nterrupted
+> download of a single file or re-use the whole file.
+>
+> This shouldn't be
+> the default because the files in general may change between downloads,
+> and may be even from different URLs, but it could be used by
+> install.packages(), where this shouldn't happen, at least when destdir
+> is NULL.
+
+This would be great! I am sure it will have many uses beyond install.packages.
+
+>
+> I think an extra round of checking checksums shouldn't be
+> needed in install.packages().
+
+As you mentioned file download might change on the websites,
+downloading the file again ensures they get the latest.
+But if no new download occurs users could install an old version of a package.
+That's why I suggested checking the downloaded files on destdir to
+check the "cache" and download those that are stale.
+If this is already solved in a different way (I couldn't find it on
+install.packages source code) it would be great.
+
+Many thanks for your comments,
+
+Llu?s
+>
+>
+> Best?
+
+> Tomas
+>
+> > I would appreciate feedback on these ideas.
+> >
+> > Best,
+> >
+> > Llu?s Revilla
+> >
+> > PD: New users encountering download & installation issues often keep
+> > seeing the progress bar (and in the future "trying URL 'https://...")
+> > of the same packages. There are some ways to prevent/avoid repeated
+> > downloads, such as, using the system library dependency resolver, or
+> > having local mirrors. But they are not easy/available for new useRs,
+> > and sometimes they are difficult to avoid (like having a reliable
+> > internet connection).
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Wed Dec 11 02:31:03 2024
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Wed, 11 Dec 2024 14:31:03 +1300
+Subject: [Rd] 
+ Is it advisable/possible to default on Linux to an EDITOR that
+ actually exists?
+In-Reply-To: <CAPRVBcxY_2jZkqtNepDRhLJXMRmgDC61jxYsDCBR2EyEX3e+5g@mail.gmail.com>
+References: <CAPRVBcxY_2jZkqtNepDRhLJXMRmgDC61jxYsDCBR2EyEX3e+5g@mail.gmail.com>
+Message-ID: <2FE55908-DDD7-4E20-B221-9FB839D32CB8@R-project.org>
+
+Michael,
+
+vi is the only editor that is part of the POSIX standard. Embedded systems have built-in support only for vi (e.g., busybox) so if a system has any editor support at all it is  most likely to be vi - it is ubiquitous which is why it's the most logical default. (FWIW no distributions I know come with emacs by default because it's too heavy, but all come with vi).
+
+If you use stripped-down images (obviously no longer standards-compliant) then you don't have any editor so it's moot. If you have preference for another editor then you should set EDITOR or VISUAL - it's just a default when neither the system nor user doesn't declare their preference. I don't think R should be fishing for random programs that may or may not be editors at run-time.
+
+Cheers,
+Simon
+
+
+> On Dec 11, 2024, at 5:08 AM, Michael Chirico <michaelchirico4 at gmail.com> wrote:
+> 
+> It looks like R has defaulted to using 'vi' for file.edit() (via
+> EDITOR since ~24 years ago[1][2].
+> 
+> These days I think it is much more common to write code from
+> lightweight environments, e.g. Docker files which strip all
+> unnecessary commands. On such machines, it is not safe to assume 'vi'
+> is installed, and it's not uncommon to encounter an issue like I did
+> again today[3] where you or some other tool call file.edit() directly
+> or implicitly and hit a clunky error.
+> 
+> Is there something better to do here? A "standard" Linux distribution
+> will come with vi, emacs, nano, probably many others. Should
+> `file.edit()` iterate over an ordered list to find the first that
+> exists? Should it at least error if
+> (!nzchar(Sys.which(Sys.getenv("EDITOR"))))?
+> 
+> Mike C
+> 
+> PS I do see some somewhat recent discussion[4] on EDITOR but it
+> focuses on the EDITOR default in non-interactive() sessions.
+> 
+> [1] https://github.com/r-devel/r-svn/commit/b294ee2cef3d9292d578b062b80d59f372cf34b2#diff-1cbaac4768fd110525ba9086cb7a684aaf2c6555389c5446c913effbfec90c85
+> [2] https://github.com/r-devel/r-svn/blob/71a2e968f4453858aadc1531a3774c011a6f9f49/doc/NEWS.0#L140-L141
+> [3] https://github.com/r-lib/usethis/pull/2088
+> [4] https://stat.ethz.ch/pipermail/r-devel/2023-July/082720.html
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
