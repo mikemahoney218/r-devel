@@ -1647,3 +1647,84 @@ Simon
 > 
 
 
+From m|ch@e|ch|r|co4 @end|ng |rom gm@||@com  Wed Dec 11 08:00:13 2024
+From: m|ch@e|ch|r|co4 @end|ng |rom gm@||@com (Michael Chirico)
+Date: Wed, 11 Dec 2024 15:00:13 +0800
+Subject: [Rd] 
+ Is it advisable/possible to default on Linux to an EDITOR that
+ actually exists?
+In-Reply-To: <2FE55908-DDD7-4E20-B221-9FB839D32CB8@R-project.org>
+References: <CAPRVBcxY_2jZkqtNepDRhLJXMRmgDC61jxYsDCBR2EyEX3e+5g@mail.gmail.com>
+ <2FE55908-DDD7-4E20-B221-9FB839D32CB8@R-project.org>
+Message-ID: <CAPRVBcx-q=RwpZ+x63-nB8ijhXYgrx5-U9uuxOt8WkcAKgndnQ@mail.gmail.com>
+
+Thanks Simon, I didn't know that! That's definitely a compelling
+reason to leave the current default untouched and to eschew any
+finicky attempts to find back-up editors.
+
+Still, I think there is benefit from checking quickly that 'editor'
+exists at run-time in file.edit() -- the current failure mode is
+unusual (a shell error & R warning). Offering an R error would also
+benefit, e.g., users with a typo in their custom EDITOR setting:
+
+$ EDITOR=eamcs R
+> file.edit(tempfile())
+# /bin/sh: line 1: eamcs: command not found
+# Warning message:
+# error in running command
+
+Where I come up short is knowing the platform-robust way to implement
+this -- nzchar(Sys.which(editor)) looks like it will work fine on
+Unix, but I don't know what to do about macGUI/Windows.
+
+Mike C
+
+
+On Wed, Dec 11, 2024 at 9:31?AM Simon Urbanek
+<simon.urbanek at r-project.org> wrote:
+>
+> Michael,
+>
+> vi is the only editor that is part of the POSIX standard. Embedded systems have built-in support only for vi (e.g., busybox) so if a system has any editor support at all it is  most likely to be vi - it is ubiquitous which is why it's the most logical default. (FWIW no distributions I know come with emacs by default because it's too heavy, but all come with vi).
+>
+> If you use stripped-down images (obviously no longer standards-compliant) then you don't have any editor so it's moot. If you have preference for another editor then you should set EDITOR or VISUAL - it's just a default when neither the system nor user doesn't declare their preference. I don't think R should be fishing for random programs that may or may not be editors at run-time.
+>
+> Cheers,
+> Simon
+>
+>
+> > On Dec 11, 2024, at 5:08 AM, Michael Chirico <michaelchirico4 at gmail.com> wrote:
+> >
+> > It looks like R has defaulted to using 'vi' for file.edit() (via
+> > EDITOR since ~24 years ago[1][2].
+> >
+> > These days I think it is much more common to write code from
+> > lightweight environments, e.g. Docker files which strip all
+> > unnecessary commands. On such machines, it is not safe to assume 'vi'
+> > is installed, and it's not uncommon to encounter an issue like I did
+> > again today[3] where you or some other tool call file.edit() directly
+> > or implicitly and hit a clunky error.
+> >
+> > Is there something better to do here? A "standard" Linux distribution
+> > will come with vi, emacs, nano, probably many others. Should
+> > `file.edit()` iterate over an ordered list to find the first that
+> > exists? Should it at least error if
+> > (!nzchar(Sys.which(Sys.getenv("EDITOR"))))?
+> >
+> > Mike C
+> >
+> > PS I do see some somewhat recent discussion[4] on EDITOR but it
+> > focuses on the EDITOR default in non-interactive() sessions.
+> >
+> > [1] https://github.com/r-devel/r-svn/commit/b294ee2cef3d9292d578b062b80d59f372cf34b2#diff-1cbaac4768fd110525ba9086cb7a684aaf2c6555389c5446c913effbfec90c85
+> > [2] https://github.com/r-devel/r-svn/blob/71a2e968f4453858aadc1531a3774c011a6f9f49/doc/NEWS.0#L140-L141
+> > [3] https://github.com/r-lib/usethis/pull/2088
+> > [4] https://stat.ethz.ch/pipermail/r-devel/2023-July/082720.html
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+> >
+>
+
+
