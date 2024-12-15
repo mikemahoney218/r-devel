@@ -1728,3 +1728,178 @@ On Wed, Dec 11, 2024 at 9:31?AM Simon Urbanek
 >
 
 
+From net|kj@ @end|ng |rom gm@||@com  Fri Dec 13 19:55:42 2024
+From: net|kj@ @end|ng |rom gm@||@com (=?UTF-8?Q?Jan_Net=C3=ADk?=)
+Date: Fri, 13 Dec 2024 19:55:42 +0100
+Subject: [Rd] Check R version dependency in R CMD Check
+Message-ID: <CA+6hu7eMvwn_BxHm_h6WXgZx979gQywUDPcbexgQJQtQ4dZqBw@mail.gmail.com>
+
+Hello,
+
+I have a server with R 3.6.3 installed and I struggled a bit with
+updating several R packages that utilizes some new syntax introduced in R
+4.1.0, such as the native pipe |> or function definition shorthand \(x) ...
+
+The thing is that these packages states "Depends: R (>= 3.6.0)" and pass R
+CMD Check without any issues. My problem occurred at the installation time.
+I can see that developers naturally include the new handy syntax but
+oftentimes forget to raise R version dependency in their DESCRIPTIONs.
+Should we employ some new checks?
+
+Best,
+Jan
+
+	[[alternative HTML version deleted]]
+
+
+From jo@|@h@p@rry @end|ng |rom gm@||@com  Fri Dec 13 20:50:42 2024
+From: jo@|@h@p@rry @end|ng |rom gm@||@com (Josiah Parry)
+Date: Fri, 13 Dec 2024 11:50:42 -0800
+Subject: [Rd] Check R version dependency in R CMD Check
+In-Reply-To: <CA+6hu7eMvwn_BxHm_h6WXgZx979gQywUDPcbexgQJQtQ4dZqBw@mail.gmail.com>
+References: <CA+6hu7eMvwn_BxHm_h6WXgZx979gQywUDPcbexgQJQtQ4dZqBw@mail.gmail.com>
+Message-ID: <CAL3ufU+P6Ov1+m-Y=jvmRwC04aCgF1Na3raBpuSMV3ghO6-MjQ@mail.gmail.com>
+
+I?ve been guilty of this myself. I think a check would be good.
+
+In my case I was using the new sort_by() function (I think also 4.1) and a
+user was failing to install on R 4.0.
+
+
+On Fri, Dec 13, 2024 at 11:30 Jan Net?k <netikja at gmail.com> wrote:
+
+> Hello,
+>
+> I have a server with R 3.6.3 installed and I struggled a bit with
+> updating several R packages that utilizes some new syntax introduced in R
+> 4.1.0, such as the native pipe |> or function definition shorthand \(x) ...
+>
+> The thing is that these packages states "Depends: R (>= 3.6.0)" and pass R
+> CMD Check without any issues. My problem occurred at the installation time.
+> I can see that developers naturally include the new handy syntax but
+> oftentimes forget to raise R version dependency in their DESCRIPTIONs.
+> Should we employ some new checks?
+>
+> Best,
+> Jan
+>
+>         [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From edd @end|ng |rom deb|@n@org  Fri Dec 13 21:02:42 2024
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Fri, 13 Dec 2024 14:02:42 -0600
+Subject: [Rd] 
+ Is it advisable/possible to default on Linux to an EDITOR that
+ actually exists?
+In-Reply-To: <CAPRVBcx-q=RwpZ+x63-nB8ijhXYgrx5-U9uuxOt8WkcAKgndnQ@mail.gmail.com>
+References: <CAPRVBcxY_2jZkqtNepDRhLJXMRmgDC61jxYsDCBR2EyEX3e+5g@mail.gmail.com>
+ <2FE55908-DDD7-4E20-B221-9FB839D32CB8@R-project.org>
+ <CAPRVBcx-q=RwpZ+x63-nB8ijhXYgrx5-U9uuxOt8WkcAKgndnQ@mail.gmail.com>
+Message-ID: <26460.37602.235030.50183@rob.eddelbuettel.com>
+
+
+On 11 December 2024 at 15:00, Michael Chirico wrote:
+| Thanks Simon, I didn't know that! That's definitely a compelling
+| reason to leave the current default untouched and to eschew any
+| finicky attempts to find back-up editors.
+
+I am not sure I agree with the fairly bold statement by Simon. I do not
+install or use that many different Unix flavours but I do come across some
+that do not, by default, install vi
+
+  $ docker run --rm -ti debian bash
+  root at 54d4be543766:/# vi
+  bash: vi: command not found
+  root at 54d4be543766:/#
+  root at 54d4be543766:/# nano
+  bash: nano: command not found
+  exit
+  $ 
+
+Distributions may have defined sets of packages deemed 'essential', editors
+do not seem to be part of that here.
+
+Anyway, when you are calling edit(), or call a function calling edit() you
+can always override appropriately with both an environment variable or an R
+option so this all seems like a nothingburger to me.  "If on systems that
+don't have all tools, maybe don't call functions from package `usethis`"
+(which makes reasonable assumptions about what could be present) also seems
+like a valid strategy.
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From x|e @end|ng |rom y|hu|@n@me  Fri Dec 13 21:52:56 2024
+From: x|e @end|ng |rom y|hu|@n@me (Yihui Xie)
+Date: Fri, 13 Dec 2024 14:52:56 -0600
+Subject: [Rd] Check R version dependency in R CMD Check
+In-Reply-To: <CAL3ufU+P6Ov1+m-Y=jvmRwC04aCgF1Na3raBpuSMV3ghO6-MjQ@mail.gmail.com>
+References: <CA+6hu7eMvwn_BxHm_h6WXgZx979gQywUDPcbexgQJQtQ4dZqBw@mail.gmail.com>
+ <CAL3ufU+P6Ov1+m-Y=jvmRwC04aCgF1Na3raBpuSMV3ghO6-MjQ@mail.gmail.com>
+Message-ID: <CANROs4c4p_LWbaGg=fHmPZY8ZCS-hKWZ_oUN7KZf_1BGOoG2_Q@mail.gmail.com>
+
+For package authors using Github Action, one reason why they forget to
+actually check their packages against the minimal R version specified
+in DESCRIPTION may be the use of _relative_ versions in the workflows
+like this: https://github.com/r-lib/actions/blob/v2/examples/check-full.yaml
+i.e., checking against the 5 last minor releases of R (and this
+example workflow says even 5 is likely to be an overkill and
+recommends people to test only one old release instead). As a result,
+as R makes new releases, packages will not be tested against older
+versions of R anymore and package authors won't notice it.
+
+Speaking of guilt, someone has a package that states `Depends: R (>=
+3.6.0)` (by coincidence):
+https://github.com/yihui/knitr/blob/master/DESCRIPTION#L117 but it's
+only checked against R >= 4.0.x (oldrel-4) at the moment:
+https://github.com/yihui/knitr/blob/master/.github/workflows/R-CMD-check.yaml#L41
+
+To ensure the package is checked against the minimal R version and
+above, we'd have to enumerate all version numbers like this:
+https://github.com/yihui/litedown/blob/main/.github/workflows/R-CMD-check.yaml#L19-L29
+And this list needs to be updated after each new release of R.
+
+I'm not sure if Jan was proposing to CRAN or package authors for such
+checks, but I feel this is primarily the responsibility of package
+authors.
+
+Regards,
+Yihui
+
+On Fri, Dec 13, 2024 at 1:51?PM Josiah Parry <josiah.parry at gmail.com> wrote:
+>
+> I?ve been guilty of this myself. I think a check would be good.
+>
+> In my case I was using the new sort_by() function (I think also 4.1) and a
+> user was failing to install on R 4.0.
+>
+>
+> On Fri, Dec 13, 2024 at 11:30 Jan Net?k <netikja at gmail.com> wrote:
+>
+> > Hello,
+> >
+> > I have a server with R 3.6.3 installed and I struggled a bit with
+> > updating several R packages that utilizes some new syntax introduced in R
+> > 4.1.0, such as the native pipe |> or function definition shorthand \(x) ...
+> >
+> > The thing is that these packages states "Depends: R (>= 3.6.0)" and pass R
+> > CMD Check without any issues. My problem occurred at the installation time.
+> > I can see that developers naturally include the new handy syntax but
+> > oftentimes forget to raise R version dependency in their DESCRIPTIONs.
+> > Should we employ some new checks?
+> >
+> > Best,
+> > Jan
+
+
