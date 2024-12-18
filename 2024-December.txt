@@ -1903,3 +1903,69 @@ On Fri, Dec 13, 2024 at 1:51?PM Josiah Parry <josiah.parry at gmail.com> wrote:
 > > Jan
 
 
+From therne@u @end|ng |rom m@yo@edu  Mon Dec 16 04:08:36 2024
+From: therne@u @end|ng |rom m@yo@edu (Therneau, Terry M., Ph.D.)
+Date: Mon, 16 Dec 2024 03:08:36 +0000
+Subject: [Rd] Changes in the survival package (long)
+Message-ID: <BL0PR01MB465846CB7B10043988409D95AE3B2@BL0PR01MB4658.prod.exchangelabs.com>
+
+The latest version of the survival package has two important additions.  In prior code the call
+               coxph(Surv(time, status) ~ age + strata(inst), data=lung)
+could fail if a version of either Surv() or strata() existed elsewhere on the search path; the wrong function could be picked up.  Second, a model with survival::strata(inst) in the formula would not do what users expect. These have now been addressed.
+
+ 1. For the coxph, concordance, survcheck, survfit, and survdiff modeling functions, any Surv(), strata(), cluster(), psline(), tt(), ridge(), frailty(), frailty.gamma(), frailty.gauss(), or frailty.t() model terms will use the versions from the survival namespace, automatically.  A survival:: modifier is not required.
+ 2. Any use of survival::strata(), survival::cluster(), survival::pspline(), ... (all but survival::Surv) will have the 'survival::' modifier removed before the formula is evaluated.
+
+ 3. An exception to 1 above are models with a function/variable conflict such as Surv(time, status) ~ x + strata + strata(group) (found in the Epi package) or Surv(time, status) ~ x + strata(strata) (found in epiDisplay); I simply haven't thought of an automatic way to pick strata() from the survival namespace, and the strata variable locally, without stepping on my own feet.  In that same formula Surv would still be found in the survival namespace, however.
+ 4. The call component of the relevant coxph, survfit, etc result is not changed, it still documents what you actually typed.  (Updating it to show "what was run" breaks a half dozen of the 800+ CRAN packages which make use of survival).
+ This has no bearing on any discussion of whether to use coxph or survival::coxph as the primary call. Only formulas are affected by this change.
+One motivation for this is that use of :: messes up formula processing, in particular the "specials" argument of model.frame, something the survival package depends on.  For instance, in versions prior to survival3.8-1 the following two calls lead to completely different models; in the second strata is not recognized. I urge people to try this and see just how different the two models are.
+               coxph(Surv(time, status) ~ age + strata(inst), data=lung)
+               coxph(Surv(time, status) ~ age + survival::strata(inst), data = lung)
+Another false variant of the second model is
+               temp <- survival::strata(lung$inst)
+               coxph(Surv(time, status) ~ age + temp, data=lung)
+The number in instances of these incorrect forms in the set of reverse dependencies was sobering.  I suspect the error is even more prevalent in user code.  This update automatically fixes the first but not the second.
+
+ A second motivation was that many users, and this includes myself up to a couple months ago, may assume that any formulas in a coxph call would automatically resolve first in the survival namespace, in the same way that internal calls from coxph to subsidary functions like coxph.fit() or residuals.coxph() do, without having to resort to use of the double colon.  But formulas are evaluated by model.frame(), outside the survival namespace.  To see this do the following simple test (pre version 3.8-2)
+         Surv <- function(x) x^2   # silly replacement
+         coxph(Surv(time, status) ~ age + strata(inst), lung)  # fails with an error
+
+I can't be responsible for many of the mistakes user's make with the survival packages, but I want to prevent these two obvious ones.
+
+As further explanation, we have to realize that formulas are special, i.e. many of the symbols in a formula mean something else than simple mathematics would give.  We are all familiar with this for the *, / and : symbols:   y ~ x1 * x2 does not fit a single predictor which is x1 times x2, and y ~ x1 + age/10 is not a successful approach for adding "age in decades" as a predictor.  These special cases are based on pattern recognition in the formula parser.  If you  instead wrote y ~ base::"*"(x1, x2), it won't produce the same result.   What many (perhaps most?) users fail to realize is that there are other "specials" that are recognized in exactly the same way, i.e., by pattern recognition, but which happen to look like a function call.  This include offset() in lm and glm, strata() in the survival package, s() in the gam package, etc. Qualifying any of these with :: mucks up the recognition process.  For instance
+                glm(status ~ x + offset(log(time)),  family=poisson, data= aml)
+               glm(status ~ x + stats::offset(log(time)), family= poisson, data=aml)
+
+are  different models.  The first is a valid poisson regression, the second something else entirely.
+
+In the survival package the Surv() function, however, is not recognized using the specials argument in model.frame, i.e. during parsing.  Instead, Surv() produces an object with a particular class and the modeling functions in survival key off that class.  Thus using survival::Surv() or Surv() in the formula both work, as does creating y <- Surv(time, status) outside and typing coxph(y ~ age + sex, lung).  Since it is not an error the new code does not strike off the survival:: part from survival::Surv() (even though this author much prefers the shorter form).  Right hand side specials do get modified.
+So why didn't I make strata() work this way as well?  In 1993, when this design was first encoded, I based my design off the examples available to me, namely those models found in Chambers and Hastie "Statistical Models in S".  Both namespaces and :: were far, far in the future, and my crystal ball  cloudy.
+
+As a footnote, getting this right was more subtle than I anticipated.  I introduced this in survival_3.8-0, and quickly went through 3.8-1, and 3.8-2 versions.  I wish to acknowlege the CRAN maintainers for their useful input and patience as we have worked through the reverse dependency checks.   Current on github and (hopefully soon) on CRAN.
+
+An unaswered question is how to best document this behaviour so that users will find it.
+
+Terry Therneau
+
+	[[alternative HTML version deleted]]
+
+
+From d@tr7320 @end|ng |rom un|@@ydney@edu@@u  Mon Dec 16 06:00:07 2024
+From: d@tr7320 @end|ng |rom un|@@ydney@edu@@u (Dario Strbenac)
+Date: Mon, 16 Dec 2024 05:00:07 +0000
+Subject: [Rd] Changes in the survival package (long)
+In-Reply-To: <BL0PR01MB465846CB7B10043988409D95AE3B2@BL0PR01MB4658.prod.exchangelabs.com>
+References: <BL0PR01MB465846CB7B10043988409D95AE3B2@BL0PR01MB4658.prod.exchangelabs.com>
+Message-ID: <MEWPR01MB8896D522A8B72C3DE84F8D8DCD3B2@MEWPR01MB8896.ausprd01.prod.outlook.com>
+
+Good day,
+
+It is impressive to see such sustained package maintenance.
+
+--------------------------------------
+Dr. Dario Strbenac
+Bioinformatics Research Associate
+School of Mathematics and Statistics, University of Sydney
+Camperdown N.S.W. 2050, Australia
+
