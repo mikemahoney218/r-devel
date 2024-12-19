@@ -1969,3 +1969,561 @@ Bioinformatics Research Associate
 School of Mathematics and Statistics, University of Sydney
 Camperdown N.S.W. 2050, Australia
 
+From d@tr7320 @end|ng |rom un|@@ydney@edu@@u  Tue Dec 17 10:00:01 2024
+From: d@tr7320 @end|ng |rom un|@@ydney@edu@@u (Dario Strbenac)
+Date: Tue, 17 Dec 2024 09:00:01 +0000
+Subject: [Rd] stats glm Response Format Ambiguity
+Message-ID: <MEWPR01MB8896EF768A83DFC2FA5FC307CD042@MEWPR01MB8896.ausprd01.prod.outlook.com>
+
+Hello,
+
+Could there be clarification added to glm's documentation? In contrast, glmnet leaves no ambiguity about what it expects for response.
+
+glm:  y: is a vector of observations of length n
+glmnet: y: For family="binomial" should be either a factor with two levels, or a two-column matrix of counts or proportions (the second column is treated as the target class). For family="multinomial", can be a nc>=2 level factor, or a matrix with nc columns of counts or proportions. For either "binomial" or "multinomial", if y is presented as a vector, it will be coerced into a factor.
+
+"a vector of observations" doesn't really narrow it down much. The warning emitted when y a is vector of proportions isn't particularly informative, either.
+
+--------------------------------------
+Dario Strbenac
+University of Sydney
+Camperdown NSW 2050
+Australia
+
+From m@rt|n@becker @end|ng |rom mx@un|-@@@r|@nd@de  Tue Dec 17 11:46:54 2024
+From: m@rt|n@becker @end|ng |rom mx@un|-@@@r|@nd@de (Martin Becker)
+Date: Tue, 17 Dec 2024 11:46:54 +0100
+Subject: [Rd] R_CheckUserInterrupt() can be a performance bottleneck within
+ GUIs
+Message-ID: <4f5bae34-ac8e-479c-bcd8-b5daea50dd2a@mx.uni-saarland.de>
+
+tl;dr: R_CheckUserInterrupt() can be a performance bottleneck
+        within GUIs. This also affects functions in the 'stats'
+        package, which could be improved by changing the position
+        of calls to R_CheckUserInterrupt().
+
+
+Dear all,
+
+Recently I was puzzled because some code in a package under development, 
+which consisted almost entirely of a .Call() to a function written in C, 
+was running much slower within RStudio compared to R in a terminal. It 
+took me some time to identify the cause, so I thought I would share my 
+findings; perhaps they will be helpful to others.
+
+The performance drop was caused by R_CheckUserInterrupt(), which I call 
+(perhaps too often) in my C code. While calling R_CheckUserInterrupt() 
+seems to be quite cheap when running R or Rscript in a terminal, it is 
+more expensive when running R within a GUI, especially within RStudio, 
+as I noticed (but also, e.g., within R.app on MacOS). In fact, using a 
+GUI (especially RStudio) can change the cost of (frequent) calls to 
+R_CheckUserInterrupt() from negligible to critical (in real-world 
+applications). Significant performance drops are also visible for 
+functions in the 'stats' package, e.g., pwilcox().
+
+The following MWE (using Rcpp) illustrates the problem. Consider the 
+following code:
+
+---
+
+library(Rcpp)
+cppFunction('double nonsense(const int n, const int m, const int check) {
+   int i, j;
+   double result;
+   for (i=0;i<n;i++) {
+     if (check) R_CheckUserInterrupt();
+     result = 1.;
+     for (j=1;j<=m;j++) if (j%2) result *= j; else result /=j;
+   }
+   return(result);
+}')
+
+tmp1 <- system.time(nonsense(1e8,10,0))[1]
+tmp2 <- system.time(nonsense(1e8,10,1))[1]
+cat("w/o check:",tmp1,"sec., with check:",tmp2,"sec., 
+diff.:",tmp2-tmp1,"sec.\n")
+
+tmp3 <- system.time(pwilcox(rwilcox(1e5,40,60),40,60))[1]
+cat("wilcox example:",tmp3,"sec.\n")
+
+---
+
+Running this code when R (4.4.2) is started in a terminal window 
+produces the following measurements/output (Apple M1, MacOS 15.1.1):
+
+   w/o check: 0.525 sec., with check: 0.752 sec., diff.: 0.227 sec.
+   wilcox example: 1.028 sec.
+
+Running the same code when R is used within R.app (1.81 (8462) 
+aarch64-apple-darwin20) on the same machine results in:
+
+   w/o check: 0.525 sec., with check: 1.683 sec., diff.: 1.158 sec.
+   wilcox example: 2.13 sec.
+
+Running the same code when R is used within RStudio Desktop (2024.12.0 
+Build 467) on the same machine results in:
+
+   w/o check: 0.507 sec., with check: 22.905 sec., diff.: 22.398 sec.
+   wilcox example: 29.686 sec.
+
+So, the performance drop is already remarkable for R.app, but really 
+huge for RStudio.
+
+Presumably, checking for user interrupts within a GUI is more involved 
+than within a terminal window, so there may not be much room for 
+improvement in R.app or RStudio (and I know that this list is not the 
+right place to suggest improvements for RStudio or to report unwanted 
+behaviour). However, it might be worth considering
+
+1. an addition to the documentation in WRE (explaining that too many 
+calls to R_CheckUserInterrupt() can cause a performance bottleneck, 
+especially when the code is running within a GUI),
+2. check (and possibly change) the position of R_CheckUserInterrupt() in 
+some base R functions. For example, moving R_CheckUserInterrupt() from 
+cwilcox() to pwilcox() and qwilcox() in src/nmath/wilcox.c may lead to a 
+significant improvement (while still being feasible in terms of response 
+time).
+
+Best,
+Martin
+
+
+-- 
+apl. Prof. Dr. Martin Becker, Akad. Oberrat
+Lehrstab Statistik
+Quantitative Methoden
+Fakult?t f?r Empirische Humanwissenschaften und Wirtschaftswissenschaft
+Universit?t des Saarlandes
+Campus C3 1, Raum 2.17
+66123 Saarbr?cken
+Deutschland
+
+
+From jeroenoom@ @end|ng |rom gm@||@com  Tue Dec 17 15:51:36 2024
+From: jeroenoom@ @end|ng |rom gm@||@com (Jeroen Ooms)
+Date: Tue, 17 Dec 2024 14:51:36 +0000
+Subject: [Rd] 
+ R_CheckUserInterrupt() can be a performance bottleneck within GUIs
+In-Reply-To: <4f5bae34-ac8e-479c-bcd8-b5daea50dd2a@mx.uni-saarland.de>
+References: <4f5bae34-ac8e-479c-bcd8-b5daea50dd2a@mx.uni-saarland.de>
+Message-ID: <CABFfbXvyiS4W_A94farR5bf-OenGxmMwBYMwh8Rd+Lf=dykn6g@mail.gmail.com>
+
+A more generic solution would be for R to throttle calls to
+R_CheckUserInterrupt(), because it makes no sense to check 1000 times
+per second if a user has interrupted, but it is difficult for the
+caller to know when R_CheckUserInterrupt() has been last called, or do
+it regularly without over-doing it.
+
+Here is a simple patch: https://github.com/r-devel/r-svn/pull/125
+
+See also: https://stat.ethz.ch/pipermail/r-devel/2023-May/082597.html
+
+
+
+On Tue, Dec 17, 2024 at 10:47?AM Martin Becker
+<martin.becker at mx.uni-saarland.de> wrote:
+>
+> tl;dr: R_CheckUserInterrupt() can be a performance bottleneck
+>         within GUIs. This also affects functions in the 'stats'
+>         package, which could be improved by changing the position
+>         of calls to R_CheckUserInterrupt().
+>
+>
+> Dear all,
+>
+> Recently I was puzzled because some code in a package under development,
+> which consisted almost entirely of a .Call() to a function written in C,
+> was running much slower within RStudio compared to R in a terminal. It
+> took me some time to identify the cause, so I thought I would share my
+> findings; perhaps they will be helpful to others.
+>
+> The performance drop was caused by R_CheckUserInterrupt(), which I call
+> (perhaps too often) in my C code. While calling R_CheckUserInterrupt()
+> seems to be quite cheap when running R or Rscript in a terminal, it is
+> more expensive when running R within a GUI, especially within RStudio,
+> as I noticed (but also, e.g., within R.app on MacOS). In fact, using a
+> GUI (especially RStudio) can change the cost of (frequent) calls to
+> R_CheckUserInterrupt() from negligible to critical (in real-world
+> applications). Significant performance drops are also visible for
+> functions in the 'stats' package, e.g., pwilcox().
+>
+> The following MWE (using Rcpp) illustrates the problem. Consider the
+> following code:
+>
+> ---
+>
+> library(Rcpp)
+> cppFunction('double nonsense(const int n, const int m, const int check) {
+>    int i, j;
+>    double result;
+>    for (i=0;i<n;i++) {
+>      if (check) R_CheckUserInterrupt();
+>      result = 1.;
+>      for (j=1;j<=m;j++) if (j%2) result *= j; else result /=j;
+>    }
+>    return(result);
+> }')
+>
+> tmp1 <- system.time(nonsense(1e8,10,0))[1]
+> tmp2 <- system.time(nonsense(1e8,10,1))[1]
+> cat("w/o check:",tmp1,"sec., with check:",tmp2,"sec.,
+> diff.:",tmp2-tmp1,"sec.\n")
+>
+> tmp3 <- system.time(pwilcox(rwilcox(1e5,40,60),40,60))[1]
+> cat("wilcox example:",tmp3,"sec.\n")
+>
+> ---
+>
+> Running this code when R (4.4.2) is started in a terminal window
+> produces the following measurements/output (Apple M1, MacOS 15.1.1):
+>
+>    w/o check: 0.525 sec., with check: 0.752 sec., diff.: 0.227 sec.
+>    wilcox example: 1.028 sec.
+>
+> Running the same code when R is used within R.app (1.81 (8462)
+> aarch64-apple-darwin20) on the same machine results in:
+>
+>    w/o check: 0.525 sec., with check: 1.683 sec., diff.: 1.158 sec.
+>    wilcox example: 2.13 sec.
+>
+> Running the same code when R is used within RStudio Desktop (2024.12.0
+> Build 467) on the same machine results in:
+>
+>    w/o check: 0.507 sec., with check: 22.905 sec., diff.: 22.398 sec.
+>    wilcox example: 29.686 sec.
+>
+> So, the performance drop is already remarkable for R.app, but really
+> huge for RStudio.
+>
+> Presumably, checking for user interrupts within a GUI is more involved
+> than within a terminal window, so there may not be much room for
+> improvement in R.app or RStudio (and I know that this list is not the
+> right place to suggest improvements for RStudio or to report unwanted
+> behaviour). However, it might be worth considering
+>
+> 1. an addition to the documentation in WRE (explaining that too many
+> calls to R_CheckUserInterrupt() can cause a performance bottleneck,
+> especially when the code is running within a GUI),
+> 2. check (and possibly change) the position of R_CheckUserInterrupt() in
+> some base R functions. For example, moving R_CheckUserInterrupt() from
+> cwilcox() to pwilcox() and qwilcox() in src/nmath/wilcox.c may lead to a
+> significant improvement (while still being feasible in terms of response
+> time).
+>
+> Best,
+> Martin
+>
+>
+> --
+> apl. Prof. Dr. Martin Becker, Akad. Oberrat
+> Lehrstab Statistik
+> Quantitative Methoden
+> Fakult?t f?r Empirische Humanwissenschaften und Wirtschaftswissenschaft
+> Universit?t des Saarlandes
+> Campus C3 1, Raum 2.17
+> 66123 Saarbr?cken
+> Deutschland
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From bbo|ker @end|ng |rom gm@||@com  Tue Dec 17 16:04:00 2024
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Tue, 17 Dec 2024 10:04:00 -0500
+Subject: [Rd] 
+ R_CheckUserInterrupt() can be a performance bottleneck within GUIs
+In-Reply-To: <CABFfbXvyiS4W_A94farR5bf-OenGxmMwBYMwh8Rd+Lf=dykn6g@mail.gmail.com>
+References: <4f5bae34-ac8e-479c-bcd8-b5daea50dd2a@mx.uni-saarland.de>
+ <CABFfbXvyiS4W_A94farR5bf-OenGxmMwBYMwh8Rd+Lf=dykn6g@mail.gmail.com>
+Message-ID: <9815bce9-df69-49d9-98ee-3d3fb77b5182@gmail.com>
+
+   This seems like a great idea. Would it help to escalate this to a 
+post on R-bugzilla, so it is less likely to fall through the cracks?
+
+On 12/17/24 09:51, Jeroen Ooms wrote:
+> A more generic solution would be for R to throttle calls to
+> R_CheckUserInterrupt(), because it makes no sense to check 1000 times
+> per second if a user has interrupted, but it is difficult for the
+> caller to know when R_CheckUserInterrupt() has been last called, or do
+> it regularly without over-doing it.
+> 
+> Here is a simple patch: https://github.com/r-devel/r-svn/pull/125
+> 
+> See also: https://stat.ethz.ch/pipermail/r-devel/2023-May/082597.html
+> 
+> 
+> 
+> On Tue, Dec 17, 2024 at 10:47?AM Martin Becker
+> <martin.becker at mx.uni-saarland.de> wrote:
+>>
+>> tl;dr: R_CheckUserInterrupt() can be a performance bottleneck
+>>          within GUIs. This also affects functions in the 'stats'
+>>          package, which could be improved by changing the position
+>>          of calls to R_CheckUserInterrupt().
+>>
+>>
+>> Dear all,
+>>
+>> Recently I was puzzled because some code in a package under development,
+>> which consisted almost entirely of a .Call() to a function written in C,
+>> was running much slower within RStudio compared to R in a terminal. It
+>> took me some time to identify the cause, so I thought I would share my
+>> findings; perhaps they will be helpful to others.
+>>
+>> The performance drop was caused by R_CheckUserInterrupt(), which I call
+>> (perhaps too often) in my C code. While calling R_CheckUserInterrupt()
+>> seems to be quite cheap when running R or Rscript in a terminal, it is
+>> more expensive when running R within a GUI, especially within RStudio,
+>> as I noticed (but also, e.g., within R.app on MacOS). In fact, using a
+>> GUI (especially RStudio) can change the cost of (frequent) calls to
+>> R_CheckUserInterrupt() from negligible to critical (in real-world
+>> applications). Significant performance drops are also visible for
+>> functions in the 'stats' package, e.g., pwilcox().
+>>
+>> The following MWE (using Rcpp) illustrates the problem. Consider the
+>> following code:
+>>
+>> ---
+>>
+>> library(Rcpp)
+>> cppFunction('double nonsense(const int n, const int m, const int check) {
+>>     int i, j;
+>>     double result;
+>>     for (i=0;i<n;i++) {
+>>       if (check) R_CheckUserInterrupt();
+>>       result = 1.;
+>>       for (j=1;j<=m;j++) if (j%2) result *= j; else result /=j;
+>>     }
+>>     return(result);
+>> }')
+>>
+>> tmp1 <- system.time(nonsense(1e8,10,0))[1]
+>> tmp2 <- system.time(nonsense(1e8,10,1))[1]
+>> cat("w/o check:",tmp1,"sec., with check:",tmp2,"sec.,
+>> diff.:",tmp2-tmp1,"sec.\n")
+>>
+>> tmp3 <- system.time(pwilcox(rwilcox(1e5,40,60),40,60))[1]
+>> cat("wilcox example:",tmp3,"sec.\n")
+>>
+>> ---
+>>
+>> Running this code when R (4.4.2) is started in a terminal window
+>> produces the following measurements/output (Apple M1, MacOS 15.1.1):
+>>
+>>     w/o check: 0.525 sec., with check: 0.752 sec., diff.: 0.227 sec.
+>>     wilcox example: 1.028 sec.
+>>
+>> Running the same code when R is used within R.app (1.81 (8462)
+>> aarch64-apple-darwin20) on the same machine results in:
+>>
+>>     w/o check: 0.525 sec., with check: 1.683 sec., diff.: 1.158 sec.
+>>     wilcox example: 2.13 sec.
+>>
+>> Running the same code when R is used within RStudio Desktop (2024.12.0
+>> Build 467) on the same machine results in:
+>>
+>>     w/o check: 0.507 sec., with check: 22.905 sec., diff.: 22.398 sec.
+>>     wilcox example: 29.686 sec.
+>>
+>> So, the performance drop is already remarkable for R.app, but really
+>> huge for RStudio.
+>>
+>> Presumably, checking for user interrupts within a GUI is more involved
+>> than within a terminal window, so there may not be much room for
+>> improvement in R.app or RStudio (and I know that this list is not the
+>> right place to suggest improvements for RStudio or to report unwanted
+>> behaviour). However, it might be worth considering
+>>
+>> 1. an addition to the documentation in WRE (explaining that too many
+>> calls to R_CheckUserInterrupt() can cause a performance bottleneck,
+>> especially when the code is running within a GUI),
+>> 2. check (and possibly change) the position of R_CheckUserInterrupt() in
+>> some base R functions. For example, moving R_CheckUserInterrupt() from
+>> cwilcox() to pwilcox() and qwilcox() in src/nmath/wilcox.c may lead to a
+>> significant improvement (while still being feasible in terms of response
+>> time).
+>>
+>> Best,
+>> Martin
+>>
+>>
+>> --
+>> apl. Prof. Dr. Martin Becker, Akad. Oberrat
+>> Lehrstab Statistik
+>> Quantitative Methoden
+>> Fakult?t f?r Empirische Humanwissenschaften und Wirtschaftswissenschaft
+>> Universit?t des Saarlandes
+>> Campus C3 1, Raum 2.17
+>> 66123 Saarbr?cken
+>> Deutschland
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+-- 
+Dr. Benjamin Bolker
+Professor, Mathematics & Statistics and Biology, McMaster University
+Director, School of Computational Science and Engineering
+* E-mail is sent at my convenience; I don't expect replies outside of 
+working hours.
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Wed Dec 18 01:19:04 2024
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Wed, 18 Dec 2024 13:19:04 +1300
+Subject: [Rd] 
+ R_CheckUserInterrupt() can be a performance bottleneck within GUIs
+In-Reply-To: <9815bce9-df69-49d9-98ee-3d3fb77b5182@gmail.com>
+References: <4f5bae34-ac8e-479c-bcd8-b5daea50dd2a@mx.uni-saarland.de>
+ <CABFfbXvyiS4W_A94farR5bf-OenGxmMwBYMwh8Rd+Lf=dykn6g@mail.gmail.com>
+ <9815bce9-df69-49d9-98ee-3d3fb77b5182@gmail.com>
+Message-ID: <DB462CAC-C1DE-4DE9-9B2A-204BB9B4A353@R-project.org>
+
+It seems benign, but has implications since checking time is actually not a cheap operation: adding jus ta time check alone incurs a penalty of ca. 700% compared with the time it takes to call R_CheckUserInterrupt(). Generally, it makes no sense to check interrupts at every iteration - you'll find code like if (++i % 10000 == 0) R_CheckUserInterrupt(); in loops to make sure it's not called unnecessarily. 
+
+Cheers,
+Simon
+
+
+> On Dec 18, 2024, at 4:04 AM, Ben Bolker <bbolker at gmail.com> wrote:
+> 
+>  This seems like a great idea. Would it help to escalate this to a post on R-bugzilla, so it is less likely to fall through the cracks?
+> 
+> On 12/17/24 09:51, Jeroen Ooms wrote:
+>> A more generic solution would be for R to throttle calls to
+>> R_CheckUserInterrupt(), because it makes no sense to check 1000 times
+>> per second if a user has interrupted, but it is difficult for the
+>> caller to know when R_CheckUserInterrupt() has been last called, or do
+>> it regularly without over-doing it.
+>> Here is a simple patch: https://github.com/r-devel/r-svn/pull/125
+>> See also: https://stat.ethz.ch/pipermail/r-devel/2023-May/082597.html
+>> On Tue, Dec 17, 2024 at 10:47?AM Martin Becker
+>> <martin.becker at mx.uni-saarland.de> wrote:
+>>> 
+>>> tl;dr: R_CheckUserInterrupt() can be a performance bottleneck
+>>>         within GUIs. This also affects functions in the 'stats'
+>>>         package, which could be improved by changing the position
+>>>         of calls to R_CheckUserInterrupt().
+>>> 
+>>> 
+>>> Dear all,
+>>> 
+>>> Recently I was puzzled because some code in a package under development,
+>>> which consisted almost entirely of a .Call() to a function written in C,
+>>> was running much slower within RStudio compared to R in a terminal. It
+>>> took me some time to identify the cause, so I thought I would share my
+>>> findings; perhaps they will be helpful to others.
+>>> 
+>>> The performance drop was caused by R_CheckUserInterrupt(), which I call
+>>> (perhaps too often) in my C code. While calling R_CheckUserInterrupt()
+>>> seems to be quite cheap when running R or Rscript in a terminal, it is
+>>> more expensive when running R within a GUI, especially within RStudio,
+>>> as I noticed (but also, e.g., within R.app on MacOS). In fact, using a
+>>> GUI (especially RStudio) can change the cost of (frequent) calls to
+>>> R_CheckUserInterrupt() from negligible to critical (in real-world
+>>> applications). Significant performance drops are also visible for
+>>> functions in the 'stats' package, e.g., pwilcox().
+>>> 
+>>> The following MWE (using Rcpp) illustrates the problem. Consider the
+>>> following code:
+>>> 
+>>> ---
+>>> 
+>>> library(Rcpp)
+>>> cppFunction('double nonsense(const int n, const int m, const int check) {
+>>>    int i, j;
+>>>    double result;
+>>>    for (i=0;i<n;i++) {
+>>>      if (check) R_CheckUserInterrupt();
+>>>      result = 1.;
+>>>      for (j=1;j<=m;j++) if (j%2) result *= j; else result /=j;
+>>>    }
+>>>    return(result);
+>>> }')
+>>> 
+>>> tmp1 <- system.time(nonsense(1e8,10,0))[1]
+>>> tmp2 <- system.time(nonsense(1e8,10,1))[1]
+>>> cat("w/o check:",tmp1,"sec., with check:",tmp2,"sec.,
+>>> diff.:",tmp2-tmp1,"sec.\n")
+>>> 
+>>> tmp3 <- system.time(pwilcox(rwilcox(1e5,40,60),40,60))[1]
+>>> cat("wilcox example:",tmp3,"sec.\n")
+>>> 
+>>> ---
+>>> 
+>>> Running this code when R (4.4.2) is started in a terminal window
+>>> produces the following measurements/output (Apple M1, MacOS 15.1.1):
+>>> 
+>>>    w/o check: 0.525 sec., with check: 0.752 sec., diff.: 0.227 sec.
+>>>    wilcox example: 1.028 sec.
+>>> 
+>>> Running the same code when R is used within R.app (1.81 (8462)
+>>> aarch64-apple-darwin20) on the same machine results in:
+>>> 
+>>>    w/o check: 0.525 sec., with check: 1.683 sec., diff.: 1.158 sec.
+>>>    wilcox example: 2.13 sec.
+>>> 
+>>> Running the same code when R is used within RStudio Desktop (2024.12.0
+>>> Build 467) on the same machine results in:
+>>> 
+>>>    w/o check: 0.507 sec., with check: 22.905 sec., diff.: 22.398 sec.
+>>>    wilcox example: 29.686 sec.
+>>> 
+>>> So, the performance drop is already remarkable for R.app, but really
+>>> huge for RStudio.
+>>> 
+>>> Presumably, checking for user interrupts within a GUI is more involved
+>>> than within a terminal window, so there may not be much room for
+>>> improvement in R.app or RStudio (and I know that this list is not the
+>>> right place to suggest improvements for RStudio or to report unwanted
+>>> behaviour). However, it might be worth considering
+>>> 
+>>> 1. an addition to the documentation in WRE (explaining that too many
+>>> calls to R_CheckUserInterrupt() can cause a performance bottleneck,
+>>> especially when the code is running within a GUI),
+>>> 2. check (and possibly change) the position of R_CheckUserInterrupt() in
+>>> some base R functions. For example, moving R_CheckUserInterrupt() from
+>>> cwilcox() to pwilcox() and qwilcox() in src/nmath/wilcox.c may lead to a
+>>> significant improvement (while still being feasible in terms of response
+>>> time).
+>>> 
+>>> Best,
+>>> Martin
+>>> 
+>>> 
+>>> --
+>>> apl. Prof. Dr. Martin Becker, Akad. Oberrat
+>>> Lehrstab Statistik
+>>> Quantitative Methoden
+>>> Fakult?t f?r Empirische Humanwissenschaften und Wirtschaftswissenschaft
+>>> Universit?t des Saarlandes
+>>> Campus C3 1, Raum 2.17
+>>> 66123 Saarbr?cken
+>>> Deutschland
+>>> 
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> -- 
+> Dr. Benjamin Bolker
+> Professor, Mathematics & Statistics and Biology, McMaster University
+> Director, School of Computational Science and Engineering
+> * E-mail is sent at my convenience; I don't expect replies outside of working hours.
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
