@@ -310,3 +310,242 @@ till now.
 Martin
 
 
+From norbert@kuder @end|ng |rom gm@||@com  Fri Jan  3 17:13:36 2025
+From: norbert@kuder @end|ng |rom gm@||@com (Norbert Kuder)
+Date: Fri, 3 Jan 2025 17:13:36 +0100
+Subject: [Rd] Possible issue in stats/arima.R package
+In-Reply-To: <26486.64727.599697.148053@stat.math.ethz.ch>
+References: <CAMUMQUSh5t2sazypdiAeOSJ2MQssNfb89jQJvvBwRbA1PwAqeA@mail.gmail.com>
+ <822e67f1-5900-4355-b231-a09c8691d4ae@gmail.com>
+ <e93186db-914d-41cf-b1df-46cbc90af3b6@gmail.com>
+ <26486.60482.328642.701605@stat.math.ethz.ch>
+ <26486.64727.599697.148053@stat.math.ethz.ch>
+Message-ID: <CAMUMQUTp+PoZfUiOAZ=U1tG3PpZokknNrvjtFEg7a7YQ48XFuw@mail.gmail.com>
+
+Martin,
+
+thank you solving this issue. Anyway there is the same bug in arima0.R:
+
+https://github.com/wch/r-source/blob/4a1ed749271c52e60a85e794e6f34b0831efb1ae/src/library/stats/R/arma0.R#L79
+
+Best regards,
+Norbert Kuder
+
+czw., 2 sty 2025, 21:53 u?ytkownik Martin Maechler <
+maechler at stat.math.ethz.ch> napisa?:
+
+> >>>>> Martin Maechler on Thu, 2 Jan 2025 20:42:58 +0100 writes:
+>  >>>>> Duncan Murdoch on Thu, 2 Jan 2025 11:28:45 -0500 writes:
+>     >> On 2025-01-02 11:20 a.m., Duncan Murdoch wrote:
+>     >>> On 2025-01-02 9:04 a.m., Norbert Kuder wrote:
+>     >>>> Hello all,
+>     >>>>
+>     >>>> I am running R version 4.4.2 (2024-10-31 ucrt) on Windows 10 x64,
+> and
+>     >>>> noticed something that might be a minor bug (or at least
+> inconsistent code)
+>     >>>> in the stats/arima.R package.
+>     >>>> I have found:
+>     >>>> 1. A missing stop() call at line 69:
+>     >>>>  if (length(order) == 3) seasonal <- list(order = seasonal) else
+>     >>>>    ("\'seasonal\' is of the wrong length")
+>     >>>> it should be rather:
+>     >>>> if (length(order) == 3) seasonal <- list(order = seasonal) else
+>     >>>> stop("\'seasonal\' is of the wrong length")
+>     >>>
+>     >>> I think you're right about this one.
+>
+> well, actually, the mishap is larger:
+>
+> Reading the help page for arima,  'seasonal' is documented as
+>
+>  seasonal: A specification of the seasonal part of the ARIMA model, plus
+>            the period (which defaults to ?frequency(x)?).  This may be a
+>            list with components ?order? and ?period?, or just a numeric
+>            vector of length 3 which specifies the seasonal ?order?.  In
+>            the latter case the default period is used.
+>
+> Note the
+>     or just a numeric vector of length 3 ... the seasonal 'order'
+> part.
+> If you look at the larger context of the
+>
+>    else ("'seasonal...
+>
+> part, it becomes clear that -- in order to fulfill the above
+> documented behavior, it's not length(order),
+> but length(seasonal) which should be 3   which leads to the
+> following change :
+>
+> @@ -124,10 +124,11 @@
+>              if(!is.numeric(seasonal$order) || length(seasonal$order) != 3L
+>                 || any(seasonal$order < 0L))
+>                  stop("'seasonal$order' must be a non-negative numeric
+> vector of length 3")
+> -        } else if(is.numeric(order)) {
+> -            if(length(order) == 3L) seasonal <- list(order=seasonal)
+> -            else ("'seasonal' is of the wrong length")
+> -        } else stop("'seasonal' must be a list with component 'order'")
+> +        } else if(is.numeric(seasonal)) { # meant to be  seasonal$order
+> +            if(length(seasonal) != 3L || any(seasonal < 0))
+> +                stop("if not a list, 'seasonal' must be a non-negative
+> numeric vector of length 3")
+> +            seasonal <- list(order=seasonal)
+> +        } else stop("'seasonal' must be a list with component 'order' or
+> length-3 vector")
+>
+>
+> ... I still plan to commit this, but it may well be that this
+> change will wake up arima() use that was buggy and never detected
+> till now.
+>
+> Martin
+>
+>
+>
+
+	[[alternative HTML version deleted]]
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Fri Jan  3 17:22:34 2025
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Fri, 3 Jan 2025 17:22:34 +0100
+Subject: [Rd] Possible issue in stats/arima.R package
+In-Reply-To: <26486.60482.328642.701605@stat.math.ethz.ch>
+References: <CAMUMQUSh5t2sazypdiAeOSJ2MQssNfb89jQJvvBwRbA1PwAqeA@mail.gmail.com>
+ <822e67f1-5900-4355-b231-a09c8691d4ae@gmail.com>
+ <e93186db-914d-41cf-b1df-46cbc90af3b6@gmail.com>
+ <26486.60482.328642.701605@stat.math.ethz.ch>
+Message-ID: <26488.3786.644216.114494@stat.math.ethz.ch>
+
+>>>>> Martin Maechler on Thu, 2 Jan 2025 20:42:58 +0100 writes:
+  >>>>> Duncan Murdoch on Thu, 2 Jan 2025 11:28:45 -0500 writes:
+
+    >> On 2025-01-02 11:20 a.m., Duncan Murdoch wrote:
+    >>> On 2025-01-02 9:04 a.m., Norbert Kuder wrote:
+    >>>> Hello all,
+    >>>> 
+    >>>> I am running R version 4.4.2 (2024-10-31 ucrt) on Windows 10 x64, and
+    >>>> noticed something that might be a minor bug (or at least inconsistent code)
+    >>>> in the stats/arima.R package.
+
+    ....................
+
+    >>>> 2. An unused 'mod' variable assignment at line 190:
+    >>>> 
+    >>>> mod <- makeARIMA(trarma[[1]], trarma[[2]], Delta, kappa, SSinit)
+    >>>> 
+    >>>> I am trying to confirm whether this is intended behavior or possibly an
+    >>>> overlooked detail. Could someone please clarify if the current logic is
+    >>>> correct?
+
+    >> Mystery solved:  code like this appears several times in that file.  In 
+    >> the occurrence here:
+
+    >> https://github.com/wch/r-source/blob/4a1ed749271c52e60a85e794e6f34b0831efb1ae/src/library/stats/R/arima.R#L293
+
+    >> it does appear that the mod value isn't being used.
+
+    >> Duncan Murdoch
+
+    > Thank you, Norbert and Duncan.
+    > A little bit (unfinished)  aRcheology showed that both parts
+    > have been in the arima code since Dec 11 2003 (when the code, i.e., the
+    > whole package 'ts') was moved / merged into package 'stats'.
+
+    > I'll fix and quickly test the change, and then commit it.
+
+and testing quickly revealed what is obvious in hindsight:
+When minimizing the negative log likelihood, in
+
+    optim(<p>, armafn, ...)
+
+the armafn() is called of course and it *does* need the model,
+i.e., `mod`.
+
+==> the 2nd "inconsistency  was *not* a mistake at all: The
+
+    mod <- makeARIMA(....)
+
+line has clearly been necessary all along.
+
+Martin
+
+
+From norbert@kuder @end|ng |rom gm@||@com  Fri Jan  3 18:02:16 2025
+From: norbert@kuder @end|ng |rom gm@||@com (Norbert Kuder)
+Date: Fri, 3 Jan 2025 18:02:16 +0100
+Subject: [Rd] stats/ar.R issue - else branch never used
+Message-ID: <CAMUMQUSHKprCOdv9RsmhtwHb9YmUm9L=cbiFqE5mFy2u-cYZZQ@mail.gmail.com>
+
+Hello,
+
+There is another issue in stats/ar.R:
+
+https://github.com/wch/r-source/blob/4a1ed749271c52e60a85e794e6f34b0831efb1ae/src/library/stats/R/ar.R#L142
+https://github.com/wch/r-source/blob/4a1ed749271c52e60a85e794e6f34b0831efb1ae/src/library/stats/R/ar.R#L429
+https://github.com/wch/r-source/blob/4a1ed749271c52e60a85e794e6f34b0831efb1ae/src/library/stats/R/ar.R#L570
+
+When aic is passed as a boolean (T/F), the code does the following:
+
+maic <- min(aic)      # 0 if F, 1 if T
+xaic <- setNames(if(is.finite(maic)) xaic - min(xaic) else
+                                                    ifelse(xaic == maic, 0,
+Inf), 0L:order.max)
+
+Because maic is always 0 or 1, is.finite(maic) is always T, so the else
+branch (ifelse(xaic == maic, 0, Inf)) never executes.
+
+Please check if my finding is valid.
+
+Best regards,
+Norbert Kuder
+
+	[[alternative HTML version deleted]]
+
+
+From norbert@kuder @end|ng |rom gm@||@com  Fri Jan  3 19:06:14 2025
+From: norbert@kuder @end|ng |rom gm@||@com (Norbert Kuder)
+Date: Fri, 3 Jan 2025 19:06:14 +0100
+Subject: [Rd] stats/HoltWinters.R inverted logic in seasonal in R and C
+Message-ID: <CAMUMQUTbwVX6SrojJiH654mfVrzD4ur4bipi22FfOW4qFRtOKQ@mail.gmail.com>
+
+Hello,
+
+I have noticed a potentially confusing implementation in the HoltWinters
+function regarding the seasonal parameter mapping between R and C code:
+https://github.com/wch/r-source/blob/4a1ed749271c52e60a85e794e6f34b0831efb1ae/src/library/stats/R/HoltWinters.R#L98
+The C code interprets a seasonal value of 1 as additive and 0 as
+multiplicative.
+The R seasonal can be "additive" or "multiplicative", so the R code must
+invert the logic when calling C.
+
+The proposed solution is to define a seasonalChoice variable:
+
+hw <- function(x, alpha, beta, gamma, seasonal, start.time, f, ...) {
+    lenx <- length(x)
+    seasonalChoice <- if (seasonal == "multiplicative") 0L else 1L
+
+    .C(C_HoltWinters,
+        as.double(x),
+        lenx,
+        as.double(max(min(alpha, 1), 0)),
+        as.double(max(min(beta, 1), 0)),
+        as.double(max(min(gamma, 1), 0)),
+        as.integer(start.time),
+        as.integer(seasonalChoice),
+        as.integer(f),
+        as.integer(!is.logical(beta) || beta),
+        as.integer(!is.logical(gamma) || gamma),
+        ...
+    )
+}
+
+Please check the proposed solution.
+
+Regards,
+Norbert Kuder
+
+	[[alternative HTML version deleted]]
+
+
