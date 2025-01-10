@@ -691,3 +691,304 @@ Am 07.01.25 um 07:28 schrieb Roland Fu? via R-devel:
 >
 
 
+From bbo|ker @end|ng |rom gm@||@com  Wed Jan  8 16:57:47 2025
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Wed, 8 Jan 2025 10:57:47 -0500
+Subject: [Rd] binomial()$linkinv no longer accepts integer values
+Message-ID: <7dfe81b2-c7ec-49fe-8955-9c41a5771d24@gmail.com>
+
+
+As of r87537, binomial()$linkinv no longer accepts integer arguments.
+
+binomial()$linkinv(1.0)  ## 0.7310586
+binomial()$linkinv(1L)
+
+Error in binomial()$linkinv(1L) :
+   REAL() can only be applied to a 'numeric', not a 'integer'
+
+   Since R is usually so permissive/sloppy with the distinction between 
+integers and numeric/doubles, I'd argue that this is a bug ...
+
+   (This came up because it happens to break lme4's tests.)
+
+    I haven't done the archaeology to figure out when this broke/exactly 
+what change in the R code base broke it: it happened within the last 
+month or so and it's certainly something upstream of the linkinv 
+function itself, as (according to 'git blame') nothing in that function 
+has changed in the last 4 years ... (if it were of interest I could 'git 
+bisect' to figure it out but maybe someone will save me the trouble ...)
+
+   Thoughts, insights?  Should I post this to r-bugzilla?  Or suck it up 
+and accept it as the new reality?
+
+   cheers
+    Ben Bolker
+
+====
+binomial()$linkinv is:
+
+function (eta)
+.Call(C_logit_linkinv, eta)
+<environment: namespace:stats>
+
+Here is the body of the function in C code:
+
+https://github.com/r-devel/r-svn/blob/195ab0870a8131d01492f8f1d3a2ad514bc7e040/src/library/stats/src/family.c#L72C1-L89C2
+
+SEXP logit_linkinv(SEXP eta)
+{
+     SEXP ans = PROTECT(shallow_duplicate(eta));
+     int i, n = LENGTH(eta);
+     double *rans = REAL(ans), *reta = REAL(eta);
+
+     if (!n || !isReal(eta))
+	error(_("Argument %s must be a nonempty numeric vector"), "eta");
+     for (i = 0; i < n; i++) {
+	double etai = reta[i], tmp;
+	tmp = (etai < MTHRESH) ? DBL_EPSILON :
+	    ((etai > THRESH) ? INVEPS : exp(etai));
+	rans[i] = x_d_opx(tmp);
+     }
+     UNPROTECT(1);
+     return ans;
+}
+
+
+From |kry|ov @end|ng |rom d|@root@org  Wed Jan  8 17:20:11 2025
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Wed, 8 Jan 2025 19:20:11 +0300
+Subject: [Rd] binomial()$linkinv no longer accepts integer values
+In-Reply-To: <7dfe81b2-c7ec-49fe-8955-9c41a5771d24@gmail.com>
+References: <7dfe81b2-c7ec-49fe-8955-9c41a5771d24@gmail.com>
+Message-ID: <20250108192011.01b9155b@Tarkus>
+
+On Wed, 8 Jan 2025 10:57:47 -0500
+Ben Bolker <bbolker at gmail.com> wrote:
+
+> I haven't done the archaeology to figure out when this broke/exactly 
+> what change in the R code base broke it: it happened within the last 
+> month or so
+
+binomial() itself exhibits this property even in R-4.2.2 from more than
+two years ago:
+
+R -q -s -e 'getRversion(); binomial()$linkinv(1L)'
+# [1] ?4.2.2?
+# Error in binomial()$linkinv(1L) : 
+#   REAL() can only be applied to a 'numeric', not a 'integer'
+
+It's the `etas` [1] that suddenly became integer due to a change in
+seq.int():
+
+R -q -s -e 'str(seq.int(-8, 8, by=1))'
+# num [1:17] -8 -7 -6 -5 -4 -3 -2 -1 0 1 ...
+R-devel -q -s -e 'str(seq.int(-8, 8, by=1))'
+# int [1:17] -8 -7 -6 -5 -4 -3 -2 -1 0 1 ...
+
+-- 
+Best regards,
+Ivan
+
+[1]
+https://github.com/lme4/lme4/blob/54c54a320c23b34fea2f7e613928d1ebe7a3fd37/tests/testthat/test-glmFamily.R#L10C5-L10C25
+
+
+From bbo|ker @end|ng |rom gm@||@com  Wed Jan  8 17:26:24 2025
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Wed, 8 Jan 2025 11:26:24 -0500
+Subject: [Rd] binomial()$linkinv no longer accepts integer values
+In-Reply-To: <20250108192011.01b9155b@Tarkus>
+References: <7dfe81b2-c7ec-49fe-8955-9c41a5771d24@gmail.com>
+ <20250108192011.01b9155b@Tarkus>
+Message-ID: <efb07b88-fbb0-468e-95d4-307f18e7127e@gmail.com>
+
+   Thanks, that makes sense.
+
+   I guess if it never worked for integers (or hasn't worked in a long 
+time, at least) then it doesn't need to be fixed/changed ...
+
+   cheers
+    Ben
+
+
+On 2025-01-08 11:20 a.m., Ivan Krylov wrote:
+> On Wed, 8 Jan 2025 10:57:47 -0500
+> Ben Bolker <bbolker at gmail.com> wrote:
+> 
+>> I haven't done the archaeology to figure out when this broke/exactly
+>> what change in the R code base broke it: it happened within the last
+>> month or so
+> 
+> binomial() itself exhibits this property even in R-4.2.2 from more than
+> two years ago:
+> 
+> R -q -s -e 'getRversion(); binomial()$linkinv(1L)'
+> # [1] ?4.2.2?
+> # Error in binomial()$linkinv(1L) :
+> #   REAL() can only be applied to a 'numeric', not a 'integer'
+> 
+> It's the `etas` [1] that suddenly became integer due to a change in
+> seq.int():
+> 
+> R -q -s -e 'str(seq.int(-8, 8, by=1))'
+> # num [1:17] -8 -7 -6 -5 -4 -3 -2 -1 0 1 ...
+> R-devel -q -s -e 'str(seq.int(-8, 8, by=1))'
+> # int [1:17] -8 -7 -6 -5 -4 -3 -2 -1 0 1 ...
+> 
+
+-- 
+Dr. Benjamin Bolker
+Professor, Mathematics & Statistics and Biology, McMaster University
+ > E-mail is sent at my convenience; I don't expect replies outside of 
+working hours.
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Wed Jan  8 17:56:08 2025
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Wed, 8 Jan 2025 17:56:08 +0100
+Subject: [Rd] binomial()$linkinv no longer accepts integer values
+In-Reply-To: <efb07b88-fbb0-468e-95d4-307f18e7127e@gmail.com>
+References: <7dfe81b2-c7ec-49fe-8955-9c41a5771d24@gmail.com>
+ <20250108192011.01b9155b@Tarkus>
+ <efb07b88-fbb0-468e-95d4-307f18e7127e@gmail.com>
+Message-ID: <10d2110b-1119-4f97-b782-cfc01dafd64f@gmail.com>
+
+
+On 1/8/25 17:26, Ben Bolker wrote:
+> Thanks, that makes sense.
+>
+> ? I guess if it never worked for integers (or hasn't worked in a long 
+> time, at least) then it doesn't need to be fixed/changed ...
+
+Still you found out that the type check and use of REAL() in the 
+function is in wrong order. Instead of
+
+"REAL() can only be applied to a 'numeric', not a 'integer' "
+
+one should get
+
+"Argument eta must be a nonempty numeric vector"
+
+Fixed in R-devel,
+
+Best,
+Tomas
+
+
+>
+> ? cheers
+> ?? Ben
+>
+>
+> On 2025-01-08 11:20 a.m., Ivan Krylov wrote:
+>> On Wed, 8 Jan 2025 10:57:47 -0500
+>> Ben Bolker <bbolker at gmail.com> wrote:
+>>
+>>> I haven't done the archaeology to figure out when this broke/exactly
+>>> what change in the R code base broke it: it happened within the last
+>>> month or so
+>>
+>> binomial() itself exhibits this property even in R-4.2.2 from more than
+>> two years ago:
+>>
+>> R -q -s -e 'getRversion(); binomial()$linkinv(1L)'
+>> # [1] ?4.2.2?
+>> # Error in binomial()$linkinv(1L) :
+>> #?? REAL() can only be applied to a 'numeric', not a 'integer'
+>>
+>> It's the `etas` [1] that suddenly became integer due to a change in
+>> seq.int():
+>>
+>> R -q -s -e 'str(seq.int(-8, 8, by=1))'
+>> # num [1:17] -8 -7 -6 -5 -4 -3 -2 -1 0 1 ...
+>> R-devel -q -s -e 'str(seq.int(-8, 8, by=1))'
+>> # int [1:17] -8 -7 -6 -5 -4 -3 -2 -1 0 1 ...
+>>
+>
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Wed Jan  8 23:16:45 2025
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Thu, 9 Jan 2025 11:16:45 +1300
+Subject: [Rd] binomial()$linkinv no longer accepts integer values
+In-Reply-To: <10d2110b-1119-4f97-b782-cfc01dafd64f@gmail.com>
+References: <7dfe81b2-c7ec-49fe-8955-9c41a5771d24@gmail.com>
+ <20250108192011.01b9155b@Tarkus>
+ <efb07b88-fbb0-468e-95d4-307f18e7127e@gmail.com>
+ <10d2110b-1119-4f97-b782-cfc01dafd64f@gmail.com>
+Message-ID: <CB0DF90B-8667-4301-BC61-8F532C26CFBA@R-project.org>
+
+
+
+> On 9 Jan 2025, at 05:56, Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+> 
+> 
+> On 1/8/25 17:26, Ben Bolker wrote:
+>> Thanks, that makes sense.
+>> 
+>>   I guess if it never worked for integers (or hasn't worked in a long time, at least) then it doesn't need to be fixed/changed ...
+> 
+> Still you found out that the type check and use of REAL() in the function is in wrong order. Instead of
+> 
+> "REAL() can only be applied to a 'numeric', not a 'integer' "
+> 
+> one should get
+> 
+> "Argument eta must be a nonempty numeric vector"
+> 
+
+
+But that is in practice a bit ambiguous, because
+
+> is.numeric(1L)
+[1] TRUE
+
+and integers are also of the mode numeric, so I?d argue that the previous error was more informative. I would either re-word the error to explicitly exclude integers, or coerce integers to doubles. Technically the latter would be more consistent with R, but if someone explicitly passes an integer to the inverse logit function in a real application then chances are it?s not intentional.
+
+Cheers,
+Simon
+ 
+
+> Fixed in R-devel,
+> 
+> Best,
+> Tomas
+> 
+> 
+>> 
+>>   cheers
+>>    Ben
+>> 
+>> 
+>> On 2025-01-08 11:20 a.m., Ivan Krylov wrote:
+>>> On Wed, 8 Jan 2025 10:57:47 -0500
+>>> Ben Bolker <bbolker at gmail.com> wrote:
+>>> 
+>>>> I haven't done the archaeology to figure out when this broke/exactly
+>>>> what change in the R code base broke it: it happened within the last
+>>>> month or so
+>>> 
+>>> binomial() itself exhibits this property even in R-4.2.2 from more than
+>>> two years ago:
+>>> 
+>>> R -q -s -e 'getRversion(); binomial()$linkinv(1L)'
+>>> # [1] ?4.2.2?
+>>> # Error in binomial()$linkinv(1L) :
+>>> #   REAL() can only be applied to a 'numeric', not a 'integer'
+>>> 
+>>> It's the `etas` [1] that suddenly became integer due to a change in
+>>> seq.int():
+>>> 
+>>> R -q -s -e 'str(seq.int(-8, 8, by=1))'
+>>> # num [1:17] -8 -7 -6 -5 -4 -3 -2 -1 0 1 ...
+>>> R-devel -q -s -e 'str(seq.int(-8, 8, by=1))'
+>>> # int [1:17] -8 -7 -6 -5 -4 -3 -2 -1 0 1 ...
+>>> 
+>> 
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
