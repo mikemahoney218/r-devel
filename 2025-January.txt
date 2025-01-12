@@ -1078,3 +1078,45 @@ Martin
     >>>> # int [1:17] -8 -7 -6 -5 -4 -3 -2 -1 0 1 ...
 
 
+From jeroenoom@ @end|ng |rom gm@||@com  Sat Jan 11 00:16:51 2025
+From: jeroenoom@ @end|ng |rom gm@||@com (Jeroen Ooms)
+Date: Sat, 11 Jan 2025 00:16:51 +0100
+Subject: [Rd] Package compression benchmarks for zstd vs gzip
+Message-ID: <CABFfbXvHddYPsHs7j9ZzvTrPo-NX880mbh6=quZWrd1+eCjD=g@mail.gmail.com>
+
+Many distros and browsers these days use zstd as the preferred
+compression method. For example if you unpack a .deb or .rpm file on
+Debian or Fedora there is zstd archive inside. It is claimed that zstd
+offers improved compression over gzip, but (unlike lzma) it has
+comparable decompression speed. Maybe it is interesting to get an
+estimate of how much R packages would benefit from zstd.
+
+Testing this for source packages and MacOS binary packages it is easy
+as we can gunzip and recompress tar.gz files without having to extract
+the tarball itself:
+
+  OUTPUT="sizes.txt"
+  echo "FILE GZIP ZSTD" > $OUTPUT
+  for x in *gz; do
+    FILE=$(basename $x)
+    GZIP=$(wc -c "$x" | awk '{print $1}')
+    ZSTD=$(gunzip -c $x | zstd -19 | wc -c)
+    echo "$FILE $GZIP $ZSTD" | tee -a $OUTPUT
+  done
+
+Attached are results of running this script on the 500 most downloaded
+CRAN packages. It shows about 16% size reduction for sources, and 19%
+for binaries.
+
+Zstd is BSD licensed C code that can easily be embedded in any project.
+
+-------------- next part --------------
+An embedded and charset-unspecified text was scrubbed...
+Name: sources.txt
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20250111/90f91d5e/attachment.txt>
+
+-------------- next part --------------
+An embedded and charset-unspecified text was scrubbed...
+Name: binaries.txt
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20250111/90f91d5e/attachment-0001.txt>
+
