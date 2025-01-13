@@ -1120,3 +1120,136 @@ An embedded and charset-unspecified text was scrubbed...
 Name: binaries.txt
 URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20250111/90f91d5e/attachment-0001.txt>
 
+From @vr@h@m@@d|er @end|ng |rom gm@||@com  Sun Jan 12 00:41:28 2025
+From: @vr@h@m@@d|er @end|ng |rom gm@||@com (Avraham Adler)
+Date: Sat, 11 Jan 2025 18:41:28 -0500
+Subject: [Rd] Package compression benchmarks for zstd vs gzip
+In-Reply-To: <CABFfbXvHddYPsHs7j9ZzvTrPo-NX880mbh6=quZWrd1+eCjD=g@mail.gmail.com>
+References: <CABFfbXvHddYPsHs7j9ZzvTrPo-NX880mbh6=quZWrd1+eCjD=g@mail.gmail.com>
+Message-ID: <CAL6gwnL0eLEFu0kyxqubmy1CeqnCGUa3FqQ+wFUghEazyxEV1g@mail.gmail.com>
+
+zstd is accessible within R using the archive package [1]. I use it
+all the time when saving large objects, using code I adapted from [2].
+Is your suggestion to import the libraries/source code into base?
+
+[1] https://CRAN.R-project.org/package=archive
+[2] https://coolbutuseless.github.io/2018/10/02/using-lz4-and-zstandard-to-compress-files-with-saverds/
+
+On Fri, Jan 10, 2025 at 6:17?PM Jeroen Ooms <jeroenooms at gmail.com> wrote:
+>
+> Many distros and browsers these days use zstd as the preferred
+> compression method. For example if you unpack a .deb or .rpm file on
+> Debian or Fedora there is zstd archive inside. It is claimed that zstd
+> offers improved compression over gzip, but (unlike lzma) it has
+> comparable decompression speed. Maybe it is interesting to get an
+> estimate of how much R packages would benefit from zstd.
+>
+> Testing this for source packages and MacOS binary packages it is easy
+> as we can gunzip and recompress tar.gz files without having to extract
+> the tarball itself:
+>
+>   OUTPUT="sizes.txt"
+>   echo "FILE GZIP ZSTD" > $OUTPUT
+>   for x in *gz; do
+>     FILE=$(basename $x)
+>     GZIP=$(wc -c "$x" | awk '{print $1}')
+>     ZSTD=$(gunzip -c $x | zstd -19 | wc -c)
+>     echo "$FILE $GZIP $ZSTD" | tee -a $OUTPUT
+>   done
+>
+> Attached are results of running this script on the 500 most downloaded
+> CRAN packages. It shows about 16% size reduction for sources, and 19%
+> for binaries.
+>
+> Zstd is BSD licensed C code that can easily be embedded in any project.
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Sun Jan 12 01:05:46 2025
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Sat, 11 Jan 2025 16:05:46 -0800
+Subject: [Rd] Package compression benchmarks for zstd vs gzip
+In-Reply-To: <CAL6gwnL0eLEFu0kyxqubmy1CeqnCGUa3FqQ+wFUghEazyxEV1g@mail.gmail.com>
+References: <CABFfbXvHddYPsHs7j9ZzvTrPo-NX880mbh6=quZWrd1+eCjD=g@mail.gmail.com>
+ <CAL6gwnL0eLEFu0kyxqubmy1CeqnCGUa3FqQ+wFUghEazyxEV1g@mail.gmail.com>
+Message-ID: <CAFDcVCS6kfkqzwR7ximTu=EJiHeuSBa0hU_r0Ze7yRi87_cLbw@mail.gmail.com>
+
+Can't speak for Jeroen, but it sounds like it's worth adding support
+for tar.zstd package files, just like how tar.gz, tar.xz, and
+tar.bzip2 are currently supported. I'd also argue for support zstd
+compression throughout R, including adding zstdfile(), support for
+saveRDS(..., compress = "zstd"), and so on. Then it could be discussed
+later what the default(s) should be.
+
+It's probably also worth looking at package compression with 'xz'
+compression. In [1], Mike FC has a graph where 'bzip2' and 'xz' seem
+to give the best compression ratios, at least for RDS files.
+
+FWIW, Mike FC submitted the 'zstdlite' package [1] to CRAN about a
+year ago, but it was removed, resubmitted, then removed again. I
+believe this was Mike FC first ever CRAN submission, but I think they
+eventually gave up. From
+https://cran.r-project.org/src/contrib/PACKAGES.in:
+
+Package: zstdlite
+X-CRAN-Comment: Removed on 2024-03-18 for repeated policy violation.
+  .
+  Does not look for suitable system 'libzstd'.
+  Spams personal email addresses of team members.
+X-CRAN-History: Removed on 2024-03-13 for policy violation and
+misrepresentation of copyright holder(s).
+  .
+  Does not even attempt to use system 'libzstd'.
+  Back on CRAN on 2024-03-17.
+
+[1] https://github.com/coolbutuseless/zstdlite
+
+/Henrik
+
+On Sat, Jan 11, 2025 at 3:41?PM Avraham Adler <avraham.adler at gmail.com> wrote:
+>
+> zstd is accessible within R using the archive package [1]. I use it
+> all the time when saving large objects, using code I adapted from [2].
+> Is your suggestion to import the libraries/source code into base?
+>
+> [1] https://CRAN.R-project.org/package=archive
+> [2] https://coolbutuseless.github.io/2018/10/02/using-lz4-and-zstandard-to-compress-files-with-saverds/
+>
+> On Fri, Jan 10, 2025 at 6:17?PM Jeroen Ooms <jeroenooms at gmail.com> wrote:
+> >
+> > Many distros and browsers these days use zstd as the preferred
+> > compression method. For example if you unpack a .deb or .rpm file on
+> > Debian or Fedora there is zstd archive inside. It is claimed that zstd
+> > offers improved compression over gzip, but (unlike lzma) it has
+> > comparable decompression speed. Maybe it is interesting to get an
+> > estimate of how much R packages would benefit from zstd.
+> >
+> > Testing this for source packages and MacOS binary packages it is easy
+> > as we can gunzip and recompress tar.gz files without having to extract
+> > the tarball itself:
+> >
+> >   OUTPUT="sizes.txt"
+> >   echo "FILE GZIP ZSTD" > $OUTPUT
+> >   for x in *gz; do
+> >     FILE=$(basename $x)
+> >     GZIP=$(wc -c "$x" | awk '{print $1}')
+> >     ZSTD=$(gunzip -c $x | zstd -19 | wc -c)
+> >     echo "$FILE $GZIP $ZSTD" | tee -a $OUTPUT
+> >   done
+> >
+> > Attached are results of running this script on the 500 most downloaded
+> > CRAN packages. It shows about 16% size reduction for sources, and 19%
+> > for binaries.
+> >
+> > Zstd is BSD licensed C code that can easily be embedded in any project.
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
