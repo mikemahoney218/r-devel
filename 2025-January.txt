@@ -1253,3 +1253,86 @@ On Sat, Jan 11, 2025 at 3:41?PM Avraham Adler <avraham.adler at gmail.com> wrote
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From |kry|ov @end|ng |rom d|@root@org  Sun Jan 12 09:14:40 2025
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Sun, 12 Jan 2025 11:14:40 +0300
+Subject: [Rd] Package compression benchmarks for zstd vs gzip
+In-Reply-To: <CAFDcVCS6kfkqzwR7ximTu=EJiHeuSBa0hU_r0Ze7yRi87_cLbw@mail.gmail.com>
+References: <CABFfbXvHddYPsHs7j9ZzvTrPo-NX880mbh6=quZWrd1+eCjD=g@mail.gmail.com>
+ <CAL6gwnL0eLEFu0kyxqubmy1CeqnCGUa3FqQ+wFUghEazyxEV1g@mail.gmail.com>
+ <CAFDcVCS6kfkqzwR7ximTu=EJiHeuSBa0hU_r0Ze7yRi87_cLbw@mail.gmail.com>
+Message-ID: <20250112111440.598e4f54@Tarkus>
+
+On Sat, 11 Jan 2025 16:05:46 -0800
+Henrik Bengtsson <henrik.bengtsson at gmail.com> wrote:
+
+> It's probably also worth looking at package compression with 'xz'
+> compression. In [1], Mike FC has a graph where 'bzip2' and 'xz' seem
+> to give the best compression ratios, at least for RDS files.
+
+'bzip2' can be surprisingly good on very repetitive payloads. It
+compresses 0x80000000 zero bytes to only 1.5 KiB, much better than 'xz
+-9' with 305 KiB (with compression settings not making much
+difference), although the compression is not perfect. One terabyte of
+zeros can be compressed to 697202 bytes of repetitive compressed stream
+that can be bzipped further to 248 bytes.
+
+Binary packages are probably the most obvious target for new
+compression methods because there is no need to install them on older
+versions of R.
+
+-- 
+Best regards,
+Ivan
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Mon Jan 13 02:26:14 2025
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Mon, 13 Jan 2025 14:26:14 +1300
+Subject: [Rd] Package compression benchmarks for zstd vs gzip
+In-Reply-To: <CABFfbXvHddYPsHs7j9ZzvTrPo-NX880mbh6=quZWrd1+eCjD=g@mail.gmail.com>
+References: <CABFfbXvHddYPsHs7j9ZzvTrPo-NX880mbh6=quZWrd1+eCjD=g@mail.gmail.com>
+Message-ID: <16544526-1245-4DF8-995E-F9289B8CF0EA@R-project.org>
+
+I think the first step would have to be to add zstd support to R. zstd is a bit controversial (as shown by the community blowback of the changes you mentioned) and their build system (calling it that is being very generous) is mess so it would require a bit of testing, but it is doable.
+
+That said, assuming the above is solved, we have been debating the change of compression at CRAN in general for a bit, but the assumptions about the file names are built into today?s tools so there would be certainly some fall-out - not just in R, but also the ecosystems around it. As you pointed out, possibly the safest place to start are binaries, since we have tighter control of those and they are used in fewer places.
+
+Personally, I think the higher priority is signing, so as we address that we may just include the compression change with it since it will require some tool changes anyway. I was thinking of using xz as that is more stable, already supported and less controversial, but I don?t think the choice really matters - it just has to be a compression which R supports (zstd and xz have different benefits, so it?s always a trade-off without a clear winner).
+
+Cheers,
+Simon
+
+
+> On 11 Jan 2025, at 12:16, Jeroen Ooms <jeroenooms at gmail.com> wrote:
+> 
+> Many distros and browsers these days use zstd as the preferred
+> compression method. For example if you unpack a .deb or .rpm file on
+> Debian or Fedora there is zstd archive inside. It is claimed that zstd
+> offers improved compression over gzip, but (unlike lzma) it has
+> comparable decompression speed. Maybe it is interesting to get an
+> estimate of how much R packages would benefit from zstd.
+> 
+> Testing this for source packages and MacOS binary packages it is easy
+> as we can gunzip and recompress tar.gz files without having to extract
+> the tarball itself:
+> 
+>  OUTPUT="sizes.txt"
+>  echo "FILE GZIP ZSTD" > $OUTPUT
+>  for x in *gz; do
+>    FILE=$(basename $x)
+>    GZIP=$(wc -c "$x" | awk '{print $1}')
+>    ZSTD=$(gunzip -c $x | zstd -19 | wc -c)
+>    echo "$FILE $GZIP $ZSTD" | tee -a $OUTPUT
+>  done
+> 
+> Attached are results of running this script on the 500 most downloaded
+> CRAN packages. It shows about 16% size reduction for sources, and 19%
+> for binaries.
+> 
+> Zstd is BSD licensed C code that can easily be embedded in any project.
+> <sources.txt><binaries.txt>______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
