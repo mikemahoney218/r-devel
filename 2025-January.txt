@@ -1336,3 +1336,310 @@ Simon
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From ht @end|ng |rom he@therturner@net  Wed Jan 15 10:21:59 2025
+From: ht @end|ng |rom he@therturner@net (Heather Turner)
+Date: Wed, 15 Jan 2025 09:21:59 +0000
+Subject: [Rd] Package compression benchmarks for zstd vs gzip
+In-Reply-To: <16544526-1245-4DF8-995E-F9289B8CF0EA@R-project.org>
+References: <CABFfbXvHddYPsHs7j9ZzvTrPo-NX880mbh6=quZWrd1+eCjD=g@mail.gmail.com>
+ <16544526-1245-4DF8-995E-F9289B8CF0EA@R-project.org>
+Message-ID: <d2bcbea5-9d62-4946-a883-70555cfe6cd9@app.fastmail.com>
+
+With the changes to add zstd support yesterday, the build of R-devel is failing when zstd is not present, even though the docs say that zstd is optional.
+
+The error comes in building the datasets package, see e.g. https://github.com/r-devel/r-svn/actions/runs/12760693086/job/35566530112.
+
+Best wishes,
+
+Heather
+
+On Mon, Jan 13, 2025, at 1:26 AM, Simon Urbanek wrote:
+> I think the first step would have to be to add zstd support to R. zstd 
+> is a bit controversial (as shown by the community blowback of the 
+> changes you mentioned) and their build system (calling it that is being 
+> very generous) is mess so it would require a bit of testing, but it is 
+> doable.
+>
+> That said, assuming the above is solved, we have been debating the 
+> change of compression at CRAN in general for a bit, but the assumptions 
+> about the file names are built into today?s tools so there would be 
+> certainly some fall-out - not just in R, but also the ecosystems around 
+> it. As you pointed out, possibly the safest place to start are 
+> binaries, since we have tighter control of those and they are used in 
+> fewer places.
+>
+> Personally, I think the higher priority is signing, so as we address 
+> that we may just include the compression change with it since it will 
+> require some tool changes anyway. I was thinking of using xz as that is 
+> more stable, already supported and less controversial, but I don?t 
+> think the choice really matters - it just has to be a compression which 
+> R supports (zstd and xz have different benefits, so it?s always a 
+> trade-off without a clear winner).
+>
+> Cheers,
+> Simon
+>
+>
+>> On 11 Jan 2025, at 12:16, Jeroen Ooms <jeroenooms at gmail.com> wrote:
+>> 
+>> Many distros and browsers these days use zstd as the preferred
+>> compression method. For example if you unpack a .deb or .rpm file on
+>> Debian or Fedora there is zstd archive inside. It is claimed that zstd
+>> offers improved compression over gzip, but (unlike lzma) it has
+>> comparable decompression speed. Maybe it is interesting to get an
+>> estimate of how much R packages would benefit from zstd.
+>> 
+>> Testing this for source packages and MacOS binary packages it is easy
+>> as we can gunzip and recompress tar.gz files without having to extract
+>> the tarball itself:
+>> 
+>>  OUTPUT="sizes.txt"
+>>  echo "FILE GZIP ZSTD" > $OUTPUT
+>>  for x in *gz; do
+>>    FILE=$(basename $x)
+>>    GZIP=$(wc -c "$x" | awk '{print $1}')
+>>    ZSTD=$(gunzip -c $x | zstd -19 | wc -c)
+>>    echo "$FILE $GZIP $ZSTD" | tee -a $OUTPUT
+>>  done
+>> 
+>> Attached are results of running this script on the 500 most downloaded
+>> CRAN packages. It shows about 16% size reduction for sources, and 19%
+>> for binaries.
+>> 
+>> Zstd is BSD licensed C code that can easily be embedded in any project.
+>> <sources.txt><binaries.txt>______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Wed Jan 15 13:30:11 2025
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Thu, 16 Jan 2025 01:30:11 +1300
+Subject: [Rd] Package compression benchmarks for zstd vs gzip
+In-Reply-To: <d2bcbea5-9d62-4946-a883-70555cfe6cd9@app.fastmail.com>
+References: <CABFfbXvHddYPsHs7j9ZzvTrPo-NX880mbh6=quZWrd1+eCjD=g@mail.gmail.com>
+ <16544526-1245-4DF8-995E-F9289B8CF0EA@R-project.org>
+ <d2bcbea5-9d62-4946-a883-70555cfe6cd9@app.fastmail.com>
+Message-ID: <7E8F4E4A-771D-4557-A640-BB540BB4007B@R-project.org>
+
+Heather,
+
+thanks, now fixed (datasets was using numeric value for compress= instead of the compression name so it picked zstd instead of gzip - now the switch order is kept the same).
+
+Cheers,
+Simon
+
+
+> On Jan 15, 2025, at 10:21 PM, Heather Turner <ht at heatherturner.net> wrote:
+> 
+> With the changes to add zstd support yesterday, the build of R-devel is failing when zstd is not present, even though the docs say that zstd is optional.
+> 
+> The error comes in building the datasets package, see e.g. https://github.com/r-devel/r-svn/actions/runs/12760693086/job/35566530112.
+> 
+> Best wishes,
+> 
+> Heather
+> 
+> On Mon, Jan 13, 2025, at 1:26 AM, Simon Urbanek wrote:
+>> I think the first step would have to be to add zstd support to R. zstd 
+>> is a bit controversial (as shown by the community blowback of the 
+>> changes you mentioned) and their build system (calling it that is being 
+>> very generous) is mess so it would require a bit of testing, but it is 
+>> doable.
+>> 
+>> That said, assuming the above is solved, we have been debating the 
+>> change of compression at CRAN in general for a bit, but the assumptions 
+>> about the file names are built into today?s tools so there would be 
+>> certainly some fall-out - not just in R, but also the ecosystems around 
+>> it. As you pointed out, possibly the safest place to start are 
+>> binaries, since we have tighter control of those and they are used in 
+>> fewer places.
+>> 
+>> Personally, I think the higher priority is signing, so as we address 
+>> that we may just include the compression change with it since it will 
+>> require some tool changes anyway. I was thinking of using xz as that is 
+>> more stable, already supported and less controversial, but I don?t 
+>> think the choice really matters - it just has to be a compression which 
+>> R supports (zstd and xz have different benefits, so it?s always a 
+>> trade-off without a clear winner).
+>> 
+>> Cheers,
+>> Simon
+>> 
+>> 
+>>> On 11 Jan 2025, at 12:16, Jeroen Ooms <jeroenooms at gmail.com> wrote:
+>>> 
+>>> Many distros and browsers these days use zstd as the preferred
+>>> compression method. For example if you unpack a .deb or .rpm file on
+>>> Debian or Fedora there is zstd archive inside. It is claimed that zstd
+>>> offers improved compression over gzip, but (unlike lzma) it has
+>>> comparable decompression speed. Maybe it is interesting to get an
+>>> estimate of how much R packages would benefit from zstd.
+>>> 
+>>> Testing this for source packages and MacOS binary packages it is easy
+>>> as we can gunzip and recompress tar.gz files without having to extract
+>>> the tarball itself:
+>>> 
+>>> OUTPUT="sizes.txt"
+>>> echo "FILE GZIP ZSTD" > $OUTPUT
+>>> for x in *gz; do
+>>>   FILE=$(basename $x)
+>>>   GZIP=$(wc -c "$x" | awk '{print $1}')
+>>>   ZSTD=$(gunzip -c $x | zstd -19 | wc -c)
+>>>   echo "$FILE $GZIP $ZSTD" | tee -a $OUTPUT
+>>> done
+>>> 
+>>> Attached are results of running this script on the 500 most downloaded
+>>> CRAN packages. It shows about 16% size reduction for sources, and 19%
+>>> for binaries.
+>>> 
+>>> Zstd is BSD licensed C code that can easily be embedded in any project.
+>>> <sources.txt><binaries.txt>______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>> 
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
+From |uc@r @end|ng |rom |edor@project@org  Wed Jan 15 17:06:54 2025
+From: |uc@r @end|ng |rom |edor@project@org (=?UTF-8?Q?I=C3=B1aki_Ucar?=)
+Date: Wed, 15 Jan 2025 17:06:54 +0100
+Subject: [Rd] Build error with gcc 15
+Message-ID: <CALEXWq0setVEQoe2+6g-BdZ73vGHQo0vG7DARnQnHBd+r-SM6A@mail.gmail.com>
+
+Dear R Core,
+
+GCC 15 is already in Fedora rawhide, because it will be part of the next
+release, Fedora 42. R 4.4.2 fails to build with the following error [1]:
+
+> sys-std.c:1189:1: warning: ?noreturn? attribute ignored [-Wattributes]
+>  1189 | void Rstd_CleanUp(SA_TYPE saveact, int status, int runLast)
+>       | ^~~~
+> sys-std.c:1189:1: error: expected identifier or ?(? before ?void?
+
+I've seen some references to this in the source code, so this may be fixed
+in R devel. If this is the case, it would be great if you could provide a
+patch that I can apply to v4.4.2 until the next R release (or maybe I
+should just specify an older C standard?).
+
+[1] https://kojipkgs.fedoraproject.org//work/tasks/6266/127896266/build.log
+
+Best,
+-- 
+I?aki ?car
+
+	[[alternative HTML version deleted]]
+
+
+From r|p|ey @end|ng |rom @t@t@@ox@@c@uk  Wed Jan 15 20:29:02 2025
+From: r|p|ey @end|ng |rom @t@t@@ox@@c@uk (Prof Brian Ripley)
+Date: Wed, 15 Jan 2025 19:29:02 +0000
+Subject: [Rd] Build error with gcc 15
+In-Reply-To: <CALEXWq0setVEQoe2+6g-BdZ73vGHQo0vG7DARnQnHBd+r-SM6A@mail.gmail.com>
+References: <CALEXWq0setVEQoe2+6g-BdZ73vGHQo0vG7DARnQnHBd+r-SM6A@mail.gmail.com>
+Message-ID: <1b6bf7b3-bc60-407e-a32b-eca298315ad3@stats.ox.ac.uk>
+
+On 15/01/2025 16:06, I?aki Ucar wrote:
+> Dear R Core,
+> 
+> GCC 15 is already in Fedora rawhide, because it will be part of the next
+> release, Fedora 42. R 4.4.2 fails to build with the following error [1]:
+> 
+>> sys-std.c:1189:1: warning: ?noreturn? attribute ignored [-Wattributes]
+>>   1189 | void Rstd_CleanUp(SA_TYPE saveact, int status, int runLast)
+>>        | ^~~~
+>> sys-std.c:1189:1: error: expected identifier or ?(? before ?void?
+
+You failed to say that GCC 15 defaults to C23 (and they have not yet 
+documented that).
+> 
+> I've seen some references to this in the source code, so this may be fixed
+> in R devel. If this is the case, it would be great if you could provide a
+> patch that I can apply to v4.4.2 until the next R release (or maybe I
+> should just specify an older C standard?).
+
+Look at the definition of NORET in R_ext/Error.h.  You want r87411;
+
+r87411 | ripley | 2024-12-01 10:11:10 +0000 (Sun, 01 Dec 2024) | 1 line
+
+gcc pre-15 does not yet support [[noreturn]]
+
+GCC 15 is not even at RC stage, and this is one of many undocumented 
+changes -- so they have not even got to the documentation-fixing stage. 
+This is a GCC issue -- both LLVM and Apple clang build R-patched in C23 
+mode.
+
+We will port this to R-patched, unless GCC 15 is fixed before its or 
+R-patched's release.
+
+-- 
+Brian D. Ripley,                  ripley at stats.ox.ac.uk
+Emeritus Professor of Applied Statistics, University of Oxford
+
+
+From |uc@r @end|ng |rom |edor@project@org  Wed Jan 15 22:22:07 2025
+From: |uc@r @end|ng |rom |edor@project@org (=?UTF-8?Q?I=C3=B1aki_Ucar?=)
+Date: Wed, 15 Jan 2025 22:22:07 +0100
+Subject: [Rd] Build error with gcc 15
+In-Reply-To: <1b6bf7b3-bc60-407e-a32b-eca298315ad3@stats.ox.ac.uk>
+References: <CALEXWq0setVEQoe2+6g-BdZ73vGHQo0vG7DARnQnHBd+r-SM6A@mail.gmail.com>
+ <1b6bf7b3-bc60-407e-a32b-eca298315ad3@stats.ox.ac.uk>
+Message-ID: <CALEXWq2XeN8LcM=Yv_uKQytDFKJgYhO9cC0hpoGvmAFzfOHLhQ@mail.gmail.com>
+
+On Wed, 15 Jan 2025 at 20:29, Prof Brian Ripley <ripley at stats.ox.ac.uk> wrote:
+>
+> On 15/01/2025 16:06, I?aki Ucar wrote:
+> > Dear R Core,
+> >
+> > GCC 15 is already in Fedora rawhide, because it will be part of the next
+> > release, Fedora 42. R 4.4.2 fails to build with the following error [1]:
+> >
+> >> sys-std.c:1189:1: warning: ?noreturn? attribute ignored [-Wattributes]
+> >>   1189 | void Rstd_CleanUp(SA_TYPE saveact, int status, int runLast)
+> >>        | ^~~~
+> >> sys-std.c:1189:1: error: expected identifier or ?(? before ?void?
+>
+> You failed to say that GCC 15 defaults to C23 (and they have not yet
+> documented that).
+> >
+> > I've seen some references to this in the source code, so this may be fixed
+> > in R devel. If this is the case, it would be great if you could provide a
+> > patch that I can apply to v4.4.2 until the next R release (or maybe I
+> > should just specify an older C standard?).
+>
+> Look at the definition of NORET in R_ext/Error.h.  You want r87411;
+>
+> r87411 | ripley | 2024-12-01 10:11:10 +0000 (Sun, 01 Dec 2024) | 1 line
+>
+> gcc pre-15 does not yet support [[noreturn]]
+
+Thanks, that worked nicely. I'll apply it for now.
+
+Best,
+I?aki
+
+> GCC 15 is not even at RC stage, and this is one of many undocumented
+> changes -- so they have not even got to the documentation-fixing stage.
+> This is a GCC issue -- both LLVM and Apple clang build R-patched in C23
+> mode.
+>
+> We will port this to R-patched, unless GCC 15 is fixed before its or
+> R-patched's release.
+>
+> --
+> Brian D. Ripley,                  ripley at stats.ox.ac.uk
+> Emeritus Professor of Applied Statistics, University of Oxford
+>
+
+
+-- 
+I?aki ?car
+
+
