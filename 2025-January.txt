@@ -1643,3 +1643,443 @@ I?aki
 I?aki ?car
 
 
+From |kry|ov @end|ng |rom d|@root@org  Thu Jan 16 12:41:21 2025
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Thu, 16 Jan 2025 14:41:21 +0300
+Subject: [Rd] Depends: R (>= 4.1) for packages that use |> and \(...)
+Message-ID: <20250116144121.5520a9cc@arachnoid>
+
+Hello R-devel,
+
+Approximately [*] the following CRAN packages make use of the pipe
+syntax in their source code or examples without depending on R >= 4.1:
+
+ [1] "biplotEZ"           "CaseBasedReasoning" "collinear"
+ [4] "cubble"             "disk.frame"         "duckdbfs"
+ [7] "eia"                "feltr"              "flattabler"
+[10] "geodimension"       "hgnc"               "himach"
+[13] "lay"                "lidR"               "locateip"
+[16] "particles"          "photosynthesis"     "pivotea"
+[19] "planr"              "rtrek"              "satres"
+[22] "sdtmval"            "selenider"          "sewage"
+[25] "stminsights"        "tabr"               "tidygraph"
+[28] "tidywikidatar"      "USgas"              "washi"
+[31] "zctaCrosswalk"
+
+Since we have checks in place to automatically set Depends: R (>=
+2.10.0) for data files compressed with xz or bzip2 and >= 3.5.0 for
+data files serialized with format version 3, would it make sense to
+automatically add Depends: R (>= 4.1) for such packages?
+
+The patch at the end of this message adds the R version dependency
+during R CMD build:
+
+R-devel CMD build --no-build-vignettes .
+* checking for file ?./DESCRIPTION? ... OK
+* preparing ?biplotEZ?:
+* checking DESCRIPTION meta-information ... OK
+* cleaning src
+* checking vignette meta-information ... OK
+* checking for LF line-endings in source and make files and shell
+scripts
+* checking for empty or unneeded directories
+  NB: this package now depends on R (>= 4.1.0)
+  WARNING: Added dependency on R >= 4.1.0 because some of the source
+  files use the new syntax constructs.
+Files making use of R >= 4.1 pipe |> or function shorthand \(...):
+  biplotEZ/R/biplot.R biplotEZ/R/translate_axes.R
+* building ?biplotEZ_2.2.tar.gz?
+
+A more extensive test could also look at the tests, demos, and
+\examples{}, but that may take longer and open the door for false
+positives. A package that uses |> in one example would still be useful
+on R-4.0.0, while a package that uses |> in the source code would fail
+to parse and install.
+
+Index: src/library/tools/R/QC.R
+===================================================================
+--- src/library/tools/R/QC.R	(revision 87545)
++++ src/library/tools/R/QC.R	(working copy)
+@@ -10367,7 +10367,29 @@
+     }
+ }
+ 
++.check_use_of_R41_syntax <-
++function(files)
++{
++    out <- vapply(files,
++           function(f) tryCatch(
++               any(getParseData(parse(f, keep.source = TRUE))$token %in% c("PIPE", "'\\\\'")),
++               error = function(e) FALSE
++           ),
++           FALSE)
++    out <- files[out]
++    class(out) <- "check_use_of_R41_syntax"
++    out
++}
+ 
++format.check_use_of_R41_syntax <-
++function(x, ...)
++{
++    if (length(x)) {
++        c("Files making use of R >= 4.1 pipe |> or function shorthand \\(...):",
++          .strwrap22(x, " "))
++    } else character()
++}
++
+ ### Local variables: ***
+ ### mode: outline-minor ***
+ ### outline-regexp: "### [*]+" ***
+Index: src/library/tools/R/build.R
+===================================================================
+--- src/library/tools/R/build.R	(revision 87545)
++++ src/library/tools/R/build.R	(working copy)
+@@ -1165,9 +1165,11 @@
+         desc <- .read_description(file.path(pkgname, "DESCRIPTION"))
+         Rdeps <- .split_description(desc)$Rdepends2
+         hasDep350 <- FALSE
++        hasDep410 <- FALSE
+         for(dep in Rdeps) {
+             if(dep$op != '>=') next
+             if(dep$version >= "3.5.0") hasDep350 <- TRUE
++            if(dep$version >= "4.1.0") hasDep410 <- TRUE
+         }
+         if (!hasDep350) {
+             ## re-read files after exclusions have been applied
+@@ -1189,6 +1191,23 @@
+                          "\n")
+             }
+         }
++        if (!hasDep410) {
++            uses410 <- .check_use_of_R41_syntax(dir(file.path(pkgname, "R"),
++                                                    full.names = TRUE,
++                                                    pattern = "[.]R$",
++                                                    ignore.case = TRUE))
++            if (length(uses410)) {
++                fixup_R_dep(pkgname, "4.1.0")
++                msg <- paste("WARNING: Added dependency on R >= 4.1.0 because",
++                             "some of the source files use the new syntax",
++                             "constructs.")
++                printLog(Log,
++                         paste(c(strwrap(msg, indent = 2L, exdent = 2L),
++                                 format(uses410)),
++                               collapse = "\n"),
++                               "\n")
++            }
++        }
+ 
+ 	## add NAMESPACE if the author didn't write one
+ 	if(!file.exists(namespace <- file.path(pkgname, "NAMESPACE")) ) {
+
+
+-- 
+Best regards,
+Ivan
+
+[*] Based on the following GitHub search, which requires logging in:
+https://github.com/search?q=org%3Acran%20path%3A%2F%5B.%5D%5BRr%5Dd%3F%24%2F%20%2F%5Cs%5C%7C%3E%2F&type=code
+There's currently no REST API support for regexp search, so the list
+was obtained manually.
+
+
+From Thom@@@SOEIRO @end|ng |rom @p-hm@|r  Thu Jan 16 14:36:02 2025
+From: Thom@@@SOEIRO @end|ng |rom @p-hm@|r (SOEIRO Thomas)
+Date: Thu, 16 Jan 2025 13:36:02 +0000
+Subject: [Rd] as.data.frame() methods for model objects
+Message-ID: <77cc3fe9e80449aaab6321794d04eb09@SCWPR-EXDAG1-6A.aphm.ap-hm.fr>
+
+Hello all,
+
+Would there be any interest for adding as.data.frame() methods for model objects?
+Of course there is packages (e.g. broom), but I think providing methods would be more discoverable (and the patch would be small).
+It is really useful for exporting model results or for plotting.
+
+e.g.:
+
+as.data.frame.lm <- function(x) { # could get other arguments, e.g. exp = TRUE/FALSE to exponentiate estimate, conf.low, conf.high
+  cf <- x |> summary() |> stats::coef()
+  ci <- stats::confint(x)
+  data.frame(
+    term = row.names(cf),
+    estimate = cf[, "Estimate"],
+    p.value = cf[, 4], # magic number because name changes between lm() and glm(*, family = *)
+    conf.low = ci[, "2.5 %"],
+    conf.high = ci[, "97.5 %"],
+    row.names = NULL
+  )
+}
+
+> lm(breaks ~ wool + tension, warpbreaks) |> as.data.frame()
+         term   estimate      p.value  conf.low  conf.high
+1 (Intercept)  39.277778 6.681866e-17  32.92715 45.6284061
+2       woolB  -5.777778 7.361367e-02 -12.12841  0.5728505
+3    tensionM -10.000000 1.278683e-02 -17.77790 -2.2221006
+4    tensionH -14.722222 3.913842e-04 -22.50012 -6.9443228
+
+> glm(breaks < 20 ~ wool + tension, data = warpbreaks) |> as.data.frame()
+Waiting for profiling to be done...
+         term   estimate    p.value    conf.low conf.high
+1 (Intercept) 0.07407407 0.54849393 -0.16624575 0.3143939
+2       woolB 0.07407407 0.54849393 -0.16624575 0.3143939
+3    tensionM 0.22222222 0.14520270 -0.07210825 0.5165527
+4    tensionH 0.33333333 0.03100435  0.03900286 0.6276638
+
+Thank you.
+
+Best regards,
+Thomas
+
+
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Thu Jan 16 16:22:03 2025
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Thu, 16 Jan 2025 07:22:03 -0800
+Subject: [Rd] Depends: R (>= 4.1) for packages that use |> and \(...)
+In-Reply-To: <20250116144121.5520a9cc@arachnoid>
+References: <20250116144121.5520a9cc@arachnoid>
+Message-ID: <CAFDcVCTTVa+Ea+BoVoag0RJ7LK3P1tyPzBG9vP4U-4w6a4kKKQ@mail.gmail.com>
+
+Thanks for looking into this and the patch. FWIW, there's an open
+PR18105 - "R CMD build: Add dependency on R >= 4.1.0 if code uses pipe
+symbol |>" for this
+(https://bugs.r-project.org/show_bug.cgi?id=18105).
+
+/Henrik
+
+On Thu, Jan 16, 2025 at 3:42?AM Ivan Krylov via R-devel
+<r-devel at r-project.org> wrote:
+>
+> Hello R-devel,
+>
+> Approximately [*] the following CRAN packages make use of the pipe
+> syntax in their source code or examples without depending on R >= 4.1:
+>
+>  [1] "biplotEZ"           "CaseBasedReasoning" "collinear"
+>  [4] "cubble"             "disk.frame"         "duckdbfs"
+>  [7] "eia"                "feltr"              "flattabler"
+> [10] "geodimension"       "hgnc"               "himach"
+> [13] "lay"                "lidR"               "locateip"
+> [16] "particles"          "photosynthesis"     "pivotea"
+> [19] "planr"              "rtrek"              "satres"
+> [22] "sdtmval"            "selenider"          "sewage"
+> [25] "stminsights"        "tabr"               "tidygraph"
+> [28] "tidywikidatar"      "USgas"              "washi"
+> [31] "zctaCrosswalk"
+>
+> Since we have checks in place to automatically set Depends: R (>=
+> 2.10.0) for data files compressed with xz or bzip2 and >= 3.5.0 for
+> data files serialized with format version 3, would it make sense to
+> automatically add Depends: R (>= 4.1) for such packages?
+>
+> The patch at the end of this message adds the R version dependency
+> during R CMD build:
+>
+> R-devel CMD build --no-build-vignettes .
+> * checking for file ?./DESCRIPTION? ... OK
+> * preparing ?biplotEZ?:
+> * checking DESCRIPTION meta-information ... OK
+> * cleaning src
+> * checking vignette meta-information ... OK
+> * checking for LF line-endings in source and make files and shell
+> scripts
+> * checking for empty or unneeded directories
+>   NB: this package now depends on R (>= 4.1.0)
+>   WARNING: Added dependency on R >= 4.1.0 because some of the source
+>   files use the new syntax constructs.
+> Files making use of R >= 4.1 pipe |> or function shorthand \(...):
+>   biplotEZ/R/biplot.R biplotEZ/R/translate_axes.R
+> * building ?biplotEZ_2.2.tar.gz?
+>
+> A more extensive test could also look at the tests, demos, and
+> \examples{}, but that may take longer and open the door for false
+> positives. A package that uses |> in one example would still be useful
+> on R-4.0.0, while a package that uses |> in the source code would fail
+> to parse and install.
+>
+> Index: src/library/tools/R/QC.R
+> ===================================================================
+> --- src/library/tools/R/QC.R    (revision 87545)
+> +++ src/library/tools/R/QC.R    (working copy)
+> @@ -10367,7 +10367,29 @@
+>      }
+>  }
+>
+> +.check_use_of_R41_syntax <-
+> +function(files)
+> +{
+> +    out <- vapply(files,
+> +           function(f) tryCatch(
+> +               any(getParseData(parse(f, keep.source = TRUE))$token %in% c("PIPE", "'\\\\'")),
+> +               error = function(e) FALSE
+> +           ),
+> +           FALSE)
+> +    out <- files[out]
+> +    class(out) <- "check_use_of_R41_syntax"
+> +    out
+> +}
+>
+> +format.check_use_of_R41_syntax <-
+> +function(x, ...)
+> +{
+> +    if (length(x)) {
+> +        c("Files making use of R >= 4.1 pipe |> or function shorthand \\(...):",
+> +          .strwrap22(x, " "))
+> +    } else character()
+> +}
+> +
+>  ### Local variables: ***
+>  ### mode: outline-minor ***
+>  ### outline-regexp: "### [*]+" ***
+> Index: src/library/tools/R/build.R
+> ===================================================================
+> --- src/library/tools/R/build.R (revision 87545)
+> +++ src/library/tools/R/build.R (working copy)
+> @@ -1165,9 +1165,11 @@
+>          desc <- .read_description(file.path(pkgname, "DESCRIPTION"))
+>          Rdeps <- .split_description(desc)$Rdepends2
+>          hasDep350 <- FALSE
+> +        hasDep410 <- FALSE
+>          for(dep in Rdeps) {
+>              if(dep$op != '>=') next
+>              if(dep$version >= "3.5.0") hasDep350 <- TRUE
+> +            if(dep$version >= "4.1.0") hasDep410 <- TRUE
+>          }
+>          if (!hasDep350) {
+>              ## re-read files after exclusions have been applied
+> @@ -1189,6 +1191,23 @@
+>                           "\n")
+>              }
+>          }
+> +        if (!hasDep410) {
+> +            uses410 <- .check_use_of_R41_syntax(dir(file.path(pkgname, "R"),
+> +                                                    full.names = TRUE,
+> +                                                    pattern = "[.]R$",
+> +                                                    ignore.case = TRUE))
+> +            if (length(uses410)) {
+> +                fixup_R_dep(pkgname, "4.1.0")
+> +                msg <- paste("WARNING: Added dependency on R >= 4.1.0 because",
+> +                             "some of the source files use the new syntax",
+> +                             "constructs.")
+> +                printLog(Log,
+> +                         paste(c(strwrap(msg, indent = 2L, exdent = 2L),
+> +                                 format(uses410)),
+> +                               collapse = "\n"),
+> +                               "\n")
+> +            }
+> +        }
+>
+>         ## add NAMESPACE if the author didn't write one
+>         if(!file.exists(namespace <- file.path(pkgname, "NAMESPACE")) ) {
+>
+>
+> --
+> Best regards,
+> Ivan
+>
+> [*] Based on the following GitHub search, which requires logging in:
+> https://github.com/search?q=org%3Acran%20path%3A%2F%5B.%5D%5BRr%5Dd%3F%24%2F%20%2F%5Cs%5C%7C%3E%2F&type=code
+> There's currently no REST API support for regexp search, so the list
+> was obtained manually.
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From peter@ruckde@che| @end|ng |rom web@de  Thu Jan 16 18:09:25 2025
+From: peter@ruckde@che| @end|ng |rom web@de (Peter Ruckdeschel)
+Date: Thu, 16 Jan 2025 18:09:25 +0100
+Subject: [Rd] UTF-8 encoding issue with R CMD check with
+ install-args="--latex"
+Message-ID: <8f65996d-9c62-41eb-ae9c-fe177ffb2c11@web.de>
+
+Hi,
+
+this is to report some minor UTF-8 encoding issue with R CMD check with option --install-args="--latex"
+(and possibly more install-args).
+
+More specifically, in my Windows system (see the cloud link below for details on my system), but also
+on the Linux machine of my collaborator Matthias Kohl (CC), the following command throws errors:
+
+ ????? R CMD check --install-args="--latex" <pkg>_<version>.tar.gz
+
+I.e., at this command, when checking the pdf version of the manual, pdflatex throws an error of type
+
+===
+* checking PDF version of manual ... WARNING
+LaTeX errors when creating PDF version.
+This typically indicates Rd problems.
+LaTeX errors found:
+! Undefined control sequence.
+l.37 \inputencoding
+ ?????????????????? {utf8}
+The control sequence at the end of the top line
+of your error message was never \def'ed. If you have
+===
+
+This is certainly not an urgent issue.
+
+Option --install-args="--latex" can be removed without harm for me, it somehow survived in my set
+of (Windows) batch files I use to build, check, and install my R packages on Windows, which,
+admittedly, makes me a rare species in the R ecosystem.
+
+Still, it would be nice to understand why this happens, so any hints would be warmly welcome.
+
+Some more details on my testing configuration and my first insights into this error can be found
+here: https://cloudstorage.uni-oldenburg.de/s/kStWp5PNiwJEqfz
+
+Best, Peter Ruckdeschel
+
+
+	[[alternative HTML version deleted]]
+
+
+From |kry|ov @end|ng |rom d|@root@org  Thu Jan 16 21:21:16 2025
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Thu, 16 Jan 2025 23:21:16 +0300
+Subject: [Rd] UTF-8 encoding issue with R CMD check with
+ install-args="--latex"
+In-Reply-To: <8f65996d-9c62-41eb-ae9c-fe177ffb2c11@web.de>
+References: <8f65996d-9c62-41eb-ae9c-fe177ffb2c11@web.de>
+Message-ID: <20250116232116.4e843b88@Tarkus>
+
+? Thu, 16 Jan 2025 18:09:25 +0100
+Peter Ruckdeschel via R-devel <r-devel at r-project.org> ?????:
+
+> this is to report some minor UTF-8 encoding issue with R CMD check
+> with option --install-args="--latex" (and possibly more install-args).
+
+Thank you for a very detailed report!
+
+This doesn't happen on R-4.2.2 or 4.3.1, but it does happen on R-devel.
+
+Comparing the calls from R CMD check to R CMD Rd2pdf, I see no
+difference in the environment variables or any significant difference
+in the command lines. The command being run ends up being equivalent to
+
+R CMD Rd2pdf <package>.Rcheck/<package>
+
+...and the source of the difference is the presence (or absence) of the
+<package>.Rcheck/<package>/latex directory. If I temporarily move it
+away during an R CMD check --install-args=--latex run, the command
+succeeds.
+
+Indeed, tools:::.pkg2tex says
+
+>> ## First check for a latex dir (from R CMD INSTALL --latex).
+>> ## Second guess is this is a >= 2.10.0 package with stored .rds
+>> ## files.
+>> ## If it does not exist, guess this is a source package.
+>> latexdir <- file.path(pkgdir, "latex")
+
+The individual *.tex files in the latex/ subdirectory of the installed
+package all do start with an "\inputencoding{utf8}" line.
+
+When the latex/ subdirectory doesn't exist, the !dir.exists(latexdir)
+branch is taken, where Rd2latex(...) is called with writeEncoding =
+FALSE, thus avoiding the problem.
+
+-- 
+Best regards,
+Ivan
+
+
