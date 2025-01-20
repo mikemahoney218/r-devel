@@ -2775,3 +2775,386 @@ Martin
 > Best regards,
 > Thomas
 
+From |kry|ov @end|ng |rom d|@root@org  Sat Jan 18 11:10:10 2025
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Sat, 18 Jan 2025 13:10:10 +0300
+Subject: [Rd] How setClass() may introduce a binary dependency between
+ packages
+Message-ID: <20250118131010.035cf539@Tarkus>
+
+Hello R-devel,
+
+Since Pavel has mentioned ABI-level dependencies between packages [1],
+it may be relevant to revisit the related problem mentioned ~1.5 years
+ago by Dirk [2].
+
+While the current version of SeuratObject doesn't exhibit this problem,
+a combination of package versions described by Dirk still breaks each
+other on R-devel:
+
+1. Install Matrix_1.5-1
+2. Install SeuratObject_4.1.3 from source
+3. Install Matrix_1.6-0
+4. SeuratObject is now broken until reinstalled from source
+
+The problem is actually slightly worse, because loading SeuratObject
+from step (2) breaks sparse matrices for everyone until Matrix is
+reloaded (and very few people can afford the $127-150 million budget for
+that):
+
+library(Matrix); sparseMatrix(1,1)
+# 1 x 1 sparse Matrix of class "ngCMatrix"
+# 
+# [1,] |
+suppressPackageStartupMessages(library(SeuratObject))
+sparseMatrix(1,1)
+# 1 x 1 sparse Matrix of class "ngCMatrix"
+# Error in validityMethod(as(object, superClass)) :
+#   object 'Csparse_validate' not found
+detach('package:SeuratObject', unload = TRUE); sparseMatrix(1,1)
+# 1 x 1 sparse Matrix of class "ngCMatrix"
+# Error in validityMethod(as(object, superClass)) :
+#   object 'Csparse_validate' not found
+detach('package:Matrix', unload = TRUE); library(Matrix)
+sparseMatrix(1,1)
+# 1 x 1 sparse Matrix of class "ngCMatrix"
+# 
+# [1,] |
+
+In turn, this can be traced to a copy of the CsparseMatrix class from
+Matrix_1.5-1 remaining in the namespace and the lazy-load database of
+SeuratObject:
+
+readRDS('SeuratObject/R/SeuratObject.rdx')$variables |> names() |>
+grep('sparseM', x = _, value = TRUE)
+# [1] ".__C__CsparseMatrix" ".__C__dsparseMatrix" ".__C__sparseMatrix" 
+SeuratObject:::.__C__CsparseMatrix at validity
+# function (object) 
+# .Call(Csparse_validate, object) # <-- missing in Matrix_1.6-0
+# <bytecode: 0x55f1f6ff16a8>
+# <environment: namespace:Matrix>
+
+When the SeuratObject namespace is loaded, methods::cacheMetaData sees
+the 1.5-1 class definition after the 1.6-0 definition and overwrites
+the cache entry.
+
+Why do these objects appear in the namespace and not the imports
+environment together with the actually imported .__C__dgCMatrix?
+
+(gdb) p Rf_install(".__C__CsparseMatrix")
+$1 = (struct SEXPREC *) 0x555557888c28
+(gdb) b Rf_defineVar if symbol == (SEXP)0x555557888c28
+Breakpoint 1 at 0x7ffff7b1bcd0: file envir.c, line 1624.
+
+file.copy(
+ 'SeuratObject-collated.R', 'SeuratObject/R/SeuratObject',
+ overwrite=TRUE
+)
+Sys.setenv('_R_TRACE_LOADNAMESPACE_'='5')
+tools:::makeLazyLoading('SeuratObject')
+
+Eventually, after two hits during loading Matrix code and exports:
+
+-- done processing imports for ?SeuratObject?
+-- loading code for ?SeuratObject?
+Thread 1 "R" hit Breakpoint 1, Rf_defineVar (symbol=0x555558753e18, value=0x55555d0602f8, rho=0x555558906630) at envir.c:1624
+1624        if (value == R_UnboundValue)
+(gdb) call Rf_PrintValue(R_NamespaceEnvSpec(rho))
+          name        version
+"SeuratObject"        "4.1.3"
+(gdb) call Rf_PrintValue(symbol)
+.__C__CsparseMatrix
+(gdb) call Rf_PrintValue(R_GlobalContext->call)
+assign(mname, def, where)
+(gdb) call Rf_PrintValue(R_GlobalContext->nextcontext->call)
+assignClassDef(class2, classDef2, where2, TRUE)
+(gdb) call Rf_PrintValue(R_GlobalContext->nextcontext->nextcontext->call)
+setIs(class2, cli, extensionObject = obji, doComplete = FALSE, 
+    where = where)
+(gdb) call Rf_PrintValue(R_GlobalContext->nextcontext->nextcontext->nextcontext->call)
+completeSubclasses(classDef2, class1, obj, where)
+(gdb) call Rf_PrintValue(R_GlobalContext->nextcontext->nextcontext->nextcontext->nextcontext->call)
+setIs(Class, class2, classDef = classDef, where = where)
+(gdb) call Rf_PrintValue(R_GlobalContext->nextcontext->nextcontext->nextcontext->nextcontext->nextcontext->nextcontext->nextcontext->nextcontext->nextcontext->nextcontext->nextcontext->call)
+setClass(Class = "Graph", contains = "dgCMatrix", slots = list(assay.used = "OptionalCharacter"))
+
+In other words, setIs("Graph", "dgCMatrix", ...) implies setIs("Graph",
+"CsparseMatrix", ...), which needs to update the definition of
+CsparseMatrix in some environment. In the current version of
+SeuratObject, methods:::.findOrCopyClass() succeeds in finding the
+class to update in the _imports_ of SeuratObject because the relevant
+classes are now imported [3]:
+
+findClass('CsparseMatrix', loadNamespace('SeuratObject'))
+# [[1]]
+# <environment: 0x560676e863c8>
+# attr(,"name")
+# [1] "imports:SeuratObject"
+
+In SeuratObject_4.1.3, the class was not imported, so
+methods:::.findOrCopyClass() used the SeuratObject _namespace_ as the
+environment to assign the class definition in.
+
+Are there ways to prevent this problem (by importing more classes?) or
+at least warn about it at package check time? How prevalent is class
+copying on CRAN? Out of 358 packages installed on my machine, many no
+doubt outdated, only six copy foreign S4 classes into their own
+namespaces:
+
+installed.packages() |> rownames() |> setNames(nm = _) |> lapply(\(n) {
+ ns <- loadNamespace(n)
+ ls(ns, pattern = '^[.]__C__', all.names = TRUE) |>
+  setNames(nm = _) |> lapply(get, ns) |>
+  vapply(attr, '', 'package') ->
+   pkgs
+ pkgs[pkgs != n]
+}) |> Filter(length, x = _)
+# $dplyr
+#    .__C__tbl .__C__tbl_df
+#     "tibble"     "tibble"
+# 
+# $MatrixModels
+#     .__C__mMatrix .__C__replValueSp
+#          "Matrix"          "Matrix"
+# 
+# $NMF
+# .__C__AssayData
+#       "Biobase"
+# 
+# $readr
+#    .__C__tbl .__C__tbl_df
+#     "tibble"     "tibble"
+# 
+# $vroom
+#    .__C__tbl .__C__tbl_df
+#     "tibble"     "tibble"
+# 
+# $shinystan
+# .__C__stanfit 
+#       "rstan" 
+
+Would it be right to replace all those with importClassesFrom()? If
+yes, should R CMD check eventually start warning about foreign copied
+classes?
+
+-- 
+Best regards,
+Ivan
+
+[1]
+https://stat.ethz.ch/pipermail/r-package-devel/2025q1/011376.html
+
+[2]
+https://stat.ethz.ch/pipermail/r-devel/2023-August/082769.html
+
+[3]
+https://github.com/satijalab/seurat-object/commit/faf86a7ccc06c5c62f9e858c5ef0f10f4d73da4d
+
+
+From j@g@nmn2 @end|ng |rom gm@||@com  Sat Jan 18 16:14:13 2025
+From: j@g@nmn2 @end|ng |rom gm@||@com (Mikael Jagan)
+Date: Sat, 18 Jan 2025 10:14:13 -0500
+Subject: [Rd] How setClass() may introduce a binary dependency between
+ packages
+In-Reply-To: <mailman.54647.7.1737198002.4651.r-devel@r-project.org>
+References: <mailman.54647.7.1737198002.4651.r-devel@r-project.org>
+Message-ID: <e752c21f-26e2-4860-ba15-55a76e3275c5@gmail.com>
+
+See my proposal in this mailing list from July 2023 where I documented the
+same problem:
+
+      [Rd] proposal for WRE: clarify that use of S4 classes implies use of 
+superclasses
+      https://stat.ethz.ch/pipermail/r-devel/2023-July/082739.html
+
+Indeed, many of the caching problems would be avoided if
+
+     importClassesFrom(P, C)
+
+implied
+
+     importClassesFrom(P, C, <superclasses of C exported from P>)
+
+or otherwise if R CMD check and/or WRE advised about the latter.
+
+There is still the problem of non-exported superclasses, which cannot be
+imported.  There has been some work in Matrix to deprecate and remove these.
+
+IIRC after the fallout of that release (and not before, regrettably, ...), I
+programmatically scanned the namespaces of the reverse dependencies of Matrix
+for classRepresentation objects with package slot "Matrix", and sent those
+maintainers an e-mail asking them to add more importClassesFrom(Matrix, ...).
+SeuratObject was one of a few affected packages.
+
+These days we run two rounds of reverse dependency testing, one with the user
+library built entirely against the old Matrix and one with the user library
+built entirely against the new Matrix.  The second catches breakage due to ABI
+changes and stale cached S4 class definitions.
+
+Mikael
+
+> Date: Sat, 18 Jan 2025 13:10:10 +0300
+> From: Ivan Krylov <ikrylov at disroot.org>
+> To: r-devel at r-project.org
+> Subject: [Rd] How setClass() may introduce a binary dependency between
+> 	packages
+> Message-ID: <20250118131010.035cf539 at Tarkus>
+> Content-Type: text/plain; charset="utf-8"
+> 
+> Hello R-devel,
+> 
+> Since Pavel has mentioned ABI-level dependencies between packages [1],
+> it may be relevant to revisit the related problem mentioned ~1.5 years
+> ago by Dirk [2].
+> 
+> While the current version of SeuratObject doesn't exhibit this problem,
+> a combination of package versions described by Dirk still breaks each
+> other on R-devel:
+> 
+> 1. Install Matrix_1.5-1
+> 2. Install SeuratObject_4.1.3 from source
+> 3. Install Matrix_1.6-0
+> 4. SeuratObject is now broken until reinstalled from source
+> 
+> The problem is actually slightly worse, because loading SeuratObject
+> from step (2) breaks sparse matrices for everyone until Matrix is
+> reloaded (and very few people can afford the $127-150 million budget for
+> that):
+> 
+> library(Matrix); sparseMatrix(1,1)
+> # 1 x 1 sparse Matrix of class "ngCMatrix"
+> #
+> # [1,] |
+> suppressPackageStartupMessages(library(SeuratObject))
+> sparseMatrix(1,1)
+> # 1 x 1 sparse Matrix of class "ngCMatrix"
+> # Error in validityMethod(as(object, superClass)) :
+> #   object 'Csparse_validate' not found
+> detach('package:SeuratObject', unload = TRUE); sparseMatrix(1,1)
+> # 1 x 1 sparse Matrix of class "ngCMatrix"
+> # Error in validityMethod(as(object, superClass)) :
+> #   object 'Csparse_validate' not found
+> detach('package:Matrix', unload = TRUE); library(Matrix)
+> sparseMatrix(1,1)
+> # 1 x 1 sparse Matrix of class "ngCMatrix"
+> #
+> # [1,] |
+> 
+> In turn, this can be traced to a copy of the CsparseMatrix class from
+> Matrix_1.5-1 remaining in the namespace and the lazy-load database of
+> SeuratObject:
+> 
+> readRDS('SeuratObject/R/SeuratObject.rdx')$variables |> names() |>
+> grep('sparseM', x = _, value = TRUE)
+> # [1] ".__C__CsparseMatrix" ".__C__dsparseMatrix" ".__C__sparseMatrix"
+> SeuratObject:::.__C__CsparseMatrix at validity
+> # function (object)
+> # .Call(Csparse_validate, object) # <-- missing in Matrix_1.6-0
+> # <bytecode: 0x55f1f6ff16a8>
+> # <environment: namespace:Matrix>
+> 
+> When the SeuratObject namespace is loaded, methods::cacheMetaData sees
+> the 1.5-1 class definition after the 1.6-0 definition and overwrites
+> the cache entry.
+> 
+> Why do these objects appear in the namespace and not the imports
+> environment together with the actually imported .__C__dgCMatrix?
+> 
+> (gdb) p Rf_install(".__C__CsparseMatrix")
+> $1 = (struct SEXPREC *) 0x555557888c28
+> (gdb) b Rf_defineVar if symbol == (SEXP)0x555557888c28
+> Breakpoint 1 at 0x7ffff7b1bcd0: file envir.c, line 1624.
+> 
+> file.copy(
+>   'SeuratObject-collated.R', 'SeuratObject/R/SeuratObject',
+>   overwrite=TRUE
+> )
+> Sys.setenv('_R_TRACE_LOADNAMESPACE_'='5')
+> tools:::makeLazyLoading('SeuratObject')
+> 
+> Eventually, after two hits during loading Matrix code and exports:
+> 
+> -- done processing imports for ?SeuratObject?
+> -- loading code for ?SeuratObject?
+> Thread 1 "R" hit Breakpoint 1, Rf_defineVar (symbol=0x555558753e18, value=0x55555d0602f8, rho=0x555558906630) at envir.c:1624
+> 1624        if (value == R_UnboundValue)
+> (gdb) call Rf_PrintValue(R_NamespaceEnvSpec(rho))
+>            name        version
+> "SeuratObject"        "4.1.3"
+> (gdb) call Rf_PrintValue(symbol)
+> .__C__CsparseMatrix
+> (gdb) call Rf_PrintValue(R_GlobalContext->call)
+> assign(mname, def, where)
+> (gdb) call Rf_PrintValue(R_GlobalContext->nextcontext->call)
+> assignClassDef(class2, classDef2, where2, TRUE)
+> (gdb) call Rf_PrintValue(R_GlobalContext->nextcontext->nextcontext->call)
+> setIs(class2, cli, extensionObject = obji, doComplete = FALSE,
+>      where = where)
+> (gdb) call Rf_PrintValue(R_GlobalContext->nextcontext->nextcontext->nextcontext->call)
+> completeSubclasses(classDef2, class1, obj, where)
+> (gdb) call Rf_PrintValue(R_GlobalContext->nextcontext->nextcontext->nextcontext->nextcontext->call)
+> setIs(Class, class2, classDef = classDef, where = where)
+> (gdb) call Rf_PrintValue(R_GlobalContext->nextcontext->nextcontext->nextcontext->nextcontext->nextcontext->nextcontext->nextcontext->nextcontext->nextcontext->nextcontext->nextcontext->call)
+> setClass(Class = "Graph", contains = "dgCMatrix", slots = list(assay.used = "OptionalCharacter"))
+> 
+> In other words, setIs("Graph", "dgCMatrix", ...) implies setIs("Graph",
+> "CsparseMatrix", ...), which needs to update the definition of
+> CsparseMatrix in some environment. In the current version of
+> SeuratObject, methods:::.findOrCopyClass() succeeds in finding the
+> class to update in the _imports_ of SeuratObject because the relevant
+> classes are now imported [3]:
+> 
+> findClass('CsparseMatrix', loadNamespace('SeuratObject'))
+> # [[1]]
+> # <environment: 0x560676e863c8>
+> # attr(,"name")
+> # [1] "imports:SeuratObject"
+> 
+> In SeuratObject_4.1.3, the class was not imported, so
+> methods:::.findOrCopyClass() used the SeuratObject _namespace_ as the
+> environment to assign the class definition in.
+> 
+> Are there ways to prevent this problem (by importing more classes?) or
+> at least warn about it at package check time? How prevalent is class
+> copying on CRAN? Out of 358 packages installed on my machine, many no
+> doubt outdated, only six copy foreign S4 classes into their own
+> namespaces:
+> 
+> installed.packages() |> rownames() |> setNames(nm = _) |> lapply(\(n) {
+>   ns <- loadNamespace(n)
+>   ls(ns, pattern = '^[.]__C__', all.names = TRUE) |>
+>    setNames(nm = _) |> lapply(get, ns) |>
+>    vapply(attr, '', 'package') ->
+>     pkgs
+>   pkgs[pkgs != n]
+> }) |> Filter(length, x = _)
+> # $dplyr
+> #    .__C__tbl .__C__tbl_df
+> #     "tibble"     "tibble"
+> #
+> # $MatrixModels
+> #     .__C__mMatrix .__C__replValueSp
+> #          "Matrix"          "Matrix"
+> #
+> # $NMF
+> # .__C__AssayData
+> #       "Biobase"
+> #
+> # $readr
+> #    .__C__tbl .__C__tbl_df
+> #     "tibble"     "tibble"
+> #
+> # $vroom
+> #    .__C__tbl .__C__tbl_df
+> #     "tibble"     "tibble"
+> #
+> # $shinystan
+> # .__C__stanfit
+> #       "rstan"
+> 
+> Would it be right to replace all those with importClassesFrom()? If
+> yes, should R CMD check eventually start warning about foreign copied
+> classes?
+>
+
+
