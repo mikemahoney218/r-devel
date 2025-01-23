@@ -3400,3 +3400,465 @@ Best
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From berw|n@tur|@ch @end|ng |rom gm@||@com  Tue Jan 21 06:23:17 2025
+From: berw|n@tur|@ch @end|ng |rom gm@||@com (Berwin A Turlach)
+Date: Tue, 21 Jan 2025 13:23:17 +0800
+Subject: [Rd] Development version of R fails a regression test
+Message-ID: <20250121132317.41bd2860@dep59159.uniwa.uwa.edu.au>
+
+G'day all,
+
+I have daily scripts running to install the patched version of the
+current R version and the development version of R on my linux box
+(Ubuntu 24.04.1 LTS).
+
+The last development version that was successfully compiled and
+installed on my machine is "R Under development (unstable) (2024-12-31
+r87500)". Since then the script always fails on one of the regression
+tests; details are in the attached file R-CheckLog.txt.
+
+I also include a file (R-Script.txt) which shows why this test fails on
+my machine using the last R development version that did install on
+my machine.  It seems the command 'si$LAPACK <- ""' introduces an extra
+line in the output of 'capture.output(si)' which then leads to an error
+message in 'which(osi != osi.noLA)'.  
+
+Sorry, but I do not have any good idea/suggestion how this issue could
+be fixed.
+
+Cheers,
+	
+	Berwin
+
+
+
+-------------- next part --------------
+An embedded and charset-unspecified text was scrubbed...
+Name: R-CheckLog.txt
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20250121/e937617a/attachment.txt>
+
+-------------- next part --------------
+An embedded and charset-unspecified text was scrubbed...
+Name: R-Script.txt
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20250121/e937617a/attachment-0001.txt>
+
+From hugh@p@r@on@ge @end|ng |rom gm@||@com  Tue Jan 21 06:51:34 2025
+From: hugh@p@r@on@ge @end|ng |rom gm@||@com (Hugh Parsonage)
+Date: Tue, 21 Jan 2025 16:51:34 +1100
+Subject: [Rd] Creating a long list triggers billions of messages
+Message-ID: <CAJmOi+MF3fq05ZfUco3ccWNBe=W6kg2vkss7njkLZ_wQeo8bTQ@mail.gmail.com>
+
+Reprex (not recommended in an interactive session as it is difficult to kill):
+x <- vector("list", 2^31)
+
+which triggers (presumably) billions of error messages like
+Error: long vectors are not supported yet ../include/Rinlinedfuns.h
+
+I believe the error arises from checking each element of the list (all
+2^31 of them) and issuing an error message for each of them regarding
+the length of the overall list.
+
+
+From |kry|ov @end|ng |rom d|@root@org  Tue Jan 21 12:56:15 2025
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Tue, 21 Jan 2025 14:56:15 +0300
+Subject: [Rd] Creating a long list triggers billions of messages
+In-Reply-To: <CAJmOi+MF3fq05ZfUco3ccWNBe=W6kg2vkss7njkLZ_wQeo8bTQ@mail.gmail.com>
+References: <CAJmOi+MF3fq05ZfUco3ccWNBe=W6kg2vkss7njkLZ_wQeo8bTQ@mail.gmail.com>
+Message-ID: <20250121145615.217146e3@arachnoid>
+
+? Tue, 21 Jan 2025 16:51:34 +1100
+Hugh Parsonage <hugh.parsonage at gmail.com> ?????:
+
+> x <- vector("list", 2^31)
+> 
+> which triggers (presumably) billions of error messages like
+> Error: long vectors are not supported yet ../include/Rinlinedfuns.h
+
+I couldn't reproduce this with some released versions of R or a recent
+R-devel. Would you mind sharing your sessionInfo()?
+
+If you'd like to, could you please run
+
+R -q -s -e 'x <- vector("list", 2^31)' -d gdb
+
+...then set a breakpoint on Rf_errorcall, run the program and collect a
+backtrace when it fires?
+
+-- 
+Best regards,
+Ivan
+
+
+From hugh@p@r@on@ge @end|ng |rom gm@||@com  Tue Jan 21 13:06:58 2025
+From: hugh@p@r@on@ge @end|ng |rom gm@||@com (Hugh Parsonage)
+Date: Tue, 21 Jan 2025 23:06:58 +1100
+Subject: [Rd] Creating a long list triggers billions of messages
+In-Reply-To: <20250121145615.217146e3@arachnoid>
+References: <CAJmOi+MF3fq05ZfUco3ccWNBe=W6kg2vkss7njkLZ_wQeo8bTQ@mail.gmail.com>
+ <20250121145615.217146e3@arachnoid>
+Message-ID: <CAJmOi+Pa6f3kwgh=8koZLvyDa=eiFj5Cqey41XBzBb8us4wfaw@mail.gmail.com>
+
+I tried doing this on a cloud instance of R 4.4.2 but the terminal
+exited and the cloud ejected my session shortly after setting the
+breakpoint and running the program
+
+Function "Rf_errorcall" not defined.
+Make breakpoint pending on future shared library load? (y or [n]) y
+Breakpoint 2 (Rf_errorcall) pending.
+(gdb) run
+Starting program: /opt/R/4.4.2/lib/R/bin/exec/R -q -s -e
+x\~+\~\<-\~+\~vector\(\"list\",\~+\~2\^31\)
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/usr/lib/x86_64-linux-gnu/libthread_db.so.1".
+[New Thread 0x7ffff3a6a700 (LWP 454)]
+[New Thread 0x7ffff3269700 (LWP 455)]
+[New Thread 0x7fffeea68700 (LWP 456)]
+[New Thread 0x7fffec267700 (LWP 457)]
+[New Thread 0x7fffe9a66700 (LWP 458)]
+[New Thread 0x7fffe7265700 (LWP 459)]
+[New Thread 0x7fffe4a64700 (LWP 460)]
+[New Thread 0x7fffe2263700 (LWP 461)]
+[New Thread 0x7fffdfa62700 (LWP 462)]
+[New Thread 0x7fffdd261700 (LWP 463)]
+[New Thread 0x7fffdaa60700 (LWP 464)]
+[New Thread 0x7fffd825f700 (LWP 465)]
+[New Thread 0x7fffd5a5e700 (LWP 466)]
+[New Thread 0x7fffd525d700 (LWP 467)]
+[New Thread 0x7fffd2a5c700 (LWP 468)]
+[Detaching after vfork from child process 469]
+[Detaching after vfork from child process 471]
+
+Session info:
+
+R version 4.4.2 (2024-10-31)
+Platform: x86_64-pc-linux-gnu
+Running under: Ubuntu 20.04.6 LTS
+
+Matrix products: default
+BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3
+LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/liblapack.so.3;
+LAPACK version 3.9.0
+
+locale:
+ [1] LC_CTYPE=C.UTF-8       LC_NUMERIC=C           LC_TIME=C.UTF-8
+   LC_COLLATE=C.UTF-8
+ [5] LC_MONETARY=C.UTF-8    LC_MESSAGES=C.UTF-8    LC_PAPER=C.UTF-8
+   LC_NAME=C
+ [9] LC_ADDRESS=C           LC_TELEPHONE=C
+LC_MEASUREMENT=C.UTF-8 LC_IDENTIFICATION=C
+
+time zone: UTC
+tzcode source: system (glibc)
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base
+
+loaded via a namespace (and not attached):
+[1] compiler_4.4.2 tools_4.4.2
+
+On Tue, 21 Jan 2025 at 22:56, Ivan Krylov <ikrylov at disroot.org> wrote:
+>
+> ? Tue, 21 Jan 2025 16:51:34 +1100
+> Hugh Parsonage <hugh.parsonage at gmail.com> ?????:
+>
+> > x <- vector("list", 2^31)
+> >
+> > which triggers (presumably) billions of error messages like
+> > Error: long vectors are not supported yet ../include/Rinlinedfuns.h
+>
+> I couldn't reproduce this with some released versions of R or a recent
+> R-devel. Would you mind sharing your sessionInfo()?
+>
+> If you'd like to, could you please run
+>
+> R -q -s -e 'x <- vector("list", 2^31)' -d gdb
+>
+> ...then set a breakpoint on Rf_errorcall, run the program and collect a
+> backtrace when it fires?
+>
+> --
+> Best regards,
+> Ivan
+
+
+From hugh@p@r@on@ge @end|ng |rom gm@||@com  Tue Jan 21 13:24:07 2025
+From: hugh@p@r@on@ge @end|ng |rom gm@||@com (Hugh Parsonage)
+Date: Tue, 21 Jan 2025 23:24:07 +1100
+Subject: [Rd] Creating a long list triggers billions of messages
+In-Reply-To: <CAJmOi+Pa6f3kwgh=8koZLvyDa=eiFj5Cqey41XBzBb8us4wfaw@mail.gmail.com>
+References: <CAJmOi+MF3fq05ZfUco3ccWNBe=W6kg2vkss7njkLZ_wQeo8bTQ@mail.gmail.com>
+ <20250121145615.217146e3@arachnoid>
+ <CAJmOi+Pa6f3kwgh=8koZLvyDa=eiFj5Cqey41XBzBb8us4wfaw@mail.gmail.com>
+Message-ID: <CAJmOi+N0Zz4xBxxFbq_GQtNyMNoj7Q42brHDHa2tg6FGMFRN=g@mail.gmail.com>
+
+Apologies all. This must have been fixed in a recent version and the
+cloud error was a resource limit not associated with the issue.
+
+On Tue, 21 Jan 2025 at 23:06, Hugh Parsonage <hugh.parsonage at gmail.com> wrote:
+>
+> I tried doing this on a cloud instance of R 4.4.2 but the terminal
+> exited and the cloud ejected my session shortly after setting the
+> breakpoint and running the program
+>
+> Function "Rf_errorcall" not defined.
+> Make breakpoint pending on future shared library load? (y or [n]) y
+> Breakpoint 2 (Rf_errorcall) pending.
+> (gdb) run
+> Starting program: /opt/R/4.4.2/lib/R/bin/exec/R -q -s -e
+> x\~+\~\<-\~+\~vector\(\"list\",\~+\~2\^31\)
+> [Thread debugging using libthread_db enabled]
+> Using host libthread_db library "/usr/lib/x86_64-linux-gnu/libthread_db.so.1".
+> [New Thread 0x7ffff3a6a700 (LWP 454)]
+> [New Thread 0x7ffff3269700 (LWP 455)]
+> [New Thread 0x7fffeea68700 (LWP 456)]
+> [New Thread 0x7fffec267700 (LWP 457)]
+> [New Thread 0x7fffe9a66700 (LWP 458)]
+> [New Thread 0x7fffe7265700 (LWP 459)]
+> [New Thread 0x7fffe4a64700 (LWP 460)]
+> [New Thread 0x7fffe2263700 (LWP 461)]
+> [New Thread 0x7fffdfa62700 (LWP 462)]
+> [New Thread 0x7fffdd261700 (LWP 463)]
+> [New Thread 0x7fffdaa60700 (LWP 464)]
+> [New Thread 0x7fffd825f700 (LWP 465)]
+> [New Thread 0x7fffd5a5e700 (LWP 466)]
+> [New Thread 0x7fffd525d700 (LWP 467)]
+> [New Thread 0x7fffd2a5c700 (LWP 468)]
+> [Detaching after vfork from child process 469]
+> [Detaching after vfork from child process 471]
+>
+> Session info:
+>
+> R version 4.4.2 (2024-10-31)
+> Platform: x86_64-pc-linux-gnu
+> Running under: Ubuntu 20.04.6 LTS
+>
+> Matrix products: default
+> BLAS:   /usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3
+> LAPACK: /usr/lib/x86_64-linux-gnu/openblas-pthread/liblapack.so.3;
+> LAPACK version 3.9.0
+>
+> locale:
+>  [1] LC_CTYPE=C.UTF-8       LC_NUMERIC=C           LC_TIME=C.UTF-8
+>    LC_COLLATE=C.UTF-8
+>  [5] LC_MONETARY=C.UTF-8    LC_MESSAGES=C.UTF-8    LC_PAPER=C.UTF-8
+>    LC_NAME=C
+>  [9] LC_ADDRESS=C           LC_TELEPHONE=C
+> LC_MEASUREMENT=C.UTF-8 LC_IDENTIFICATION=C
+>
+> time zone: UTC
+> tzcode source: system (glibc)
+>
+> attached base packages:
+> [1] stats     graphics  grDevices utils     datasets  methods   base
+>
+> loaded via a namespace (and not attached):
+> [1] compiler_4.4.2 tools_4.4.2
+>
+> On Tue, 21 Jan 2025 at 22:56, Ivan Krylov <ikrylov at disroot.org> wrote:
+> >
+> > ? Tue, 21 Jan 2025 16:51:34 +1100
+> > Hugh Parsonage <hugh.parsonage at gmail.com> ?????:
+> >
+> > > x <- vector("list", 2^31)
+> > >
+> > > which triggers (presumably) billions of error messages like
+> > > Error: long vectors are not supported yet ../include/Rinlinedfuns.h
+> >
+> > I couldn't reproduce this with some released versions of R or a recent
+> > R-devel. Would you mind sharing your sessionInfo()?
+> >
+> > If you'd like to, could you please run
+> >
+> > R -q -s -e 'x <- vector("list", 2^31)' -d gdb
+> >
+> > ...then set a breakpoint on Rf_errorcall, run the program and collect a
+> > backtrace when it fires?
+> >
+> > --
+> > Best regards,
+> > Ivan
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Tue Jan 21 14:45:03 2025
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Tue, 21 Jan 2025 14:45:03 +0100
+Subject: [Rd] Development version of R fails a regression test
+In-Reply-To: <20250121132317.41bd2860@dep59159.uniwa.uwa.edu.au>
+References: <20250121132317.41bd2860@dep59159.uniwa.uwa.edu.au>
+Message-ID: <26511.42207.205872.617287@stat.math.ethz.ch>
+
+>>>>> Berwin A Turlach 
+>>>>>     on Tue, 21 Jan 2025 13:23:17 +0800 writes:
+
+    > G'day all, I have daily scripts running to install the
+    > patched version of the current R version and the
+    > development version of R on my linux box (Ubuntu 24.04.1
+    > LTS).
+
+    > The last development version that was successfully
+    > compiled and installed on my machine is "R Under
+    > development (unstable) (2024-12-31 r87500)". Since then
+    > the script always fails on one of the regression tests;
+    > details are in the attached file R-CheckLog.txt.
+
+    > I also include a file (R-Script.txt) which shows why this
+    > test fails on my machine using the last R development
+    > version that did install on my machine.  It seems the
+    > command 'si$LAPACK <- ""' introduces an extra line in the
+    > output of 'capture.output(si)' which then leads to an
+    > error message in 'which(osi != osi.noLA)'.
+
+    > Sorry, but I do not have any good idea/suggestion how this
+    > issue could be fixed.
+
+    > Cheers,
+    > 	Berwin
+
+Thank you very much, Berwin,
+for the report!
+
+This is a regression/functionality/consistency test I added with
+the new smarter printing of the Lapack library version  in
+R-devel with svn revisions
+- 87492 (sessionInfo() code);
+- 87506 for the test (to work on Windows and elsewhere).
+
+and it looks like the test/check is really *not* working on your platform.
+To debug and notably fix the issue, I'd be glad if you could
+send me the console output on that platform  of
+
+    dput( extSoftVersion()[["BLAS"]] )
+    dput( La_library() )
+    dput( La_version() )
+
+
+I definitely will get back to this, within a few days,
+but not yet today.
+
+Martin
+
+
+From tum@ @end|ng |rom z|b@de  Tue Jan 21 14:42:14 2025
+From: tum@ @end|ng |rom z|b@de (Christian Tuma)
+Date: Tue, 21 Jan 2025 14:42:14 +0100
+Subject: [Rd] R test suite LAPACK error with AOCL
+Message-ID: <8ab39ba1-cb51-44cd-86ac-7f8e1ec582d3@zib.de>
+
+Hello,
+
+We are running an AMD-Genoa compute cluster. For this system I compiled 
+R-4.4.2 configured and linked against AMD Optimizing CPU Libraries 
+(AOCL) downloaded from
+
+https://www.amd.com/en/developer/aocl.html
+
+When running the R test suite (make check), I get this error:
+
+$ cat tests/lapack.Rout.fail
+...
+ > ##  -------  tests of non-finite values  -----------------
+ >
+ > a <- matrix(NaN, 3, 3,, list(one=1:3, two=letters[1:3]))
+ > b <- cbind(1:3, NA)
+ > dimnames(b) <- list(One=4:6, Two=11:12)
+ > bb <- 1:3; names(bb) <- 11:12
+ > ## gave error with LAPACK 3.11.0
+ > ## names(dimnames(.)), ("two", "Two") are lost {FIXME?}:
+ > ## IGNORE_RDIFF_BEGIN
+ > stopifnot(is.na(print(solve(a, b )))) # is.na(): NA *or* NaN
+Error in solve.default(a, b) :
+   Lapack routine dgesv: system is exactly singular: U[1,1] = 0
+Calls: stopifnot -> print -> solve -> solve.default
+Execution halted
+
+Now I wonder whether AOCL are supported by R or not. Did somebody 
+already use this combination successfully? Is this test suite error a 
+serious problem? Is a workaround available?
+
+This is my R installation configuration line:
+
+$ CC=gcc CFLAGS="-O3 -march=znver4" \
+  CXX=g++ CXXFLAGS="-O3 -march=znver4" \
+  FC=gfortran FCFLAGS="-O3 -march=znver4" \
+  LDFLAGS="-Wl,-rpath=$GCC_PATH/lib64" \
+  ../configure \
+  --with-blas="-L/usr/lib64 -Wl,-rpath=$AOCL_ROOT/lib_LP64 
+-L$AOCL_ROOT/lib_LP64 -lblis -lflame" \
+  --with-lapack \
+  --enable-year2038
+
+I am using the GCC (13.3.0).
+
+ > sessionInfo()
+R version 4.4.2 (2024-10-31)
+Platform: x86_64-pc-linux-gnu
+Running under: Rocky Linux 9.4 (Blue Onyx)
+
+Matrix products: default
+BLAS:   /sw/numerics/aocl/5.0.0/gcc/lib_LP64/libblis.so.5.0.0
+LAPACK: /sw/numerics/aocl/5.0.0/gcc/lib_LP64/libflame.so;  LAPACK 
+version 3.11.0
+...
+
+
+With Intel MKL instead of AOCL the test suite passes without errors. But 
+this is an AMD system, so here I tend to prefer AOCL over MKL.
+
+Any ideas? Thank you.
+
+
+Best wishes,
+Christian
+
+
+From g|orkutz@ @end|ng |rom gm@||@com  Tue Jan 21 18:23:54 2025
+From: g|orkutz@ @end|ng |rom gm@||@com (Greg Forkutza)
+Date: Tue, 21 Jan 2025 12:23:54 -0500
+Subject: [Rd] Will the R Project be a Mentoring Organization for GSOC 2025?
+Message-ID: <CAPnUujJqmundnu8-SMXmBDFraP3TLSqXk5+tD7-T3kin6vrHTA@mail.gmail.com>
+
+Hi there,
+
+I just wanted to confirm if this will be true this year.
+
+Best,
+
+Greg Forkutza
+
+	[[alternative HTML version deleted]]
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Wed Jan 22 01:18:59 2025
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Wed, 22 Jan 2025 13:18:59 +1300
+Subject: [Rd] 
+ Will the R Project be a Mentoring Organization for GSOC 2025?
+In-Reply-To: <CAPnUujJqmundnu8-SMXmBDFraP3TLSqXk5+tD7-T3kin6vrHTA@mail.gmail.com>
+References: <CAPnUujJqmundnu8-SMXmBDFraP3TLSqXk5+tD7-T3kin6vrHTA@mail.gmail.com>
+Message-ID: <6306A23D-DD2D-45DB-8F58-10FAF6E40971@R-project.org>
+
+Please see the GSoC schedule - for 2025 the organisation applications won't close until February 12 so we may not know the answer until possibly sometime in March (that's assuming there are proposed projects).
+
+Cheers,
+Simon
+
+
+> On Jan 22, 2025, at 6:23 AM, Greg Forkutza <gforkutza at gmail.com> wrote:
+> 
+> Hi there,
+> 
+> I just wanted to confirm if this will be true this year.
+> 
+> Best,
+> 
+> Greg Forkutza
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
