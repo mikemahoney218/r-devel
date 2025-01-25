@@ -4454,3 +4454,154 @@ On Wed, Jan 22, 2025 at 1:47?AM Kurt Hornik <Kurt.Hornik at wu.ac.at> wrote:
 	[[alternative HTML version deleted]]
 
 
+From |kry|ov @end|ng |rom d|@root@org  Thu Jan 23 10:10:08 2025
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Thu, 23 Jan 2025 12:10:08 +0300
+Subject: [Rd] Depends: R (>= 4.1) for packages that use |> and \(...)
+In-Reply-To: <CAP8nD2xthJ5TzwYdok5tjXiWyf4=Y=uGf-sf7FFQKCjzNAACOA@mail.gmail.com>
+References: <20250116144121.5520a9cc@arachnoid>
+ <CAFDcVCTTVa+Ea+BoVoag0RJ7LK3P1tyPzBG9vP4U-4w6a4kKKQ@mail.gmail.com>
+ <26506.26949.241762.7373@hornik.net>
+ <26509.10892.521351.954386@hornik.net>
+ <26512.37984.542732.125792@hornik.net>
+ <CAP8nD2xthJ5TzwYdok5tjXiWyf4=Y=uGf-sf7FFQKCjzNAACOA@mail.gmail.com>
+Message-ID: <20250123121008.4338cff0@Tarkus>
+
+Many thanks to Henrik for remembering the report in Bugzilla and to
+Kurt for implementing the change and finding out the true number of
+affected packages.
+
+On Wed, 22 Jan 2025 15:34:41 -0500
+Ian Farm <ian.farm at maine.edu> wrote:
+
+> Would packages using the underscore placeholder with the native pipe
+> need to also depend on R >= 4.2.0?
+
+That's a good find! For the R >= 4.2 syntax, we only need to check for
+getParseData(...)$token %in% 'PLACEHOLDER'. The R >= 4.3 syntax feature
+is harder to test for:
+
+>> As an experimental feature the placeholder _ can now also be used in
+>> the rhs of a forward pipe |> expression as the first argument in an
+>> extraction call, such as _$coef. More generally, it can be used as
+>> the head of a chain of extractions, such as _$coef[[2]]. 
+
+I think it might be possible to parse(text = paste('PLACEHOLDER |>',
+grandparent_expression)) and then look at the top-level function in the
+call, but that feels quite fragile:
+
+x <- utils::getParseData(parse(f, keep.source = TRUE))
+i <- x$token %in% "PLACEHOLDER"
+pi <- x[i, "parent"]
+ppi <- x[x$id %in% pi, "parent"]
+placeholder_expressions <- utils::getParseText(x, ppi)
+extractor_used <- vapply(placeholder_expressions, function(src) {
+ toplevel <- parse(text = paste("PLACEHOLDER |> ", src))[[1]][[1]]
+ identical(toplevel, quote(`$`)) ||
+  identical(toplevel, quote(`[`)) ||
+  identical(toplevel, quote(`[[`))
+}, FALSE)
+
+Alternatively, we may find the first child of the grandparent of the
+placeholder. If it's the placeholder expression, then the pipe must be
+of the form ...|> _..., which is the R >= 4.3 syntax:
+
+x <- utils::getParseData(parse(f, keep.source = TRUE))
+i <- x$token %in% "PLACEHOLDER"
+vapply(which(i), function(i) {
+ pi <- x[i, "parent"]
+ ppi <- x[x$id %in% pi, "parent"]
+ cppi <- x[x$parent %in% ppi, "id"]
+ min(cppi) == pi
+}, FALSE)
+
+-- 
+Best regards,
+Ivan
+
+
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Thu Jan 23 11:16:48 2025
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Thu, 23 Jan 2025 11:16:48 +0100
+Subject: [Rd] Depends: R (>= 4.1) for packages that use |> and \(...)
+In-Reply-To: <20250123121008.4338cff0@Tarkus>
+References: <20250116144121.5520a9cc@arachnoid>
+ <CAFDcVCTTVa+Ea+BoVoag0RJ7LK3P1tyPzBG9vP4U-4w6a4kKKQ@mail.gmail.com>
+ <26506.26949.241762.7373@hornik.net>
+ <26509.10892.521351.954386@hornik.net>
+ <26512.37984.542732.125792@hornik.net>
+ <CAP8nD2xthJ5TzwYdok5tjXiWyf4=Y=uGf-sf7FFQKCjzNAACOA@mail.gmail.com>
+ <20250123121008.4338cff0@Tarkus>
+Message-ID: <26514.5904.863904.292546@hornik.net>
+
+>>>>> Ivan Krylov via R-devel writes:
+
+Thanks.  I am already looking handling the 4.2.0 placeholder syntax, but
+likely will need to refactor the code I added yesterday.
+
+The "experimental" 4.3.0 extra placeholder feature looks like a lot of
+effort: ideally there would be a simpler way.  I'll ask on R Core.
+
+My guess would be that the new syntax is particularly prominently used
+in examples: if so, it would be good to also have coverage for this.  
+
+Best
+-k
+
+> Many thanks to Henrik for remembering the report in Bugzilla and to
+> Kurt for implementing the change and finding out the true number of
+> affected packages.
+
+> On Wed, 22 Jan 2025 15:34:41 -0500
+> Ian Farm <ian.farm at maine.edu> wrote:
+
+>> Would packages using the underscore placeholder with the native pipe
+>> need to also depend on R >= 4.2.0?
+
+> That's a good find! For the R >= 4.2 syntax, we only need to check for
+> getParseData(...)$token %in% 'PLACEHOLDER'. The R >= 4.3 syntax feature
+> is harder to test for:
+
+>>> As an experimental feature the placeholder _ can now also be used in
+>>> the rhs of a forward pipe |> expression as the first argument in an
+>>> extraction call, such as _$coef. More generally, it can be used as
+>>> the head of a chain of extractions, such as _$coef[[2]]. 
+
+> I think it might be possible to parse(text = paste('PLACEHOLDER |>',
+> grandparent_expression)) and then look at the top-level function in the
+> call, but that feels quite fragile:
+
+> x <- utils::getParseData(parse(f, keep.source = TRUE))
+> i <- x$token %in% "PLACEHOLDER"
+> pi <- x[i, "parent"]
+> ppi <- x[x$id %in% pi, "parent"]
+> placeholder_expressions <- utils::getParseText(x, ppi)
+> extractor_used <- vapply(placeholder_expressions, function(src) {
+>  toplevel <- parse(text = paste("PLACEHOLDER |> ", src))[[1]][[1]]
+>  identical(toplevel, quote(`$`)) ||
+>   identical(toplevel, quote(`[`)) ||
+>   identical(toplevel, quote(`[[`))
+> }, FALSE)
+
+> Alternatively, we may find the first child of the grandparent of the
+> placeholder. If it's the placeholder expression, then the pipe must be
+> of the form ...|> _..., which is the R >= 4.3 syntax:
+
+> x <- utils::getParseData(parse(f, keep.source = TRUE))
+> i <- x$token %in% "PLACEHOLDER"
+> vapply(which(i), function(i) {
+>  pi <- x[i, "parent"]
+>  ppi <- x[x$id %in% pi, "parent"]
+>  cppi <- x[x$parent %in% ppi, "id"]
+>  min(cppi) == pi
+> }, FALSE)
+
+> -- 
+> Best regards,
+> Ivan
+
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
