@@ -4605,3 +4605,192 @@ Best
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From tony_@_w||ke@ @end|ng |rom out|ook@com  Sat Jan 25 11:08:17 2025
+From: tony_@_w||ke@ @end|ng |rom out|ook@com (Tony Wilkes)
+Date: Sat, 25 Jan 2025 10:08:17 +0000
+Subject: [Rd] 64bit integers
+Message-ID: <AS4P195MB1430CB59D20414B7D123614DBEE22@AS4P195MB1430.EURP195.PROD.OUTLOOK.COM>
+
+Hi everyone,
+
+I heard somewhere that Core R is developing the implementation of true 64bit integers.
+Is this true? If so, may I know what the status is of this development, and when, approximately, one can expect 64bit integers to be available in R?
+
+Thank you for your time!
+
+Kind regards,
+
+Tony
+
+	[[alternative HTML version deleted]]
+
+
+From edd @end|ng |rom deb|@n@org  Sat Jan 25 15:11:19 2025
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Sat, 25 Jan 2025 08:11:19 -0600
+Subject: [Rd] 64bit integers
+In-Reply-To: <AS4P195MB1430CB59D20414B7D123614DBEE22@AS4P195MB1430.EURP195.PROD.OUTLOOK.COM>
+References: <AS4P195MB1430CB59D20414B7D123614DBEE22@AS4P195MB1430.EURP195.PROD.OUTLOOK.COM>
+Message-ID: <26516.61703.891945.118454@rob.eddelbuettel.com>
+
+
+On 25 January 2025 at 10:08, Tony Wilkes wrote:
+| I heard somewhere that Core R is developing the implementation of true 64bit integers.
+
+Would you have a source reference for that claim?
+
+| Is this true? If so, may I know what the status is of this development, and when, approximately, one can expect 64bit integers to be available in R?
+
+Luke Tierney may chime in, the last official word I heard based on a
+recent-ish talk of his (for which I cannot find a reference now, may have
+been one of the UseR! conference in last few years if memory serves) was 'yes
+to more work on large integer values via double storage (up to 53 bits) but
+no to a formal new type'.
+
+There are hard limits to number of available 'bits' in the SEXP header making
+it very 'costly' to add new types. That makes R Core _very_ reluctant to do
+so (my reading, not putting words in anybody's mouth).
+
+I too would like to have support for uint64_t. We do have the added-on and
+mostly-working `integer64` in a `double` payload. One could conceivably
+double up that work and add a `unsigned_integer64` but that seems like a lot
+of work / could create a risk of muddling up what integer64 support we have.
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Sat Jan 25 17:26:15 2025
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Sat, 25 Jan 2025 17:26:15 +0100
+Subject: [Rd] Depends: R (>= 4.1) for packages that use |> and \(...)
+In-Reply-To: <26514.5904.863904.292546@hornik.net>
+References: <20250116144121.5520a9cc@arachnoid>
+ <CAFDcVCTTVa+Ea+BoVoag0RJ7LK3P1tyPzBG9vP4U-4w6a4kKKQ@mail.gmail.com>
+ <26506.26949.241762.7373@hornik.net>
+ <26509.10892.521351.954386@hornik.net>
+ <26512.37984.542732.125792@hornik.net>
+ <CAP8nD2xthJ5TzwYdok5tjXiWyf4=Y=uGf-sf7FFQKCjzNAACOA@mail.gmail.com>
+ <20250123121008.4338cff0@Tarkus>
+ <26514.5904.863904.292546@hornik.net>
+Message-ID: <26517.4263.208016.582496@hornik.net>
+
+>>>>> Kurt Hornik writes:
+
+Thanks again.  All added now with c87633.
+
+Best
+-k
+
+>>>>> Ivan Krylov via R-devel writes:
+> Thanks.  I am already looking handling the 4.2.0 placeholder syntax, but
+> likely will need to refactor the code I added yesterday.
+
+> The "experimental" 4.3.0 extra placeholder feature looks like a lot of
+> effort: ideally there would be a simpler way.  I'll ask on R Core.
+
+> My guess would be that the new syntax is particularly prominently used
+> in examples: if so, it would be good to also have coverage for this.  
+
+> Best
+> -k
+
+>> Many thanks to Henrik for remembering the report in Bugzilla and to
+>> Kurt for implementing the change and finding out the true number of
+>> affected packages.
+
+>> On Wed, 22 Jan 2025 15:34:41 -0500
+>> Ian Farm <ian.farm at maine.edu> wrote:
+
+>>> Would packages using the underscore placeholder with the native pipe
+>>> need to also depend on R >= 4.2.0?
+
+>> That's a good find! For the R >= 4.2 syntax, we only need to check for
+>> getParseData(...)$token %in% 'PLACEHOLDER'. The R >= 4.3 syntax feature
+>> is harder to test for:
+
+>>>> As an experimental feature the placeholder _ can now also be used in
+>>>> the rhs of a forward pipe |> expression as the first argument in an
+>>>> extraction call, such as _$coef. More generally, it can be used as
+>>>> the head of a chain of extractions, such as _$coef[[2]]. 
+
+>> I think it might be possible to parse(text = paste('PLACEHOLDER |>',
+>> grandparent_expression)) and then look at the top-level function in the
+>> call, but that feels quite fragile:
+
+>> x <- utils::getParseData(parse(f, keep.source = TRUE))
+>> i <- x$token %in% "PLACEHOLDER"
+>> pi <- x[i, "parent"]
+>> ppi <- x[x$id %in% pi, "parent"]
+>> placeholder_expressions <- utils::getParseText(x, ppi)
+>> extractor_used <- vapply(placeholder_expressions, function(src) {
+>> toplevel <- parse(text = paste("PLACEHOLDER |> ", src))[[1]][[1]]
+>> identical(toplevel, quote(`$`)) ||
+>> identical(toplevel, quote(`[`)) ||
+>> identical(toplevel, quote(`[[`))
+>> }, FALSE)
+
+>> Alternatively, we may find the first child of the grandparent of the
+>> placeholder. If it's the placeholder expression, then the pipe must be
+>> of the form ...|> _..., which is the R >= 4.3 syntax:
+
+>> x <- utils::getParseData(parse(f, keep.source = TRUE))
+>> i <- x$token %in% "PLACEHOLDER"
+>> vapply(which(i), function(i) {
+>> pi <- x[i, "parent"]
+>> ppi <- x[x$id %in% pi, "parent"]
+>> cppi <- x[x$parent %in% ppi, "id"]
+>> min(cppi) == pi
+>> }, FALSE)
+
+>> -- 
+>> Best regards,
+>> Ivan
+
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @|mon@urb@nek @end|ng |rom R-project@org  Sun Jan 26 00:37:00 2025
+From: @|mon@urb@nek @end|ng |rom R-project@org (Simon Urbanek)
+Date: Sun, 26 Jan 2025 12:37:00 +1300
+Subject: [Rd] 64bit integers
+In-Reply-To: <AS4P195MB1430CB59D20414B7D123614DBEE22@AS4P195MB1430.EURP195.PROD.OUTLOOK.COM>
+References: <AS4P195MB1430CB59D20414B7D123614DBEE22@AS4P195MB1430.EURP195.PROD.OUTLOOK.COM>
+Message-ID: <6EAC9427-CC3D-4DFE-A501-7D856B805CB2@R-project.org>
+
+Tony,
+
+Dirk sent a good response. I would like to add to that that it goes beyond just bits in SEXP: adding a new type involved in arithmetics is not only a lot of work but has performance implications. Also it is unclear how it should behave in the int32_t, double, int64_t triangle of vector classes in that respect (they don't nest) while retaining compatibility (doubles promote because they are a superset, but int64_t cannot do that). I am yet to see a real use-case where 53-bits are not sufficient in integer arithmetics so it is unclear that opening that big can of worms (and breaking things) would have any benefit. Typically, the only use-case for full 64-bit integers is as opaque 64-bit storage (e.g., randomly generated IDs) but there arithmetics make no sense there and packages are already covering that need.
+
+Cheers,
+Simon
+
+
+> On Jan 25, 2025, at 11:08 PM, Tony Wilkes <tony_a_wilkes at outlook.com> wrote:
+> 
+> Hi everyone,
+> 
+> I heard somewhere that Core R is developing the implementation of true 64bit integers.
+> Is this true? If so, may I know what the status is of this development, and when, approximately, one can expect 64bit integers to be available in R?
+> 
+> Thank you for your time!
+> 
+> Kind regards,
+> 
+> Tony
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+
+
+	[[alternative HTML version deleted]]
+
+
