@@ -4794,3 +4794,64 @@ Simon
 	[[alternative HTML version deleted]]
 
 
+From r|p|eybd @end|ng |rom |c|oud@com  Sun Jan 26 09:05:54 2025
+From: r|p|eybd @end|ng |rom |c|oud@com (Prof Brian Ripley)
+Date: Sun, 26 Jan 2025 08:05:54 +0000
+Subject: [Rd] 64bit integers
+In-Reply-To: <6EAC9427-CC3D-4DFE-A501-7D856B805CB2@R-project.org>
+References: <AS4P195MB1430CB59D20414B7D123614DBEE22@AS4P195MB1430.EURP195.PROD.OUTLOOK.COM>
+ <6EAC9427-CC3D-4DFE-A501-7D856B805CB2@R-project.org>
+Message-ID: <bc0ee359-5439-444d-9a1c-02ea3e17b284@icloud.com>
+
+On 25/01/2025 23:37, Simon Urbanek wrote:
+> Tony,
+> 
+> Dirk sent a good response. I would like to add to that that it goes beyond just bits in SEXP: adding a new type involved in arithmetics is not only a lot of work but has performance implications. Also it is unclear how it should behave in the int32_t, double, int64_t triangle of vector classes in that respect (they don't nest) while retaining compatibility (doubles promote because they are a superset, but int64_t cannot do that). I am yet to see a real use-case where 53-bits are not sufficient in integer arithmetics so it is unclear that opening that big can of worms (and breaking things) would have any benefit. Typically, the only use-case for full 64-bit integers is as opaque 64-bit storage (e.g., randomly generated IDs) but there arithmetics make no sense there and packages are already covering that need.
+
+
+Both Luke and I have looked into 64-bit integers, and not yet found them 
+a high enough priority.
+
+Perhaps the most compelling motivation has not yet been mentioned. Array 
+dimensions (especially of matrices) and hence indices are restricted to 
+2^31-1, although total array size is limited by available storage.  If 
+we support more, people will expect to do matrix operations on such 
+matrices, and that is going to need versions of e.g. LAPACK which work 
+with 64-bit integers.  Modern Fortran allows different INTEGER sizes to 
+interwork, but most of the matrix code is not written in modern Fortran. 
+  If compiling them from source it would likely be possible to include 
+both 32-bit and 64-bit matrix libraries, but this will be tricky at best 
+with enhanced BLAS/LAPACK which often do have both 32- and 64-bit 
+versions but using the same entry-point names.
+
+Ironically there were versions of S-PLUS with 64-bit integers.  But only 
+64-bit integers as in S pointers and integers had to be the same size. 
+That is not something we could contemplate for R, as vast numbers of 
+packages assume that R's integers map to C int (tested to be 32-bit) and 
+Fortran 32-bit INTEGER.
+
+> 
+> Cheers,
+> Simon
+> 
+> 
+>> On Jan 25, 2025, at 11:08 PM, Tony Wilkes <tony_a_wilkes at outlook.com> wrote:
+>>
+>> Hi everyone,
+>>
+>> I heard somewhere that Core R is developing the implementation of true 64bit integers.
+>> Is this true? If so, may I know what the status is of this development, and when, approximately, one can expect 64bit integers to be available in R?
+
+It would have been helpful to tell us what you wanted to do with them.
+
+>> Thank you for your time!
+>>
+>> Kind regards,
+>>
+>> Tony
+
+-- 
+Brian D. Ripley,                  ripley at stats.ox.ac.uk
+Emeritus Professor of Applied Statistics, University of Oxford
+
+
