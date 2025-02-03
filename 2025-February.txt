@@ -1,0 +1,95 @@
+From |kry|ov @end|ng |rom d|@root@org  Sat Feb  1 10:39:04 2025
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Sat, 1 Feb 2025 12:39:04 +0300
+Subject: [Rd] 
+ [SPAM Warning!] Suggestion to emphasize Rboolean is unrelated
+ to LGLSXP in R-exts
+In-Reply-To: <CAPRVBcwA_j9=nPsjo272knqzK8Bdaoi6bgsGO+5YrKLhttHvDw@mail.gmail.com>
+References: <CAPRVBcwA_j9=nPsjo272knqzK8Bdaoi6bgsGO+5YrKLhttHvDw@mail.gmail.com>
+Message-ID: <20250201123904.6fc253be@Tarkus>
+
+On Thu, 30 Jan 2025 13:07:31 -0800
+Michael Chirico <michaelchirico4 at gmail.com> wrote:
+
+> There are at least dozens of other cases on CRAN [2],[3].
+
+Some of these involve casting an int to Rboolean. Best case, the int is
+compared against NA_LOGICAL beforehand, avoiding any mistake (there's
+at least one like that). Worst case, NA_LOGICAL is not considered before
+the cast, so NA will now be interpreted as TRUE. This is hard to check
+without actually reading the code.
+
+Some packages compare an Rboolean expression against NA_LOGICAL [1].
+This implies having stored an int in an Rboolean value as in the
+previous paragraph. I think that it wasn't disallowed according to the
+C standard to store NA_LOGICAL in an enumeration type wide enough to
+fit it (and it evidently worked in practice). With typedef bool
+Rboolean, storing NA_LOGICAL in an Rboolean converts it to 'true', so
+the comparison will definitely fail:
+
+DPQ src/pnchisq-it.c:530,532
+Rmpfr src/convert.c:535
+checkmate src/helper.c:102
+chron src/unpaste.c:21
+collapse src/data.table_rbindlist.c:208,258,383,384,408,431
+data.table (many; fixed in Git)
+ff src/ordermerge.c:5074 (one declaration, many comparisons)
+networkDynamic src/Rinit.c:209 src/is.active.c:75,76,96-98
+slam src/util.c:258
+this.path src/get_file_from_closure.h:13,43 src/thispath.c:14,17,19,39
+ src/ext.c:25 src/setsyspath.c:8 src/get_file_from_closure.h:13,43
+
+Four packages cast int* pointers returned by LOGICAL() to Rboolean* or
+use sizeof(Rboolean) to calculate buffer sizes in calls to memcpy()
+with LOGICAL() buffers [2]. With typedef bool Rboolean, this is a
+serious mistake, because the memory layout of the types is no longer
+compatible:
+
+bit64 src/integer64.c:576,603,914,929,942,955,968,981,994
+collapse src/data.table_rbindlist.c:19,67,105
+data.table (many; fixed in Git)
+kit src/utils.c:390
+
+I don't know Coccinelle that well and there may be additional cases I
+failed to consider. At which point is it appropriate to start notifying
+maintainers of the bugs not caught by their test suites?
+
+-- 
+Best regards,
+Ivan
+
+[1] Coccinelle script:
+@@
+typedef Rboolean;
+Rboolean E;
+@@
+* E == NA_LOGICAL
+
+[2] Coccinelle scripts:
+
+@@
+typedef Rboolean;
+int* E;
+@@
+* (Rboolean*)E
+
+This one will offer a diff to fix the bug:
+
+@@
+int *E1;
+int *E2;
+typedef Rboolean;
+@@
+(
+ memcpy
+|
+ memmove
+)
+ (E1, E2,
+ <+...
+-sizeof(Rboolean)
++sizeof(int)
+ ...+>
+ )
+
+
