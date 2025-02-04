@@ -93,3 +93,41 @@ typedef Rboolean;
  )
 
 
+From |kry|ov @end|ng |rom d|@root@org  Sun Feb  2 16:50:58 2025
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Sun, 2 Feb 2025 18:50:58 +0300
+Subject: [Rd] Suggestion to emphasize Rboolean is unrelated to LGLSXP in
+ R-exts
+In-Reply-To: <20250201123904.6fc253be@Tarkus>
+References: <CAPRVBcwA_j9=nPsjo272knqzK8Bdaoi6bgsGO+5YrKLhttHvDw@mail.gmail.com>
+ <20250201123904.6fc253be@Tarkus>
+Message-ID: <20250202185058.531317c2@Tarkus>
+
+The good news is that without a C23-enabled compiler, the problem will
+only happen to source files that #include <stdbool.h>. The bad news is
+that such a source file will technically disagree with the rest of R
+about the type of Rboolean, including the prototypes of the API
+functions that accept Rboolean:
+
+#include <stdbool.h>
+#include <Rinternals.h>
+typedef void (*pordervector1)(int *, int, SEXP, Rboolean, Rboolean);
+// ...
+pordervector1 f = R_orderVector1;
+f(pindx, length(indx), arg, nalast, decreasing);
+
+foo.c:27:17: runtime error: call to function R_orderVector1 through
+pointer to incorrect function type 'void (*)(int *, int, struct SEXPREC
+*, bool, bool)'
+/tmp/R-devel/src/main/sort.c:1135: note: R_orderVector1 defined here
+SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior foo.c:27:17
+
+With sanitizers disabled, this doesn't seem to cause any real problems
+thanks to the calling convention, where both 'enum's and 'bool's are
+passed and returned in a register.
+
+-- 
+Best regards,
+Ivan
+
+
