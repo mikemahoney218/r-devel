@@ -131,3 +131,206 @@ Best regards,
 Ivan
 
 
+From r|p|eybd @end|ng |rom |c|oud@com  Mon Feb  3 11:07:13 2025
+From: r|p|eybd @end|ng |rom |c|oud@com (Prof Brian Ripley)
+Date: Mon, 3 Feb 2025 10:07:13 +0000
+Subject: [Rd] Suggestion to emphasize Rboolean is unrelated to LGLSXP in
+ R-exts
+In-Reply-To: <20250202185058.531317c2@Tarkus>
+References: <CAPRVBcwA_j9=nPsjo272knqzK8Bdaoi6bgsGO+5YrKLhttHvDw@mail.gmail.com>
+ <20250201123904.6fc253be@Tarkus> <20250202185058.531317c2@Tarkus>
+Message-ID: <551e7875-03a3-4a94-99e5-751ac9c496f4@icloud.com>
+
+On 02/02/2025 15:50, Ivan Krylov via R-devel wrote:
+> The good news is that without a C23-enabled compiler, the problem will
+> only happen to source files that #include <stdbool.h>. The bad news is
+> that such a source file will technically disagree with the rest of R
+> about the type of Rboolean, including the prototypes of the API
+> functions that accept Rboolean:
+> 
+> #include <stdbool.h>
+> #include <Rinternals.h>
+> typedef void (*pordervector1)(int *, int, SEXP, Rboolean, Rboolean);
+> // ...
+> pordervector1 f = R_orderVector1;
+> f(pindx, length(indx), arg, nalast, decreasing);
+> 
+> foo.c:27:17: runtime error: call to function R_orderVector1 through
+> pointer to incorrect function type 'void (*)(int *, int, struct SEXPREC
+> *, bool, bool)'
+> /tmp/R-devel/src/main/sort.c:1135: note: R_orderVector1 defined here
+> SUMMARY: UndefinedBehaviorSanitizer: undefined-behavior foo.c:27:17
+> 
+> With sanitizers disabled, this doesn't seem to cause any real problems
+> thanks to the calling convention, where both 'enum's and 'bool's are
+> passed and returned in a register.
+
+This is work in progress, and it was not intended to apply to R-devel 
+unless configured with --with-C23 or using a compiler (such as GCC 
+pre-15) that defaults to C23.  We will back that out pending further 
+testing.
+
+-- 
+Brian D. Ripley,                  ripley at stats.ox.ac.uk
+Emeritus Professor of Applied Statistics, University of Oxford
+
+
+From r|p|eybd @end|ng |rom |c|oud@com  Mon Feb  3 18:36:28 2025
+From: r|p|eybd @end|ng |rom |c|oud@com (Prof Brian Ripley)
+Date: Mon, 3 Feb 2025 17:36:28 +0000
+Subject: [Rd] boolean and logical types -draft
+Message-ID: <93d0bc7e-9ad2-4193-b43e-34c1544bb1a7@icloud.com>
+
+Tomas,
+
+I am thinking of writing something for R-devel, and hope to have your 
+input first.
+
+I get moderated on R-devel as I am now subscribed as 
+brian.ripley at R-project.org which of course I cannot send from. So I am 
+even more discouraged from posting there.  (R-core is bad enough with 
+Luke discouraging all innovation except by him and Simon completely 
+misunderstanding the C23 status.)
+
+Thanks,
+
+Brian
+
+----------------
+
+There are several of these, and few guarantees for inter-working.
+
+a) R's logical vectors, which include a value NA for its elements.
+b) R's Rboolean type in C/C++
+
+c) C++'s bool type
+d) C23's bool type
+e) C99's _Bool type to which bool is aliased if <stdbool.h> is included.
+f) Fortran's LOGICAL type
+
+a) is currently implemented as a C int (so 32-bit) type with NA as the C 
+value NA_LOGICAL which is the same a NA_INTEGER.
+
+b) is currently implemented as a C enum with two values.  I don't know 
+of any guarantees on how that is stored except in char or an integer 
+type -- however it seems common practice to use a 32-bit type (int or 
+unsigned int would not be distinguishable).  (C23 ?6.7.3.3)  Enums can 
+have a specified data type, but we do not.
+
+C23 states that bool has 1 value bit and some padding bits (?6.2.6.2) so 
+it can be stored in char-sized storage (i.e. bytes) or multiples 
+thereof.  And that _Bool is a alternative name for bool.
+
+f) is complier-dependent: for interoperability with C or R, code should 
+use c_bool from iso_c_binding (Fortran 2003).  Fortran compilers store 
+LOGICAL in compiler-dependent ways, and for a long time we got away with 
+assuming that was equivalent to int (so LOGICAL values could be passed 
+to and from with int* on the C/R side).  But sometime around GCC 8 they 
+changed to int_least32_t, which on common platforms is the same as int 
+but does not need to be.
+
+It seems that in all cases coercion to an integer type coerces false 
+values to 0 and true values to 1 (and this is guaranteed by C23 at 
+least).  And C23 guarantees that when coercing from an integer type to 
+bool zero values are coerced to false and non-zero ones to true (bool is 
+'an unsigned integer type').  However, that does not seem to be true for 
+C++ as UB sanitizers warn on coercing values other than 0/1.
+
+I believe it to be the intention that c), d) and e) have the same 
+representation and interwork using the same compiler, but I could not 
+find that documented and see signs that e) might differ in C17 and C23 
+modes.
+
+----------------
+
+I need to look again at the C and C++ standards which with my vision I 
+need to do in very small chunks.  Oh for the vision I once had!
+
+-- 
+Brian D. Ripley,                  ripley at stats.ox.ac.uk
+Emeritus Professor of Applied Statistics, University of Oxford
+
+
+From r|p|eybd @end|ng |rom |c|oud@com  Mon Feb  3 18:39:07 2025
+From: r|p|eybd @end|ng |rom |c|oud@com (Prof Brian Ripley)
+Date: Mon, 3 Feb 2025 17:39:07 +0000
+Subject: [Rd] boolean and logical types -draft
+In-Reply-To: <93d0bc7e-9ad2-4193-b43e-34c1544bb1a7@icloud.com>
+References: <93d0bc7e-9ad2-4193-b43e-34c1544bb1a7@icloud.com>
+Message-ID: <fd059a61-57ab-4592-80e5-7a68b3b1d6d0@icloud.com>
+
+Sent in error (and not moderated).
+
+On 03/02/2025 17:36, Prof Brian Ripley via R-devel wrote:
+> Tomas,
+> 
+> I am thinking of writing something for R-devel, and hope to have your 
+> input first.
+> 
+> I get moderated on R-devel as I am now subscribed as brian.ripley at R- 
+> project.org which of course I cannot send from. So I am even more 
+> discouraged from posting there.? (R-core is bad enough with Luke 
+> discouraging all innovation except by him and Simon completely 
+> misunderstanding the C23 status.)
+> 
+> Thanks,
+> 
+> Brian
+> 
+> ----------------
+> 
+> There are several of these, and few guarantees for inter-working.
+> 
+> a) R's logical vectors, which include a value NA for its elements.
+> b) R's Rboolean type in C/C++
+> 
+> c) C++'s bool type
+> d) C23's bool type
+> e) C99's _Bool type to which bool is aliased if <stdbool.h> is included.
+> f) Fortran's LOGICAL type
+> 
+> a) is currently implemented as a C int (so 32-bit) type with NA as the C 
+> value NA_LOGICAL which is the same a NA_INTEGER.
+> 
+> b) is currently implemented as a C enum with two values.? I don't know 
+> of any guarantees on how that is stored except in char or an integer 
+> type -- however it seems common practice to use a 32-bit type (int or 
+> unsigned int would not be distinguishable).? (C23 ?6.7.3.3)? Enums can 
+> have a specified data type, but we do not.
+> 
+> C23 states that bool has 1 value bit and some padding bits (?6.2.6.2) so 
+> it can be stored in char-sized storage (i.e. bytes) or multiples 
+> thereof.? And that _Bool is a alternative name for bool.
+> 
+> f) is complier-dependent: for interoperability with C or R, code should 
+> use c_bool from iso_c_binding (Fortran 2003).? Fortran compilers store 
+> LOGICAL in compiler-dependent ways, and for a long time we got away with 
+> assuming that was equivalent to int (so LOGICAL values could be passed 
+> to and from with int* on the C/R side).? But sometime around GCC 8 they 
+> changed to int_least32_t, which on common platforms is the same as int 
+> but does not need to be.
+> 
+> It seems that in all cases coercion to an integer type coerces false 
+> values to 0 and true values to 1 (and this is guaranteed by C23 at 
+> least).? And C23 guarantees that when coercing from an integer type to 
+> bool zero values are coerced to false and non-zero ones to true (bool is 
+> 'an unsigned integer type').? However, that does not seem to be true for 
+> C++ as UB sanitizers warn on coercing values other than 0/1.
+> 
+> I believe it to be the intention that c), d) and e) have the same 
+> representation and interwork using the same compiler, but I could not 
+> find that documented and see signs that e) might differ in C17 and C23 
+> modes.
+> 
+> ----------------
+> 
+> I need to look again at the C and C++ standards which with my vision I 
+> need to do in very small chunks.? Oh for the vision I once had!
+> 
+
+
+-- 
+Brian D. Ripley,                  ripley at stats.ox.ac.uk
+Emeritus Professor of Applied Statistics, University of Oxford
+
+
