@@ -1890,3 +1890,147 @@ R-devel at r-project.org mailing list
 https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From m|ch@e|ch|r|co4 @end|ng |rom gm@||@com  Fri Feb 14 22:40:28 2025
+From: m|ch@e|ch|r|co4 @end|ng |rom gm@||@com (Michael Chirico)
+Date: Fri, 14 Feb 2025 13:40:28 -0800
+Subject: [Rd] More precise documentation of on.exit() [when leaving function
+ vs. "context"]
+Message-ID: <CAPRVBcxZJF7W1=Ha6UWKHt4kFka4HsaWVR4FvZHETdim_7YrGQ@mail.gmail.com>
+
+The current documentation of ?on.exit reads [1]
+
+> `on.exit` records [`expr`] as needing to be executed when the current function exits...
+
+This is almost always how it is used, however I don't see that as
+explaining this other common way to use on.exit():
+
+local({
+  old = setwd(...)
+  on.exit(setwd(old))
+  readLines(...)
+})
+
+There's not really a "function" here. It may be that the actual
+implementation of 'local()' eventually runs this code
+indistinguishably from a function, which I'm not sure -- all I see is
+that local() is a wrapper of eval.parent(), so it doesn't _look_ to me
+like that's the case.
+
+I'm not sure this word has a precise meaning in R but I think of
+on.exit() as running upon leaving the "context" in this case. Would
+that be an improvement? Is this more an "unintentional" benefit that
+local() can be used like this?
+
+I've definitely seen usage like this [2] that I've recommended just be
+re-written with local instead:
+
+(\(x) { old = setwd(...); on.exit(setwd(old)); readLines(...) })()
+
+I'll also note that while this approach to using on.exit() is not
+uncommon, and quite a useful idiom, it does not appear in the examples
+either in ?on.exit or in ?local [3].
+
+(I also don't see mention of these in any other R manual [4][5])
+
+Mike C
+
+[1] https://github.com/r-devel/r-svn/blob/9bd62756d3c1289c3c01faec0e2b4de9e8a88d59/src/library/base/man/on.exit.Rd#L10-L13
+[2] https://github.com/rstudio/sass/blob/9228fcf39deecfe32b7cb90ed40690338a18acba/scripts/build_docs.R#L5-L23
+[3] https://github.com/r-devel/r-svn/blob/9bd62756d3c1289c3c01faec0e2b4de9e8a88d59/src/library/base/man/eval.Rd#L136-L138
+[4] https://github.com/r-devel/r-svn/blob/main/doc/manual/R-intro.texi
+[5] https://github.com/r-devel/r-svn/blob/9bd62756d3c1289c3c01faec0e2b4de9e8a88d59/doc/manual/R-lang.texi#L3755-L3757
+
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Sat Feb 15 02:05:25 2025
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Fri, 14 Feb 2025 19:05:25 -0600 (CST)
+Subject: [Rd] [External] More precise documentation of on.exit() [when
+ leaving function vs. "context"]
+In-Reply-To: <CAPRVBcxZJF7W1=Ha6UWKHt4kFka4HsaWVR4FvZHETdim_7YrGQ@mail.gmail.com>
+References: <CAPRVBcxZJF7W1=Ha6UWKHt4kFka4HsaWVR4FvZHETdim_7YrGQ@mail.gmail.com>
+Message-ID: <f151e222-a58c-93b-46aa-b165b9ee7fdd@uiowa.edu>
+
+On Fri, 14 Feb 2025, Michael Chirico wrote:
+
+> The current documentation of ?on.exit reads [1]
+>
+>> `on.exit` records [`expr`] as needing to be executed when the current function exits...
+>
+> This is almost always how it is used, however I don't see that as
+> explaining this other common way to use on.exit():
+>
+> local({
+>  old = setwd(...)
+>  on.exit(setwd(old))
+>  readLines(...)
+> })
+>
+> There's not really a "function" here. It may be that the actual
+> implementation of 'local()' eventually runs this code
+> indistinguishably from a function, which I'm not sure -- all I see is
+> that local() is a wrapper of eval.parent(), so it doesn't _look_ to me
+> like that's the case.
+
+local(expr) is essentially equivalent to (function() expr)().
+
+['Essentially' because in the interpreted implementation there might
+currently be slight differences, though if there are we would want to
+eventually get rid of them. For compiled code the two are exactly
+equivalent.]
+
+I don't see any benefits of changing this wording in ?on.exit that
+would outweigh the costs.
+
+In principle I don't object to noting in ?local that local(expr) is
+just syntactic sugar for (function() expr)(), but not until someone
+spends some time making sure it is exactly true for the interpreted
+case; not something I could justify giving high priority to.
+
+> I'm not sure this word has a precise meaning in R but I think of
+> on.exit() as running upon leaving the "context" in this case. Would
+> that be an improvement? Is this more an "unintentional" benefit that
+> local() can be used like this?
+>
+> I've definitely seen usage like this [2] that I've recommended just be
+> re-written with local instead:
+>
+> (\(x) { old = setwd(...); on.exit(setwd(old)); readLines(...) })()
+>
+> I'll also note that while this approach to using on.exit() is not
+> uncommon, and quite a useful idiom, it does not appear in the examples
+> either in ?on.exit or in ?local [3].
+
+I'm not sure I would want to encourage this. Using tryCatch with a
+finally expression seems clearer to me:
+
+local({ old <- setwd(...); tryCatch(readLines(...), finally = setwd(old)) })
+
+Best,
+
+luke
+
+> (I also don't see mention of these in any other R manual [4][5])
+>
+> Mike C
+>
+> [1] https://github.com/r-devel/r-svn/blob/9bd62756d3c1289c3c01faec0e2b4de9e8a88d59/src/library/base/man/on.exit.Rd#L10-L13
+> [2] https://github.com/rstudio/sass/blob/9228fcf39deecfe32b7cb90ed40690338a18acba/scripts/build_docs.R#L5-L23
+> [3] https://github.com/r-devel/r-svn/blob/9bd62756d3c1289c3c01faec0e2b4de9e8a88d59/src/library/base/man/eval.Rd#L136-L138
+> [4] https://github.com/r-devel/r-svn/blob/main/doc/manual/R-intro.texi
+> [5] https://github.com/r-devel/r-svn/blob/9bd62756d3c1289c3c01faec0e2b4de9e8a88d59/doc/manual/R-lang.texi#L3755-L3757
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu/
+
+
