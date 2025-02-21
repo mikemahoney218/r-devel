@@ -2172,3 +2172,46 @@ Will Landau
 	[[alternative HTML version deleted]]
 
 
+From bbo|ker @end|ng |rom gm@||@com  Wed Feb 19 17:18:39 2025
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Wed, 19 Feb 2025 11:18:39 -0500
+Subject: [Rd] patch to model matrix to improve error messages
+Message-ID: <5702d5c7-e56e-4ca7-a3ca-e7b204f06044@gmail.com>
+
+   I posted this to r-bugzilla already 
+<https://bugs.r-project.org/show_bug.cgi?id=18860>, but I would be 
+interested to see if anyone here has comments (fewer people track 
+r-bugzilla closely ...)
+
+   The issue: if a variable reference in a model.frame() formula is 
+missing from the data but matches a function found elsewhere in the 
+environment (e.g. `count()` in `dplyr`), the  user gets the opaque error 
+message "object is not a matrix".
+
+   If the variable reference is missing from the data, but matches (e.g. 
+a list or list-like object (e.g., a data frame), then we get the more 
+useful error "invalid type (TYPE) for variable 'VARIABLE'"
+
+   The issue is that model frame tries to compute the number of rows of 
+the data before it tests the type of each column. If we switch the order 
+of operations so that the columns are tested first, we get a much more 
+useful error message.
+
+   This change seems harmless, but of course I wouldn't be surprised if 
+someone can come up with a reasonable scenario where it causes problems ...
+
+    More details/examples in the bug report linked above.  The relevant 
+bits of source code are here
+
+model.c row/column checking:
+
+https://github.com/r-devel/r-svn/blob/63369bfed9330b9461ec1d8b90d7251c0118508f/src/library/stats/src/model.c#L138-L152
+
+nrows() function:
+
+https://github.com/r-devel/r-svn/blob/63369bfed9330b9461ec1d8b90d7251c0118508f/src/main/util.c#L81-L94
+
+   cheers
+    Ben Bolker
+
+
