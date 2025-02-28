@@ -2421,3 +2421,256 @@ Director, School of Computational Science and Engineering
 working hours.
 
 
+From ru|pb@rr@d@@ @end|ng |rom @@po@pt  Wed Feb 26 09:47:57 2025
+From: ru|pb@rr@d@@ @end|ng |rom @@po@pt (Rui Barradas)
+Date: Wed, 26 Feb 2025 08:47:57 +0000
+Subject: [Rd] Vuori - Due Diligence
+In-Reply-To: <DM4PR14MB57415FCC001D7A26473EDF6C84C32@DM4PR14MB5741.namprd14.prod.outlook.com>
+References: <DM4PR14MB5741D9BDFD4126E978CAE97884102@DM4PR14MB5741.namprd14.prod.outlook.com>
+ <DM4PR14MB5741988AEB4E43EF687E53A984122@DM4PR14MB5741.namprd14.prod.outlook.com>
+ <DM4PR14MB5741BA35344E59B49010E86984122@DM4PR14MB5741.namprd14.prod.outlook.com>
+ <DM4PR14MB574123E5CBF3BD29AE948DA484132@DM4PR14MB5741.namprd14.prod.outlook.com>
+ <DM4PR14MB57414EC96D48F8BA31FE6AA084E92@DM4PR14MB5741.namprd14.prod.outlook.com>
+ <DM4PR14MB574122A7CBCAEBC2F9EDC13184F72@DM4PR14MB5741.namprd14.prod.outlook.com>
+ <DM4PR14MB574189F55D6072C359F3895184F12@DM4PR14MB5741.namprd14.prod.outlook.com>
+ <DM4PR14MB57419F29E421529D8FBAD3D384F22@DM4PR14MB5741.namprd14.prod.outlook.com>
+ <DM4PR14MB574112950E70FC30B76CE36A84C72@DM4PR14MB5741.namprd14.prod.outlook.com>
+ <DM4PR14MB5741041CF8BC17F861CEB06784C32@DM4PR14MB5741.namprd14.prod.outlook.com>
+ <DM4PR14MB57415FCC001D7A26473EDF6C84C32@DM4PR14MB5741.namprd14.prod.outlook.com>
+Message-ID: <94405ab6-e7b9-4fde-8d33-452a4864fcb5@sapo.pt>
+
+Hello,
+
+R [1] and RStudio (now Posit) [2] are different things. Though I don't 
+speak for any of the two, you should address Posit directly.
+
+[1] https://cran.r-project.org/
+[2] https://posit.co/
+
+Hope this helps,
+
+Rui Barradas
+
+?s 19:27 de 25/02/2025, Geoff Wolkis via R-devel escreveu:
+> Hello -
+> 
+>    My name is Geoff Wolkis and I'm with Vuori's Third Party Risk Management Team.  I've been assigned to conduct due diligence on the services and/or products your organization is providing to Vuori.  In this case R Studio is providing statistical data and create reporting to be used internally. You should have received an email from our GRC platform.  There is 1 questionnaire that needs to be completed: An INFOSEC Questionnaire.
+> 
+> Appreciate your assistance in this effort and look forward to working with you. We're looking for a completed date of both assessments no later than 3/7.  Feel free to reach out to me if you have any questions.
+> 
+> Kind Regards,
+> 
+> [-]
+> Geoffrey Wolkis, CTPRP
+> Information Security Analyst - Third Party Risk
+> 
+> E: geoff.wolkis at vuori.com<mailto:geoff.wolkis at vuori.com>
+> _
+> vuoriclothing.com<http://vuoriclothing.com/>
+> #therisetheshine
+> [-] <https://www.linkedin.com/company/vuori-inc-/> [-]  <https://www.instagram.com/vuoriclothing/> [-]  <https://twitter.com/vuoriclothing> [-]  <https://www.facebook.com/vuoriclothing/> [-] <https://www.pinterest.com/vuoriclothing/>
+> 
+> 
+> 
+> 	[[alternative HTML version deleted]]
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+-- 
+Este e-mail foi analisado pelo software antiv?rus AVG para verificar a presen?a de v?rus.
+www.avg.com
+
+
+From |kry|ov @end|ng |rom d|@root@org  Wed Feb 26 12:42:03 2025
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Wed, 26 Feb 2025 14:42:03 +0300
+Subject: [Rd] Customizing width of input in Rterm
+In-Reply-To: <725b0cf4-4874-4747-9bba-4ae24891ba38@sjd.es>
+References: <725b0cf4-4874-4747-9bba-4ae24891ba38@sjd.es>
+Message-ID: <20250226144203.203a8a31@arachnoid>
+
+? Fri, 21 Feb 2025 11:52:41 +0100
+Iago Gin?-V?zquez <iago.gine at sjd.es> ?????:
+
+> When using Rterm.exe (on Windows, I didn?t check Linux) only a
+> limited number of characters is displayed in the input lines,
+> independent on the |width| option, and, when navigating through the
+> command history this becomes very uncomfortable, since a command is
+> not fully displayed and, for example, it is very difficult to know
+> which parts of a command are being edited.
+
+The patch at the end of this message reads the console width on startup
+and handles the console resize events while getline() is running. The
+automatic resizing doesn't look nice due to gl_redraw() starting a new
+line newline before redrawing the prompt, but it works.
+
+This may have accessibility implications since it changes the behaviour
+of Rterm.exe, which is what A. Jonathan R. Godfrey recommends for blind
+Windows users [1]. I've experimented with NVDA and didn't notice
+anything breaking in Windows 10 terminal or mintty.exe, but it's hard
+to be sure without the real experience of using a screen reader.
+
+Is this approach worth adopting? Is it better to erase the current line
+instead of starting a new one? options(setWidthOnResize) could be
+implemented similarly but may require more care due to
+R_SetOptionWidth(...) evaluating R code.
+
+Index: src/gnuwin32/getline/getline.c
+===================================================================
+--- src/gnuwin32/getline/getline.c	(revision 87795)
++++ src/gnuwin32/getline/getline.c	(working copy)
+@@ -25,6 +25,7 @@
+ int 		(*gl_in_hook)(char *) = 0;
+ int 		(*gl_out_hook)(char *) = 0;
+ int 		(*gl_tab_hook)(char *, int, int *) = gl_tab;
++static int      do_setwidth(int w);
+ 
+ #include <Rconfig.h>
+ #include <R_ext/Riconv.h>
+@@ -214,6 +215,10 @@
+          The bug still exists in Windows 10, and thus we now call
+          GetConsoleInputW to get uchar.UnicodeChar. */
+       ReadConsoleInputW(Win32InputStream, &r, 1, &a);
++      if (r.EventType == WINDOW_BUFFER_SIZE_EVENT) {
++        if (do_setwidth(r.Event.WindowBufferSizeEvent.dwSize.X))
++          gl_redraw();
++      }
+       if (!(r.EventType == KEY_EVENT)) break;
+       st = r.Event.KeyEvent.dwControlKeyState;
+       vk = r.Event.KeyEvent.wVirtualKeyCode;
+@@ -487,6 +492,11 @@
+     gl_w2e_map = gl_realloc(NULL, 0, BUF_SIZE, sizeof(size_t)); 
+ 
+     gl_char_init();
++
++    CONSOLE_SCREEN_BUFFER_INFO csb;
++    GetConsoleScreenBufferInfo(Win32OutputStream, &csb);
++    do_setwidth(csb.dwSize.X);
++
+     gl_init_done = 1;
+ }
+ 
+@@ -536,13 +546,21 @@
+     BUF_SIZE = newsize;
+ }
+ 
++static int
++do_setwidth(int w)
++{
++    /* may be called from gl_getc if a resize event is received */
++    if (w > 20) {
++	gl_w_termw = w;
++	return 1;
++    }
++    return 0;
++}
++
+ void
+ gl_setwidth(int w)
+ {
+-    /* not used in R; should arrange for redraw */
+-    if (w > 20) 
+-	gl_w_termw = w;
+-    else 
++    if (!do_setwidth(w))
+ 	gl_error("\n*** Error: minimum screen width is 21\n");
+ }
+ 
+
+
+-- 
+Best regards,
+Ivan
+
+[1]
+https://r-resources.massey.ac.nz/lurnblind/LURNBlindch2.html#x4-80002.3
+
+
+From geo||@wo|k|@ @end|ng |rom vuor|@com  Wed Feb 26 18:16:05 2025
+From: geo||@wo|k|@ @end|ng |rom vuor|@com (Geoff Wolkis)
+Date: Wed, 26 Feb 2025 17:16:05 +0000
+Subject: [Rd] Vuori - Due Diligence
+In-Reply-To: <6bdfffba-3de2-4bcb-8705-f1de379ace4b@gmail.com>
+References: <DM4PR14MB5741D9BDFD4126E978CAE97884102@DM4PR14MB5741.namprd14.prod.outlook.com>
+ <DM4PR14MB5741988AEB4E43EF687E53A984122@DM4PR14MB5741.namprd14.prod.outlook.com>
+ <DM4PR14MB5741BA35344E59B49010E86984122@DM4PR14MB5741.namprd14.prod.outlook.com>
+ <DM4PR14MB574123E5CBF3BD29AE948DA484132@DM4PR14MB5741.namprd14.prod.outlook.com>
+ <DM4PR14MB57414EC96D48F8BA31FE6AA084E92@DM4PR14MB5741.namprd14.prod.outlook.com>
+ <DM4PR14MB574122A7CBCAEBC2F9EDC13184F72@DM4PR14MB5741.namprd14.prod.outlook.com>
+ <DM4PR14MB574189F55D6072C359F3895184F12@DM4PR14MB5741.namprd14.prod.outlook.com>
+ <DM4PR14MB57419F29E421529D8FBAD3D384F22@DM4PR14MB5741.namprd14.prod.outlook.com>
+ <DM4PR14MB574112950E70FC30B76CE36A84C72@DM4PR14MB5741.namprd14.prod.outlook.com>
+ <DM4PR14MB5741041CF8BC17F861CEB06784C32@DM4PR14MB5741.namprd14.prod.outlook.com>
+ <DM4PR14MB57415FCC001D7A26473EDF6C84C32@DM4PR14MB5741.namprd14.prod.outlook.com>
+ <6bdfffba-3de2-4bcb-8705-f1de379ace4b@gmail.com>
+Message-ID: <DM4PR14MB574158437695667BBDEB1D0B84C22@DM4PR14MB5741.namprd14.prod.outlook.com>
+
+Appreciate the response.  We're trying to find someone there now.
+
+Geoff
+
+-----Original Message-----
+From: Ben Bolker <bbolker at gmail.com> 
+Sent: Tuesday, February 25, 2025 4:30 PM
+To: r-devel at r-project.org
+Cc: Geoff Wolkis <geoff.wolkis at vuori.com>; Stevie Ratto <Stevie.Ratto at vuori.com>
+Subject: Re: [Rd] Vuori - Due Diligence
+
+External Sender - STOP, ASSESS AND VERIFY. Be very careful about links and attachments. If suspicious, use the PHISH ALERT button.
+
+
+    R is an open-source project. There is no-one involved with the project who is funded to complete these kinds of assessments.  The e-mail you sent probably got eaten by a spam/inappropriate-for-the-mailing-list filter ...
+
+    Also, this list is for the R programming language. RStudio is a separate piece of software developed by Posit, a public benefit corporation. It's possible that someone there <https://posit.co/> will be able to help you, especially if you purchase on of their enterprise products.
+
+These links might be useful:
+
+https://forum.posit.co/t/using-r-rstudio-and-rtools-in-a-corporate-environment/4742/2
+
+https://posit.co/products/
+
+
+   sincerely
+    Ben Bolker
+
+(you may get a slew of responses along these lines)
+
+On 2025-02-25 2:27 p.m., Geoff Wolkis via R-devel wrote:
+> Hello -
+>
+>    My name is Geoff Wolkis and I'm with Vuori's Third Party Risk Management Team.  I've been assigned to conduct due diligence on the services and/or products your organization is providing to Vuori.  In this case R Studio is providing statistical data and create reporting to be used internally. You should have received an email from our GRC platform.  There is 1 questionnaire that needs to be completed: An INFOSEC Questionnaire.
+>
+> Appreciate your assistance in this effort and look forward to working with you. We're looking for a completed date of both assessments no later than 3/7.  Feel free to reach out to me if you have any questions.
+>
+> Kind Regards,
+>
+> [-]
+> Geoffrey Wolkis, CTPRP
+> Information Security Analyst - Third Party Risk
+>
+> E: geoff.wolkis at vuori.com<mailto:geoff.wolkis at vuori.com>
+> _
+> vuoriclothing.com<http://vuoriclothing.com/>
+> #therisetheshine
+> [-] <https://www.linkedin.com/company/vuori-inc-/> [-]  
+> <https://www.instagram.com/vuoriclothing/> [-]  
+> <https://twitter.com/vuoriclothing> [-]  
+> <https://www.facebook.com/vuoriclothing/> [-] 
+> <https://www.pinterest.com/vuoriclothing/>
+>
+>
+>
+>       [[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+--
+Dr. Benjamin Bolker
+Professor, Mathematics & Statistics and Biology, McMaster University Director, School of Computational Science and Engineering  > E-mail is sent at my convenience; I don't expect replies outside of working hours.
+
+
