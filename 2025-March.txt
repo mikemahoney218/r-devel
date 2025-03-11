@@ -2204,3 +2204,373 @@ Best
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From @vr@h@m@@d|er @end|ng |rom gm@||@com  Sun Mar  9 18:15:57 2025
+From: @vr@h@m@@d|er @end|ng |rom gm@||@com (Avraham Adler)
+Date: Sun, 9 Mar 2025 13:15:57 -0400
+Subject: [Rd] R-devel (87913) compilation fails at "make vignettes";
+ R-4-4 completes and fails "make check"
+Message-ID: <CAL6gwnKvncaoD_GSniDQ7jf3VjbbUEcPE+J8EqdbZ92wkuK7FQ@mail.gmail.com>
+
+Hello.
+
+I recently built a new computer and I am now using Windows 11. When
+building a distribution of R-devel from source using the most recent
+Rtools44, the build consistently fails at the point it is supposed to
+build the vignettes from base with the message below. R-4-4-branch
+(also 87913) completes without error but fails "make check".
+
+R-devel Error:
+```
+* DONE (mgcv)
+building/updating vignettes for package 'grid' ...
+processing 'displaylist.Rnw'
+make[2]: *** [Makefile.win:99: vignettes] Error 1
+make[1]: *** [Makefile:345: vignettes] Error 2
+make: *** [Makefile:395: distribution] Error 2
+```
+Looking at Makefile.win in .src/library at line 99 shows:
+
+```
+vignettes:
+@for pkg in grid parallel utils stats; do \
+    $(ECHO) "building/updating vignettes for package '$${pkg}' ..."; \
+    ($(ECHO) "tools:::.install_package_vignettes(\"$(srcdir)/$${pkg}\",
+\"$(top_builddir)/library/$${pkg}\")") | \
+        R_DEFAULT_PACKAGES="utils,tools" LC_ALL=C \
+  R_LIBS_USER=NULL R_LIBS_SITE=NULL \
+          $(R_EXE) > /dev/null || exit 1; \
+done
+@rm -Rf .vignettes
+```
+
+While R-4-4 completes "make distribution" compilation, it fails make check with:
+
+```
+Testing examples for package 'tools'
+  comparing 'tools-Ex.Rout' to 'tools-Ex.Rout.save' ... NOTE
+  1062,1063d1061
+  < Warning in file(con, "r") :
+  <   file("") only supports open = "w+" and open = "w+b": using the former
+  1066,1067c1064,1065
+  <  $ file    : chr ""
+  <  $ title   : chr ""
+  ---
+  >  $ file    : chr "grid.Rnw"
+  >  $ title   : chr "Introduction to grid"
+Testing examples for package 'utils'
+Error: running examples in 'utils-Ex.R' failed
+Error: testing 'utils' failed
+Execution halted
+make[3]: *** [Makefile.win:29: test-Examples-Base] Error 1
+make[2]: *** [Makefile.common:208: test-Examples] Error 2
+make[1]: *** [Makefile.common:193: test-all-basics] Error 1
+make: *** [Makefile:333: check-devel] Error 2
+```
+
+Some initial research indicated that permission issues can interfere
+with vignette building. I have set Rtools44 to run as an administrator
+and I confirmed that my build directory and all its subdirectories are
+allowed full control by the logged-in windows account.
+
+The only major difference between these sets of runs and those over
+the last decade is the chip (Ryzen 9800X3D), which for vignettes
+should be irrelevant, and the operating system?Windows 11 Pro instead
+of Windows 10 Home. I don't know which change from R-4-4 to R-devel
+triggers the error or why R-4-4 completes and fails the check. I have
+exhausted my limited knowledge as to how to address the issue. Any
+ideas as to why this may be happening and what I could do would be
+greatly appreciated.
+
+For completeness:
+
+R VERSION AND TOOLS
+R-devel version: 87913
+R-4-4-branch:     87913
+Rtools version: 6459
+
+HARDWARE
+Processor: AMD Ryzen 7 9800X3D 8-Core Processor
+Installed RAM :192 GB (190 GB usable)
+System type 64-bit operating system, x64-based processor
+
+OPERATING SYSTEM
+Edition Windows 11 Pro
+Version 24H2
+Installed on ?3/?7/?2025
+OS build 26100.3194
+Experience Windows Feature Experience Pack 1000.26100.48.0
+
+Thank you,
+
+Avi
+
+
+From @eb@meyer @end|ng |rom |@u@de  Sun Mar  9 18:55:21 2025
+From: @eb@meyer @end|ng |rom |@u@de (Sebastian Meyer)
+Date: Sun, 9 Mar 2025 18:55:21 +0100
+Subject: [Rd] R-devel (87913) compilation fails at "make vignettes";
+ R-4-4 completes and fails "make check"
+In-Reply-To: <CAL6gwnKvncaoD_GSniDQ7jf3VjbbUEcPE+J8EqdbZ92wkuK7FQ@mail.gmail.com>
+References: <CAL6gwnKvncaoD_GSniDQ7jf3VjbbUEcPE+J8EqdbZ92wkuK7FQ@mail.gmail.com>
+Message-ID: <97c1b0d7-14f0-415a-8966-b117b59e0c3a@fau.de>
+
+Am 09.03.25 um 18:15 schrieb Avraham Adler:
+> Hello.
+> 
+> I recently built a new computer and I am now using Windows 11. When
+> building a distribution of R-devel from source using the most recent
+> Rtools44, the build consistently fails at the point it is supposed to
+> build the vignettes from base with the message below. R-4-4-branch
+> (also 87913) completes without error but fails "make check".
+> 
+> R-devel Error:
+> ```
+> * DONE (mgcv)
+> building/updating vignettes for package 'grid' ...
+> processing 'displaylist.Rnw'
+> make[2]: *** [Makefile.win:99: vignettes] Error 1
+> make[1]: *** [Makefile:345: vignettes] Error 2
+> make: *** [Makefile:395: distribution] Error 2
+> ```
+> Looking at Makefile.win in .src/library at line 99 shows:
+> 
+> ```
+> vignettes:
+> @for pkg in grid parallel utils stats; do \
+>      $(ECHO) "building/updating vignettes for package '$${pkg}' ..."; \
+>      ($(ECHO) "tools:::.install_package_vignettes(\"$(srcdir)/$${pkg}\",
+> \"$(top_builddir)/library/$${pkg}\")") | \
+>          R_DEFAULT_PACKAGES="utils,tools" LC_ALL=C \
+>    R_LIBS_USER=NULL R_LIBS_SITE=NULL \
+>            $(R_EXE) > /dev/null || exit 1; \
+
+The '|| exit 1' only exists since r87822: previously, failures from 
+building the base vignettes would be missed.
+
+> done
+> @rm -Rf .vignettes
+> ```
+> 
+> While R-4-4 completes "make distribution" compilation, it fails make check with:
+> 
+> ```
+> Testing examples for package 'tools'
+>    comparing 'tools-Ex.Rout' to 'tools-Ex.Rout.save' ... NOTE
+>    1062,1063d1061
+>    < Warning in file(con, "r") :
+>    <   file("") only supports open = "w+" and open = "w+b": using the former
+>    1066,1067c1064,1065
+>    <  $ file    : chr ""
+>    <  $ title   : chr ""
+>    ---
+>    >  $ file    : chr "grid.Rnw"
+>    >  $ title   : chr "Introduction to grid"
+
+This output diff from the example in ?tools::vignetteInfo shows that 
+your R-4-4 installation indeed lacks base vignettes. Maybe pdflatex 
+isn't installed or in the PATH on your new system?
+
+> Testing examples for package 'utils'
+> Error: running examples in 'utils-Ex.R' failed
+> Error: testing 'utils' failed
+> Execution halted
+> make[3]: *** [Makefile.win:29: test-Examples-Base] Error 1
+> make[2]: *** [Makefile.common:208: test-Examples] Error 2
+> make[1]: *** [Makefile.common:193: test-all-basics] Error 1
+> make: *** [Makefile:333: check-devel] Error 2
+> ```
+
+There should be a file utils-Ex.Rout.fail (I think in tests/Examples/). 
+What does it say about the error?
+
+Hope this helps!
+
+	Sebastian Meyer
+
+> 
+> Some initial research indicated that permission issues can interfere
+> with vignette building. I have set Rtools44 to run as an administrator
+> and I confirmed that my build directory and all its subdirectories are
+> allowed full control by the logged-in windows account.
+> 
+> The only major difference between these sets of runs and those over
+> the last decade is the chip (Ryzen 9800X3D), which for vignettes
+> should be irrelevant, and the operating system?Windows 11 Pro instead
+> of Windows 10 Home. I don't know which change from R-4-4 to R-devel
+> triggers the error or why R-4-4 completes and fails the check. I have
+> exhausted my limited knowledge as to how to address the issue. Any
+> ideas as to why this may be happening and what I could do would be
+> greatly appreciated.
+> 
+> For completeness:
+> 
+> R VERSION AND TOOLS
+> R-devel version: 87913
+> R-4-4-branch:     87913
+> Rtools version: 6459
+> 
+> HARDWARE
+> Processor: AMD Ryzen 7 9800X3D 8-Core Processor
+> Installed RAM :192 GB (190 GB usable)
+> System type 64-bit operating system, x64-based processor
+> 
+> OPERATING SYSTEM
+> Edition Windows 11 Pro
+> Version 24H2
+> Installed on ?3/?7/?2025
+> OS build 26100.3194
+> Experience Windows Feature Experience Pack 1000.26100.48.0
+> 
+> Thank you,
+> 
+> Avi
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @vr@h@m@@d|er @end|ng |rom gm@||@com  Sun Mar  9 20:15:12 2025
+From: @vr@h@m@@d|er @end|ng |rom gm@||@com (Avraham Adler)
+Date: Sun, 9 Mar 2025 15:15:12 -0400
+Subject: [Rd] R-devel (87913) compilation fails at "make vignettes";
+ R-4-4 completes and fails "make check"
+In-Reply-To: <97c1b0d7-14f0-415a-8966-b117b59e0c3a@fau.de>
+References: <CAL6gwnKvncaoD_GSniDQ7jf3VjbbUEcPE+J8EqdbZ92wkuK7FQ@mail.gmail.com>
+ <97c1b0d7-14f0-415a-8966-b117b59e0c3a@fau.de>
+Message-ID: <CAL6gwnLbzSA7u_Xk78FkaggbD6fAUy6nAXn3NCWsNMnAsuYK5w@mail.gmail.com>
+
+Thank you very much, Sebastian. Your suggestion about checking the
+FAIL solved the problem. It reminded me that GCC 12+ has a bug
+regarding AVX2 alignments on Windows, which manifests when calling
+`agrep` or `adist`, the latter being precisely the point of failure in
+the FAIL file. See this thread [1] and this post in particular [2] for
+more detail. Restoring passing "-Wa,-muse-unaligned-vector-move" to
+EOPTS and Makevars solved the problem and check-devel passes. Tomas is
+going to be rightfully annoyed with me for forgetting!
+
+Thank you again!!
+
+Avi
+
+[1] https://stat.ethz.ch/pipermail/r-sig-windows/2024q1/000106.html
+[2] https://stat.ethz.ch/pipermail/r-sig-windows/2024q1/000113.html
+
+On Sun, Mar 9, 2025 at 1:55?PM Sebastian Meyer <seb.meyer at fau.de> wrote:
+>
+> Am 09.03.25 um 18:15 schrieb Avraham Adler:
+> > Hello.
+> >
+> > I recently built a new computer and I am now using Windows 11. When
+> > building a distribution of R-devel from source using the most recent
+> > Rtools44, the build consistently fails at the point it is supposed to
+> > build the vignettes from base with the message below. R-4-4-branch
+> > (also 87913) completes without error but fails "make check".
+> >
+> > R-devel Error:
+> > ```
+> > * DONE (mgcv)
+> > building/updating vignettes for package 'grid' ...
+> > processing 'displaylist.Rnw'
+> > make[2]: *** [Makefile.win:99: vignettes] Error 1
+> > make[1]: *** [Makefile:345: vignettes] Error 2
+> > make: *** [Makefile:395: distribution] Error 2
+> > ```
+> > Looking at Makefile.win in .src/library at line 99 shows:
+> >
+> > ```
+> > vignettes:
+> > @for pkg in grid parallel utils stats; do \
+> >      $(ECHO) "building/updating vignettes for package '$${pkg}' ..."; \
+> >      ($(ECHO) "tools:::.install_package_vignettes(\"$(srcdir)/$${pkg}\",
+> > \"$(top_builddir)/library/$${pkg}\")") | \
+> >          R_DEFAULT_PACKAGES="utils,tools" LC_ALL=C \
+> >    R_LIBS_USER=NULL R_LIBS_SITE=NULL \
+> >            $(R_EXE) > /dev/null || exit 1; \
+>
+> The '|| exit 1' only exists since r87822: previously, failures from
+> building the base vignettes would be missed.
+>
+> > done
+> > @rm -Rf .vignettes
+> > ```
+> >
+> > While R-4-4 completes "make distribution" compilation, it fails make check with:
+> >
+> > ```
+> > Testing examples for package 'tools'
+> >    comparing 'tools-Ex.Rout' to 'tools-Ex.Rout.save' ... NOTE
+> >    1062,1063d1061
+> >    < Warning in file(con, "r") :
+> >    <   file("") only supports open = "w+" and open = "w+b": using the former
+> >    1066,1067c1064,1065
+> >    <  $ file    : chr ""
+> >    <  $ title   : chr ""
+> >    ---
+> >    >  $ file    : chr "grid.Rnw"
+> >    >  $ title   : chr "Introduction to grid"
+>
+> This output diff from the example in ?tools::vignetteInfo shows that
+> your R-4-4 installation indeed lacks base vignettes. Maybe pdflatex
+> isn't installed or in the PATH on your new system?
+>
+> > Testing examples for package 'utils'
+> > Error: running examples in 'utils-Ex.R' failed
+> > Error: testing 'utils' failed
+> > Execution halted
+> > make[3]: *** [Makefile.win:29: test-Examples-Base] Error 1
+> > make[2]: *** [Makefile.common:208: test-Examples] Error 2
+> > make[1]: *** [Makefile.common:193: test-all-basics] Error 1
+> > make: *** [Makefile:333: check-devel] Error 2
+> > ```
+>
+> There should be a file utils-Ex.Rout.fail (I think in tests/Examples/).
+> What does it say about the error?
+>
+> Hope this helps!
+>
+>         Sebastian Meyer
+>
+> >
+> > Some initial research indicated that permission issues can interfere
+> > with vignette building. I have set Rtools44 to run as an administrator
+> > and I confirmed that my build directory and all its subdirectories are
+> > allowed full control by the logged-in windows account.
+> >
+> > The only major difference between these sets of runs and those over
+> > the last decade is the chip (Ryzen 9800X3D), which for vignettes
+> > should be irrelevant, and the operating system?Windows 11 Pro instead
+> > of Windows 10 Home. I don't know which change from R-4-4 to R-devel
+> > triggers the error or why R-4-4 completes and fails the check. I have
+> > exhausted my limited knowledge as to how to address the issue. Any
+> > ideas as to why this may be happening and what I could do would be
+> > greatly appreciated.
+> >
+> > For completeness:
+> >
+> > R VERSION AND TOOLS
+> > R-devel version: 87913
+> > R-4-4-branch:     87913
+> > Rtools version: 6459
+> >
+> > HARDWARE
+> > Processor: AMD Ryzen 7 9800X3D 8-Core Processor
+> > Installed RAM :192 GB (190 GB usable)
+> > System type 64-bit operating system, x64-based processor
+> >
+> > OPERATING SYSTEM
+> > Edition Windows 11 Pro
+> > Version 24H2
+> > Installed on ?3/?7/?2025
+> > OS build 26100.3194
+> > Experience Windows Feature Experience Pack 1000.26100.48.0
+> >
+> > Thank you,
+> >
+> > Avi
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
