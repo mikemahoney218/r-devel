@@ -2574,3 +2574,316 @@ On Sun, Mar 9, 2025 at 1:55?PM Sebastian Meyer <seb.meyer at fau.de> wrote:
 > > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From pd@|gd @end|ng |rom gm@||@com  Mon Mar 10 14:19:50 2025
+From: pd@|gd @end|ng |rom gm@||@com (peter dalgaard)
+Date: Mon, 10 Mar 2025 14:19:50 +0100
+Subject: [Rd] R 4.5.0 scheduled for April 11
+Message-ID: <983AEC97-BB06-46E4-8691-4C0F90F76F7B@gmail.com>
+
+Full schedule is available on developer.r-project.org (pending update from SVN).
+
+-- 
+Peter Dalgaard, Professor,
+Center for Statistics, Copenhagen Business School
+Solbjerg Plads 3, 2000 Frederiksberg, Denmark
+Phone: (+45)38153501
+Office: A 4.23
+Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From ||gge@ @end|ng |rom @t@t|@t|k@tu-dortmund@de  Mon Mar 10 14:36:57 2025
+From: ||gge@ @end|ng |rom @t@t|@t|k@tu-dortmund@de (Uwe Ligges)
+Date: Mon, 10 Mar 2025 14:36:57 +0100
+Subject: [Rd] write_PACKAGES's fields default
+In-Reply-To: <CAN+W6_uyiPFrxZY+1jpZfWr2OuyB8GjZWGasyKe3-0=Uj2R3iQ@mail.gmail.com>
+References: <CAN+W6_uyiPFrxZY+1jpZfWr2OuyB8GjZWGasyKe3-0=Uj2R3iQ@mail.gmail.com>
+Message-ID: <945a0cfd-76ea-402b-941f-6f74474ec156@statistik.tu-dortmund.de>
+
+
+
+On 01.03.2025 13:07, Llu?s Revilla wrote:
+> Dear list,
+> 
+> I'm trying to get some details from repositories with
+> available.packages. However, despite being included on the DESCRIPTION
+> files they are not available.
+> 
+> ap <- utils::available.packages(fields = "Additional_repositories",
+>      filters = c("CRAN", "duplicates"),
+>      ignore_repo_cache =  TRUE,
+>      repos = "https://cran.r-project.org")
+> ap[, "Additional_repositories"] |> is.na() |> all()
+> ## [1] TRUE
+> 
+> However, some packages like Seurat have the Additional_repositories
+> field [2]. If I try with another repository (Bioconductor software
+> repository):
+> 
+> ap <- available.packages(fields = "biocViews",
+>      ignore_repo_cache =  TRUE,
+>      repos = "https://bioconductor.org/packages/3.21/bioc")
+> ap[, "biocViews"] |> is.na() |> all()
+> ## [1] TRUE
+> 
+> It also misses the BiocViews field compulsory on that repository.
+> Both repositories use tools::write_PACKAGES [3][4] to generate the
+> file read by available.packages. This function writes by default
+> fields "needed by available.packages".
+> 
+> However, it is unclear what is needed for available.packages.
+> According to its documentation, it returns "details corresponding to
+> packages currently available at one or more repositories". To me this
+> would mean that fields on the DESCRIPTION files should appear, but the
+> default of write_PACKAGES doesn't write other fields besides
+> '"Package"', '"Version"', '"Priority"',  '"Depends"', '"Imports"',
+> '"LinkingTo"', '"Suggests"', '"Enhances"', '"OS_type"', '"License"'
+> and '"Archs"'.
+> 
+> I could approach each repository and ask to include more fields.
+> However, to match the documentation on available.packages and help all
+> repository administrators it would make sense to change the default on
+> write_PACKAGES.
+> Could the default fields be changed, so
+> that all fields available on packages' DESCRIPTION to
+> PACKAGES(.gz,.rds). Perhaps with fields = TRUE?
+> If this is too much it would be great if fields documented by Writing
+> R Extensions are written on PACKAGES.
+> This modification would make it easier for all to reuse repository data.
+> 
+> Many thanks for your consideration,
+> 
+> Llu?s
+> 
+> PD: From CRAN perspective CRAN_packages_db() function can be used to
+> get Additional_repositories, but this is limited to CRAN and won't
+> work for BiocViews on Bioconductor or for other arbitrary fields like
+> '"RoxygenNote"'.
+
+
+I'd indeed use
+
+Cpdb <- tools:::CRAN_package_db()
+Bpdb <- tools:::BioC_package_db()
+
+for the two mentioned repos. ALso, PACLAGES.... is downloaded very 
+frequently and should not grow too much.
+
+Is there a use case why available.packages() should provide this info 
+while not being less performant for package installatons etc.?
+
+Best,
+Uwe Ligges
+
+
+
+
+> 
+> [1]: https://stat.ethz.ch/pipermail/r-devel/2024-June/083477.html
+> [2]: https://cran.r-project.org/package=Seurat
+> [3]: https://svn.r-project.org/R-dev-web/trunk/CRAN/QA/Uwe/make/writeCRANPackages.R
+> [4]: https://github.com/Bioconductor/BBS/blob/devel/utils/makePropagationStatusDb.R#L348
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Mon Mar 10 16:52:59 2025
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Mon, 10 Mar 2025 16:52:59 +0100
+Subject: [Rd] S4: show() method for "MethodDefinition": show non-trivial
+ generic
+Message-ID: <26575.2779.682772.959686@stat.math.ethz.ch>
+
+Context: We are working to add complex and integer (sparse and dense)
+	 matrix classes to package Matrix.
+
+I'm working with "Ops", notably "Arith" group methods in order
+to ensure that all combinations of classes  and arithmetic,
+comparison, etc operators work.
+ { and yes, if you don't know anything about S4 or group methods
+   (which also exist for S3 or S7) you may now press "delete message"
+   and go on to something else ...
+
+   In the other case, maybe browse ?S4groupGeneric in R or on the web
+   https://rdrr.io/r/methods/S4groupGeneric.html  
+ }
+
+Debugging problems and testing, for me always involves lots of
+showMethods(..) and selectMethod(..) calls such as, say,
+
+ selectMethod("+", c("lgCMatrix", "nMatrix"))
+
+For the current (CRAN) version of Matrix, this prints the method
+definition, and then ends in
+
+   ...............
+   }
+   <environment: namespace:Matrix>
+
+   Signatures:
+	   e1          e2       
+   target  "lgCMatrix" "nMatrix"
+   defined "lMatrix"   "nMatrix"
+   >
+
+I did only ask for the "+" method, but of course,
+e.g., when looking where we got this implemented, it is interesting
+to note if this is from a "+" or an "Arith" or even (most
+generally), an "Ops" method definition.
+
+Now, fortunately, the selectMethod() object *does* contain this
+information in its `generic` slot, but the show() method does not show it.
+
+I propose to look into fixing this situation, such that in cases
+as this one, there would be one additional line of show() output
+   ` Generic: "Ops" `
+and it would show (not the '~~~~~~~~~~~~~~' line I only added
+here for visibility) :
+
+
+   ...............
+   }
+   <environment: namespace:Matrix>
+
+   Generic: "Ops"
+   ~~~~~~~~~~~~~~
+   Signatures:
+	   e1          e2       
+   target  "lgCMatrix" "nMatrix"
+   defined "lMatrix"   "nMatrix"
+   >
+
+
+Of course this may break people's "pipelines" if they rely on
+exact reproduction of R's console (or *.Rout R batch) output.
+Apart from that, I see really advantages here, and I don't expect
+the net effect to be problematic.
+
+It may affect  the many Bioconductor packages using S4, and I'm
+particularly glad for feedback from "there".
+
+With thanks in advance,
+Martin
+
+
+--
+Martin Maechler
+ETH Zurich   and   R Core team
+
+
+From |@go@g|ne @end|ng |rom @jd@e@  Mon Mar 10 17:22:23 2025
+From: |@go@g|ne @end|ng |rom @jd@e@ (=?UTF-8?Q?Iago_Gin=C3=A9-V=C3=A1zquez?=)
+Date: Mon, 10 Mar 2025 17:22:23 +0100
+Subject: [Rd] Customizing width of input in Rterm
+In-Reply-To: <20250226144203.203a8a31@arachnoid>
+References: <725b0cf4-4874-4747-9bba-4ae24891ba38@sjd.es>
+ <20250226144203.203a8a31@arachnoid>
+Message-ID: <8c90ae43-cad4-411a-af12-1ef08d7f492f@sjd.es>
+
+Thank you, Ivan!
+
+On 26/02/2025 12:42, Ivan Krylov wrote:
+
+> ? Fri, 21 Feb 2025 11:52:41 +0100
+> Iago Gin?-V?zquez<iago.gine at sjd.es> ?????:
+>
+>> When using Rterm.exe (on Windows, I didn?t check Linux) only a
+>> limited number of characters is displayed in the input lines,
+>> independent on the |width| option, and, when navigating through the
+>> command history this becomes very uncomfortable, since a command is
+>> not fully displayed and, for example, it is very difficult to know
+>> which parts of a command are being edited.
+> The patch at the end of this message reads the console width on startup
+> and handles the console resize events while getline() is running. The
+> automatic resizing doesn't look nice due to gl_redraw() starting a new
+> line newline before redrawing the prompt, but it works.
+>
+> This may have accessibility implications since it changes the behaviour
+> of Rterm.exe, which is what A. Jonathan R. Godfrey recommends for blind
+> Windows users [1]. I've experimented with NVDA and didn't notice
+> anything breaking in Windows 10 terminal or mintty.exe, but it's hard
+> to be sure without the real experience of using a screen reader.
+>
+> Is this approach worth adopting? Is it better to erase the current line
+> instead of starting a new one? options(setWidthOnResize) could be
+> implemented similarly but may require more care due to
+> R_SetOptionWidth(...) evaluating R code.
+>
+> Index: src/gnuwin32/getline/getline.c
+> ===================================================================
+> --- src/gnuwin32/getline/getline.c	(revision 87795)
+> +++ src/gnuwin32/getline/getline.c	(working copy)
+> @@ -25,6 +25,7 @@
+>   int 		(*gl_in_hook)(char *) = 0;
+>   int 		(*gl_out_hook)(char *) = 0;
+>   int 		(*gl_tab_hook)(char *, int, int *) = gl_tab;
+> +static int      do_setwidth(int w);
+>   
+>   #include <Rconfig.h>
+>   #include <R_ext/Riconv.h>
+> @@ -214,6 +215,10 @@
+>            The bug still exists in Windows 10, and thus we now call
+>            GetConsoleInputW to get uchar.UnicodeChar. */
+>         ReadConsoleInputW(Win32InputStream, &r, 1, &a);
+> +      if (r.EventType == WINDOW_BUFFER_SIZE_EVENT) {
+> +        if (do_setwidth(r.Event.WindowBufferSizeEvent.dwSize.X))
+> +          gl_redraw();
+> +      }
+>         if (!(r.EventType == KEY_EVENT)) break;
+>         st = r.Event.KeyEvent.dwControlKeyState;
+>         vk = r.Event.KeyEvent.wVirtualKeyCode;
+> @@ -487,6 +492,11 @@
+>       gl_w2e_map = gl_realloc(NULL, 0, BUF_SIZE, sizeof(size_t));
+>   
+>       gl_char_init();
+> +
+> +    CONSOLE_SCREEN_BUFFER_INFO csb;
+> +    GetConsoleScreenBufferInfo(Win32OutputStream, &csb);
+> +    do_setwidth(csb.dwSize.X);
+> +
+>       gl_init_done = 1;
+>   }
+>   
+> @@ -536,13 +546,21 @@
+>       BUF_SIZE = newsize;
+>   }
+>   
+> +static int
+> +do_setwidth(int w)
+> +{
+> +    /* may be called from gl_getc if a resize event is received */
+> +    if (w > 20) {
+> +	gl_w_termw = w;
+> +	return 1;
+> +    }
+> +    return 0;
+> +}
+> +
+>   void
+>   gl_setwidth(int w)
+>   {
+> -    /* not used in R; should arrange for redraw */
+> -    if (w > 20)
+> -	gl_w_termw = w;
+> -    else
+> +    if (!do_setwidth(w))
+>   	gl_error("\n*** Error: minimum screen width is 21\n");
+>   }
+>   
+>
+>
+&#8203;
+
+-------------- next part --------------
+A non-text attachment was scrubbed...
+Name: OpenPGP_signature.asc
+Type: application/pgp-signature
+Size: 665 bytes
+Desc: OpenPGP digital signature
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20250310/365bb625/attachment.sig>
+
