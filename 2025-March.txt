@@ -3060,3 +3060,183 @@ On Mon, 10 Mar 2025 at 14:37, Uwe Ligges
 >
 
 
+From edd @end|ng |rom deb|@n@org  Sat Mar 15 04:25:54 2025
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Fri, 14 Mar 2025 22:25:54 -0500
+Subject: [Rd] R-devel, bool, and C23
+Message-ID: <26580.62274.590859.894472@rob.eddelbuettel.com>
+
+
+An older package I looked at apparently currently fails to build under
+r-devel (and with that my thanks to R-universe for giving us a 'broad' range
+of builds for free -- off our development sources) over 'bool' related
+changes and enum definitions.
+
+I can get it to behave and build by declaring
+
+  PKG_CFLAGS = -std=gnu23
+
+but then I get a nag from both r-devel and r-release that
+
+  W  checking compilation flags in Makevars ...
+     Non-portable flags in variable 'PKG_CFLAGS':
+       -std=gnu23
+
+Reading the texi sources of r-devel's update WRE did not reveal a better way,
+but maybe I missed it. Is there are preferred approach?
+
+(My r-release and r-devel are current(ish): 4.4.3 and r87909, respectively.)
+
+Thanks in advance for any pointers.
+
+Cheers, Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From |kry|ov @end|ng |rom d|@root@org  Sat Mar 15 07:49:58 2025
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Sat, 15 Mar 2025 09:49:58 +0300
+Subject: [Rd] R-devel, bool, and C23
+In-Reply-To: <26580.62274.590859.894472@rob.eddelbuettel.com>
+References: <26580.62274.590859.894472@rob.eddelbuettel.com>
+Message-ID: <20250315094958.3ae62fe7@Tarkus>
+
+On Fri, 14 Mar 2025 22:25:54 -0500
+Dirk Eddelbuettel <edd at debian.org> wrote:
+
+> An older package I looked at apparently currently fails to build under
+> r-devel (and with that my thanks to R-universe for giving us a
+> 'broad' range of builds for free -- off our development sources) over
+> 'bool' related changes and enum definitions.
+> 
+> I can get it to behave and build by declaring
+> 
+>   PKG_CFLAGS = -std=gnu23
+
+Could you please share the compilation failure messages? The -std=gnu23
+flag causes R_ext/Boolean.h to _not_ #include <stdbool.h> before
+defining enum Rboolean, so the problem is likely related to that.
+
+-- 
+Best regards,
+Ivan
+
+
+From edd @end|ng |rom deb|@n@org  Sat Mar 15 13:51:11 2025
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Sat, 15 Mar 2025 07:51:11 -0500
+Subject: [Rd] R-devel, bool, and C23
+In-Reply-To: <20250315094958.3ae62fe7@Tarkus>
+References: <26580.62274.590859.894472@rob.eddelbuettel.com>
+ <20250315094958.3ae62fe7@Tarkus>
+Message-ID: <26581.30655.401159.119676@rob.eddelbuettel.com>
+
+
+On 15 March 2025 at 09:49, Ivan Krylov wrote:
+| On Fri, 14 Mar 2025 22:25:54 -0500
+| Dirk Eddelbuettel <edd at debian.org> wrote:
+| 
+| > An older package I looked at apparently currently fails to build under
+| > r-devel (and with that my thanks to R-universe for giving us a
+| > 'broad' range of builds for free -- off our development sources) over
+| > 'bool' related changes and enum definitions.
+| > 
+| > I can get it to behave and build by declaring
+| > 
+| >   PKG_CFLAGS = -std=gnu23
+| 
+| Could you please share the compilation failure messages? The -std=gnu23
+| flag causes R_ext/Boolean.h to _not_ #include <stdbool.h> before
+| defining enum Rboolean, so the problem is likely related to that.
+
+Sure thing. It is as so often a C++ package but has one C file src/init.c
+which begins with
+
+  #include <R.h>
+  #include <Rinternals.h>
+  #include <stdlib.h> // for NULL
+  #include <R_ext/Rdynload.h>
+
+and compilation then fails with
+
+  In file included from /usr/local/lib/R-devel/lib/R/include/R.h:70,
+                   from init.c:1:
+  /usr/local/lib/R-devel/lib/R/include/R_ext/Boolean.h:62:16: warning: ISO C does not support specifying ?enum? underlying types before C23 [-Wpedantic]
+     62 |   typedef enum :int { FALSE = 0, TRUE } Rboolean;  // so NOT NA
+        |                ^
+
+so apparently R.h as it is upsets it.
+
+Cheers, Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From |kry|ov @end|ng |rom d|@root@org  Sat Mar 15 14:26:31 2025
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Sat, 15 Mar 2025 16:26:31 +0300
+Subject: [Rd] R-devel, bool, and C23
+In-Reply-To: <26581.30655.401159.119676@rob.eddelbuettel.com>
+References: <26580.62274.590859.894472@rob.eddelbuettel.com>
+ <20250315094958.3ae62fe7@Tarkus>
+ <26581.30655.401159.119676@rob.eddelbuettel.com>
+Message-ID: <20250315162631.6424c52b@Tarkus>
+
+On Sat, 15 Mar 2025 07:51:11 -0500
+Dirk Eddelbuettel <edd at debian.org> wrote:
+
+>   /usr/local/lib/R-devel/lib/R/include/R_ext/Boolean.h:62:16: warning: ISO C does not support specifying ?enum? underlying types before C23 [-Wpedantic]
+>      62 |   typedef enum :int { FALSE = 0, TRUE } Rboolean;  // so NOT NA
+>       A |                ^
+
+I think that the configure test [1] succeeds in non-C23 mode because
+the test program compiles successfully (despite the warning), causing
+the enum-related warning for any compilation units that include
+R_ext/Boolean.h.
+
+Since there may be no portable way to specify CFLAGS=-Werror for the
+AC_RUN_IFELSE(...) test, perhaps the configure test should also test
+for the reported C standard version? But that of course could also be
+wrong...
+
+-- 
+Best regards,
+Ivan
+
+[1]
+https://github.com/r-devel/r-svn/blob/886ba5f282a82d6f327211b08b4fa502641c7ef8/m4/R.m4#L5442-L5459
+
+
+From edd @end|ng |rom deb|@n@org  Sat Mar 15 20:53:41 2025
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Sat, 15 Mar 2025 14:53:41 -0500
+Subject: [Rd] R-devel, bool, and C23
+In-Reply-To: <20250315162631.6424c52b@Tarkus>
+References: <26580.62274.590859.894472@rob.eddelbuettel.com>
+ <20250315094958.3ae62fe7@Tarkus>
+ <26581.30655.401159.119676@rob.eddelbuettel.com>
+ <20250315162631.6424c52b@Tarkus>
+Message-ID: <26581.56005.953244.379850@rob.eddelbuettel.com>
+
+
+Follow-up and 'case (sort of) closed': Tomas and I dug around some more and
+it is due to me setting CC in ~/.R/Makevars (to
+
+  VER=-14
+  CCACHE=ccache
+  CC=$(CCACHE) gcc$(VER)
+
+which drops the compilation standard flag (needed here for C23) and attached
+to CC by configure.
+
+I think that is actually buggy. It should attach it to CFLAGS, no?
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
