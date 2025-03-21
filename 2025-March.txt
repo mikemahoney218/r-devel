@@ -3276,3 +3276,310 @@ Best
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From ht @end|ng |rom he@therturner@net  Wed Mar 19 14:45:28 2025
+From: ht @end|ng |rom he@therturner@net (Heather Turner)
+Date: Wed, 19 Mar 2025 13:45:28 +0000
+Subject: [Rd] R Dev Day @ useR! 2025, Mon 11 Aug, Duke University
+Message-ID: <5fd362a2-252c-4859-9460-209fb5e56db0@app.fastmail.com>
+
+Dear All,
+
+The next R Dev Day will be the day after useR! 2025, at Duke University, Durham, NC, USA on Monday 11 August.
+
+Read more details and apply for a place: https://user2025.r-project.org/additional/r-dev-day
+
+*Deadline: Tuesday, 15 April (midnight anywhere on earth).*
+
+The latest information for all upcoming R Dev Days can be found on the contributor site: https://contributor.r-project.org/events/r-dev-days/.
+
+Best wishes,
+
+Heather
+
+
+From therne@u @end|ng |rom m@yo@edu  Wed Mar 19 17:49:31 2025
+From: therne@u @end|ng |rom m@yo@edu (Therneau, Terry M., Ph.D.)
+Date: Wed, 19 Mar 2025 16:49:31 +0000
+Subject: [Rd] Problems with ::
+Message-ID: <BL0PR01MB4625B1FDA4ACA669297120E3AED92@BL0PR01MB4625.prod.exchangelabs.com>
+
+In response to the tidyverse habit of adding another zillion functions to one's search space, the use of things like survival::coxph is becoming more common.  But this practice breaks the use of the specials argument in terms.formula, something that I make heavy use of in the survival package.   The following two pairs of models give different answers, and the second is wrong.
+
+fit1a <- lm(GNP ~  Year + offset(Unemployed), longley)
+fit1b<- lm(GNP ~  Year + stats::offset(Unemployed), longley)
+
+fit1a <- survdiff(Surv(time, status) ~ rx + cluster(litter), rats)
+fit1b <- survdiff(Surv(time, status) ~ rx + survival::cluster(litter), rats)
+zed <- survival::cluster(rats$litter)
+fit1c <- survdiff(Surv(time, status) ~ rx + zed, rats)
+
+In the most recent CRAN version of survival I added some pre-processing steps that successfully catch fit1b, by stripping off  "survival::" from formulas before calling terms.formula.   But I can't prevent fit1c, and don't yet know if there are other case not covered by my current hack.  At least one of the CRAN packages that depends on survival has an example of exactly fit1c in their test suite.
+
+The survival package uses the special argument a lot: strata, cluster, pspline, tt, frailty, and ridge.  I'm trying to think of a good plan for long term changes.   I list 3 below, and am hoping for better ideas or input.
+
+a. Caveat emptor:  If you work hard to fool the specials argument, and succeed, then "Congratulations, you fooled the parser."
+
+b. What I did early on with tt(), which is to make the function defition completely internal to coxph (the only survival function that uses tt).   People who type survival::tt or  survival:::tt get an error message.   A plus of this is that the error message will  wean users from pasting survival:: to everything inside a formula.   The disadvantages are first that it will break existing user code (most of which should be broken -- its not doing what they think), a second is that there may be use cases for strata, say, outside of a survival formula; it is essentially factor with shorter default labels.
+
+c. Make all of these functions have a class, and rewrite the code to depend on the class rather than specials.  The Surv function is recognized in this way, so is not harmed by survival::Surv.  It is also why calling Surv to create a new variable is fine.  I'd still retain specials,  to support legacy code.
+
+The more ornery part of me votes for b (what is the effect on help files)?    In any case a change won't happen overnight.
+Do we leave offset in the caveat emptor group?
+A small section needs to be added to the "user written packages" document, where it talks about specials.
+What other packages use specials?
+
+Terry T.
+
+
+
+
+
+
+
+	[[alternative HTML version deleted]]
+
+
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Wed Mar 19 18:58:46 2025
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Wed, 19 Mar 2025 10:58:46 -0700
+Subject: [Rd] structure(<primitive function>, ...) is sticky: a bug,
+ or should it be an error?
+Message-ID: <CAFDcVCTka7-qHEHZ6U42ynSVffpEgZwboqJBOuDMCAMEtyNaFQ@mail.gmail.com>
+
+Hello.
+
+I just (re-)discovered that structure(sum, init = 100) is "sticky",
+i.e. it stays with base::sum(). Here's an minimal example:
+
+$ R --vanilla --quiet
+> void <- structure(sum, some_attr = TRUE)
+> str(sum)
+function (..., na.rm = FALSE)
+ - attr(*, "some_attr")= logi TRUE
+
+>From my very basic troubleshooting, it looks like this is happening
+for primitive functions. I think I understand that this comes down to
+primitive functions cannot be copied and baseenv() being special, i.e.
+in structure() there will be no copy made of the primitive function,
+and then attributes()<- ends up modifying the original primitive
+function. Even if this is a documented feature, I believe, it is a
+silent feature with risky side effects. We might already have code out
+there that silently produces incorrect results, because of this
+behavior. For example, I was about to a custom reduce() function where
+I control the initial value via an "init" attribute of the reducer
+function, e.g.
+
+x <- 1:10
+sum1 <- reduce(x, `+`)
+sum2 <- reduce(x, structure(`+`, init = 100))  # == 100 + sum1
+
+If I then call:
+
+sum3 <- reduce(x, `+`)
+
+the 'init' attribute that was set in the sum2 statement will affect
+sum3 such that sum3 == sum2, not sum3 == sum1 as one would expect.
+
+
+SUGGESTIONS:
+
+If this is a bug, then I think it needs to be fixed. If it cannot be
+fixed, maybe this could be protected against, e.g.
+
+> void <- structure(sum, some_attr = TRUE)
+Error: You must not set attributes on a primitive function: sum
+
+Maybe it's sufficient to implement a protection against this in
+attr()<-, attributes()<-, and class()<-.
+
+Comments?
+
+/Henrik
+
+PS. I've verified this with R 4.4.3 and  R Under development
+(unstable) (2025-03-19 r88003).
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Wed Mar 19 19:37:03 2025
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Wed, 19 Mar 2025 14:37:03 -0400
+Subject: [Rd] Problems with ::
+In-Reply-To: <BL0PR01MB4625B1FDA4ACA669297120E3AED92@BL0PR01MB4625.prod.exchangelabs.com>
+References: <BL0PR01MB4625B1FDA4ACA669297120E3AED92@BL0PR01MB4625.prod.exchangelabs.com>
+Message-ID: <b0a6c71d-65b6-441c-a5e2-38f79792c47b@gmail.com>
+
+On 2025-03-19 12:49 p.m., Therneau, Terry M., Ph.D. via R-devel wrote:
+> In response to the tidyverse habit of adding another zillion functions to one's search space, the use of things like survival::coxph is becoming more common.  But this practice breaks the use of the specials argument in terms.formula, something that I make heavy use of in the survival package.   The following two pairs of models give different answers, and the second is wrong.
+> 
+> fit1a <- lm(GNP ~  Year + offset(Unemployed), longley)
+> fit1b<- lm(GNP ~  Year + stats::offset(Unemployed), longley)
+> 
+> fit1a <- survdiff(Surv(time, status) ~ rx + cluster(litter), rats)
+> fit1b <- survdiff(Surv(time, status) ~ rx + survival::cluster(litter), rats)
+> zed <- survival::cluster(rats$litter)
+> fit1c <- survdiff(Surv(time, status) ~ rx + zed, rats)
+> 
+> In the most recent CRAN version of survival I added some pre-processing steps that successfully catch fit1b, by stripping off  "survival::" from formulas before calling terms.formula.   But I can't prevent fit1c, and don't yet know if there are other case not covered by my current hack.  At least one of the CRAN packages that depends on survival has an example of exactly fit1c in their test suite.
+> 
+> The survival package uses the special argument a lot: strata, cluster, pspline, tt, frailty, and ridge.  I'm trying to think of a good plan for long term changes.   I list 3 below, and am hoping for better ideas or input.
+> 
+> a. Caveat emptor:  If you work hard to fool the specials argument, and succeed, then "Congratulations, you fooled the parser."
+> 
+> b. What I did early on with tt(), which is to make the function defition completely internal to coxph (the only survival function that uses tt).   People who type survival::tt or  survival:::tt get an error message.   A plus of this is that the error message will  wean users from pasting survival:: to everything inside a formula.   The disadvantages are first that it will break existing user code (most of which should be broken -- its not doing what they think), a second is that there may be use cases for strata, say, outside of a survival formula; it is essentially factor with shorter default labels.
+> 
+> c. Make all of these functions have a class, and rewrite the code to depend on the class rather than specials.  The Surv function is recognized in this way, so is not harmed by survival::Surv.  It is also why calling Surv to create a new variable is fine.  I'd still retain specials,  to support legacy code.
+> 
+> The more ornery part of me votes for b (what is the effect on help files)?    In any case a change won't happen overnight.
+> Do we leave offset in the caveat emptor group?
+> A small section needs to be added to the "user written packages" document, where it talks about specials.
+> What other packages use specials?
+
+For those functions where the "survival::" prefix leads to the wrong 
+behaviour, I'd suggest defining a function that always generates an 
+error. For example,
+
+cluster <- function(...)
+   stop("In the survival package, cluster() is not a real function.  It 
+has special meaning in formulas and should only be used there.")
+
+
+This will conflict with any of those functions (like survival::strata?) 
+that are supposed to be meaningful outside of a formula.  In that case 
+you'd have to rename either the special or the function, so you use two 
+different names, e.g.
+rata
+
+strata <- function(...)
+   stop("In the survival package version x.y or later, strata() is not a 
+real function.  It has special meaning in formulas and should only be 
+used there.  Use Strata() outside of a formula.")
+
+Duncan Murdoch
+
+
+From @vi@e@gross m@iii@g oii gm@ii@com  Wed Mar 19 19:52:51 2025
+From: @vi@e@gross m@iii@g oii gm@ii@com (@vi@e@gross m@iii@g oii gm@ii@com)
+Date: Wed, 19 Mar 2025 14:52:51 -0400
+Subject: [Rd] Problems with ::
+In-Reply-To: <BL0PR01MB4625B1FDA4ACA669297120E3AED92@BL0PR01MB4625.prod.exchangelabs.com>
+References: <BL0PR01MB4625B1FDA4ACA669297120E3AED92@BL0PR01MB4625.prod.exchangelabs.com>
+Message-ID: <008001db9900$1db013d0$59103b70$@gmail.com>
+
+Terry,
+
+If I understand you, this is a problem anytime you include more than one
+function with the same name and the latest masks all others. It is not only
+a problem with the tidyverse, albeit that is an example of bringing in quite
+a few functions from many packages at once.
+
+I wonder if the following work-around makes some sense or will just cause
+more issues somewhere.
+
+Your concern is that if the user asks for something like package::function
+it can cause issues. You are exploring options but I wonder if t can be
+handled somewhat by the caller not using that.
+
+Consider a function like stats::filter which is often masked by
+dplyr::filter. If I ask for help on "filter" BEFORE loading tidyverse, I see
+the stats version and can use it. After loading, the dplyr version is used
+and the help shows both as it looks.
+
+But when I add the line: 
+
+filter <- stats::filter
+
+I can reset it so the proper function is called. If you need both, you can
+do something like this:
+
+statsfilter <- stats::filter
+
+The point is when calling another function such as your example, the
+"package::" need not be passed along and all the other side would see is
+"filter" which it would evaluate in an environment that hopefully now works
+properly. 
+
+In your case, would the following change work?
+
+workaround_cluster<- survival::cluster
+
+And then use "workaround_cluster" to avoid the confusion you need.
+
+This is not a SOLUTION in any real sense but if it works, could be helpful
+to some. Assuming dplyr has no compatibility, you can then use dplyr::filter
+when you want the other one or ...
+
+-----Original Message-----
+From: R-devel <r-devel-bounces at r-project.org> On Behalf Of Therneau, Terry
+M., Ph.D. via R-devel
+Sent: Wednesday, March 19, 2025 12:50 PM
+To: r-devel at r-project.org
+Subject: [Rd] Problems with ::
+
+In response to the tidyverse habit of adding another zillion functions to
+one's search space, the use of things like survival::coxph is becoming more
+common.  But this practice breaks the use of the specials argument in
+terms.formula, something that I make heavy use of in the survival package.
+The following two pairs of models give different answers, and the second is
+wrong.
+
+fit1a <- lm(GNP ~  Year + offset(Unemployed), longley)
+fit1b<- lm(GNP ~  Year + stats::offset(Unemployed), longley)
+
+fit1a <- survdiff(Surv(time, status) ~ rx + cluster(litter), rats)
+fit1b <- survdiff(Surv(time, status) ~ rx + survival::cluster(litter), rats)
+zed <- survival::cluster(rats$litter)
+fit1c <- survdiff(Surv(time, status) ~ rx + zed, rats)
+
+In the most recent CRAN version of survival I added some pre-processing
+steps that successfully catch fit1b, by stripping off  "survival::" from
+formulas before calling terms.formula.   But I can't prevent fit1c, and
+don't yet know if there are other case not covered by my current hack.  At
+least one of the CRAN packages that depends on survival has an example of
+exactly fit1c in their test suite.
+
+The survival package uses the special argument a lot: strata, cluster,
+pspline, tt, frailty, and ridge.  I'm trying to think of a good plan for
+long term changes.   I list 3 below, and am hoping for better ideas or
+input.
+
+a. Caveat emptor:  If you work hard to fool the specials argument, and
+succeed, then "Congratulations, you fooled the parser."
+
+b. What I did early on with tt(), which is to make the function defition
+completely internal to coxph (the only survival function that uses tt).
+People who type survival::tt or  survival:::tt get an error message.   A
+plus of this is that the error message will  wean users from pasting
+survival:: to everything inside a formula.   The disadvantages are first
+that it will break existing user code (most of which should be broken -- its
+not doing what they think), a second is that there may be use cases for
+strata, say, outside of a survival formula; it is essentially factor with
+shorter default labels.
+
+c. Make all of these functions have a class, and rewrite the code to depend
+on the class rather than specials.  The Surv function is recognized in this
+way, so is not harmed by survival::Surv.  It is also why calling Surv to
+create a new variable is fine.  I'd still retain specials,  to support
+legacy code.
+
+The more ornery part of me votes for b (what is the effect on help files)?
+In any case a change won't happen overnight.
+Do we leave offset in the caveat emptor group?
+A small section needs to be added to the "user written packages" document,
+where it talks about specials.
+What other packages use specials?
+
+Terry T.
+
+
+
+
+
+
+
+	[[alternative HTML version deleted]]
+
+______________________________________________
+R-devel at r-project.org mailing list
+https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
