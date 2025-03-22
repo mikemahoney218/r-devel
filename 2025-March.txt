@@ -3583,3 +3583,207 @@ R-devel at r-project.org mailing list
 https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Mar 20 11:31:40 2025
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 20 Mar 2025 11:31:40 +0100
+Subject: [Rd] structure(<primitive function>, ...) is sticky: a bug,
+ or should it be an error?
+In-Reply-To: <CAFDcVCTka7-qHEHZ6U42ynSVffpEgZwboqJBOuDMCAMEtyNaFQ@mail.gmail.com>
+References: <CAFDcVCTka7-qHEHZ6U42ynSVffpEgZwboqJBOuDMCAMEtyNaFQ@mail.gmail.com>
+Message-ID: <26587.61068.527937.384919@stat.math.ethz.ch>
+
+>>>>> Henrik Bengtsson 
+>>>>>     on Wed, 19 Mar 2025 10:58:46 -0700 writes:
+
+    > Hello.
+    > I just (re-)discovered that structure(sum, init = 100) is "sticky",
+    > i.e. it stays with base::sum(). Here's an minimal example:
+
+    > $ R --vanilla --quiet
+    >> void <- structure(sum, some_attr = TRUE)
+    >> str(sum)
+    > function (..., na.rm = FALSE)
+    > - attr(*, "some_attr")= logi TRUE
+
+    >> From my very basic troubleshooting, it looks like this is happening
+    > for primitive functions. I think I understand that this comes down to
+    > primitive functions cannot be copied and baseenv() being special, i.e.
+    > in structure() there will be no copy made of the primitive function,
+    > and then attributes()<- ends up modifying the original primitive
+    > function. Even if this is a documented feature, I believe, it is a
+    > silent feature with risky side effects. We might already have code out
+    > there that silently produces incorrect results, because of this
+    > behavior. For example, I was about to a custom reduce() function where
+    > I control the initial value via an "init" attribute of the reducer
+    > function, e.g.
+
+    > x <- 1:10
+    > sum1 <- reduce(x, `+`)
+    > sum2 <- reduce(x, structure(`+`, init = 100))  # == 100 + sum1
+
+    > If I then call:
+
+    > sum3 <- reduce(x, `+`)
+
+    > the 'init' attribute that was set in the sum2 statement will affect
+    > sum3 such that sum3 == sum2, not sum3 == sum1 as one would expect.
+
+
+    > SUGGESTIONS:
+
+    > If this is a bug, then I think it needs to be fixed. If it cannot be
+    > fixed, maybe this could be protected against, e.g.
+
+    >> void <- structure(sum, some_attr = TRUE)
+    > Error: You must not set attributes on a primitive function: sum
+
+    > Maybe it's sufficient to implement a protection against this in
+    > attr()<-, attributes()<-, and class()<-.
+
+    > Comments?
+
+    > /Henrik
+
+Yes, this is a bug -- a version of your code above:
+
+> void <- structure(sum, foo = TRUE)
+> identical(void, sum)
+[1] TRUE
+> sum
+function (..., na.rm = FALSE)  .Primitive("sum")
+attr(,"foo")
+[1] TRUE
+> 
+
+Above, you are already looking at ways to deal with it; and that
+*is* more delicate, indeed:
+
+One thing we (R core) found previously (a couple of years ago)
+ was that the  `structure(..)` function was
+already too "slow" for it to be used in some base R functions,
+and adding another  if(..) to it will not help making it faster ...
+
+OTOH, structure() being a pure R function (no direct .Internal(), .Call() ..)
+is also important I think,  as it keeps its code nicely self documenting.
+
+I'm pretty convinced we should fix it by checking for primitive
+functions inside the C code of `attributes<-` :
+arguably the bug is really there, rather than in structure().
+
+Patches are welcome (via R's Bugzilla or just here).
+
+Martin
+
+
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Thu Mar 20 19:55:05 2025
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Thu, 20 Mar 2025 11:55:05 -0700
+Subject: [Rd] structure(<primitive function>, ...) is sticky: a bug,
+ or should it be an error?
+In-Reply-To: <26587.61068.527937.384919@stat.math.ethz.ch>
+References: <CAFDcVCTka7-qHEHZ6U42ynSVffpEgZwboqJBOuDMCAMEtyNaFQ@mail.gmail.com>
+ <26587.61068.527937.384919@stat.math.ethz.ch>
+Message-ID: <CAFDcVCSyG1HxUO1ZNUxQ=BGUGgPtoVQBqySnWg_EJyLa_VtzZA@mail.gmail.com>
+
+> I'm pretty convinced we should fix it by checking for primitive
+> functions inside the C code of `attributes<-` :
+> arguably the bug is really there, rather than in structure().
+>
+> Patches are welcome (via R's Bugzilla or just here).
+
+Thank you Martin. I'll make sure I create a brief BugZilla report on
+this, and hopefully a follow with a patch later on.
+
+One question on urgency or not: Is it too late to get such a change in
+for the R 4.5.0 release? I suspect so, because it has a potential of
+breaking existing packages. But if there's a possibility of fixing
+this in R 4.5.0, I'll make this a top priority.  Please let me know.
+
+/Henrik
+
+On Thu, Mar 20, 2025 at 3:31?AM Martin Maechler
+<maechler at stat.math.ethz.ch> wrote:
+>
+> >>>>> Henrik Bengtsson
+> >>>>>     on Wed, 19 Mar 2025 10:58:46 -0700 writes:
+>
+>     > Hello.
+>     > I just (re-)discovered that structure(sum, init = 100) is "sticky",
+>     > i.e. it stays with base::sum(). Here's an minimal example:
+>
+>     > $ R --vanilla --quiet
+>     >> void <- structure(sum, some_attr = TRUE)
+>     >> str(sum)
+>     > function (..., na.rm = FALSE)
+>     > - attr(*, "some_attr")= logi TRUE
+>
+>     >> From my very basic troubleshooting, it looks like this is happening
+>     > for primitive functions. I think I understand that this comes down to
+>     > primitive functions cannot be copied and baseenv() being special, i.e.
+>     > in structure() there will be no copy made of the primitive function,
+>     > and then attributes()<- ends up modifying the original primitive
+>     > function. Even if this is a documented feature, I believe, it is a
+>     > silent feature with risky side effects. We might already have code out
+>     > there that silently produces incorrect results, because of this
+>     > behavior. For example, I was about to a custom reduce() function where
+>     > I control the initial value via an "init" attribute of the reducer
+>     > function, e.g.
+>
+>     > x <- 1:10
+>     > sum1 <- reduce(x, `+`)
+>     > sum2 <- reduce(x, structure(`+`, init = 100))  # == 100 + sum1
+>
+>     > If I then call:
+>
+>     > sum3 <- reduce(x, `+`)
+>
+>     > the 'init' attribute that was set in the sum2 statement will affect
+>     > sum3 such that sum3 == sum2, not sum3 == sum1 as one would expect.
+>
+>
+>     > SUGGESTIONS:
+>
+>     > If this is a bug, then I think it needs to be fixed. If it cannot be
+>     > fixed, maybe this could be protected against, e.g.
+>
+>     >> void <- structure(sum, some_attr = TRUE)
+>     > Error: You must not set attributes on a primitive function: sum
+>
+>     > Maybe it's sufficient to implement a protection against this in
+>     > attr()<-, attributes()<-, and class()<-.
+>
+>     > Comments?
+>
+>     > /Henrik
+>
+> Yes, this is a bug -- a version of your code above:
+>
+> > void <- structure(sum, foo = TRUE)
+> > identical(void, sum)
+> [1] TRUE
+> > sum
+> function (..., na.rm = FALSE)  .Primitive("sum")
+> attr(,"foo")
+> [1] TRUE
+> >
+>
+> Above, you are already looking at ways to deal with it; and that
+> *is* more delicate, indeed:
+>
+> One thing we (R core) found previously (a couple of years ago)
+>  was that the  `structure(..)` function was
+> already too "slow" for it to be used in some base R functions,
+> and adding another  if(..) to it will not help making it faster ...
+>
+> OTOH, structure() being a pure R function (no direct .Internal(), .Call() ..)
+> is also important I think,  as it keeps its code nicely self documenting.
+>
+> I'm pretty convinced we should fix it by checking for primitive
+> functions inside the C code of `attributes<-` :
+> arguably the bug is really there, rather than in structure().
+>
+> Patches are welcome (via R's Bugzilla or just here).
+>
+> Martin
+
+
