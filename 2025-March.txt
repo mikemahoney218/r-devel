@@ -3787,3 +3787,785 @@ On Thu, Mar 20, 2025 at 3:31?AM Martin Maechler
 > Martin
 
 
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Fri Mar 21 06:51:10 2025
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Thu, 20 Mar 2025 22:51:10 -0700
+Subject: [Rd] Suppressed "graphical parameter" warnings reviving themselves
+ magically
+Message-ID: <CAFDcVCRKhfoycdjUmEbrO04uhRA87o8SFpUB4fUgEbbprTxcjA@mail.gmail.com>
+
+What's going on here?
+
+$ R --vanilla --quiet
+> plot.new(); suppressWarnings({ points(0, 0, foo = TRUE) })
+> NULL
+NULL
+Warning messages:
+1: "foo" is not a graphical parameter
+2: "foo" is not a graphical parameter
+
+Note how the warnings are revived in that second "NULL" call.  I can
+reproduce this in R 4.4.3 and R-devel (2025-03-19 r88003). This might
+be specific to "graphical parameter" warnings, because it won't happen
+with, say, suppressWarnings({ log(-1) }).
+
+It also doesn't appear if I call split up the first call into to
+different REPL calls;
+
+$ R --vanilla --quiet
+> plot.new()
+> suppressWarnings({ points(0, 0, foo = TRUE) })
+> NULL
+NULL
+
+/Henrik
+
+PS. I thought I had sent this many months ago, but I just now found
+this message in my draft folder, so now I'm not sure. Sorry, if this
+is a duplicate.
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Fri Mar 21 10:34:12 2025
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Fri, 21 Mar 2025 05:34:12 -0400
+Subject: [Rd] 
+ Suppressed "graphical parameter" warnings reviving themselves
+ magically
+In-Reply-To: <CAFDcVCRKhfoycdjUmEbrO04uhRA87o8SFpUB4fUgEbbprTxcjA@mail.gmail.com>
+References: <CAFDcVCRKhfoycdjUmEbrO04uhRA87o8SFpUB4fUgEbbprTxcjA@mail.gmail.com>
+Message-ID: <00252fbd-4a7e-4b52-a2c4-135aff4c4127@gmail.com>
+
+I don't know what's going on, but I see a version of it in R 4.4.2 on 
+MacOS in the console, but not in R.app.
+
+The difference is I only get one of the warnings, and only on the first 
+attempt:
+
+> $ R
+> 
+> R version 4.4.2 (2024-10-31) -- "Pile of Leaves"
+> Copyright (C) 2024 The R Foundation for Statistical Computing
+> Platform: aarch64-apple-darwin20
+> 
+> R is free software and comes with ABSOLUTELY NO WARRANTY.
+> You are welcome to redistribute it under certain conditions.
+> Type 'license()' or 'licence()' for distribution details.
+> 
+>   Natural language support but running in an English locale
+> 
+> R is a collaborative project with many contributors.
+> Type 'contributors()' for more information and
+> 'citation()' on how to cite R or R packages in publications.
+> 
+> Type 'demo()' for some demos, 'help()' for on-line help, or
+> 'help.start()' for an HTML browser interface to help.
+> Type 'q()' to quit R.
+> 
+>> plot.new(); suppressWarnings({ points(0, 0, foo = TRUE) })
+>> NULL
+> NULL
+> Warning message:
+> "foo" is not a graphical parameter 
+>> plot.new(); suppressWarnings({ points(0, 0, foo = TRUE) })
+>> NULL
+> NULL
+
+In R.app I don't seem to see it at all.
+
+Duncan Murdoch
+
+
+
+On 2025-03-21 1:51 a.m., Henrik Bengtsson wrote:
+> What's going on here?
+> 
+> $ R --vanilla --quiet
+>> plot.new(); suppressWarnings({ points(0, 0, foo = TRUE) })
+>> NULL
+> NULL
+> Warning messages:
+> 1: "foo" is not a graphical parameter
+> 2: "foo" is not a graphical parameter
+> 
+> Note how the warnings are revived in that second "NULL" call.  I can
+> reproduce this in R 4.4.3 and R-devel (2025-03-19 r88003). This might
+> be specific to "graphical parameter" warnings, because it won't happen
+> with, say, suppressWarnings({ log(-1) }).
+> 
+> It also doesn't appear if I call split up the first call into to
+> different REPL calls;
+> 
+> $ R --vanilla --quiet
+>> plot.new()
+>> suppressWarnings({ points(0, 0, foo = TRUE) })
+>> NULL
+> NULL
+> 
+> /Henrik
+> 
+> PS. I thought I had sent this many months ago, but I just now found
+> this message in my draft folder, so now I'm not sure. Sorry, if this
+> is a duplicate.
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From ru|pb@rr@d@@ @end|ng |rom @@po@pt  Fri Mar 21 11:14:14 2025
+From: ru|pb@rr@d@@ @end|ng |rom @@po@pt (Rui Barradas)
+Date: Fri, 21 Mar 2025 10:14:14 +0000
+Subject: [Rd] 
+ Suppressed "graphical parameter" warnings reviving themselves
+ magically
+In-Reply-To: <CAFDcVCRKhfoycdjUmEbrO04uhRA87o8SFpUB4fUgEbbprTxcjA@mail.gmail.com>
+References: <CAFDcVCRKhfoycdjUmEbrO04uhRA87o8SFpUB4fUgEbbprTxcjA@mail.gmail.com>
+Message-ID: <286b3f3f-2ff3-4c10-b897-2c5e695d9173@sapo.pt>
+
+?s 05:51 de 21/03/2025, Henrik Bengtsson escreveu:
+> What's going on here?
+> 
+> $ R --vanilla --quiet
+>> plot.new(); suppressWarnings({ points(0, 0, foo = TRUE) })
+>> NULL
+> NULL
+> Warning messages:
+> 1: "foo" is not a graphical parameter
+> 2: "foo" is not a graphical parameter
+> 
+> Note how the warnings are revived in that second "NULL" call.  I can
+> reproduce this in R 4.4.3 and R-devel (2025-03-19 r88003). This might
+> be specific to "graphical parameter" warnings, because it won't happen
+> with, say, suppressWarnings({ log(-1) }).
+> 
+> It also doesn't appear if I call split up the first call into to
+> different REPL calls;
+> 
+> $ R --vanilla --quiet
+>> plot.new()
+>> suppressWarnings({ points(0, 0, foo = TRUE) })
+>> NULL
+> NULL
+> 
+> /Henrik
+> 
+> PS. I thought I had sent this many months ago, but I just now found
+> this message in my draft folder, so now I'm not sure. Sorry, if this
+> is a duplicate.
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+Hello,
+
+I cannot reproduce this on Windows 11, R 4.4.3.
+The command below is not exactly the same but I have tried it with the 
+command in the OP and got the same result.
+
+
+
+$ R --vanilla --quiet -f "rdevel.R" > ./Temp/rdevel.txt
+ > plot.new(); suppressWarnings({ points(0, 0, foo = TRUE) })
+ > NULL
+NULL
+ > sessionInfo()
+R version 4.4.3 (2025-02-28 ucrt)
+Platform: x86_64-w64-mingw32/x64
+Running under: Windows 11 x64 (build 22631)
+
+Matrix products: default
+
+
+locale:
+[1] LC_COLLATE=Portuguese_Portugal.utf8 
+LC_CTYPE=Portuguese_Portugal.utf8
+[3] LC_MONETARY=Portuguese_Portugal.utf8 LC_NUMERIC=C 
+
+[5] LC_TIME=Portuguese_Portugal.utf8
+
+time zone: Europe/Lisbon
+tzcode source: internal
+
+attached base packages:
+[1] stats     graphics  grDevices utils     datasets  methods   base
+
+loaded via a namespace (and not attached):
+[1] compiler_4.4.3
+ >
+
+
+
+Hope this helps,
+
+Rui Barradas
+
+
+-- 
+Este e-mail foi analisado pelo software antiv?rus AVG para verificar a presen?a de v?rus.
+www.avg.com
+
+
+From k@ro||@@koncev|c|u@ @end|ng |rom gm@||@com  Fri Mar 21 13:26:44 2025
+From: k@ro||@@koncev|c|u@ @end|ng |rom gm@||@com (=?utf-8?Q?Karolis_Koncevi=C4=8Dius?=)
+Date: Fri, 21 Mar 2025 14:26:44 +0200
+Subject: [Rd] table() and as.character() performance for logical values
+Message-ID: <B9F8C2E9-0D85-4F79-9259-DC0E5B6F250A@gmail.com>
+
+I was calling table() on some long logical vectors and noticed that it took a long time.
+
+Out of curiosity I checked the performance of table() on different types, and had some unexpected results:
+
+    C <- sample(c("yes", "no"), 10^7, replace = TRUE)
+    F <- factor(sample(c("yes", "no"), 10^7, replace = TRUE))
+    N <- sample(c(1,0), 10^7, replace = TRUE)
+    I <- sample(c(1L,0L), 10^7, replace = TRUE)
+    L <- sample(c(TRUE, FALSE), 10^7, replace = TRUE)
+
+                           # ordered by execution time
+                           #   user  system elapsed
+    system.time(table(F))  #  0.088   0.006   0.093
+    system.time(table(C))  #  0.208   0.017   0.224
+    system.time(table(I))  #  0.242   0.019   0.261
+    system.time(table(L))  #  0.665   0.015   0.680
+    system.time(table(N))  #  1.771   0.019   1.791
+
+
+The performance for Integers and specially booleans is quite surprising.
+After investigating the source of table, I ended up on the reason being ?as.character()?:
+
+    system.time(as.character(L))
+     user  system elapsed       
+    0.461   0.002   0.462       
+
+Even a manual conversion can achieve a speed-up by a factor of ~7:
+
+    system.time(c("FALSE", "TRUE")[L+1])
+     user  system elapsed               
+    0.061   0.006   0.067               
+   
+
+Tested on 4.4.3 as well as devel trunk.
+
+Just reporting for comments and attention.
+Karolis K.
+
+From iuke-tier@ey m@iii@g oii uiow@@edu  Fri Mar 21 13:57:39 2025
+From: iuke-tier@ey m@iii@g oii uiow@@edu (iuke-tier@ey m@iii@g oii uiow@@edu)
+Date: Fri, 21 Mar 2025 07:57:39 -0500 (CDT)
+Subject: [Rd] 
+ [External] Suppressed "graphical parameter" warnings reviving
+ themselves magically
+In-Reply-To: <CAFDcVCRKhfoycdjUmEbrO04uhRA87o8SFpUB4fUgEbbprTxcjA@mail.gmail.com>
+References: <CAFDcVCRKhfoycdjUmEbrO04uhRA87o8SFpUB4fUgEbbprTxcjA@mail.gmail.com>
+Message-ID: <7ac9f86d-6883-65ff-2aab-14a4e6c6a4f3@uiowa.edu>
+
+Warnings are not "reviving themselves magically". Try resizing the
+window a few times and hitting return in the REPL. That should give
+you a hint on what is going on.
+
+Best,
+
+luke
+
+On Fri, 21 Mar 2025, Henrik Bengtsson wrote:
+
+> What's going on here?
+>
+> $ R --vanilla --quiet
+>> plot.new(); suppressWarnings({ points(0, 0, foo = TRUE) })
+>> NULL
+> NULL
+> Warning messages:
+> 1: "foo" is not a graphical parameter
+> 2: "foo" is not a graphical parameter
+>
+> Note how the warnings are revived in that second "NULL" call.  I can
+> reproduce this in R 4.4.3 and R-devel (2025-03-19 r88003). This might
+> be specific to "graphical parameter" warnings, because it won't happen
+> with, say, suppressWarnings({ log(-1) }).
+>
+> It also doesn't appear if I call split up the first call into to
+> different REPL calls;
+>
+> $ R --vanilla --quiet
+>> plot.new()
+>> suppressWarnings({ points(0, 0, foo = TRUE) })
+>> NULL
+> NULL
+>
+> /Henrik
+>
+> PS. I thought I had sent this many months ago, but I just now found
+> this message in my draft folder, so now I'm not sure. Sorry, if this
+> is a duplicate.
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+-- 
+Luke Tierney
+Ralph E. Wareham Professor of Mathematical Sciences
+University of Iowa                  Phone:             319-335-3386
+Department of Statistics and        Fax:               319-335-3017
+    Actuarial Science
+241 Schaeffer Hall                  email:   luke-tierney at uiowa.edu
+Iowa City, IA 52242                 WWW:  http://www.stat.uiowa.edu/
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Fri Mar 21 14:49:16 2025
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Fri, 21 Mar 2025 14:49:16 +0100
+Subject: [Rd] structure(<primitive function>, ...) is sticky: a bug,
+ or should it be an error?
+In-Reply-To: <CAFDcVCSyG1HxUO1ZNUxQ=BGUGgPtoVQBqySnWg_EJyLa_VtzZA@mail.gmail.com>
+References: <CAFDcVCTka7-qHEHZ6U42ynSVffpEgZwboqJBOuDMCAMEtyNaFQ@mail.gmail.com>
+ <26587.61068.527937.384919@stat.math.ethz.ch>
+ <CAFDcVCSyG1HxUO1ZNUxQ=BGUGgPtoVQBqySnWg_EJyLa_VtzZA@mail.gmail.com>
+Message-ID: <26589.28252.677695.886493@stat.math.ethz.ch>
+
+>>>>> Henrik Bengtsson 
+>>>>>     on Thu, 20 Mar 2025 11:55:05 -0700 writes:
+
+    >> I'm pretty convinced we should fix it by checking for
+    >> primitive functions inside the C code of `attributes<-` :
+    >> arguably the bug is really there, rather than in
+    >> structure().
+    >> 
+    >> Patches are welcome (via R's Bugzilla or just here).
+
+    > Thank you Martin. I'll make sure I create a brief BugZilla
+    > report on this, and hopefully a follow with a patch later
+    > on.
+
+    > One question on urgency or not: Is it too late to get such
+    > a change in for the R 4.5.0 release? I suspect so, because
+    > it has a potential of breaking existing packages. But if
+    > there's a possibility of fixing this in R 4.5.0, I'll make
+    > this a top priority.  Please let me know.
+
+    > /Henrik
+
+In such cases, I always go to  https://developer.r-project.org/
+and look at the release schedule.
+
+Important for this Q seems
+
+* Friday 2025-03-14: GRAND-FEATURE FREEZE (4.5.0 alpha)
+* Friday 2025-03-28: FEATURE FREEZE (4.5.0 beta)
+* Friday 2025-04-04: CODE FREEZE (4.5.0 RC) 
+
+So, yes there's a possibility  ... but as you mentioned, too,
+it depends quite a bit on if the fix is easily affectiong useR
+and CRAN/Bioc package space.
+
+Martin
+
+    > On Thu, Mar 20, 2025 at 3:31?AM Martin Maechler
+    > <maechler at stat.math.ethz.ch> wrote:
+    >> 
+    >> >>>>> Henrik Bengtsson >>>>> on Wed, 19 Mar 2025 10:58:46
+    >> -0700 writes:
+    >> 
+    >> > Hello.  > I just (re-)discovered that structure(sum,
+    >> init = 100) is "sticky", > i.e. it stays with
+    >> base::sum(). Here's an minimal example:
+    >> 
+    >> > $ R --vanilla --quiet >> void <- structure(sum,
+    >> some_attr = TRUE) >> str(sum) > function (..., na.rm =
+    >> FALSE) > - attr(*, "some_attr")= logi TRUE
+    >> 
+    >> >> From my very basic troubleshooting, it looks like this
+    >> is happening > for primitive functions. I think I
+    >> understand that this comes down to > primitive functions
+    >> cannot be copied and baseenv() being special, i.e.  > in
+    >> structure() there will be no copy made of the primitive
+    >> function, > and then attributes()<- ends up modifying the
+    >> original primitive > function. Even if this is a
+    >> documented feature, I believe, it is a > silent feature
+    >> with risky side effects. We might already have code out >
+    >> there that silently produces incorrect results, because
+    >> of this > behavior. For example, I was about to a custom
+    >> reduce() function where > I control the initial value via
+    >> an "init" attribute of the reducer > function, e.g.
+    >> 
+    >> > x <- 1:10 > sum1 <- reduce(x, `+`) > sum2 <- reduce(x,
+    >> structure(`+`, init = 100)) # == 100 + sum1
+    >> 
+    >> > If I then call:
+    >> 
+    >> > sum3 <- reduce(x, `+`)
+    >> 
+    >> > the 'init' attribute that was set in the sum2 statement
+    >> will affect > sum3 such that sum3 == sum2, not sum3 ==
+    >> sum1 as one would expect.
+    >> 
+    >> 
+    >> > SUGGESTIONS:
+    >> 
+    >> > If this is a bug, then I think it needs to be fixed. If
+    >> it cannot be > fixed, maybe this could be protected
+    >> against, e.g.
+    >> 
+    >> >> void <- structure(sum, some_attr = TRUE) > Error: You
+    >> must not set attributes on a primitive function: sum
+    >> 
+    >> > Maybe it's sufficient to implement a protection against
+    >> this in > attr()<-, attributes()<-, and class()<-.
+    >> 
+    >> > Comments?
+    >> 
+    >> > /Henrik
+    >> 
+    >> Yes, this is a bug -- a version of your code above:
+    >> 
+    >> > void <- structure(sum, foo = TRUE) > identical(void,
+    >> sum) [1] TRUE > sum function (..., na.rm = FALSE)
+    >> .Primitive("sum") attr(,"foo") [1] TRUE
+    >> >
+    >> 
+    >> Above, you are already looking at ways to deal with it;
+    >> and that *is* more delicate, indeed:
+    >> 
+    >> One thing we (R core) found previously (a couple of years
+    >> ago) was that the `structure(..)` function was already
+    >> too "slow" for it to be used in some base R functions,
+    >> and adding another if(..) to it will not help making it
+    >> faster ...
+    >> 
+    >> OTOH, structure() being a pure R function (no direct
+    >> .Internal(), .Call() ..)  is also important I think, as
+    >> it keeps its code nicely self documenting.
+    >> 
+    >> I'm pretty convinced we should fix it by checking for
+    >> primitive functions inside the C code of `attributes<-` :
+    >> arguably the bug is really there, rather than in
+    >> structure().
+    >> 
+    >> Patches are welcome (via R's Bugzilla or just here).
+    >> 
+    >> Martin
+
+
+From AHL27 @end|ng |rom p|tt@edu  Fri Mar 21 15:42:21 2025
+From: AHL27 @end|ng |rom p|tt@edu (Aidan Lakshman)
+Date: Fri, 21 Mar 2025 10:42:21 -0400
+Subject: [Rd] table() and as.character() performance for logical values
+In-Reply-To: <B9F8C2E9-0D85-4F79-9259-DC0E5B6F250A@gmail.com>
+References: <B9F8C2E9-0D85-4F79-9259-DC0E5B6F250A@gmail.com>
+Message-ID: <2412F28E-095C-439D-8FC5-1DF864AA67C3@pitt.edu>
+
+Some small points to add on this discussion:
+
+> After investigating the source of table, I ended up on the reason being ?as.character()?:
+
+This is specifically happening within the conversion of the input to type factor, which is where the as.character conversion happens.
+
+  # Timing is all on my local machine (OSX)
+  N_v <- sample(c(1,0), 10^7, replace = TRUE)
+  L_v <- sample(c(TRUE, FALSE), 10^7, replace = TRUE)
+                                         #  user  system elapsed
+  system.time(table(N_v))                # 2.155   0.039   2.192
+  system.time(table(L_v))                # 0.806   0.030   0.838
+
+  system.time(N_fv <- as.factor(N_v))    # 2.026   0.024   2.050
+  system.time(L_fv <- as.factor(L_v))    # 0.668   0.015   0.683
+
+  system.time(table(N_fv))               # 0.133   0.022   0.156
+  system.time(table(L_fv))               # 0.134   0.018   0.151
+
+> The performance for Integers and specially booleans is quite surprising.
+
+Of note is that the performance is significantly better if using `tabulate`, since this doesn't involve a conversion to factor (though input must be numeric/factor, results aren't named, and it has worse handling of NA values). If you have performance critical calls like this you could consider using `tabulate` instead.
+
+  system.time(tabulate(N_v))             # 0.054   0.002   0.056
+  system.time(tabulate(as.integer(L_v))) # 0.052   0.002   0.055
+
+
+I don't know if this is a known issue or not; most of my colleagues are aware of the slow-down and use `tabulate` when performance is required. My understanding was that the slower performance is a trade-off for more consistent performance (better output, better handling of ambiguities/NA, etc.), and that speed isn't the highest priority with `table`. Maybe someone else has a better understanding of the history of the function.
+
+As for improving the speed, it would basically come down to refactoring `table` to not use a `factor` conversion. I'd be concerned about introducing a lot of edge cases with that, but it's theoretically possible. Based on 30 seconds of thinking, it may be possible to do something like:
+
+## just a sketch of a barebones non-factor implementation
+  test_tab <- function(x){
+    lookup <- unique(x)
+    counts <- tabulate(match(x, lookup))
+    names(counts) <- as.character(lookup)
+    counts
+  }
+
+  system.time(test_tab(L_v))  # 0.101   0.006   0.107
+  system.time(test_tab(N_v))  # 0.129   0.015   0.144
+
+This is also faster in the case where there are lots of categories with few entries per category:
+
+  N_v2 <- 1:1e7
+  system.time(test_tab(N_v2)) # 0.383   0.024   0.411
+  system.time(table(N_v2))    # 6.122   0.228   6.398
+
+Obviously there are some big shortcomings:
+- it's missing a lot of error checking etc. that the standard `table` has
+- it only works with 1D vectors
+- NA handling isn't quite the same as `table` (though it would be easy to adapt)
+
+Just including to potentially start discussion for optimization.
+
+For reference, the relevant section is in src/library/base/R/table.R:L75-85
+
+-Aidan
+
+-----------------------
+Aidan Lakshman (he/him)
+http://www.ahl27.com/
+
+On 21 Mar 2025, at 8:26, Karolis Koncevi?ius wrote:
+
+> [You don't often get email from karolis.koncevicius at gmail.com. Learn why this is important at https://aka.ms/LearnAboutSenderIdentification ]
+>
+> I was calling table() on some long logical vectors and noticed that it took a long time.
+>
+> Out of curiosity I checked the performance of table() on different types, and had some unexpected results:
+>
+>     C <- sample(c("yes", "no"), 10^7, replace = TRUE)
+>     F <- factor(sample(c("yes", "no"), 10^7, replace = TRUE))
+>     N <- sample(c(1,0), 10^7, replace = TRUE)
+>     I <- sample(c(1L,0L), 10^7, replace = TRUE)
+>     L <- sample(c(TRUE, FALSE), 10^7, replace = TRUE)
+>
+>                            # ordered by execution time
+>                            #   user  system elapsed
+>     system.time(table(F))  #  0.088   0.006   0.093
+>     system.time(table(C))  #  0.208   0.017   0.224
+>     system.time(table(I))  #  0.242   0.019   0.261
+>     system.time(table(L))  #  0.665   0.015   0.680
+>     system.time(table(N))  #  1.771   0.019   1.791
+>
+>
+> The performance for Integers and specially booleans is quite surprising.
+> After investigating the source of table, I ended up on the reason being ?as.character()?:
+>
+>     system.time(as.character(L))
+>      user  system elapsed
+>     0.461   0.002   0.462
+>
+> Even a manual conversion can achieve a speed-up by a factor of ~7:
+>
+>     system.time(c("FALSE", "TRUE")[L+1])
+>      user  system elapsed
+>     0.061   0.006   0.067
+>
+>
+> Tested on 4.4.3 as well as devel trunk.
+>
+> Just reporting for comments and attention.
+> Karolis K.
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Fri Mar 21 16:55:44 2025
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Fri, 21 Mar 2025 16:55:44 +0100
+Subject: [Rd] structure(<primitive function>, ...) is sticky: a bug,
+ or should it be an error?
+In-Reply-To: <26589.28252.677695.886493@stat.math.ethz.ch>
+References: <CAFDcVCTka7-qHEHZ6U42ynSVffpEgZwboqJBOuDMCAMEtyNaFQ@mail.gmail.com>
+ <26587.61068.527937.384919@stat.math.ethz.ch>
+ <CAFDcVCSyG1HxUO1ZNUxQ=BGUGgPtoVQBqySnWg_EJyLa_VtzZA@mail.gmail.com>
+ <26589.28252.677695.886493@stat.math.ethz.ch>
+Message-ID: <26589.35840.771000.991255@stat.math.ethz.ch>
+
+>>>>> Martin Maechler 
+>>>>>     on Fri, 21 Mar 2025 14:49:16 +0100 writes:
+
+>>>>> Henrik Bengtsson 
+>>>>>     on Thu, 20 Mar 2025 11:55:05 -0700 writes:
+
+    >>> I'm pretty convinced we should fix it by checking for
+    >>> primitive functions inside the C code of `attributes<-` :
+    >>> arguably the bug is really there, rather than in
+    >>> structure().
+    >>> 
+    >>> Patches are welcome (via R's Bugzilla or just here).
+
+    >> Thank you Martin. I'll make sure I create a brief BugZilla
+    >> report on this, and hopefully a follow with a patch later
+    >> on.
+
+    >> One question on urgency or not: Is it too late to get such
+    >> a change in for the R 4.5.0 release? I suspect so, because
+    >> it has a potential of breaking existing packages. But if
+    >> there's a possibility of fixing this in R 4.5.0, I'll make
+    >> this a top priority.  Please let me know.
+
+    >> /Henrik
+
+    > In such cases, I always go to  https://developer.r-project.org/
+    > and look at the release schedule.
+
+    > Important for this Q seems
+
+    > * Friday 2025-03-14: GRAND-FEATURE FREEZE (4.5.0 alpha)
+    > * Friday 2025-03-28: FEATURE FREEZE (4.5.0 beta)
+    > * Friday 2025-04-04: CODE FREEZE (4.5.0 RC) 
+
+    > So, yes there's a possibility  ... but as you mentioned, too,
+    > it depends quite a bit on if the fix is easily affectiong useR
+    > and CRAN/Bioc package space.
+
+    > Martin
+
+As a matter of fact, I'm testing already a simple patch I wrote
+myself.
+So, sorry, but I must renounce the above  "Patches are welcome".
+
+Martin
+
+
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Fri Mar 21 18:07:52 2025
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Fri, 21 Mar 2025 10:07:52 -0700
+Subject: [Rd] structure(<primitive function>, ...) is sticky: a bug,
+ or should it be an error?
+In-Reply-To: <26589.35840.771000.991255@stat.math.ethz.ch>
+References: <CAFDcVCTka7-qHEHZ6U42ynSVffpEgZwboqJBOuDMCAMEtyNaFQ@mail.gmail.com>
+ <26587.61068.527937.384919@stat.math.ethz.ch>
+ <CAFDcVCSyG1HxUO1ZNUxQ=BGUGgPtoVQBqySnWg_EJyLa_VtzZA@mail.gmail.com>
+ <26589.28252.677695.886493@stat.math.ethz.ch>
+ <26589.35840.771000.991255@stat.math.ethz.ch>
+Message-ID: <CAFDcVCR14Tqoz4eKR5pFZLSTpoDxv2jE9fs3B0w4ZO6=CdmrXw@mail.gmail.com>
+
+On Fri, Mar 21, 2025 at 8:55?AM Martin Maechler
+<maechler at stat.math.ethz.ch> wrote:
+>
+> >>>>> Martin Maechler
+> >>>>>     on Fri, 21 Mar 2025 14:49:16 +0100 writes:
+>
+> >>>>> Henrik Bengtsson
+> >>>>>     on Thu, 20 Mar 2025 11:55:05 -0700 writes:
+>
+>     >>> I'm pretty convinced we should fix it by checking for
+>     >>> primitive functions inside the C code of `attributes<-` :
+>     >>> arguably the bug is really there, rather than in
+>     >>> structure().
+>     >>>
+>     >>> Patches are welcome (via R's Bugzilla or just here).
+>
+>     >> Thank you Martin. I'll make sure I create a brief BugZilla
+>     >> report on this, and hopefully a follow with a patch later
+>     >> on.
+>
+>     >> One question on urgency or not: Is it too late to get such
+>     >> a change in for the R 4.5.0 release? I suspect so, because
+>     >> it has a potential of breaking existing packages. But if
+>     >> there's a possibility of fixing this in R 4.5.0, I'll make
+>     >> this a top priority.  Please let me know.
+>
+>     >> /Henrik
+>
+>     > In such cases, I always go to  https://developer.r-project.org/
+>     > and look at the release schedule.
+>
+>     > Important for this Q seems
+>
+>     > * Friday 2025-03-14: GRAND-FEATURE FREEZE (4.5.0 alpha)
+>     > * Friday 2025-03-28: FEATURE FREEZE (4.5.0 beta)
+>     > * Friday 2025-04-04: CODE FREEZE (4.5.0 RC)
+>
+>     > So, yes there's a possibility  ... but as you mentioned, too,
+>     > it depends quite a bit on if the fix is easily affectiong useR
+>     > and CRAN/Bioc package space.
+>
+>     > Martin
+>
+> As a matter of fact, I'm testing already a simple patch I wrote
+> myself.
+> So, sorry, but I must renounce the above  "Patches are welcome".
+
+Excellent and even better (for me). Thank you Martin!
+
+/Henrik
+
+>
+> Martin
+
+
+From j@g@nmn2 @end|ng |rom gm@||@com  Fri Mar 21 20:46:54 2025
+From: j@g@nmn2 @end|ng |rom gm@||@com (Mikael Jagan)
+Date: Fri, 21 Mar 2025 15:46:54 -0400
+Subject: [Rd] Problems with ::
+In-Reply-To: <mailman.54763.3.1742468402.5825.r-devel@r-project.org>
+References: <mailman.54763.3.1742468402.5825.r-devel@r-project.org>
+Message-ID: <23f2cb10-3581-49be-9f2a-3ef9b1a5ef78@gmail.com>
+
+I've wanted to use specials to detect random effect terms as in ~(f | g), but
+non-syntactic function names (in this case, '|') are currently not supported.
+I proposed a patch some time ago:
+
+     https://bugs.r-project.org/show_bug.cgi?id=18568
+
+I wonder if some of these issues with '::' could be solved backwards compatibly
+with a patch along similar lines, i.e., not requiring specials to be syntactic
+names, and avoiding doing string comparison with deparse(<language>).  One idea:
+
+* At R level, allow something like
+
+       specials=structure(c("cluster", "cluster"), package = c("", "survival"))
+
+   to separately mark as special calls cluster() and survival::cluster() in the
+   model formula.
+
+* At C level, test for calls whose first component is a symbol (like 'cluster')
+   or a call to '::' whose two arguments are symbols (like 'survival::cluster'),
+   matching these against the 'specials', respecting attr(specials, "package")
+   if that is a character vector of length equal to length(specials).
+
+where I recommend using attribute 'package' rather than 'names' because:
+
+* It's not hard to imagine that code "out there" is using
+   specials=<named character>, and we should not change the behaviour of that
+   code.
+
+* Package 'methods' defines formal class 'ObjectsWithPackage' with the same
+   layout as well as utilities 'PackageSlot', 'PackageSlot<-', ...
+
+Well, that's just just one idea ...  I understand reluctance to make non-trivial
+changes to model.c, but maybe there is a basis here, if people are more and more
+(for better or worse (mostly worse)) trying to use '::' everywhere including in
+model formulas.
+
+Mikael
+
+> Date: Wed, 19 Mar 2025 16:49:31 +0000
+> From: "Therneau, Terry M., Ph.D."<therneau at mayo.edu>
+> 
+> In response to the tidyverse habit of adding another zillion functions to one's search space, the use of things like survival::coxph is becoming more common.  But this practice breaks the use of the specials argument in terms.formula, something that I make heavy use of in the survival package.   The following two pairs of models give different answers, and the second is wrong.
+> 
+> fit1a <- lm(GNP ~  Year + offset(Unemployed), longley)
+> fit1b<- lm(GNP ~  Year + stats::offset(Unemployed), longley)
+> 
+> fit1a <- survdiff(Surv(time, status) ~ rx + cluster(litter), rats)
+> fit1b <- survdiff(Surv(time, status) ~ rx + survival::cluster(litter), rats)
+> zed <- survival::cluster(rats$litter)
+> fit1c <- survdiff(Surv(time, status) ~ rx + zed, rats)
+> 
+> In the most recent CRAN version of survival I added some pre-processing steps that successfully catch fit1b, by stripping off  "survival::" from formulas before calling terms.formula.   But I can't prevent fit1c, and don't yet know if there are other case not covered by my current hack.  At least one of the CRAN packages that depends on survival has an example of exactly fit1c in their test suite.
+> 
+> The survival package uses the special argument a lot: strata, cluster, pspline, tt, frailty, and ridge.  I'm trying to think of a good plan for long term changes.   I list 3 below, and am hoping for better ideas or input.
+> 
+> a. Caveat emptor:  If you work hard to fool the specials argument, and succeed, then "Congratulations, you fooled the parser."
+> 
+> b. What I did early on with tt(), which is to make the function defition completely internal to coxph (the only survival function that uses tt).   People who type survival::tt or  survival:::tt get an error message.   A plus of this is that the error message will  wean users from pasting survival:: to everything inside a formula.   The disadvantages are first that it will break existing user code (most of which should be broken -- its not doing what they think), a second is that there may be use cases for strata, say, outside of a survival formula; it is essentially factor with shorter default labels.
+> 
+> c. Make all of these functions have a class, and rewrite the code to depend on the class rather than specials.  The Surv function is recognized in this way, so is not harmed by survival::Surv.  It is also why calling Surv to create a new variable is fine.  I'd still retain specials,  to support legacy code.
+> 
+> The more ornery part of me votes for b (what is the effect on help files)?    In any case a change won't happen overnight.
+> Do we leave offset in the caveat emptor group?
+> A small section needs to be added to the "user written packages" document, where it talks about specials.
+> What other packages use specials?
+> 
+> Terry T.
+
+
