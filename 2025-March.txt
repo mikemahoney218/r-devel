@@ -4569,3 +4569,467 @@ Mikael
 > Terry T.
 
 
+From @eb@meyer @end|ng |rom |@u@de  Mon Mar 24 12:49:40 2025
+From: @eb@meyer @end|ng |rom |@u@de (Sebastian Meyer)
+Date: Mon, 24 Mar 2025 12:49:40 +0100
+Subject: [Rd] table() and as.character() performance for logical values
+In-Reply-To: <2412F28E-095C-439D-8FC5-1DF864AA67C3@pitt.edu>
+References: <B9F8C2E9-0D85-4F79-9259-DC0E5B6F250A@gmail.com>
+ <2412F28E-095C-439D-8FC5-1DF864AA67C3@pitt.edu>
+Message-ID: <b9b7ace1-8bda-484a-8277-2db3fc4bd699@fau.de>
+
+Am 21.03.25 um 15:42 schrieb Aidan Lakshman via R-devel:
+>> After investigating the source of table, I ended up on the reason being ?as.character()?:
+> 
+> This is specifically happening within the conversion of the input to type factor, which is where the as.character conversion happens.
+
+Yes, I also think 'factor' could do a bit better for unclassed integers 
+(such as when called from 'cut') as well as for logical input (such as 
+from 'summary' -> 'table').
+
+Note that 'as.factor' already has a "fast track" for plain integers 
+(originally for 'split.default' from 'tapply'), so can be used instead 
+of 'factor' when there is no need for custom 'levels', 'labels', or 
+'exclude'. (Thanks for already mentioning 'tabulate'.)
+
+A 'factor' patch would apply more broadly, e.g.:
+
+===================================================================
+--- src/library/base/R/factor.R	(Revision 88042)
++++ src/library/base/R/factor.R	(Arbeitskopie)
+@@ -20,14 +20,18 @@
+                     exclude = NA, ordered = is.ordered(x), nmax = NA)
+  {
+      if(is.null(x)) x <- character()
++    directmatch <- !is.object(x) &&
++        (is.character(x) || is.integer(x) || is.logical(x))
+      nx <- names(x)
+      if (missing(levels)) {
+  	y <- unique(x, nmax = nmax)
+  	ind <- order(y)
+-	levels <- unique(as.character(y)[ind])
++        if (!directmatch)
++            y <- as.character(y)
++	levels <- unique(y[ind])
+      }
+      force(ordered) # check if original x is an ordered factor
+-    if(!is.character(x))
++    if(!directmatch)
+  	x <- as.character(x)
+      ## levels could be a long vector, but match will not handle that.
+      levels <- levels[is.na(match(levels, exclude))]
+      f <- match(x, levels)
+===================================================================
+
+This skips as.character() also for integer/logical 'x' and would indeed 
+bring table() runtimes "in order":
+
+     set.seed(1)
+     C <- sample(c("no", "yes"), 10^7, replace = TRUE)
+     F <- as.factor(C)
+     L <- F == "yes"
+     I <- as.integer(L)
+     N <- as.numeric(I)
+
+     ## Median system.time(table(.)) in ms:
+     ## table(F)   256
+     ## table(I)   384   # not  696
+     ## table(L)   409   # not 1159
+     ## table(C)   591
+     ## table(N)  3324
+
+The (seemingly) small patch passes check-all, but maybe it overlooks 
+some edge cases. I'd test it on a subset of CRAN/BIOC packages.
+
+Best,
+
+	Sebastian Meyer
+
+> 
+>    # Timing is all on my local machine (OSX)
+>    N_v <- sample(c(1,0), 10^7, replace = TRUE)
+>    L_v <- sample(c(TRUE, FALSE), 10^7, replace = TRUE)
+>                                           #  user  system elapsed
+>    system.time(table(N_v))                # 2.155   0.039   2.192
+>    system.time(table(L_v))                # 0.806   0.030   0.838
+> 
+>    system.time(N_fv <- as.factor(N_v))    # 2.026   0.024   2.050
+>    system.time(L_fv <- as.factor(L_v))    # 0.668   0.015   0.683
+> 
+>    system.time(table(N_fv))               # 0.133   0.022   0.156
+>    system.time(table(L_fv))               # 0.134   0.018   0.151
+> 
+>> The performance for Integers and specially booleans is quite surprising.
+> 
+> Of note is that the performance is significantly better if using `tabulate`, since this doesn't involve a conversion to factor (though input must be numeric/factor, results aren't named, and it has worse handling of NA values). If you have performance critical calls like this you could consider using `tabulate` instead.
+> 
+>    system.time(tabulate(N_v))             # 0.054   0.002   0.056
+>    system.time(tabulate(as.integer(L_v))) # 0.052   0.002   0.055
+> 
+> 
+> I don't know if this is a known issue or not; most of my colleagues are aware of the slow-down and use `tabulate` when performance is required. My understanding was that the slower performance is a trade-off for more consistent performance (better output, better handling of ambiguities/NA, etc.), and that speed isn't the highest priority with `table`. Maybe someone else has a better understanding of the history of the function.
+> 
+> As for improving the speed, it would basically come down to refactoring `table` to not use a `factor` conversion. I'd be concerned about introducing a lot of edge cases with that, but it's theoretically possible. Based on 30 seconds of thinking, it may be possible to do something like:
+> 
+> ## just a sketch of a barebones non-factor implementation
+>    test_tab <- function(x){
+>      lookup <- unique(x)
+>      counts <- tabulate(match(x, lookup))
+>      names(counts) <- as.character(lookup)
+>      counts
+>    }
+> 
+>    system.time(test_tab(L_v))  # 0.101   0.006   0.107
+>    system.time(test_tab(N_v))  # 0.129   0.015   0.144
+> 
+> This is also faster in the case where there are lots of categories with few entries per category:
+> 
+>    N_v2 <- 1:1e7
+>    system.time(test_tab(N_v2)) # 0.383   0.024   0.411
+>    system.time(table(N_v2))    # 6.122   0.228   6.398
+> 
+> Obviously there are some big shortcomings:
+> - it's missing a lot of error checking etc. that the standard `table` has
+> - it only works with 1D vectors
+> - NA handling isn't quite the same as `table` (though it would be easy to adapt)
+> 
+> Just including to potentially start discussion for optimization.
+> 
+> For reference, the relevant section is in src/library/base/R/table.R:L75-85
+> 
+> -Aidan
+> 
+> -----------------------
+> Aidan Lakshman (he/him)
+> http://www.ahl27.com/
+> 
+> On 21 Mar 2025, at 8:26, Karolis Koncevi?ius wrote:
+> 
+>> [You don't often get email from karolis.koncevicius at gmail.com. Learn why this is important at https://aka.ms/LearnAboutSenderIdentification ]
+>>
+>> I was calling table() on some long logical vectors and noticed that it took a long time.
+>>
+>> Out of curiosity I checked the performance of table() on different types, and had some unexpected results:
+>>
+>>      C <- sample(c("yes", "no"), 10^7, replace = TRUE)
+>>      F <- factor(sample(c("yes", "no"), 10^7, replace = TRUE))
+>>      N <- sample(c(1,0), 10^7, replace = TRUE)
+>>      I <- sample(c(1L,0L), 10^7, replace = TRUE)
+>>      L <- sample(c(TRUE, FALSE), 10^7, replace = TRUE)
+>>
+>>                             # ordered by execution time
+>>                             #   user  system elapsed
+>>      system.time(table(F))  #  0.088   0.006   0.093
+>>      system.time(table(C))  #  0.208   0.017   0.224
+>>      system.time(table(I))  #  0.242   0.019   0.261
+>>      system.time(table(L))  #  0.665   0.015   0.680
+>>      system.time(table(N))  #  1.771   0.019   1.791
+>>
+>>
+>> The performance for Integers and specially booleans is quite surprising.
+>> After investigating the source of table, I ended up on the reason being ?as.character()?:
+>>
+>>      system.time(as.character(L))
+>>       user  system elapsed
+>>      0.461   0.002   0.462
+>>
+>> Even a manual conversion can achieve a speed-up by a factor of ~7:
+>>
+>>      system.time(c("FALSE", "TRUE")[L+1])
+>>       user  system elapsed
+>>      0.061   0.006   0.067
+>>
+>>
+>> Tested on 4.4.3 as well as devel trunk.
+>>
+>> Just reporting for comments and attention.
+>> Karolis K.
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From bbo|ker @end|ng |rom gm@||@com  Mon Mar 24 18:18:18 2025
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Mon, 24 Mar 2025 13:18:18 -0400
+Subject: [Rd] request for discussion on lonely doc patch suggestion
+Message-ID: <afc37678-3cbd-49c8-96c1-e815513ed529@gmail.com>
+
+   Aki Vehtari and I suggested a revision to some of the man pages 
+involving NA/is.nan/is.na about a year ago, but it never seems to have 
+gotten any traction.
+
+https://bugs.r-project.org/show_bug.cgi?id=18691
+
+Discussion here:
+
+https://fediscience.org/@avehtari at bayes.club/112043521852737720
+
+   The patch file is attached (also available at bugzilla, if it doesn't 
+get through to the list). I find the patch format a little hard to read, 
+so I'm reproducing just the *new* text below.
+
+   Any ideas or suggestions would be welcome.
+
+   cheers
+    Ben Bolker
+
+
+----
+src/library/base/man/NA.Rd:
+
+  The generic function \code{is.na} indicates which elements are missing
+   (\code{NA}) or \sQuote{Not a Number} (\code{link{NaN}}).
+
+in examples from this page:
+
+is.na(c(1, NA, NA_real_, NaN))        #> FALSE  TRUE  TRUE  TRUE
+is.na(paste(c(1, NA, NA_real_, NaN))) #> FALSE FALSE FALSE FALSE
+
+# When NaN should not be considered as missing value
+is.na(c(1, NA, NA_real_, NaN)) & !is.nan(c(1, NA, NA_real_, NaN))
+
+   (POSSIBLE EDITS: more explanatory comments, especially explaining 
+that paste() is converting NA values to "NA" strings ...)
+
+---
+ From src/library/base/man/is.finite.Rd:
+
+whereas \code{NaN} means \sQuote{Not a Number}.  \code{Inf} and
+   \code{NaN} are class of \code{numeric} and type of \code{double},
+   and can be used in real and imaginary parts of complex values, but not
+   as values in integer vectors.
+
+  (POSSIBLE EDITS: "class of", "type of" -> "of class"/"of type" or 
+"have class"/"have type" ?)
+
+   in "See Also":
+
+\code{\link{NA}}, \sQuote{\emph{Not Available}}, which is usually used
+   to denote a missing value. The default mode of \code{NA} is
+   \code{logical}, unlike \code{NaN}, which is always of mode
+   \code{double}.
+
+---
+ From src/library/base/man/numeric.Rd
+
+\code{is.numeric} is a more general test of an object being
+   interpretable as numbers. These include special numeric objects
+   \code{\link{Inf}}, \code{\link{NaN}}, \code{\link{NA_integer_}},
+   and \code{\link{NA_real_}}.
+
+-------------- next part --------------
+An embedded and charset-unspecified text was scrubbed...
+Name: nan.txt
+URL: <https://stat.ethz.ch/pipermail/r-devel/attachments/20250324/f5c9606b/attachment.txt>
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Mon Mar 24 20:21:42 2025
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Mon, 24 Mar 2025 15:21:42 -0400
+Subject: [Rd] request for discussion on lonely doc patch suggestion
+In-Reply-To: <afc37678-3cbd-49c8-96c1-e815513ed529@gmail.com>
+References: <afc37678-3cbd-49c8-96c1-e815513ed529@gmail.com>
+Message-ID: <5ca819d3-1c9d-4264-a832-67b8a28b4608@gmail.com>
+
+I sent some comments directly to Ben.  I just want to reply publicly to 
+this part:
+
+On 2025-03-24 1:18 p.m., Ben Bolker wrote:
+
+>     The patch file is attached (also available at bugzilla, if it doesn't
+> get through to the list). I find the patch format a little hard to read,
+> so I'm reproducing just the *new* text below.
+
+I agree absolutely about the lack of readability of patch files.  A side 
+by side display is much nicer.  If anyone out there isn't using one, you 
+should.
+
+I really like the one I use ("Beyond Compare"), but it's not open 
+source.  I've been using it for a very long time (20 years or more, I 
+think), and I suspect there are very good open source competitors out 
+there now (and may have been for all the time I've been using BC). 
+Suggestions?
+
+Duncan Murdoch
+
+
+From pro|jcn@@h @end|ng |rom gm@||@com  Mon Mar 24 20:28:50 2025
+From: pro|jcn@@h @end|ng |rom gm@||@com (J C Nash)
+Date: Mon, 24 Mar 2025 15:28:50 -0400
+Subject: [Rd] request for discussion on lonely doc patch suggestion
+In-Reply-To: <5ca819d3-1c9d-4264-a832-67b8a28b4608@gmail.com>
+References: <afc37678-3cbd-49c8-96c1-e815513ed529@gmail.com>
+ <5ca819d3-1c9d-4264-a832-67b8a28b4608@gmail.com>
+Message-ID: <46cf0a61-7f78-4898-a3ba-db3a087274a3@gmail.com>
+
+For Linux users, meld is quite nice for side by side editing, though I've never tried using it for
+display. Just checking now suggests it isn't obvious how to "print" side by side display.
+
+I've made meld easier for my own use by creating an icon in Double Commander (DC allows
+the user to create iconized links to scripts and programs). There are two panes in the DC
+file manager. I highlight one file in each then click. This saves typing two full paths in
+a command
+
+    meld  path/to/file1 path/to/file2
+
+I suspect the highlight and click makes my use of meld reasonably attractive. I'm not sure
+I'd use it in the raw command line mode.
+
+Like Duncan, I welcome suggestions for similar tools, especially if there's a display option.
+
+John Nash
+
+On 2025-03-24 15:21, Duncan Murdoch wrote:
+> I sent some comments directly to Ben.? I just want to reply publicly to this part:
+> 
+> On 2025-03-24 1:18 p.m., Ben Bolker wrote:
+> 
+>> ??? The patch file is attached (also available at bugzilla, if it doesn't
+>> get through to the list). I find the patch format a little hard to read,
+>> so I'm reproducing just the *new* text below.
+> 
+> I agree absolutely about the lack of readability of patch files.? A side by side display is much nicer.? If anyone out 
+> there isn't using one, you should.
+> 
+> I really like the one I use ("Beyond Compare"), but it's not open source.? I've been using it for a very long time (20 
+> years or more, I think), and I suspect there are very good open source competitors out there now (and may have been for 
+> all the time I've been using BC). Suggestions?
+> 
+> Duncan Murdoch
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From t|m@t@y|or @end|ng |rom h|ddene|eph@nt@@co@uk  Mon Mar 24 21:05:36 2025
+From: t|m@t@y|or @end|ng |rom h|ddene|eph@nt@@co@uk (Tim Taylor)
+Date: Mon, 24 Mar 2025 20:05:36 +0000
+Subject: [Rd] request for discussion on lonely doc patch suggestion
+In-Reply-To: <46cf0a61-7f78-4898-a3ba-db3a087274a3@gmail.com>
+References: <46cf0a61-7f78-4898-a3ba-db3a087274a3@gmail.com>
+Message-ID: <77E13D24-F617-4990-9F86-0C6EC8B6ECB5@hiddenelephants.co.uk>
+
+FWIW, on the command line I?m a happy 'delta' user for a quick side by side comparison (https://github.com/dandavison/delta)
+
+>  On 24 Mar 2025, at 19:32, J C Nash <profjcnash at gmail.com> wrote:
+> 
+> ?For Linux users, meld is quite nice for side by side editing, though I've never tried using it for
+> display. Just checking now suggests it isn't obvious how to "print" side by side display.
+> 
+> I've made meld easier for my own use by creating an icon in Double Commander (DC allows
+> the user to create iconized links to scripts and programs). There are two panes in the DC
+> file manager. I highlight one file in each then click. This saves typing two full paths in
+> a command
+> 
+>   meld  path/to/file1 path/to/file2
+> 
+> I suspect the highlight and click makes my use of meld reasonably attractive. I'm not sure
+> I'd use it in the raw command line mode.
+> 
+> Like Duncan, I welcome suggestions for similar tools, especially if there's a display option.
+> 
+> John Nash
+> 
+>> On 2025-03-24 15:21, Duncan Murdoch wrote:
+>> I sent some comments directly to Ben.  I just want to reply publicly to this part:
+>>> On 2025-03-24 1:18 p.m., Ben Bolker wrote:
+>>>     The patch file is attached (also available at bugzilla, if it doesn't
+>>> get through to the list). I find the patch format a little hard to read,
+>>> so I'm reproducing just the *new* text below.
+>> I agree absolutely about the lack of readability of patch files.  A side by side display is much nicer.  If anyone out there isn't using one, you should.
+>> I really like the one I use ("Beyond Compare"), but it's not open source.  I've been using it for a very long time (20 years or more, I think), and I suspect there are very good open source competitors out there now (and may have been for all the time I've been using BC). Suggestions?
+>> Duncan Murdoch
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+	[[alternative HTML version deleted]]
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Mon Mar 24 21:35:04 2025
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Mon, 24 Mar 2025 16:35:04 -0400
+Subject: [Rd] request for discussion on lonely doc patch suggestion
+In-Reply-To: <77E13D24-F617-4990-9F86-0C6EC8B6ECB5@hiddenelephants.co.uk>
+References: <46cf0a61-7f78-4898-a3ba-db3a087274a3@gmail.com>
+ <77E13D24-F617-4990-9F86-0C6EC8B6ECB5@hiddenelephants.co.uk>
+Message-ID: <918cbadf-9fae-467f-98f3-a0295e9e9931@gmail.com>
+
+Thanks for the suggestion.  I did a quick scan of the delta manual, but 
+couldn't spot anything on integration with svn, just git.  Have you 
+worked out the necessary config options for svn so that it would work 
+with diffs like Ben's, or for running `svn diff` on some local changes?
+
+Currently I don't use svn for anything but the R sources, but I suspect 
+that will continue for some time...
+
+Duncan Murdoch
+
+
+
+On 2025-03-24 4:05 p.m., Tim Taylor wrote:
+> FWIW, on the command line I?m a happy 'delta' user for a quick side by 
+> side comparison (https://github.com/dandavison/delta 
+> <https://github.com/dandavison/delta>)
+> 
+>> ?On 24 Mar 2025, at 19:32, J C Nash <profjcnash at gmail.com> wrote:
+>>
+>> ?For Linux users, meld is quite nice for side by side editing, though 
+>> I've never tried using it for
+>> display. Just checking now suggests it isn't obvious how to "print" 
+>> side by side display.
+>>
+>> I've made meld easier for my own use by creating an icon in Double 
+>> Commander (DC allows
+>> the user to create iconized links to scripts and programs). There are 
+>> two panes in the DC
+>> file manager. I highlight one file in each then click. This saves 
+>> typing two full paths in
+>> a command
+>>
+>> ??meld ?path/to/file1 path/to/file2
+>>
+>> I suspect the highlight and click makes my use of meld reasonably 
+>> attractive. I'm not sure
+>> I'd use it in the raw command line mode.
+>>
+>> Like Duncan, I welcome suggestions for similar tools, especially if 
+>> there's a display option.
+>>
+>> John Nash
+>>
+>> On 2025-03-24 15:21, Duncan Murdoch wrote:
+>>> I sent some comments directly to Ben.? I just want to reply publicly 
+>>> to this part:
+>>> On 2025-03-24 1:18 p.m., Ben Bolker wrote:
+>>>> ??? The patch file is attached (also available at bugzilla, if it 
+>>>> doesn't
+>>>> get through to the list). I find the patch format a little hard to read,
+>>>> so I'm reproducing just the *new* text below.
+>>> I agree absolutely about the lack of readability of patch files.? A 
+>>> side by side display is much nicer.? If anyone out there isn't using 
+>>> one, you should.
+>>> I really like the one I use ("Beyond Compare"), but it's not open 
+>>> source.? I've been using it for a very long time (20 years or more, I 
+>>> think), and I suspect there are very good open source competitors out 
+>>> there now (and may have been for all the time I've been using BC). 
+>>> Suggestions?
+>>> Duncan Murdoch
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
