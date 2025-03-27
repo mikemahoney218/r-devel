@@ -5033,3 +5033,655 @@ On 2025-03-24 4:05 p.m., Tim Taylor wrote:
 >> https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From m|ch@e|ch|r|co4 @end|ng |rom gm@||@com  Tue Mar 25 07:12:26 2025
+From: m|ch@e|ch|r|co4 @end|ng |rom gm@||@com (Michael Chirico)
+Date: Mon, 24 Mar 2025 23:12:26 -0700
+Subject: [Rd] Why does NextMethod() pick up duplicate arguments in '...' if
+ given positionally at top level?
+Message-ID: <CAPRVBcww0W_UzV6V5kvgJCGPLuNWg_=g2KiM-j73m3J2cNsSNQ@mail.gmail.com>
+
+Consider:
+
+foo <- function(x, y, ...) {
+    UseMethod("foo")
+}
+
+foo.default <- function(x, y = 0, ...) {
+    cat(sprintf("%s: x=%s, y=%s\n", as.character(match.call()[[1L]]), x, y))
+    if (...length()) str(list(...))
+}
+
+foo.C <- function(x, y = 3, ...) {
+    cat(sprintf("%s: x=%s, y=%s\n", as.character(match.call()[[1L]]), x, y))
+    if (...length()) str(list(...))
+    NextMethod("foo", x = x, y = y)
+}
+
+c <- structure(class = "C", 1)
+
+# 'x' winds up in ..1
+foo(c)
+# foo.C: x=1, y=3
+# foo.default: x=1, y=3
+# List of 1
+#  $ : 'C' num 1
+
+# empty ...!
+foo(x=c)
+# foo.C: x=1, y=3
+# foo.default: x=1, y=3
+
+# now both x is ..1, y is ..2
+foo(c, 4)
+# foo.C: x=1, y=4
+# foo.default: x=1, y=4
+# List of 2
+#  $ : 'C' num 1
+#  $ : num 4
+
+# perhaps predictably, ...length()==0
+foo(x=c, y=4)
+# foo.C: x=1, y=4
+# foo.default: x=1, y=4
+
+I've tried re-reading ?NextMethod a few times as well as R-lang [1] &
+can't make heads or tails of this. I've also come across related 2012
+(!) thread [2] and tangentially-related bug [3].
+
+Is this intended behavior? If so, might I reiterate Henrik's long-ago
+request for better documentation of how to work around this?
+
+For some added context, where I actually encountered this, my S3
+method is mainly written to overwrite the defaults of a parent class's
+method.
+
+Mike C
+
+[1] https://cran.r-project.org/doc/manuals/r-devel/R-lang.html#NextMethod
+[2] https://stat.ethz.ch/pipermail/r-devel/2012-October/065016.html
+[3] https://bugs.r-project.org/show_bug.cgi?id=15654
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Tue Mar 25 11:30:32 2025
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 25 Mar 2025 06:30:32 -0400
+Subject: [Rd] 
+ Why does NextMethod() pick up duplicate arguments in '...' if
+ given positionally at top level?
+In-Reply-To: <CAPRVBcww0W_UzV6V5kvgJCGPLuNWg_=g2KiM-j73m3J2cNsSNQ@mail.gmail.com>
+References: <CAPRVBcww0W_UzV6V5kvgJCGPLuNWg_=g2KiM-j73m3J2cNsSNQ@mail.gmail.com>
+Message-ID: <d3d29ec2-69d7-4253-94b9-cfef9cb0f26b@gmail.com>
+
+I don't think there's any valid reason for this behaviour, i.e. it's a 
+bug.  For those who haven't read closely, the bug is that in the 
+`foo(c)` call, within foo.default() the value of `c` is bound to both
+x and to the first element of ... .
+
+The 2012 thread you link to started with a slightly different setup and 
+arguments were made by Simon that the behaviour is documented, but the 
+final message in the thread is about the same bug as here.
+
+I think the bug report 15654 is about the first setup, not the current one.
+
+So what I'd suggest you do is report this example in a new bug report, 
+and if you have the energy (seems nobody else does!), track down where 
+the duplication happens, and include a patch to fix it.
+
+If you do attempt that, you'll probably learn enough about NextMethod to 
+decide whether to follow the suggestion in 15654, and could maybe submit 
+a patch for that, too.
+
+Duncan Murdoch
+
+
+On 2025-03-25 2:12 a.m., Michael Chirico wrote:
+> Consider:
+> 
+> foo <- function(x, y, ...) {
+>      UseMethod("foo")
+> }
+> 
+> foo.default <- function(x, y = 0, ...) {
+>      cat(sprintf("%s: x=%s, y=%s\n", as.character(match.call()[[1L]]), x, y))
+>      if (...length()) str(list(...))
+> }
+> 
+> foo.C <- function(x, y = 3, ...) {
+>      cat(sprintf("%s: x=%s, y=%s\n", as.character(match.call()[[1L]]), x, y))
+>      if (...length()) str(list(...))
+>      NextMethod("foo", x = x, y = y)
+> }
+> 
+> c <- structure(class = "C", 1)
+> 
+> # 'x' winds up in ..1
+> foo(c)
+> # foo.C: x=1, y=3
+> # foo.default: x=1, y=3
+> # List of 1
+> #  $ : 'C' num 1
+> 
+> # empty ...!
+> foo(x=c)
+> # foo.C: x=1, y=3
+> # foo.default: x=1, y=3
+> 
+> # now both x is ..1, y is ..2
+> foo(c, 4)
+> # foo.C: x=1, y=4
+> # foo.default: x=1, y=4
+> # List of 2
+> #  $ : 'C' num 1
+> #  $ : num 4
+> 
+> # perhaps predictably, ...length()==0
+> foo(x=c, y=4)
+> # foo.C: x=1, y=4
+> # foo.default: x=1, y=4
+> 
+> I've tried re-reading ?NextMethod a few times as well as R-lang [1] &
+> can't make heads or tails of this. I've also come across related 2012
+> (!) thread [2] and tangentially-related bug [3].
+> 
+> Is this intended behavior? If so, might I reiterate Henrik's long-ago
+> request for better documentation of how to work around this?
+> 
+> For some added context, where I actually encountered this, my S3
+> method is mainly written to overwrite the defaults of a parent class's
+> method.
+> 
+> Mike C
+> 
+> [1] https://cran.r-project.org/doc/manuals/r-devel/R-lang.html#NextMethod
+> [2] https://stat.ethz.ch/pipermail/r-devel/2012-October/065016.html
+> [3] https://bugs.r-project.org/show_bug.cgi?id=15654
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @oko| @end|ng |rom |n@@-tou|ou@e@|r  Tue Mar 25 11:53:19 2025
+From: @oko| @end|ng |rom |n@@-tou|ou@e@|r (Serguei Sokol)
+Date: Tue, 25 Mar 2025 11:53:19 +0100
+Subject: [Rd] request for discussion on lonely doc patch suggestion
+In-Reply-To: <46cf0a61-7f78-4898-a3ba-db3a087274a3@gmail.com>
+References: <afc37678-3cbd-49c8-96c1-e815513ed529@gmail.com>
+ <5ca819d3-1c9d-4264-a832-67b8a28b4608@gmail.com>
+ <46cf0a61-7f78-4898-a3ba-db3a087274a3@gmail.com>
+Message-ID: <c6b9cd3c-cfa6-4933-ba21-2df4ea8a54cb@insa-toulouse.fr>
+
+Le 24/03/2025 ? 20:28, J C Nash a ?crit?:
+> For Linux users, meld is quite nice for side by side editing, though 
+> I've never tried using it for
+> display. Just checking now suggests it isn't obvious how to "print" 
+> side by side display.
+>
+> I've made meld easier for my own use by creating an icon in Double 
+> Commander (DC allows
+> the user to create iconized links to scripts and programs). There are 
+> two panes in the DC
+> file manager. I highlight one file in each then click. This saves 
+> typing two full paths in
+> a command
+>
+> ?? meld? path/to/file1 path/to/file2
+>
+> I suspect the highlight and click makes my use of meld reasonably 
+> attractive. I'm not sure
+> I'd use it in the raw command line mode.
+>
+> Like Duncan, I welcome suggestions for similar tools, especially if 
+> there's a display option.
+I like tkdiff.
+
+Serguei.
+
+>
+> John Nash
+>
+> On 2025-03-24 15:21, Duncan Murdoch wrote:
+>> I sent some comments directly to Ben.? I just want to reply publicly 
+>> to this part:
+>>
+>> On 2025-03-24 1:18 p.m., Ben Bolker wrote:
+>>
+>>> ??? The patch file is attached (also available at bugzilla, if it 
+>>> doesn't
+>>> get through to the list). I find the patch format a little hard to 
+>>> read,
+>>> so I'm reproducing just the *new* text below.
+>>
+>> I agree absolutely about the lack of readability of patch files.? A 
+>> side by side display is much nicer.? If anyone out there isn't using 
+>> one, you should.
+>>
+>> I really like the one I use ("Beyond Compare"), but it's not open 
+>> source.? I've been using it for a very long time (20 years or more, I 
+>> think), and I suspect there are very good open source competitors out 
+>> there now (and may have been for all the time I've been using BC). 
+>> Suggestions?
+>>
+>> Duncan Murdoch
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+-- 
+Serguei Sokol
+Ingenieur de recherche INRAE
+
+Cellule Math?matiques
+TBI, INSA/INRAE UMR 792, INSA/CNRS UMR 5504
+135 Avenue de Rangueil
+31077 Toulouse Cedex 04
+
+tel: +33 5 61 55 98 49
+email: sokol at insa-toulouse.fr
+https://www.toulouse-biotechnology-institute.fr/en/plateformes-plateaux/cellule-mathematiques/
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Tue Mar 25 12:57:10 2025
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 25 Mar 2025 07:57:10 -0400
+Subject: [Rd] request for discussion on lonely doc patch suggestion
+In-Reply-To: <c6b9cd3c-cfa6-4933-ba21-2df4ea8a54cb@insa-toulouse.fr>
+References: <afc37678-3cbd-49c8-96c1-e815513ed529@gmail.com>
+ <5ca819d3-1c9d-4264-a832-67b8a28b4608@gmail.com>
+ <46cf0a61-7f78-4898-a3ba-db3a087274a3@gmail.com>
+ <c6b9cd3c-cfa6-4933-ba21-2df4ea8a54cb@insa-toulouse.fr>
+Message-ID: <edc57f9f-2edd-4f3f-b547-0061f3d4080f@gmail.com>
+
+Thanks.  When I went looking for a web page about tkdiff, I found this 
+one comparing multiple diff tools:
+
+  https://www.tecmint.com/best-linux-file-diff-tools-comparison/
+
+It says it's for Linux, but they may be available on other platforms 
+too.  For example, tkdiff is based on TCL/TK, so it is cross-platform.
+
+Based just on that comparison page, I'd probably choose DiffMerge or 
+Diffuse, but I imagine some of the others can match them.
+
+Duncan Murdoch
+
+On 2025-03-25 6:53 a.m., Serguei Sokol via R-devel wrote:
+> Le 24/03/2025 ? 20:28, J C Nash a ?crit?:
+>> For Linux users, meld is quite nice for side by side editing, though
+>> I've never tried using it for
+>> display. Just checking now suggests it isn't obvious how to "print"
+>> side by side display.
+>>
+>> I've made meld easier for my own use by creating an icon in Double
+>> Commander (DC allows
+>> the user to create iconized links to scripts and programs). There are
+>> two panes in the DC
+>> file manager. I highlight one file in each then click. This saves
+>> typing two full paths in
+>> a command
+>>
+>>  ?? meld? path/to/file1 path/to/file2
+>>
+>> I suspect the highlight and click makes my use of meld reasonably
+>> attractive. I'm not sure
+>> I'd use it in the raw command line mode.
+>>
+>> Like Duncan, I welcome suggestions for similar tools, especially if
+>> there's a display option.
+> I like tkdiff.
+> 
+> Serguei.
+> 
+>>
+>> John Nash
+>>
+>> On 2025-03-24 15:21, Duncan Murdoch wrote:
+>>> I sent some comments directly to Ben.? I just want to reply publicly
+>>> to this part:
+>>>
+>>> On 2025-03-24 1:18 p.m., Ben Bolker wrote:
+>>>
+>>>>  ??? The patch file is attached (also available at bugzilla, if it
+>>>> doesn't
+>>>> get through to the list). I find the patch format a little hard to
+>>>> read,
+>>>> so I'm reproducing just the *new* text below.
+>>>
+>>> I agree absolutely about the lack of readability of patch files.? A
+>>> side by side display is much nicer.? If anyone out there isn't using
+>>> one, you should.
+>>>
+>>> I really like the one I use ("Beyond Compare"), but it's not open
+>>> source.? I've been using it for a very long time (20 years or more, I
+>>> think), and I suspect there are very good open source competitors out
+>>> there now (and may have been for all the time I've been using BC).
+>>> Suggestions?
+>>>
+>>> Duncan Murdoch
+>>>
+>>> ______________________________________________
+>>> R-devel at r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+>
+
+
+From deep@y@n@@@rk@r @end|ng |rom gm@||@com  Tue Mar 25 13:38:24 2025
+From: deep@y@n@@@rk@r @end|ng |rom gm@||@com (Deepayan Sarkar)
+Date: Tue, 25 Mar 2025 18:08:24 +0530
+Subject: [Rd] request for discussion on lonely doc patch suggestion
+In-Reply-To: <46cf0a61-7f78-4898-a3ba-db3a087274a3@gmail.com>
+References: <afc37678-3cbd-49c8-96c1-e815513ed529@gmail.com>
+ <5ca819d3-1c9d-4264-a832-67b8a28b4608@gmail.com>
+ <46cf0a61-7f78-4898-a3ba-db3a087274a3@gmail.com>
+Message-ID: <CADfFDC6K=BmMJstDbLkCKm8mvXa4pRdGvTN65d_ThzGZjbm4=g@mail.gmail.com>
+
+I like kompare very much, but I think it's Linux only.
+
+https://apps.kde.org/kompare/
+
+-Deepayan
+
+On Tue, 25 Mar 2025 at 01:01, J C Nash <profjcnash at gmail.com> wrote:
+
+> For Linux users, meld is quite nice for side by side editing, though I've
+> never tried using it for
+> display. Just checking now suggests it isn't obvious how to "print" side
+> by side display.
+>
+> I've made meld easier for my own use by creating an icon in Double
+> Commander (DC allows
+> the user to create iconized links to scripts and programs). There are two
+> panes in the DC
+> file manager. I highlight one file in each then click. This saves typing
+> two full paths in
+> a command
+>
+>     meld  path/to/file1 path/to/file2
+>
+> I suspect the highlight and click makes my use of meld reasonably
+> attractive. I'm not sure
+> I'd use it in the raw command line mode.
+>
+> Like Duncan, I welcome suggestions for similar tools, especially if
+> there's a display option.
+>
+> John Nash
+>
+> On 2025-03-24 15:21, Duncan Murdoch wrote:
+> > I sent some comments directly to Ben.  I just want to reply publicly to
+> this part:
+> >
+> > On 2025-03-24 1:18 p.m., Ben Bolker wrote:
+> >
+> >>     The patch file is attached (also available at bugzilla, if it
+> doesn't
+> >> get through to the list). I find the patch format a little hard to read,
+> >> so I'm reproducing just the *new* text below.
+> >
+> > I agree absolutely about the lack of readability of patch files.  A side
+> by side display is much nicer.  If anyone out
+> > there isn't using one, you should.
+> >
+> > I really like the one I use ("Beyond Compare"), but it's not open
+> source.  I've been using it for a very long time (20
+> > years or more, I think), and I suspect there are very good open source
+> competitors out there now (and may have been for
+> > all the time I've been using BC). Suggestions?
+> >
+> > Duncan Murdoch
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
+From edd @end|ng |rom deb|@n@org  Tue Mar 25 23:53:02 2025
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Tue, 25 Mar 2025 17:53:02 -0500
+Subject: [Rd] Patch for RJSONIO
+Message-ID: <26595.13262.945659.157308@rob.eddelbuettel.com>
+
+
+I can never remember where the canonical sources are for the effectively-CRAN
+maintained packages so I am dropping it here -- yesterday's update to RJSONIO
+does not build on anything older than r-devel.  This patch helps, feel free
+to adjust as needed.
+
+Dirk
+
+
+diff -ru RJSONIO.orig/src/RJSON.c RJSONIO/src/RJSON.c
+--- RJSONIO.orig/src/RJSON.c	2025-03-24 02:10:08.000000000 -0500
++++ RJSONIO/src/RJSON.c	2025-03-25 17:49:50.490016649 -0500
+@@ -2,6 +2,7 @@
+ 
+ #include <Rinternals.h>
+ #include <Rdefines.h>
++#include <Rversion.h>
+ 
+ #include "ConvertUTF.h"
+ 
+@@ -70,7 +71,11 @@
+ 	    ptr = REAL(tmp);
+ 	    break;
+ 	case VECSXP:
++#if R_VERSION >= R_Version(4,5,0)
+ 	    ptr = (void *) VECTOR_PTR_RO(tmp);
++#else
++	    ptr = (void *) VECTOR_PTR(tmp);
++#endif
+ 	    break;
+ 	default:
+ 	    ptr = NULL;
+
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
+From bbo|ker @end|ng |rom gm@||@com  Tue Mar 25 23:58:05 2025
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Tue, 25 Mar 2025 18:58:05 -0400
+Subject: [Rd] Patch for RJSONIO
+In-Reply-To: <26595.13262.945659.157308@rob.eddelbuettel.com>
+References: <26595.13262.945659.157308@rob.eddelbuettel.com>
+Message-ID: <aa40a238-ddba-40f7-bba5-c2f4be8aef16@gmail.com>
+
+Maybe https://github.com/duncantl/RJSONIO ?
+
+(That page also points to https://omegahat.org/RJSONIO, which is now 
+defunct ...)
+
+On 3/25/25 18:53, Dirk Eddelbuettel wrote:
+> 
+> I can never remember where the canonical sources are for the effectively-CRAN
+> maintained packages so I am dropping it here -- yesterday's update to RJSONIO
+> does not build on anything older than r-devel.  This patch helps, feel free
+> to adjust as needed.
+> 
+> Dirk
+> 
+> 
+> diff -ru RJSONIO.orig/src/RJSON.c RJSONIO/src/RJSON.c
+> --- RJSONIO.orig/src/RJSON.c	2025-03-24 02:10:08.000000000 -0500
+> +++ RJSONIO/src/RJSON.c	2025-03-25 17:49:50.490016649 -0500
+> @@ -2,6 +2,7 @@
+>   
+>   #include <Rinternals.h>
+>   #include <Rdefines.h>
+> +#include <Rversion.h>
+>   
+>   #include "ConvertUTF.h"
+>   
+> @@ -70,7 +71,11 @@
+>   	    ptr = REAL(tmp);
+>   	    break;
+>   	case VECSXP:
+> +#if R_VERSION >= R_Version(4,5,0)
+>   	    ptr = (void *) VECTOR_PTR_RO(tmp);
+> +#else
+> +	    ptr = (void *) VECTOR_PTR(tmp);
+> +#endif
+>   	    break;
+>   	default:
+>   	    ptr = NULL;
+> 
+>
+
+
+From murdoch@dunc@n @end|ng |rom gm@||@com  Wed Mar 26 01:10:02 2025
+From: murdoch@dunc@n @end|ng |rom gm@||@com (Duncan Murdoch)
+Date: Tue, 25 Mar 2025 20:10:02 -0400
+Subject: [Rd] Patch for RJSONIO
+In-Reply-To: <aa40a238-ddba-40f7-bba5-c2f4be8aef16@gmail.com>
+References: <26595.13262.945659.157308@rob.eddelbuettel.com>
+ <aa40a238-ddba-40f7-bba5-c2f4be8aef16@gmail.com>
+Message-ID: <1c47587a-9397-4783-b8c0-bac3e7e98164@gmail.com>
+
+I think email to the maintainer is likely the only choice.  The 
+maintainer is "CRAN Team <CRAN at r-project.org>".
+
+Duncan Murdoch
+
+
+On 2025-03-25 6:58 p.m., Ben Bolker wrote:
+> Maybe https://github.com/duncantl/RJSONIO ?
+> 
+> (That page also points to https://omegahat.org/RJSONIO, which is now
+> defunct ...)
+> 
+> On 3/25/25 18:53, Dirk Eddelbuettel wrote:
+>>
+>> I can never remember where the canonical sources are for the effectively-CRAN
+>> maintained packages so I am dropping it here -- yesterday's update to RJSONIO
+>> does not build on anything older than r-devel.  This patch helps, feel free
+>> to adjust as needed.
+>>
+>> Dirk
+>>
+>>
+>> diff -ru RJSONIO.orig/src/RJSON.c RJSONIO/src/RJSON.c
+>> --- RJSONIO.orig/src/RJSON.c	2025-03-24 02:10:08.000000000 -0500
+>> +++ RJSONIO/src/RJSON.c	2025-03-25 17:49:50.490016649 -0500
+>> @@ -2,6 +2,7 @@
+>>    
+>>    #include <Rinternals.h>
+>>    #include <Rdefines.h>
+>> +#include <Rversion.h>
+>>    
+>>    #include "ConvertUTF.h"
+>>    
+>> @@ -70,7 +71,11 @@
+>>    	    ptr = REAL(tmp);
+>>    	    break;
+>>    	case VECSXP:
+>> +#if R_VERSION >= R_Version(4,5,0)
+>>    	    ptr = (void *) VECTOR_PTR_RO(tmp);
+>> +#else
+>> +	    ptr = (void *) VECTOR_PTR(tmp);
+>> +#endif
+>>    	    break;
+>>    	default:
+>>    	    ptr = NULL;
+>>
+>>
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From bbo|ker @end|ng |rom gm@||@com  Wed Mar 26 01:23:58 2025
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Tue, 25 Mar 2025 20:23:58 -0400
+Subject: [Rd] Patch for RJSONIO
+In-Reply-To: <1c47587a-9397-4783-b8c0-bac3e7e98164@gmail.com>
+References: <26595.13262.945659.157308@rob.eddelbuettel.com>
+ <aa40a238-ddba-40f7-bba5-c2f4be8aef16@gmail.com>
+ <1c47587a-9397-4783-b8c0-bac3e7e98164@gmail.com>
+Message-ID: <CABghstTWFxi7tQ2bOmLno1_-7KLP1a3KXNs1w6ab-DBaobipVA@mail.gmail.com>
+
+  Dirk points out via Jeroen Ooms that
+
+https://github.com/r-devel/r-svn-packages
+
+is a  mirror of
+
+https://svn.r-project.org/R-packages/trunk/RJSONIO/
+
+which is where the package really lives ...
+
+On Tue, Mar 25, 2025 at 8:10?PM Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+>
+> I think email to the maintainer is likely the only choice.  The
+> maintainer is "CRAN Team <CRAN at r-project.org>".
+>
+> Duncan Murdoch
+>
+>
+> On 2025-03-25 6:58 p.m., Ben Bolker wrote:
+> > Maybe https://github.com/duncantl/RJSONIO ?
+> >
+> > (That page also points to https://omegahat.org/RJSONIO, which is now
+> > defunct ...)
+> >
+> > On 3/25/25 18:53, Dirk Eddelbuettel wrote:
+> >>
+> >> I can never remember where the canonical sources are for the effectively-CRAN
+> >> maintained packages so I am dropping it here -- yesterday's update to RJSONIO
+> >> does not build on anything older than r-devel.  This patch helps, feel free
+> >> to adjust as needed.
+> >>
+> >> Dirk
+> >>
+> >>
+> >> diff -ru RJSONIO.orig/src/RJSON.c RJSONIO/src/RJSON.c
+> >> --- RJSONIO.orig/src/RJSON.c 2025-03-24 02:10:08.000000000 -0500
+> >> +++ RJSONIO/src/RJSON.c      2025-03-25 17:49:50.490016649 -0500
+> >> @@ -2,6 +2,7 @@
+> >>
+> >>    #include <Rinternals.h>
+> >>    #include <Rdefines.h>
+> >> +#include <Rversion.h>
+> >>
+> >>    #include "ConvertUTF.h"
+> >>
+> >> @@ -70,7 +71,11 @@
+> >>          ptr = REAL(tmp);
+> >>          break;
+> >>      case VECSXP:
+> >> +#if R_VERSION >= R_Version(4,5,0)
+> >>          ptr = (void *) VECTOR_PTR_RO(tmp);
+> >> +#else
+> >> +        ptr = (void *) VECTOR_PTR(tmp);
+> >> +#endif
+> >>          break;
+> >>      default:
+> >>          ptr = NULL;
+> >>
+> >>
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
