@@ -5685,3 +5685,347 @@ On Tue, Mar 25, 2025 at 8:10?PM Duncan Murdoch <murdoch.duncan at gmail.com> wro
 >
 
 
+From m|ch@e|ch|r|co4 @end|ng |rom gm@||@com  Wed Mar 26 07:13:20 2025
+From: m|ch@e|ch|r|co4 @end|ng |rom gm@||@com (Michael Chirico)
+Date: Tue, 25 Mar 2025 23:13:20 -0700
+Subject: [Rd] 
+ Why does NextMethod() pick up duplicate arguments in '...' if
+ given positionally at top level?
+In-Reply-To: <d3d29ec2-69d7-4253-94b9-cfef9cb0f26b@gmail.com>
+References: <CAPRVBcww0W_UzV6V5kvgJCGPLuNWg_=g2KiM-j73m3J2cNsSNQ@mail.gmail.com>
+ <d3d29ec2-69d7-4253-94b9-cfef9cb0f26b@gmail.com>
+Message-ID: <CAPRVBczPtvKafcHZBz6n2JAm3N_NNx__Jt49ap=mj9vTzva77A@mail.gmail.com>
+
+Thanks Duncan! I filed [1]. I didn't have a clue how to fix it, so I
+figured, why not ask an LLM [2].
+
+It got the solution quite wrong (unless I'm just not zen enough to
+understand its wisdom), but it _did_ focus my attention on the right
+place. I have a patch going through CI at [3] that fixes the bug, I
+just don't know what knock-on effects it might have.
+
+[1] https://bugs.r-project.org/show_bug.cgi?id=18875
+[2] https://claude.ai/share/2b702387-6aef-44ee-9e28-17c9096ce8f0
+[3] https://github.com/r-devel/r-svn/pull/198
+
+On Tue, Mar 25, 2025 at 3:30?AM Duncan Murdoch <murdoch.duncan at gmail.com> wrote:
+>
+> I don't think there's any valid reason for this behaviour, i.e. it's a
+> bug.  For those who haven't read closely, the bug is that in the
+> `foo(c)` call, within foo.default() the value of `c` is bound to both
+> x and to the first element of ... .
+>
+> The 2012 thread you link to started with a slightly different setup and
+> arguments were made by Simon that the behaviour is documented, but the
+> final message in the thread is about the same bug as here.
+>
+> I think the bug report 15654 is about the first setup, not the current one.
+>
+> So what I'd suggest you do is report this example in a new bug report,
+> and if you have the energy (seems nobody else does!), track down where
+> the duplication happens, and include a patch to fix it.
+>
+> If you do attempt that, you'll probably learn enough about NextMethod to
+> decide whether to follow the suggestion in 15654, and could maybe submit
+> a patch for that, too.
+>
+> Duncan Murdoch
+>
+>
+> On 2025-03-25 2:12 a.m., Michael Chirico wrote:
+> > Consider:
+> >
+> > foo <- function(x, y, ...) {
+> >      UseMethod("foo")
+> > }
+> >
+> > foo.default <- function(x, y = 0, ...) {
+> >      cat(sprintf("%s: x=%s, y=%s\n", as.character(match.call()[[1L]]), x, y))
+> >      if (...length()) str(list(...))
+> > }
+> >
+> > foo.C <- function(x, y = 3, ...) {
+> >      cat(sprintf("%s: x=%s, y=%s\n", as.character(match.call()[[1L]]), x, y))
+> >      if (...length()) str(list(...))
+> >      NextMethod("foo", x = x, y = y)
+> > }
+> >
+> > c <- structure(class = "C", 1)
+> >
+> > # 'x' winds up in ..1
+> > foo(c)
+> > # foo.C: x=1, y=3
+> > # foo.default: x=1, y=3
+> > # List of 1
+> > #  $ : 'C' num 1
+> >
+> > # empty ...!
+> > foo(x=c)
+> > # foo.C: x=1, y=3
+> > # foo.default: x=1, y=3
+> >
+> > # now both x is ..1, y is ..2
+> > foo(c, 4)
+> > # foo.C: x=1, y=4
+> > # foo.default: x=1, y=4
+> > # List of 2
+> > #  $ : 'C' num 1
+> > #  $ : num 4
+> >
+> > # perhaps predictably, ...length()==0
+> > foo(x=c, y=4)
+> > # foo.C: x=1, y=4
+> > # foo.default: x=1, y=4
+> >
+> > I've tried re-reading ?NextMethod a few times as well as R-lang [1] &
+> > can't make heads or tails of this. I've also come across related 2012
+> > (!) thread [2] and tangentially-related bug [3].
+> >
+> > Is this intended behavior? If so, might I reiterate Henrik's long-ago
+> > request for better documentation of how to work around this?
+> >
+> > For some added context, where I actually encountered this, my S3
+> > method is mainly written to overwrite the defaults of a parent class's
+> > method.
+> >
+> > Mike C
+> >
+> > [1] https://cran.r-project.org/doc/manuals/r-devel/R-lang.html#NextMethod
+> > [2] https://stat.ethz.ch/pipermail/r-devel/2012-October/065016.html
+> > [3] https://bugs.r-project.org/show_bug.cgi?id=15654
+> >
+> > ______________________________________________
+> > R-devel at r-project.org mailing list
+> > https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+
+From Kurt@Horn|k @end|ng |rom wu@@c@@t  Wed Mar 26 07:17:45 2025
+From: Kurt@Horn|k @end|ng |rom wu@@c@@t (Kurt Hornik)
+Date: Wed, 26 Mar 2025 07:17:45 +0100
+Subject: [Rd] Patch for RJSONIO
+In-Reply-To: <26595.13262.945659.157308@rob.eddelbuettel.com>
+References: <26595.13262.945659.157308@rob.eddelbuettel.com>
+Message-ID: <26595.39945.471375.82303@hornik.net>
+
+>>>>> Dirk Eddelbuettel writes:
+
+Great, thanks!  Will put up a fixed RJSONIO shortly ...
+
+Best
+-k
+
+> I can never remember where the canonical sources are for the effectively-CRAN
+> maintained packages so I am dropping it here -- yesterday's update to RJSONIO
+> does not build on anything older than r-devel.  This patch helps, feel free
+> to adjust as needed.
+
+> Dirk
+
+
+> diff -ru RJSONIO.orig/src/RJSON.c RJSONIO/src/RJSON.c
+> --- RJSONIO.orig/src/RJSON.c	2025-03-24 02:10:08.000000000 -0500
+> +++ RJSONIO/src/RJSON.c	2025-03-25 17:49:50.490016649 -0500
+> @@ -2,6 +2,7 @@
+ 
+>  #include <Rinternals.h>
+>  #include <Rdefines.h>
+> +#include <Rversion.h>
+ 
+>  #include "ConvertUTF.h"
+ 
+> @@ -70,7 +71,11 @@
+>  	    ptr = REAL(tmp);
+>  	    break;
+>  	case VECSXP:
+> +#if R_VERSION >= R_Version(4,5,0)
+>  	    ptr = (void *) VECTOR_PTR_RO(tmp);
+> +#else
+> +	    ptr = (void *) VECTOR_PTR(tmp);
+> +#endif
+>  	    break;
+>  	default:
+>  	    ptr = NULL;
+
+
+> -- 
+> dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @erg|o||er @end|ng |rom gm@||@com  Wed Mar 26 17:47:26 2025
+From: @erg|o||er @end|ng |rom gm@||@com (Sergio Oller)
+Date: Wed, 26 Mar 2025 17:47:26 +0100
+Subject: [Rd] Suggestion: Install packages on non-appendable file systems
+ (e.g. databricks volumes)
+Message-ID: <CAGBo=GnvV_udrRMWmL_hCsRceUZibtDfpR05sxs8ZSxkbd8rOg@mail.gmail.com>
+
+Hello,
+
+I would like to submit a patch to R. Following 5  Submitting Feature
+Requests ? R Development Guide
+<https://contributor.r-project.org/rdevguide/chapters/submitting_feature_requests.html>,
+I would like to ask for feedback before proceeding with a ?formal?
+submission on bugzilla. It's my first attempt contributing to R and I do
+not currently have a bugzilla account.
+
+I am working at a company, and we use R with databricks. We want to install
+some packages on a distributed filesystem that is not fully POSIX
+compliant, as it does not support opening files in append mode. In C terms,
+`open(filename, "a")` gives an error. I guess other distributed file
+systems beyond the ones in databricks may have issues with append mode as
+well.
+
+Our current workaround is to install all packages on a local folder, and
+then copy/move the folder to the distributed file system.
+
+If I understand package installation correctly, when a package is
+installed, the installation happens inside a 00LOCK directory, and then the
+outcome is moved to the final destination.
+
+The contribution I would like to submit allows users/sysadmins to set an
+environment variable named PKG_LOCKDIR_PREFIX, that defines the location
+where the "00LOCK-" directories are created. The patch is backwards
+compatible and it consists of +28,-10 lines, hopefully easy enough to
+review.
+
+https://github.com/r-devel/r-svn/pull/196.diff
+
+When I use this patch, I can successfully install packages on a distributed
+file system by setting PKG_LOCKDIR_PREFIX to a directory in my local
+filesystem (R does all the file append stuff in the local file system, and
+finally copies all the package files to the distributed file system)
+
+This setting makes package installation transparent for all data
+scientists, since they may not even know that PKG_LOCKDIR_PREFIX has been
+set. Package installation just works as expected.
+
+I feel the patch has some added value over our workaround: Even if we
+implement the workaround with a simple wrapper over install.packages(), any
+third party package that depends on install.packages() (such as renv or
+others) won't use our workaround. Besides, with this patch merged any other
+R user benefits from being able to install packages in those filesystems.
+
+Any feedback is very much appreciated.
+
+Thanks for your time,
+
+Sergio
+
+	[[alternative HTML version deleted]]
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Wed Mar 26 21:34:42 2025
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Wed, 26 Mar 2025 21:34:42 +0100
+Subject: [Rd] 
+ Suggestion: Install packages on non-appendable file systems
+ (e.g. databricks volumes)
+In-Reply-To: <CAGBo=GnvV_udrRMWmL_hCsRceUZibtDfpR05sxs8ZSxkbd8rOg@mail.gmail.com>
+References: <CAGBo=GnvV_udrRMWmL_hCsRceUZibtDfpR05sxs8ZSxkbd8rOg@mail.gmail.com>
+Message-ID: <ec874f23-cdb9-4902-b7a6-24cd64d6659f@gmail.com>
+
+
+On 3/26/25 17:47, Sergio Oller wrote:
+> Hello,
+>
+> I would like to submit a patch to R. Following 5  Submitting Feature
+> Requests ? R Development Guide
+> <https://contributor.r-project.org/rdevguide/chapters/submitting_feature_requests.html>,
+> I would like to ask for feedback before proceeding with a ?formal?
+> submission on bugzilla. It's my first attempt contributing to R and I do
+> not currently have a bugzilla account.
+>
+> I am working at a company, and we use R with databricks. We want to install
+> some packages on a distributed filesystem that is not fully POSIX
+> compliant, as it does not support opening files in append mode. In C terms,
+> `open(filename, "a")` gives an error. I guess other distributed file
+> systems beyond the ones in databricks may have issues with append mode as
+> well.
+>
+> Our current workaround is to install all packages on a local folder, and
+> then copy/move the folder to the distributed file system.
+
+This is something we try to keep working in R if possible, to allow 
+users moving installed packages by moving the installation directories. 
+If this practice works for you, it is probably fine.
+
+Currently, installing a binary package just means unpacking it to the 
+target directory. Probably you could do this also? via binary packages: 
+build binary packages on a local filesystem, and then install them to 
+the non-POSIX filesystem (provided the unpacking/installation would work 
+on such a filesystem). If the installation of a binary package doesn't 
+work but could be (possibly optionally) made work, that might be of 
+interest.
+
+> If I understand package installation correctly, when a package is
+> installed, the installation happens inside a 00LOCK directory, and then the
+> outcome is moved to the final destination.
+>
+> The contribution I would like to submit allows users/sysadmins to set an
+> environment variable named PKG_LOCKDIR_PREFIX, that defines the location
+> where the "00LOCK-" directories are created. The patch is backwards
+> compatible and it consists of +28,-10 lines, hopefully easy enough to
+> review.
+>
+> https://github.com/r-devel/r-svn/pull/196.diff
+>
+> When I use this patch, I can successfully install packages on a distributed
+> file system by setting PKG_LOCKDIR_PREFIX to a directory in my local
+> filesystem (R does all the file append stuff in the local file system, and
+> finally copies all the package files to the distributed file system)
+
+I am not excited about the idea combining this with the locking 
+mechanism and staged installation in the described way. The current 
+implementation takes advantage of that on a single filesystem, a move 
+operation is either atomic (POSIX) or at least very fast (Windows). 
+Copying an installed package to a different filesystem isn't. There is a 
+risk that some other R session could see a partial installation of a 
+package. Then, if the library was on a distributed filesystem accessed 
+from different machines, there could even be corruption due to 
+concurrent installation from multiple machines. In principle, this could 
+be even on a single machine (checking existence of a directory on one 
+filesystem and creating it on another wouldn't be atomic).
+
+Perhaps the staging/locking could be implemented in some special way on 
+the target filesystem, some second-level staging and installation - but 
+it is questionable whether it is worth the effort/maintenance in base R. 
+Also keep in mind this could hardly be regularly tested as such 
+filesystems are rare.
+
+Best
+Tomas
+
+P.S.
+
+about staged installation: 
+https://developer.r-project.org/Blog/public/2019/02/14/staged-install/index.html
+
+
+>
+> This setting makes package installation transparent for all data
+> scientists, since they may not even know that PKG_LOCKDIR_PREFIX has been
+> set. Package installation just works as expected.
+>
+> I feel the patch has some added value over our workaround: Even if we
+> implement the workaround with a simple wrapper over install.packages(), any
+> third party package that depends on install.packages() (such as renv or
+> others) won't use our workaround. Besides, with this patch merged any other
+> R user benefits from being able to install packages in those filesystems.
+>
+> Any feedback is very much appreciated.
+>
+> Thanks for your time,
+>
+> Sergio
+>
+> 	[[alternative HTML version deleted]]
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
