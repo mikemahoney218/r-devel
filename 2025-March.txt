@@ -6029,3 +6029,115 @@ https://developer.r-project.org/Blog/public/2019/02/14/staged-install/index.html
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From @erg|o||er @end|ng |rom gm@||@com  Thu Mar 27 13:26:47 2025
+From: @erg|o||er @end|ng |rom gm@||@com (Sergio Oller)
+Date: Thu, 27 Mar 2025 13:26:47 +0100
+Subject: [Rd] 
+ Suggestion: Install packages on non-appendable file systems
+ (e.g. databricks volumes)
+In-Reply-To: <ec874f23-cdb9-4902-b7a6-24cd64d6659f@gmail.com>
+References: <CAGBo=GnvV_udrRMWmL_hCsRceUZibtDfpR05sxs8ZSxkbd8rOg@mail.gmail.com>
+ <ec874f23-cdb9-4902-b7a6-24cd64d6659f@gmail.com>
+Message-ID: <CAGBo=GmW8jjRrVTDq6hN8Uf_Dx3nGtWY04X5-=eS1XKiA01VvA@mail.gmail.com>
+
+Hi Tomas,
+
+Thanks for your feedback and the link to your blog post about staged installs.
+
+Missatge de Tomas Kalibera <tomas.kalibera at gmail.com> del dia dc., 26
+de mar? 2025 a les 21:34:
+>
+>
+> > I am working at a company, and we use R with databricks. We want to install
+> > some packages on a distributed filesystem that is not fully POSIX
+> > compliant, as it does not support opening files in append mode. In C terms,
+> > `open(filename, "a")` gives an error. I guess other distributed file
+> > systems beyond the ones in databricks may have issues with append mode as
+> > well.
+> >
+> > Our current workaround is to install all packages on a local folder, and
+> > then copy/move the folder to the distributed file system.
+>
+> This is something we try to keep working in R if possible, to allow
+> users moving installed packages by moving the installation directories.
+> If this practice works for you, it is probably fine.
+
+
+Our current workaround kind of works, but when users expect to be able
+to install packages
+using renv or other tools that use install.packages to work; our
+wrapper is not that convenient.
+
+>
+>
+> Currently, installing a binary package just means unpacking it to the
+> target directory. Probably you could do this also  via binary packages:
+> build binary packages on a local filesystem, and then install them to
+> the non-POSIX filesystem (provided the unpacking/installation would work
+> on such a filesystem). If the installation of a binary package doesn't
+> work but could be (possibly optionally) made work, that might be of
+> interest.
+
+
+Yes, binary package installation works. Still, source package installation does
+not, which is inconvenient especially when there is some mixture of
+binary/source
+packages being installed.
+
+>
+> I am not excited about the idea combining this with the locking
+> mechanism and staged installation in the described way. The current
+> implementation takes advantage of that on a single filesystem, a move
+> operation is either atomic (POSIX) or at least very fast (Windows).
+> Copying an installed package to a different filesystem isn't. There is a
+> risk that some other R session could see a partial installation of a
+> package. Then, if the library was on a distributed filesystem accessed
+> from different machines, there could even be corruption due to
+> concurrent installation from multiple machines. In principle, this could
+> be even on a single machine (checking existence of a directory on one
+> filesystem and creating it on another wouldn't be atomic).
+>
+> Perhaps the staging/locking could be implemented in some special way on
+> the target filesystem, some second-level staging and installation - but
+> it is questionable whether it is worth the effort/maintenance in base R.
+> Also keep in mind this could hardly be regularly tested as such
+> filesystems are rare.
+
+
+The patch I propose does not help fixing concurrent installations on
+the distributed
+file system. I fully agree that the lack of an atomic move creates a
+risk of leaving
+the library in a corrupted state in case of errors. I believe the best
+way to address
+that probably requires improving the distributed filesystem so it can
+append mode
+and handle atomic moves better, however that's beyond my abilities.
+(Or not using that
+file system in the first place, but that is the place we have for
+persisting files right now).
+
+So far I included detailed documentation, including this caveats, in
+the R admin manual.
+Feel free to see the updated patch:
+
+https://patch-diff.githubusercontent.com/raw/r-devel/r-svn/pull/196.diff
+
+I have also submitted this patch to bugzilla:
+
+https://bugs.r-project.org/show_bug.cgi?id=18876
+
+I hope that even if the proposed solution is not perfect, it will be
+good and simple enough to be
+considered for merging, since it improves basic support for non POSIX
+compliant filesystems and
+it does not harm common use. However I would perfectly respect and
+understand that you decide
+to reject the patch
+
+Thanks for your time and your feedback, it is very much appreciated.
+
+Best,
+Sergio
+
+
