@@ -1735,3 +1735,392 @@ Ivan
 https://github.com/r-devel/r-svn/blob/0a905442c27b538c7626b21e262939873523f209/src/library/tools/R/install.R#L544
 
 
+From henr|k@bengt@@on @end|ng |rom gm@||@com  Thu Apr  3 05:24:37 2025
+From: henr|k@bengt@@on @end|ng |rom gm@||@com (Henrik Bengtsson)
+Date: Wed, 2 Apr 2025 20:24:37 -0700
+Subject: [Rd] structure(<primitive function>, ...) is sticky: a bug,
+ or should it be an error?
+In-Reply-To: <CAFDcVCR14Tqoz4eKR5pFZLSTpoDxv2jE9fs3B0w4ZO6=CdmrXw@mail.gmail.com>
+References: <CAFDcVCTka7-qHEHZ6U42ynSVffpEgZwboqJBOuDMCAMEtyNaFQ@mail.gmail.com>
+ <26587.61068.527937.384919@stat.math.ethz.ch>
+ <CAFDcVCSyG1HxUO1ZNUxQ=BGUGgPtoVQBqySnWg_EJyLa_VtzZA@mail.gmail.com>
+ <26589.28252.677695.886493@stat.math.ethz.ch>
+ <26589.35840.771000.991255@stat.math.ethz.ch>
+ <CAFDcVCR14Tqoz4eKR5pFZLSTpoDxv2jE9fs3B0w4ZO6=CdmrXw@mail.gmail.com>
+Message-ID: <CAFDcVCRUakN0pdCZNLjdQkw135EqCEjURUqLSCov7KALjFUO9g@mail.gmail.com>
+
+Thank you Martin - I've been following your commits to R-devel and
+R-beta. FWIW, I've just verified that it works as expected - I scanned
+the base environment for all primitive functions and then verified
+that attr(x, "abc") <- TRUE gives an error on R-devel;
+
+$ R --vanilla
+R Under development (unstable) (2025-04-02 r88098) -- "Unsuffered Consequences"
+> attr(sum, "abc") <- TRUE
+Error in attr(sum, "abc") <- TRUE : cannot set attribute on a 'builtin'
+
+a warning on R-beta;
+
+$ R --vanilla
+> R version 4.5.0 beta (2025-04-02 r88102) -- "How About a Twenty-Six"
+> attr(sum, "abc") <- TRUE
+Warning message:
+In attr(sum, "abc") <- TRUE :
+  Setting attributes on primitive functions is deprecated and will be disabled
+
+and neither on R release.
+
+For the warning in R 4.5.0 beta, have you considered making it a
+warning of class 'deprecatedWarning'? Not a big deal, but wanted to
+mention it, just in case.
+
+/Henrik
+
+On Fri, Mar 21, 2025 at 10:07?AM Henrik Bengtsson
+<henrik.bengtsson at gmail.com> wrote:
+>
+> On Fri, Mar 21, 2025 at 8:55?AM Martin Maechler
+> <maechler at stat.math.ethz.ch> wrote:
+> >
+> > >>>>> Martin Maechler
+> > >>>>>     on Fri, 21 Mar 2025 14:49:16 +0100 writes:
+> >
+> > >>>>> Henrik Bengtsson
+> > >>>>>     on Thu, 20 Mar 2025 11:55:05 -0700 writes:
+> >
+> >     >>> I'm pretty convinced we should fix it by checking for
+> >     >>> primitive functions inside the C code of `attributes<-` :
+> >     >>> arguably the bug is really there, rather than in
+> >     >>> structure().
+> >     >>>
+> >     >>> Patches are welcome (via R's Bugzilla or just here).
+> >
+> >     >> Thank you Martin. I'll make sure I create a brief BugZilla
+> >     >> report on this, and hopefully a follow with a patch later
+> >     >> on.
+> >
+> >     >> One question on urgency or not: Is it too late to get such
+> >     >> a change in for the R 4.5.0 release? I suspect so, because
+> >     >> it has a potential of breaking existing packages. But if
+> >     >> there's a possibility of fixing this in R 4.5.0, I'll make
+> >     >> this a top priority.  Please let me know.
+> >
+> >     >> /Henrik
+> >
+> >     > In such cases, I always go to  https://developer.r-project.org/
+> >     > and look at the release schedule.
+> >
+> >     > Important for this Q seems
+> >
+> >     > * Friday 2025-03-14: GRAND-FEATURE FREEZE (4.5.0 alpha)
+> >     > * Friday 2025-03-28: FEATURE FREEZE (4.5.0 beta)
+> >     > * Friday 2025-04-04: CODE FREEZE (4.5.0 RC)
+> >
+> >     > So, yes there's a possibility  ... but as you mentioned, too,
+> >     > it depends quite a bit on if the fix is easily affectiong useR
+> >     > and CRAN/Bioc package space.
+> >
+> >     > Martin
+> >
+> > As a matter of fact, I'm testing already a simple patch I wrote
+> > myself.
+> > So, sorry, but I must renounce the above  "Patches are welcome".
+>
+> Excellent and even better (for me). Thank you Martin!
+>
+> /Henrik
+>
+> >
+> > Martin
+
+
+From jeroenoom@ @end|ng |rom gm@||@com  Thu Apr  3 11:13:44 2025
+From: jeroenoom@ @end|ng |rom gm@||@com (Jeroen Ooms)
+Date: Thu, 3 Apr 2025 11:13:44 +0200
+Subject: [Rd] Enable compression in download.file()
+Message-ID: <CABFfbXszJjhJCO3Dyhwodk8BCjnrdD36buttar354Q3B8FFtKg@mail.gmail.com>
+
+Comparing download times of base R and the curl package:
+
+  url <- 'https://jeroen.github.io/data/nycflights13.json'
+  tmp <- tempfile()
+  system.time(download.file(url, tmp, quiet = F)
+  system.time(curl::curl_download(url, tmp, quiet = F))
+
+Because this is an uncompressed file, the gzipped download is about 7x faster.
+
+For the solution see https://curl.se/libcurl/c/CURLOPT_ACCEPT_ENCODING.html :
+
+> To aid applications not having to bother about what specific algorithms this particular libcurl build supports, libcurl allows a zero-length string to be set ("") to ask for an Accept-Encoding: header to be used that contains all built-in supported encodings.
+
+
+From @unwj|e @end|ng |rom gm@||@com  Thu Apr  3 10:36:39 2025
+From: @unwj|e @end|ng |rom gm@||@com (Sun Wenjie)
+Date: Thu, 3 Apr 2025 10:36:39 +0200
+Subject: [Rd] Proposal: Integrating Rust Toolchain into Rtools for
+ Rust-Based R Package Development
+Message-ID: <E98B4E64-559D-41E1-8B65-7B6A39773129@gmail.com>
+
+Dear R-devel community,
+
+I'm exploring (experimentally) the integration of the Rust toolchain into 
+Rtools, to enable smoother development and shipping of Rust-based R packages 
+on Windows.
+
+I've written a detailed blog post documenting the process, technical rationale
+and what?s next:
+https://medium.com/@sunwjie/integrating-the-rust-toolchain-into-rtools-e4c7df40cb82.
+
+Currently, Rust is not included in Rtools, and setting it up alongside R on
+Windows can be confusing for some users, especially those unfamiliar with
+computers. However, both Rust (via the -gnu toolchain) and
+Rtools share the same MinGW-based toolchain, making integration technically
+feasible.
+
+What I?ve done so far
+- Built a custom Rtools45 installer with Rust 1.85.0 integrated alongside GCC
+  and other tools.
+- Successfully tested Rust-based R packages like {string2path} using the custom
+  Rtools.
+
+I'd love to contribute this work upstream and collaborate with Rtools
+maintainers to make Rust a supported part of the official Rtools release. Are
+there existing plans or blockers around this?
+
+Thank you for your time, and I look forward to your thoughts! 
+
+Best regards,
+Wenjie
+
+?? 
+https://www.sun-wenjie.site
+
+
+From @vr@h@m@@d|er @end|ng |rom gm@||@com  Thu Apr  3 13:57:07 2025
+From: @vr@h@m@@d|er @end|ng |rom gm@||@com (Avraham Adler)
+Date: Thu, 3 Apr 2025 07:57:07 -0400
+Subject: [Rd] Proposal: Integrating Rust Toolchain into Rtools for
+ Rust-Based R Package Development
+In-Reply-To: <E98B4E64-559D-41E1-8B65-7B6A39773129@gmail.com>
+References: <E98B4E64-559D-41E1-8B65-7B6A39773129@gmail.com>
+Message-ID: <1C3455E7-B3D7-41B7-A994-82D805785B49@gmail.com>
+
+Hello, Wenjie. 
+
+If you are specifically interested in Windows, Tomas Kalibera is the keeper of Rtools for Windows and it has its own list at R-sig-windows which may provide more focus. 
+
+Thank you,
+
+Avi
+
+Sent from my iPhone
+
+> On Apr 3, 2025, at 7:30?AM, Sun Wenjie <sunwjie at gmail.com> wrote:
+> 
+> ?Dear R-devel community,
+> 
+> I'm exploring (experimentally) the integration of the Rust toolchain into
+> Rtools, to enable smoother development and shipping of Rust-based R packages
+> on Windows.
+> 
+> I've written a detailed blog post documenting the process, technical rationale
+> and what?s next:
+> https://medium.com/@sunwjie/integrating-the-rust-toolchain-into-rtools-e4c7df40cb82.
+> 
+> Currently, Rust is not included in Rtools, and setting it up alongside R on
+> Windows can be confusing for some users, especially those unfamiliar with
+> computers. However, both Rust (via the -gnu toolchain) and
+> Rtools share the same MinGW-based toolchain, making integration technically
+> feasible.
+> 
+> What I?ve done so far
+> - Built a custom Rtools45 installer with Rust 1.85.0 integrated alongside GCC
+>  and other tools.
+> - Successfully tested Rust-based R packages like {string2path} using the custom
+>  Rtools.
+> 
+> I'd love to contribute this work upstream and collaborate with Rtools
+> maintainers to make Rust a supported part of the official Rtools release. Are
+> there existing plans or blockers around this?
+> 
+> Thank you for your time, and I look forward to your thoughts!
+> 
+> Best regards,
+> Wenjie
+> 
+> ??
+> https://www.sun-wenjie.site
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From tom@@@k@||ber@ @end|ng |rom gm@||@com  Thu Apr  3 14:21:40 2025
+From: tom@@@k@||ber@ @end|ng |rom gm@||@com (Tomas Kalibera)
+Date: Thu, 3 Apr 2025 14:21:40 +0200
+Subject: [Rd] Proposal: Integrating Rust Toolchain into Rtools for
+ Rust-Based R Package Development
+In-Reply-To: <E98B4E64-559D-41E1-8B65-7B6A39773129@gmail.com>
+References: <E98B4E64-559D-41E1-8B65-7B6A39773129@gmail.com>
+Message-ID: <24d5f3e1-5727-44d9-9800-22982183fdbb@gmail.com>
+
+Congratulations on figuring out how to extend the build of the Rtools 
+installer to add more programs there - it is always good to have a 
+confirmation such things are clear enough from the available 
+documentation and sources. You can see that e.g. QPDF is added this way, 
+but adding a toolchain requires a different approach (more below).
+
+What may not have been clear enough - please keep in mind that there are 
+two distinct parts of what you get when you install Rtools from the 
+installer: an (essentially vanilla) installation of Msys2 with the msys2 
+subsystem, and toolchain + libraries built via (customized) MXE. The 
+latter does not depend on the former. The latter can be (and is) built 
+on Linux, without any involvement of Msys2. It doesn't use the Cygwin 
+runtime in any way. In principle, one could use the latter only without 
+the former, provided one has an alternative set of build tools (so 
+perhaps the original Cygwin distribution, maybe WSL2 - even though, this 
+is not tested, some details surely would have to be figured out). The 
+latter is what includes the toolchains (and libraries), and can be also 
+downloaded as a tarball - this is convenient for people who have their 
+own installation of Msys2 they use. Also it is good for github actions 
+(with a smaller tarball for that, when it suffices).
+
+Also please note that Rtools doesn't use any of mingw-w64 from Msys2. It 
+only uses programs using the Cygwin runtime (as build tools). Msys2 has 
+indeed toolchains based on mingw-w64, but Rtools doesn't use them (from 
+version 42).
+
+To properly integrate Rust, one would have to make it part of the 
+toolchain+libraries, so add it to MXE. One would have to build it using 
+the compiler suite used within MXE. The upstream version of MXE uses 
+gcc, which doesn't yet have a stable version of Rust. Once it will have 
+it, it would make sense to extend MXE to also build Rust compilers using 
+the same gcc used also to build C, C++ and Fortran compilers, and indeed 
+make sure Rust will use the toolchains and libraries from the same build 
+of MXE. That way it will be assured that the compiler runtimes and all 
+libraries are compatible. Without that, they cannot be.
+
+Rtools is also available for LLVM/aarch64, only a downstream version I 
+am maintaining. In theory, Rust could already be added there, because 
+LLVM already supports it. In theory, we could even use LLVM on x86_64 
+then to get Rust. But, not in practice, because the Fortran 90 compiler 
+(flang-new) in LLVM is not yet stable enough.
+
+Best
+Tomas
+
+On 4/3/25 10:36, Sun Wenjie wrote:
+> Dear R-devel community,
+>
+> I'm exploring (experimentally) the integration of the Rust toolchain into
+> Rtools, to enable smoother development and shipping of Rust-based R packages
+> on Windows.
+>
+> I've written a detailed blog post documenting the process, technical rationale
+> and what?s next:
+> https://medium.com/@sunwjie/integrating-the-rust-toolchain-into-rtools-e4c7df40cb82.
+>
+> Currently, Rust is not included in Rtools, and setting it up alongside R on
+> Windows can be confusing for some users, especially those unfamiliar with
+> computers. However, both Rust (via the -gnu toolchain) and
+> Rtools share the same MinGW-based toolchain, making integration technically
+> feasible.
+>
+> What I?ve done so far
+> - Built a custom Rtools45 installer with Rust 1.85.0 integrated alongside GCC
+>    and other tools.
+> - Successfully tested Rust-based R packages like {string2path} using the custom
+>    Rtools.
+>
+> I'd love to contribute this work upstream and collaborate with Rtools
+> maintainers to make Rust a supported part of the official Rtools release. Are
+> there existing plans or blockers around this?
+>
+> Thank you for your time, and I look forward to your thoughts!
+>
+> Best regards,
+> Wenjie
+>
+> ??
+> https://www.sun-wenjie.site
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From c@g|||e@p|e @end|ng |rom gm@||@com  Thu Apr  3 17:16:48 2025
+From: c@g|||e@p|e @end|ng |rom gm@||@com (Colin Gillespie)
+Date: Thu, 3 Apr 2025 16:16:48 +0100
+Subject: [Rd] Bad URLs in DESCRIPTION files
+Message-ID: <CADbDLZ=fq8_ff32mBvjZNpbi38STRpPGi1=5epknGTYcqw-2SA@mail.gmail.com>
+
+Hi All,
+
+Just want to flag a few packages:
+
+MatrixLDA: https://cran.r-project.org/web/packages/MatrixLDA/index.html
+The URL is technically valid - ajmolstad at github.io/ - but returns a
+404. Almost certainly a typo.
+
+redistmetrics: https://cran.r-project.org/web/packages/redistmetrics/index.html
+Not a valid URL: https::/github.com/alarm-redist/redistmetrics/
+
+yarrr: https://cran.r-project.org/web/packages/yarrr/
+It looks like a lapsed domain, and Cypro folks have grabbed it.
+
+Thanks
+
+Colin
+
+Ps I only found the last package because the name caught my attention
+
+
+From ||u|@@rev|||@ @end|ng |rom gm@||@com  Thu Apr  3 19:57:50 2025
+From: ||u|@@rev|||@ @end|ng |rom gm@||@com (=?UTF-8?Q?Llu=C3=ADs_Revilla?=)
+Date: Thu, 3 Apr 2025 19:57:50 +0200
+Subject: [Rd] Bad URLs in DESCRIPTION files
+In-Reply-To: <CADbDLZ=fq8_ff32mBvjZNpbi38STRpPGi1=5epknGTYcqw-2SA@mail.gmail.com>
+References: <CADbDLZ=fq8_ff32mBvjZNpbi38STRpPGi1=5epknGTYcqw-2SA@mail.gmail.com>
+Message-ID: <CAN+W6_sGdx2x4vPrU=NF2zCJNJZASQRBuTT51XJ7Hxr2kF+n3A@mail.gmail.com>
+
+Hi Colin,
+
+I'm surprised this wasn't captured by the url checker on CRAN.
+Are you suggesting a new check on package descriptions for the urls present?
+In that case I guess it could be part of the standard R CMD check.
+
+Llu?s
+
+On Thu, 3 Apr 2025 at 17:17, Colin Gillespie <csgillespie at gmail.com> wrote:
+
+> Hi All,
+>
+> Just want to flag a few packages:
+>
+> MatrixLDA: https://cran.r-project.org/web/packages/MatrixLDA/index.html
+> The URL is technically valid - ajmolstad at github.io/ - but returns a
+> 404. Almost certainly a typo.
+>
+> redistmetrics:
+> https://cran.r-project.org/web/packages/redistmetrics/index.html
+> Not a valid URL: https::/github.com/alarm-redist/redistmetrics/
+>
+> yarrr: https://cran.r-project.org/web/packages/yarrr/
+> It looks like a lapsed domain, and Cypro folks have grabbed it.
+>
+> Thanks
+>
+> Colin
+>
+> Ps I only found the last package because the name caught my attention
+>
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+>
+
+	[[alternative HTML version deleted]]
+
+
