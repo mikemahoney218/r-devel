@@ -2383,3 +2383,90 @@ wrote:
 	[[alternative HTML version deleted]]
 
 
+From @unwj|e @end|ng |rom gm@||@com  Mon Apr  7 15:34:04 2025
+From: @unwj|e @end|ng |rom gm@||@com (Sun Wenjie)
+Date: Mon, 7 Apr 2025 15:34:04 +0200
+Subject: [Rd] Proposal: Integrating Rust Toolchain into Rtools for
+ Rust-Based R Package Development
+In-Reply-To: <24d5f3e1-5727-44d9-9800-22982183fdbb@gmail.com>
+References: <E98B4E64-559D-41E1-8B65-7B6A39773129@gmail.com>
+ <24d5f3e1-5727-44d9-9800-22982183fdbb@gmail.com>
+Message-ID: <ECCB4930-33FF-4282-995B-EAF0C4BC843C@gmail.com>
+
+Hi Tomas,
+
+Thank you very much for the detailed and thoughtful reply. Your explanation really helped me better understand the architecture of Rtools.
+
+You're absolutely right that a **ideal** integration of Rust into Rtools would ideally involve extending the MXE-based toolchain, as the same compiling environment can guarantee the ABI compatibility. 
+
+However, that is not the only way to ensure ABI compatibility. By leveraging shared UCRT-based ABI compatibility and using Rtools' own linker during the build process, integrating the Rust compiler binaries (x86_64-pc-windows-gnu toolchain) into the Rtools environment has proven effective and stable in practice.
+
+I documented the process, rationale, and some findings in a blog post here: https://medium.com/@sunwjie/integrating-the-rust-toolchain-into-rtools-e4c7df40cb82
+
+What I?ve done so far is very much user-oriented. The goal isn't to replace a proper MXE-based integration, but rather to offer an usable solution for R package users with {extendr} or {savvy}, while also exploring longer-term collaboration toward better support.
+
+I'd be very happy to contribute to or test any future concerns you had according to this integration methods, as well as explore the potential MXE-based integration in the future.
+
+Thanks,
+Wenjie
+
+P.S. During the process, I received valuable assistance from the Extendr community, particularly from @Mossa @albersonmiranda, @josiah and @luciorq, for which I am especially grateful.
+
+----
+https://www.sun-wenjie.site
+
+> On Apr 3, 2025, at 14:21, Tomas Kalibera <tomas.kalibera at gmail.com> wrote:
+> 
+> Congratulations on figuring out how to extend the build of the Rtools installer to add more programs there - it is always good to have a confirmation such things are clear enough from the available documentation and sources. You can see that e.g. QPDF is added this way, but adding a toolchain requires a different approach (more below).
+> 
+> What may not have been clear enough - please keep in mind that there are two distinct parts of what you get when you install Rtools from the installer: an (essentially vanilla) installation of Msys2 with the msys2 subsystem, and toolchain + libraries built via (customized) MXE. The latter does not depend on the former. The latter can be (and is) built on Linux, without any involvement of Msys2. It doesn't use the Cygwin runtime in any way. In principle, one could use the latter only without the former, provided one has an alternative set of build tools (so perhaps the original Cygwin distribution, maybe WSL2 - even though, this is not tested, some details surely would have to be figured out). The latter is what includes the toolchains (and libraries), and can be also downloaded as a tarball - this is convenient for people who have their own installation of Msys2 they use. Also it is good for github actions (with a smaller tarball for that, when it suffices).
+> 
+> Also please note that Rtools doesn't use any of mingw-w64 from Msys2. It only uses programs using the Cygwin runtime (as build tools). Msys2 has indeed toolchains based on mingw-w64, but Rtools doesn't use them (from version 42).
+> 
+> To properly integrate Rust, one would have to make it part of the toolchain+libraries, so add it to MXE. One would have to build it using the compiler suite used within MXE. The upstream version of MXE uses gcc, which doesn't yet have a stable version of Rust. Once it will have it, it would make sense to extend MXE to also build Rust compilers using the same gcc used also to build C, C++ and Fortran compilers, and indeed make sure Rust will use the toolchains and libraries from the same build of MXE. That way it will be assured that the compiler runtimes and all libraries are compatible. Without that, they cannot be.
+> 
+> Rtools is also available for LLVM/aarch64, only a downstream version I am maintaining. In theory, Rust could already be added there, because LLVM already supports it. In theory, we could even use LLVM on x86_64 then to get Rust. But, not in practice, because the Fortran 90 compiler (flang-new) in LLVM is not yet stable enough.
+> 
+> Best
+> Tomas
+> 
+> On 4/3/25 10:36, Sun Wenjie wrote:
+>> Dear R-devel community,
+>> 
+>> I'm exploring (experimentally) the integration of the Rust toolchain into
+>> Rtools, to enable smoother development and shipping of Rust-based R packages
+>> on Windows.
+>> 
+>> I've written a detailed blog post documenting the process, technical rationale
+>> and what?s next:
+>> https://medium.com/@sunwjie/integrating-the-rust-toolchain-into-rtools-e4c7df40cb82.
+>> 
+>> Currently, Rust is not included in Rtools, and setting it up alongside R on
+>> Windows can be confusing for some users, especially those unfamiliar with
+>> computers. However, both Rust (via the -gnu toolchain) and
+>> Rtools share the same MinGW-based toolchain, making integration technically
+>> feasible.
+>> 
+>> What I?ve done so far
+>> - Built a custom Rtools45 installer with Rust 1.85.0 integrated alongside GCC
+>>   and other tools.
+>> - Successfully tested Rust-based R packages like {string2path} using the custom
+>>   Rtools.
+>> 
+>> I'd love to contribute this work upstream and collaborate with Rtools
+>> maintainers to make Rust a supported part of the official Rtools release. Are
+>> there existing plans or blockers around this?
+>> 
+>> Thank you for your time, and I look forward to your thoughts!
+>> 
+>> Best regards,
+>> Wenjie
+>> 
+>> ??
+>> https://www.sun-wenjie.site
+>> 
+>> ______________________________________________
+>> R-devel at r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
