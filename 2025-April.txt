@@ -2484,3 +2484,512 @@ the choice widget rather than Tcl/Tk, Aqua, or whatever Windows does.
 	[[alternative HTML version deleted]]
 
 
+From bryce@@@c@r@on @end|ng |rom gm@||@com  Wed Apr  9 07:15:12 2025
+From: bryce@@@c@r@on @end|ng |rom gm@||@com (Bryce Carson)
+Date: Tue, 8 Apr 2025 23:15:12 -0600
+Subject: [Rd] 
+ Better support ESS by allowing choice of CRAN mirror using the
+ `menu-choice` widget
+In-Reply-To: <CADPqqnJBU+FazAhySRHW8fCmsmERrkNCF988gZN20GT6JdW+MQ@mail.gmail.com>
+References: <CADPqqnJBU+FazAhySRHW8fCmsmERrkNCF988gZN20GT6JdW+MQ@mail.gmail.com>
+Message-ID: <CADPqqn+FxXFecbQPHS8H+n7LusV4_mx4GsQAp8Wh1AKYvqv6pw@mail.gmail.com>
+
+I know ESS already has a better interface for installing packages, C-c C-e
+TAB, but it'd be "neat" if when I forget to do this and I call
+install.packages() without first setting a mirror that either the same
+interface would be presented rather than Tcl/Tk, or a widget.el-based
+interface was presented.
+
+On Tue, Apr 8, 2025 at 3:08?PM Bryce Carson <bryce.a.carson at gmail.com>
+wrote:
+
+> This would allow ESS to be used in a graphical-mode emacs without
+> utilizing the Tcl/Tk widget, and on non-Linux platforms would allow Emacs
+> to provide the choice widget rather than Tcl/Tk, Aqua, or whatever Windows
+> does.
+>
+
+	[[alternative HTML version deleted]]
+
+
+From @uh@rto_@nggono @end|ng |rom y@hoo@com  Wed Apr  9 08:26:42 2025
+From: @uh@rto_@nggono @end|ng |rom y@hoo@com (Suharto Anggono Suharto Anggono)
+Date: Wed, 9 Apr 2025 06:26:42 +0000 (UTC)
+Subject: [Rd] table() and as.character() performance for logical values
+References: <61991736.3422978.1744180002225.ref@mail.yahoo.com>
+Message-ID: <61991736.3422978.1744180002225@mail.yahoo.com>
+
+With the change to 'factor',
+factor(1L, levels = TRUE)
+doesn't give NA, different from
+factor(1, levels = TRUE)
+
+With the change to 'factor',
+factor(TRUE, levels = 1L)
+and
+factor(TRUE, levels = 1)
+don't give NA.
+
+With the change to 'factor',
+factor(2L, levels = sqrt(2)^2)
+gives NA, different from
+factor(2, levels = sqrt(2)^2)
+
+With the change to 'factor',
+factor(2L, exclude = sqrt(2)^2)
+has 1 level (nothing is excluded), different from
+factor(2, exclude = sqrt(2)^2)
+
+------------
+Am 21.03.25 um 15:42 schrieb Aidan Lakshman via R-devel:
+>> After investigating the source of table, I ended up on the reason being ?as.character()?:
+> 
+> This is specifically happening within the conversion of the input to type factor, which is where the as.character conversion happens.
+
+Yes, I also think 'factor' could do a bit better for unclassed integers 
+(such as when called from 'cut') as well as for logical input (such as 
+from 'summary' -> 'table').
+
+Note that 'as.factor' already has a "fast track" for plain integers 
+(originally for 'split.default' from 'tapply'), so can be used instead 
+of 'factor' when there is no need for custom 'levels', 'labels', or 
+'exclude'. (Thanks for already mentioning 'tabulate'.)
+
+A 'factor' patch would apply more broadly, e.g.:
+
+===================================================================
+--- src/library/base/R/factor.R	(Revision 88042)
++++ src/library/base/R/factor.R	(Arbeitskopie)
+@@ -20,14 +20,18 @@
+                     exclude = NA, ordered = is.ordered(x), nmax = NA)
+  {
+      if(is.null(x)) x <- character()
++    directmatch <- !is.object(x) &&
++        (is.character(x) || is.integer(x) || is.logical(x))
+      nx <- names(x)
+      if (missing(levels)) {
+  	y <- unique(x, nmax = nmax)
+  	ind <- order(y)
+-	levels <- unique(as.character(y)[ind])
++        if (!directmatch)
++            y <- as.character(y)
++	levels <- unique(y[ind])
+      }
+      force(ordered) # check if original x is an ordered factor
+-    if(!is.character(x))
++    if(!directmatch)
+  	x <- as.character(x)
+      ## levels could be a long vector, but match will not handle that.
+      levels <- levels[is.na(match(levels, exclude))]
+      f <- match(x, levels)
+===================================================================
+
+This skips as.character() also for integer/logical 'x' and would indeed 
+bring table() runtimes "in order":
+
+     set.seed(1)
+     C <- sample(c("no", "yes"), 10^7, replace = TRUE)
+     F <- as.factor(C)
+     L <- F == "yes"
+     I <- as.integer(L)
+     N <- as.numeric(I)
+
+     ## Median system.time(table(.)) in ms:
+     ## table(F)   256
+     ## table(I)   384   # not  696
+     ## table(L)   409   # not 1159
+     ## table(C)   591
+     ## table(N)  3324
+
+The (seemingly) small patch passes check-all, but maybe it overlooks 
+some edge cases. I'd test it on a subset of CRAN/BIOC packages.
+
+Best,
+
+	Sebastian Meyer
+
+> 
+>    # Timing is all on my local machine (OSX)
+>    N_v <- sample(c(1,0), 10^7, replace = TRUE)
+>    L_v <- sample(c(TRUE, FALSE), 10^7, replace = TRUE)
+>                                           #  user  system elapsed
+>    system.time(table(N_v))                # 2.155   0.039   2.192
+>    system.time(table(L_v))                # 0.806   0.030   0.838
+> 
+>    system.time(N_fv <- as.factor(N_v))    # 2.026   0.024   2.050
+>    system.time(L_fv <- as.factor(L_v))    # 0.668   0.015   0.683
+> 
+>    system.time(table(N_fv))               # 0.133   0.022   0.156
+>    system.time(table(L_fv))               # 0.134   0.018   0.151
+> 
+>> The performance for Integers and specially booleans is quite surprising.
+> 
+> Of note is that the performance is significantly better if using `tabulate`, since this doesn't involve a conversion to factor (though input must be numeric/factor, results aren't named, and it has worse handling of NA values). If you have performance critical calls like this you could consider using `tabulate` instead.
+> 
+>    system.time(tabulate(N_v))             # 0.054   0.002   0.056
+>    system.time(tabulate(as.integer(L_v))) # 0.052   0.002   0.055
+> 
+> 
+> I don't know if this is a known issue or not; most of my colleagues are aware of the slow-down and use `tabulate` when performance is required. My understanding was that the slower performance is a trade-off for more consistent performance (better output, better handling of ambiguities/NA, etc.), and that speed isn't the highest priority with `table`. Maybe someone else has a better understanding of the history of the function.
+> 
+> As for improving the speed, it would basically come down to refactoring `table` to not use a `factor` conversion. I'd be concerned about introducing a lot of edge cases with that, but it's theoretically possible. Based on 30 seconds of thinking, it may be possible to do something like:
+> 
+> ## just a sketch of a barebones non-factor implementation
+>    test_tab <- function(x){
+>      lookup <- unique(x)
+>      counts <- tabulate(match(x, lookup))
+>      names(counts) <- as.character(lookup)
+>      counts
+>    }
+> 
+>    system.time(test_tab(L_v))  # 0.101   0.006   0.107
+>    system.time(test_tab(N_v))  # 0.129   0.015   0.144
+> 
+> This is also faster in the case where there are lots of categories with few entries per category:
+> 
+>    N_v2 <- 1:1e7
+>    system.time(test_tab(N_v2)) # 0.383   0.024   0.411
+>    system.time(table(N_v2))    # 6.122   0.228   6.398
+> 
+> Obviously there are some big shortcomings:
+> - it's missing a lot of error checking etc. that the standard `table` has
+> - it only works with 1D vectors
+> - NA handling isn't quite the same as `table` (though it would be easy to adapt)
+> 
+> Just including to potentially start discussion for optimization.
+> 
+> For reference, the relevant section is in src/library/base/R/table.R:L75-85
+> 
+> -Aidan
+> 
+> -----------------------
+> Aidan Lakshman (he/him)
+> http://www.ahl27.com/
+> 
+> On 21 Mar 2025, at 8:26, Karolis Koncevi?ius wrote:
+> 
+>> [You don't often get email from karolis.koncevicius using gmail.com. Learn why this is important at https://aka.ms/LearnAboutSenderIdentification ]
+>>
+>> I was calling table() on some long logical vectors and noticed that it took a long time.
+>>
+>> Out of curiosity I checked the performance of table() on different types, and had some unexpected results:
+>>
+>>      C <- sample(c("yes", "no"), 10^7, replace = TRUE)
+>>      F <- factor(sample(c("yes", "no"), 10^7, replace = TRUE))
+>>      N <- sample(c(1,0), 10^7, replace = TRUE)
+>>      I <- sample(c(1L,0L), 10^7, replace = TRUE)
+>>      L <- sample(c(TRUE, FALSE), 10^7, replace = TRUE)
+>>
+>>                             # ordered by execution time
+>>                             #   user  system elapsed
+>>      system.time(table(F))  #  0.088   0.006   0.093
+>>      system.time(table(C))  #  0.208   0.017   0.224
+>>      system.time(table(I))  #  0.242   0.019   0.261
+>>      system.time(table(L))  #  0.665   0.015   0.680
+>>      system.time(table(N))  #  1.771   0.019   1.791
+>>
+>>
+>> The performance for Integers and specially booleans is quite surprising.
+>> After investigating the source of table, I ended up on the reason being ?as.character()?:
+>>
+>>      system.time(as.character(L))
+>>       user  system elapsed
+>>      0.461   0.002   0.462
+>>
+>> Even a manual conversion can achieve a speed-up by a factor of ~7:
+>>
+>>      system.time(c("FALSE", "TRUE")[L+1])
+>>       user  system elapsed
+>>      0.061   0.006   0.067
+>>
+>>
+>> Tested on 4.4.3 as well as devel trunk.
+>>
+>> Just reporting for comments and attention.
+>> Karolis K.
+>> ______________________________________________
+>> R-devel using r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel using r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From @eb@meyer @end|ng |rom |@u@de  Wed Apr  9 23:51:42 2025
+From: @eb@meyer @end|ng |rom |@u@de (Sebastian Meyer)
+Date: Wed, 9 Apr 2025 23:51:42 +0200
+Subject: [Rd] table() and as.character() performance for logical values
+In-Reply-To: <61991736.3422978.1744180002225@mail.yahoo.com>
+References: <61991736.3422978.1744180002225.ref@mail.yahoo.com>
+ <61991736.3422978.1744180002225@mail.yahoo.com>
+Message-ID: <c5a333c2-1418-4b69-8886-cd8f2f5615e2@fau.de>
+
+Right, thanks! These are non-standard uses of factor(), edge cases I 
+alluded to. We didn't see any problems with the patch in existing tests 
+nor in CRAN/BIOC package checks. Note that 'levels' is documented as
+
+     an optional vector of the unique values (as character
+     strings) that ?x? might have taken.
+
+E.g.: factor(1L, levels = "1") is identical to factor(1, levels = "1").
+Using integers (or logicals) for *both* 'x' and 'levels' still works 
+(and is used by, e.g., cut.default() internally, is more efficient now, 
+and could be documented), but that 2L fails to match sqrt(2)^2 doesn't 
+really come as a surprise.
+
+I'm not sure if it is worth special-casing integer/logical 'x' with 
+specified non-character 'levels' of a non-conforming type, but yes, 
+*not* skipping as.character() would then give the more consistent 
+undocumented behaviour from before the performance patch. Maybe 
+something to consider for 4.5.1.
+
+	Sebastian Meyer
+
+
+Am 09.04.25 um 08:26 schrieb Suharto Anggono Suharto Anggono via R-devel:
+> With the change to 'factor',
+> factor(1L, levels = TRUE)
+> doesn't give NA, different from
+> factor(1, levels = TRUE)
+> 
+> With the change to 'factor',
+> factor(TRUE, levels = 1L)
+> and
+> factor(TRUE, levels = 1)
+> don't give NA.
+> 
+> With the change to 'factor',
+> factor(2L, levels = sqrt(2)^2)
+> gives NA, different from
+> factor(2, levels = sqrt(2)^2)
+> 
+> With the change to 'factor',
+> factor(2L, exclude = sqrt(2)^2)
+> has 1 level (nothing is excluded), different from
+> factor(2, exclude = sqrt(2)^2)
+> 
+> ------------
+> Am 21.03.25 um 15:42 schrieb Aidan Lakshman via R-devel:
+>>> After investigating the source of table, I ended up on the reason being ?as.character()?:
+>>
+>> This is specifically happening within the conversion of the input to type factor, which is where the as.character conversion happens.
+> 
+> Yes, I also think 'factor' could do a bit better for unclassed integers
+> (such as when called from 'cut') as well as for logical input (such as
+> from 'summary' -> 'table').
+> 
+> Note that 'as.factor' already has a "fast track" for plain integers
+> (originally for 'split.default' from 'tapply'), so can be used instead
+> of 'factor' when there is no need for custom 'levels', 'labels', or
+> 'exclude'. (Thanks for already mentioning 'tabulate'.)
+> 
+> A 'factor' patch would apply more broadly, e.g.:
+> 
+> ===================================================================
+> --- src/library/base/R/factor.R	(Revision 88042)
+> +++ src/library/base/R/factor.R	(Arbeitskopie)
+> @@ -20,14 +20,18 @@
+>                       exclude = NA, ordered = is.ordered(x), nmax = NA)
+>    {
+>        if(is.null(x)) x <- character()
+> +    directmatch <- !is.object(x) &&
+> +        (is.character(x) || is.integer(x) || is.logical(x))
+>        nx <- names(x)
+>        if (missing(levels)) {
+>    	y <- unique(x, nmax = nmax)
+>    	ind <- order(y)
+> -	levels <- unique(as.character(y)[ind])
+> +        if (!directmatch)
+> +            y <- as.character(y)
+> +	levels <- unique(y[ind])
+>        }
+>        force(ordered) # check if original x is an ordered factor
+> -    if(!is.character(x))
+> +    if(!directmatch)
+>    	x <- as.character(x)
+>        ## levels could be a long vector, but match will not handle that.
+>        levels <- levels[is.na(match(levels, exclude))]
+>        f <- match(x, levels)
+> ===================================================================
+> 
+> This skips as.character() also for integer/logical 'x' and would indeed
+> bring table() runtimes "in order":
+> 
+>       set.seed(1)
+>       C <- sample(c("no", "yes"), 10^7, replace = TRUE)
+>       F <- as.factor(C)
+>       L <- F == "yes"
+>       I <- as.integer(L)
+>       N <- as.numeric(I)
+> 
+>       ## Median system.time(table(.)) in ms:
+>       ## table(F)   256
+>       ## table(I)   384   # not  696
+>       ## table(L)   409   # not 1159
+>       ## table(C)   591
+>       ## table(N)  3324
+> 
+> The (seemingly) small patch passes check-all, but maybe it overlooks
+> some edge cases. I'd test it on a subset of CRAN/BIOC packages.
+> 
+> Best,
+> 
+> 	Sebastian Meyer
+> 
+>>
+>>     # Timing is all on my local machine (OSX)
+>>     N_v <- sample(c(1,0), 10^7, replace = TRUE)
+>>     L_v <- sample(c(TRUE, FALSE), 10^7, replace = TRUE)
+>>                                            #  user  system elapsed
+>>     system.time(table(N_v))                # 2.155   0.039   2.192
+>>     system.time(table(L_v))                # 0.806   0.030   0.838
+>>
+>>     system.time(N_fv <- as.factor(N_v))    # 2.026   0.024   2.050
+>>     system.time(L_fv <- as.factor(L_v))    # 0.668   0.015   0.683
+>>
+>>     system.time(table(N_fv))               # 0.133   0.022   0.156
+>>     system.time(table(L_fv))               # 0.134   0.018   0.151
+>>
+>>> The performance for Integers and specially booleans is quite surprising.
+>>
+>> Of note is that the performance is significantly better if using `tabulate`, since this doesn't involve a conversion to factor (though input must be numeric/factor, results aren't named, and it has worse handling of NA values). If you have performance critical calls like this you could consider using `tabulate` instead.
+>>
+>>     system.time(tabulate(N_v))             # 0.054   0.002   0.056
+>>     system.time(tabulate(as.integer(L_v))) # 0.052   0.002   0.055
+>>
+>>
+>> I don't know if this is a known issue or not; most of my colleagues are aware of the slow-down and use `tabulate` when performance is required. My understanding was that the slower performance is a trade-off for more consistent performance (better output, better handling of ambiguities/NA, etc.), and that speed isn't the highest priority with `table`. Maybe someone else has a better understanding of the history of the function.
+>>
+>> As for improving the speed, it would basically come down to refactoring `table` to not use a `factor` conversion. I'd be concerned about introducing a lot of edge cases with that, but it's theoretically possible. Based on 30 seconds of thinking, it may be possible to do something like:
+>>
+>> ## just a sketch of a barebones non-factor implementation
+>>     test_tab <- function(x){
+>>       lookup <- unique(x)
+>>       counts <- tabulate(match(x, lookup))
+>>       names(counts) <- as.character(lookup)
+>>       counts
+>>     }
+>>
+>>     system.time(test_tab(L_v))  # 0.101   0.006   0.107
+>>     system.time(test_tab(N_v))  # 0.129   0.015   0.144
+>>
+>> This is also faster in the case where there are lots of categories with few entries per category:
+>>
+>>     N_v2 <- 1:1e7
+>>     system.time(test_tab(N_v2)) # 0.383   0.024   0.411
+>>     system.time(table(N_v2))    # 6.122   0.228   6.398
+>>
+>> Obviously there are some big shortcomings:
+>> - it's missing a lot of error checking etc. that the standard `table` has
+>> - it only works with 1D vectors
+>> - NA handling isn't quite the same as `table` (though it would be easy to adapt)
+>>
+>> Just including to potentially start discussion for optimization.
+>>
+>> For reference, the relevant section is in src/library/base/R/table.R:L75-85
+>>
+>> -Aidan
+>>
+>> -----------------------
+>> Aidan Lakshman (he/him)
+>> http://www.ahl27.com/
+>>
+>> On 21 Mar 2025, at 8:26, Karolis Koncevi?ius wrote:
+>>
+>>> [You don't often get email from karolis.koncevicius using gmail.com. Learn why this is important at https://aka.ms/LearnAboutSenderIdentification ]
+>>>
+>>> I was calling table() on some long logical vectors and noticed that it took a long time.
+>>>
+>>> Out of curiosity I checked the performance of table() on different types, and had some unexpected results:
+>>>
+>>>       C <- sample(c("yes", "no"), 10^7, replace = TRUE)
+>>>       F <- factor(sample(c("yes", "no"), 10^7, replace = TRUE))
+>>>       N <- sample(c(1,0), 10^7, replace = TRUE)
+>>>       I <- sample(c(1L,0L), 10^7, replace = TRUE)
+>>>       L <- sample(c(TRUE, FALSE), 10^7, replace = TRUE)
+>>>
+>>>                              # ordered by execution time
+>>>                              #   user  system elapsed
+>>>       system.time(table(F))  #  0.088   0.006   0.093
+>>>       system.time(table(C))  #  0.208   0.017   0.224
+>>>       system.time(table(I))  #  0.242   0.019   0.261
+>>>       system.time(table(L))  #  0.665   0.015   0.680
+>>>       system.time(table(N))  #  1.771   0.019   1.791
+>>>
+>>>
+>>> The performance for Integers and specially booleans is quite surprising.
+>>> After investigating the source of table, I ended up on the reason being ?as.character()?:
+>>>
+>>>       system.time(as.character(L))
+>>>        user  system elapsed
+>>>       0.461   0.002   0.462
+>>>
+>>> Even a manual conversion can achieve a speed-up by a factor of ~7:
+>>>
+>>>       system.time(c("FALSE", "TRUE")[L+1])
+>>>        user  system elapsed
+>>>       0.061   0.006   0.067
+>>>
+>>>
+>>> Tested on 4.4.3 as well as devel trunk.
+>>>
+>>> Just reporting for comments and attention.
+>>> Karolis K.
+>>> ______________________________________________
+>>> R-devel using r-project.org mailing list
+>>> https://stat.ethz.ch/mailman/listinfo/r-devel
+>>
+>> ______________________________________________
+>> R-devel using r-project.org mailing list
+>> https://stat.ethz.ch/mailman/listinfo/r-devel
+> 
+> ______________________________________________
+> R-devel at r-project.org mailing list
+> https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From edd @end|ng |rom deb|@n@org  Thu Apr 10 03:02:28 2025
+From: edd @end|ng |rom deb|@n@org (Dirk Eddelbuettel)
+Date: Wed, 9 Apr 2025 20:02:28 -0500
+Subject: [Rd] 
+ Better support ESS by allowing choice of CRAN mirror using the
+ `menu-choice` widget
+In-Reply-To: <CADPqqn+FxXFecbQPHS8H+n7LusV4_mx4GsQAp8Wh1AKYvqv6pw@mail.gmail.com>
+References: <CADPqqnJBU+FazAhySRHW8fCmsmERrkNCF988gZN20GT6JdW+MQ@mail.gmail.com>
+ <CADPqqn+FxXFecbQPHS8H+n7LusV4_mx4GsQAp8Wh1AKYvqv6pw@mail.gmail.com>
+Message-ID: <26615.6308.502125.309508@rob.eddelbuettel.com>
+
+
+On 8 April 2025 at 23:15, Bryce Carson wrote:
+| I know ESS already has a better interface for installing packages, C-c C-e
+| TAB, but it'd be "neat" if when I forget to do this and I call
+| install.packages() without first setting a mirror that either the same
+| interface would be presented rather than Tcl/Tk, or a widget.el-based
+| interface was presented.
+
+You could avoid the issue by setting the CDN-served cloud.r-project.org up as
+your default. The ways CDNs work, they will always automatically find you the
+closest server in their network. No need to manually select.
+
+I set the following up as the default for the Debian (and hence Ubuntu,
+PopOS!, ...) package back in 2018 as part of Rprofile.site:
+
+  ## We set the cloud mirror, which is 'network-close' to everybody, as default
+  local({
+      r <- getOption("repos")
+      r["CRAN"] <- "https://cloud.r-project.org"
+      options(repos = r)
+  })
+
+and use it personally too.
+
+In your case ESS would dispatch to R, and R would do "The Right Thing (TM)"
+as instructed.
+
+Dirk
+
+-- 
+dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+
+
