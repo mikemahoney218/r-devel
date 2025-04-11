@@ -2993,3 +2993,319 @@ Dirk
 dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
 
 
+From bryce@@@c@r@on @end|ng |rom gm@||@com  Thu Apr 10 03:09:18 2025
+From: bryce@@@c@r@on @end|ng |rom gm@||@com (Bryce Carson)
+Date: Wed, 9 Apr 2025 19:09:18 -0600
+Subject: [Rd] 
+ Better support ESS by allowing choice of CRAN mirror using the
+ `menu-choice` widget
+In-Reply-To: <26615.6308.502125.309508@rob.eddelbuettel.com>
+References: <CADPqqnJBU+FazAhySRHW8fCmsmERrkNCF988gZN20GT6JdW+MQ@mail.gmail.com>
+ <CADPqqn+FxXFecbQPHS8H+n7LusV4_mx4GsQAp8Wh1AKYvqv6pw@mail.gmail.com>
+ <26615.6308.502125.309508@rob.eddelbuettel.com>
+Message-ID: <CADPqqn+GGoVF245Pi=T8rq400mBstvNJFSxZBT+piBm44=8QzQ@mail.gmail.com>
+
+I see, a profile option is a good idea.
+
+I think I will tinker with the ESS package a bit regardless and see what
+interesting things can be done.
+
+On Wed., Apr. 9, 2025, 7:02 p.m. Dirk Eddelbuettel, <edd at debian.org> wrote:
+
+>
+> On 8 April 2025 at 23:15, Bryce Carson wrote:
+> | I know ESS already has a better interface for installing packages, C-c
+> C-e
+> | TAB, but it'd be "neat" if when I forget to do this and I call
+> | install.packages() without first setting a mirror that either the same
+> | interface would be presented rather than Tcl/Tk, or a widget.el-based
+> | interface was presented.
+>
+> You could avoid the issue by setting the CDN-served cloud.r-project.org
+> up as
+> your default. The ways CDNs work, they will always automatically find you
+> the
+> closest server in their network. No need to manually select.
+>
+> I set the following up as the default for the Debian (and hence Ubuntu,
+> PopOS!, ...) package back in 2018 as part of Rprofile.site:
+>
+>   ## We set the cloud mirror, which is 'network-close' to everybody, as
+> default
+>   local({
+>       r <- getOption("repos")
+>       r["CRAN"] <- "https://cloud.r-project.org"
+>       options(repos = r)
+>   })
+>
+> and use it personally too.
+>
+> In your case ESS would dispatch to R, and R would do "The Right Thing (TM)"
+> as instructed.
+>
+> Dirk
+>
+> --
+> dirk.eddelbuettel.com | @eddelbuettel | edd at debian.org
+>
+
+	[[alternative HTML version deleted]]
+
+
+From @uh@rto_@nggono @end|ng |rom y@hoo@com  Thu Apr 10 09:53:04 2025
+From: @uh@rto_@nggono @end|ng |rom y@hoo@com (Suharto Anggono Suharto Anggono)
+Date: Thu, 10 Apr 2025 07:53:04 +0000 (UTC)
+Subject: [Rd] table() and as.character() performance for logical values
+References: <2092175466.123741.1744271584635.ref@mail.yahoo.com>
+Message-ID: <2092175466.123741.1744271584635@mail.yahoo.com>
+
+Chain?of?calls?of?C?functions?in?coerce.c?for?as.character(<logical>)?in?R:
+do_asatomic
+ascommon
+coerceVector
+coerceToString
+StringFromLogical?(for?each?element)
+
+The?definition?of?'StringFromLogical'?in?coerce.c?:
+
+attribute_hidden?SEXP?StringFromLogical(int?x,?int?*warn)
+{
+????int?w;
+????formatLogical(&x,?1,?&w);
+????if?(x?==?NA_LOGICAL)?return?NA_STRING;
+????else?return?mkChar(EncodeLogical(x,?w));
+}
+
+The?definition?of?'EncodeLogical'?in?printutils.c?:
+
+const?char?*EncodeLogical(int?x,?int?w)
+{
+????static?char?buff[NB];
+????if(x?==?NA_LOGICAL)?snprintf(buff,?NB,?"%*s",?min(w,?(NB-1)),?CHAR(R_print.na_string));
+????else?if(x)?snprintf(buff,?NB,?"%*s",?min(w,?(NB-1)),?"TRUE");
+????else?snprintf(buff,?NB,?"%*s",?min(w,?(NB-1)),?"FALSE");
+????buff[NB-1]?=?'\0';
+????return?buff;
+}
+
+>?L?<-?sample(c(TRUE,?FALSE),?10^7,?replace?=?TRUE)
+>?system.time(as.character(L))
+???user??system?elapsed
+???2.69????0.02????2.73
+>?system.time(c("FALSE",?"TRUE")[L+1])
+???user??system?elapsed
+???0.15????0.04????0.20
+>?system.time(c("FALSE",?"TRUE")[L+1L])
+???user??system?elapsed
+???0.08????0.05????0.13
+>?L?<-?rep(NA,?10^7)
+>?system.time(as.character(L))
+???user??system?elapsed
+???0.11????0.00????0.11
+>?system.time(c("FALSE",?"TRUE")[L+1])
+???user??system?elapsed
+???0.16????0.06????0.22
+>?system.time(c("FALSE",?"TRUE")[L+1L])
+???user??system?elapsed
+???0.09????0.03????0.12
+
+`as.character`?of?a?logical?vector?that?is?all?NA?is?fast?enough.?It?appears?that?the?call?to?'formatLogical'?inside?the?C?function?'StringFromLogical'?does?not?introduce?much?slowdown.
+
+I?found?that?using?string?literal?inside?the?C?function?'StringFromLogical',?by?replacing
+EncodeLogical(x,?w)
+with
+x???"TRUE"?:?"FALSE"
+(and?the?call?to?'formatLogical'?is?not?needed?anymore),?make?it?faster.
+
+Alternatively,?"fast?path"?could?be?introduced?in?'EncodeLogical', potentially also benefits format() in R.?For?example,?without?replacing?existing?code,?the?following?fragment?could?be?inserted.
+
+????if(x?==?NA_LOGICAL)?{if(w?==?R_print.na_width)?return?CHAR(R_print.na_string);}
+????else?if(x)?{if(w?==?4)?return?"TRUE";}
+????else?{if(w?==?5)?return?"FALSE";}
+
+However,?with?either?of?them,?c("FALSE",?"TRUE")[L+1L]?is?still?faster?than?as.character(L)?.
+
+Precomputing?or?caching?possible?results?of?the?C?function?'StringFromLogical'?allows?as.character(L)?to?be?as?fast?as?c("FALSE",?"TRUE")[L+1L]?in?R. For example, 'StringFromLogical' could be changed to
+
+attribute_hidden?SEXP?StringFromLogical(int?x,?int?*warn)
+{
+    static SEXP TrueCh, FalseCh;
+????if?(x?==?NA_LOGICAL)?return?NA_STRING;
+????else?if (x) return TrueCh ? TrueCh : (TrueCh = mkChar("TRUE"));
+    else return FalseCh ? FalseCh : (FalseCh = mkChar("FALSE"));
+}
+
+----------------
+On?21?Mar?2025,?at?8:26,?Karolis?Koncevi?ius?wrote:
+
+>?[You?don't?often?get?email?from?karolis.koncevicius?using?gmail.com.?Learn?why?this?is?important?at?https://aka.ms/LearnAboutSenderIdentification?]
+>
+>?I?was?calling?table()?on?some?long?logical?vectors?and?noticed?that?it?took?a?long?time.
+>
+>?Out?of?curiosity?I?checked?the?performance?of?table()?on?different?types,?and?had?some?unexpected?results:
+>
+>????C?<-?sample(c("yes",?"no"),?10^7,?replace?=?TRUE)
+>????F?<-?factor(sample(c("yes",?"no"),?10^7,?replace?=?TRUE))
+>????N?<-?sample(c(1,0),?10^7,?replace?=?TRUE)
+>????I?<-?sample(c(1L,0L),?10^7,?replace?=?TRUE)
+>????L?<-?sample(c(TRUE,?FALSE),?10^7,?replace?=?TRUE)
+>
+>????????????????????????????#?ordered?by?execution?time
+>????????????????????????????#??user??system?elapsed
+>????system.time(table(F))??#??0.088??0.006??0.093
+>????system.time(table(C))??#??0.208??0.017??0.224
+>????system.time(table(I))??#??0.242??0.019??0.261
+>????system.time(table(L))??#??0.665??0.015??0.680
+>????system.time(table(N))??#??1.771??0.019??1.791
+>
+>
+>?The?performance?for?Integers?and?specially?booleans?is?quite?surprising.
+>?After?investigating?the?source?of?table,?I?ended?up?on?the?reason?being??as.character()?:
+>
+>????system.time(as.character(L))
+>??????user??system?elapsed
+>????0.461??0.002??0.462
+>
+>?Even?a?manual?conversion?can?achieve?a?speed-up?by?a?factor?of?~7:
+>
+>????system.time(c("FALSE",?"TRUE")[L+1])
+>??????user??system?elapsed
+>????0.061??0.006??0.067
+>
+>
+>?Tested?on?4.4.3?as?well?as?devel?trunk.
+>
+>?Just?reporting?for?comments?and?attention.
+>?Karolis?K.
+>?______________________________________________
+>?R-devel?using?r-project.org?mailing?list
+>?https://stat.ethz.ch/mailman/listinfo/r-devel
+
+
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Thu Apr 10 17:53:58 2025
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Thu, 10 Apr 2025 17:53:58 +0200
+Subject: [Rd] table() and as.character() performance for logical values
+In-Reply-To: <2092175466.123741.1744271584635@mail.yahoo.com>
+References: <2092175466.123741.1744271584635.ref@mail.yahoo.com>
+ <2092175466.123741.1744271584635@mail.yahoo.com>
+Message-ID: <26615.59798.376511.472793@stat.math.ethz.ch>
+
+>>>>> Suharto Anggono Suharto Anggono via R-devel 
+>>>>>     on Thu, 10 Apr 2025 07:53:04 +0000 (UTC) writes:
+
+    > Chain of calls of C functions in coerce.c for as.character(<logical>) in R:
+
+    > do_asatomic
+    > ascommon
+    > coerceVector
+    > coerceToString
+    > StringFromLogical (for each element)
+
+    > The definition of 'StringFromLogical' in coerce.c :
+
+    > Chain of calls of C functions in coerce.c for as.character(<logical>) in R:
+    > 
+    > do_asatomic
+    > ascommon
+    > coerceVector
+    > coerceToString
+    > StringFromLogical (for each element)
+    > 
+    > The definition of 'StringFromLogical' in coerce.c :
+    > 
+    > attribute_hidden SEXP StringFromLogical(int x, int *warn)
+    > {
+    >     int w;
+    >     formatLogical(&x, 1, &w);
+    >     if (x == NA_LOGICAL) return NA_STRING;
+    >     else return mkChar(EncodeLogical(x, w));
+    > }
+    > 
+    > The definition of 'EncodeLogical' in printutils.c :
+    > 
+    > const char *EncodeLogical(int x, int w)
+    > {
+    >     static char buff[NB];
+    >     if(x == NA_LOGICAL) snprintf(buff, NB, "%*s", min(w, (NB-1)), CHAR(R_print.na_string));
+    >     else if(x) snprintf(buff, NB, "%*s", min(w, (NB-1)), "TRUE");
+    >     else snprintf(buff, NB, "%*s", min(w, (NB-1)), "FALSE");
+    >     buff[NB-1] = '\0';
+    >     return buff;
+    > }
+    > 
+    > > L <- sample(c(TRUE, FALSE), 10^7, replace = TRUE)
+    > > system.time(as.character(L))
+    >    user  system elapsed
+    >    2.69    0.02    2.73
+    > > system.time(c("FALSE", "TRUE")[L+1])
+    >    user  system elapsed
+    >    0.15    0.04    0.20
+    > > system.time(c("FALSE", "TRUE")[L+1L])
+    >    user  system elapsed
+    >    0.08    0.05    0.13
+    > > L <- rep(NA, 10^7)
+    > > system.time(as.character(L))
+    >    user  system elapsed
+    >    0.11    0.00    0.11
+    > > system.time(c("FALSE", "TRUE")[L+1])
+    >    user  system elapsed
+    >    0.16    0.06    0.22
+    > > system.time(c("FALSE", "TRUE")[L+1L])
+    >    user  system elapsed
+    >    0.09    0.03    0.12
+    > 
+    > `as.character` of a logical vector that is all NA is fast enough. 
+    > It appears that the call to 'formatLogical' inside > the C function
+    > 'StringFromLogical' does not introduce much     > slowdown. 
+
+
+    > I found that using string literal inside the C function 'StringFromLogical', by replacing
+    > EncodeLogical(x, w)
+    > with
+    > x ? "TRUE" : "FALSE"
+    > (and the call to 'formatLogical' is not needed anymore), make it faster.
+
+indeed! ... and we also notice that the 'w' argument is neither
+needed anymore, and that makes sense: At this point when you
+know you have a an R logical value there are only three
+possibilities and no reason ever to warn about the conversion.
+
+    > Alternatively, 
+or in addition !
+
+    > "fast path" could be introduced in 'EncodeLogical', potentially also benefits format() in R. 
+    > For example, without replacing existing code, the following fragment could be inserted.
+    > 
+    >     if(x == NA_LOGICAL) {if(w == R_print.na_width) return CHAR(R_print.na_string);}
+    >     else if(x) {if(w == 4) return "TRUE";}
+    >     else {if(w == 5) return "FALSE";}
+    > 
+    > However, with either of them, c("FALSE", "TRUE")[L+1L] is still faster than as.character(L) .
+    > 
+    > Precomputing or caching possible results of the C function 'StringFromLogical' allows as.character(L) to be as fast as c("FALSE", "TRUE")[L+1L] in R. For example, 'StringFromLogical' could be changed to
+    > 
+    > attribute_hidden SEXP StringFromLogical(int x, int *warn)
+    > {
+    >     static SEXP TrueCh, FalseCh;
+    >     if (x == NA_LOGICAL) return NA_STRING;
+    >     else if (x) return TrueCh ? TrueCh : (TrueCh = mkChar("TRUE"));
+    >     else return FalseCh ? FalseCh : (FalseCh = mkChar("FALSE"));
+    > }
+
+Indeed, and something along this line (storing the other two constant strings) was also 
+my thought when seeing the
+   mkChar(x ? "TRUE" : "FALSE)
+you implicitly proposed above.
+
+I'm looking into applying both speedups;
+thank you very much, Suharto!
+
+Martin
+
+
+--
+Martin Maechler
+ETH Zurich  and  R Core team
+
+
