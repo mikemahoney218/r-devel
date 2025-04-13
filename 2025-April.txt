@@ -5637,3 +5637,167 @@ Tomas
 > https://stat.ethz.ch/mailman/listinfo/r-devel
 
 
+From @uh@rto_@nggono @end|ng |rom y@hoo@com  Sat Apr 12 10:27:26 2025
+From: @uh@rto_@nggono @end|ng |rom y@hoo@com (Suharto Anggono Suharto Anggono)
+Date: Sat, 12 Apr 2025 08:27:26 +0000 (UTC)
+Subject: [Rd] table() and as.character() performance for logical values
+In-Reply-To: <26615.59798.376511.472793@stat.math.ethz.ch>
+References: <2092175466.123741.1744271584635.ref@mail.yahoo.com>
+ <2092175466.123741.1744271584635@mail.yahoo.com>
+ <26615.59798.376511.472793@stat.math.ethz.ch>
+Message-ID: <670861846.967390.1744446446068@mail.yahoo.com>
+
+For NA case (x == NA_LOGICAL), if R_print.na_width > NB-1 , the "fast path" for 'EncodeLogical' that I propose previously behaves differently from the general case that truncates at (NB-1).
+
+To be consistent with the general case,
+if(w == R_print.na_width)
+can be replaced with
+if(w == R_print.na_width && w <= NB-1)
+or
+if(min(w, (NB-1)) == R_print.na_width)
+
+Or, just remove the "fast path" for NA case. For example, replace
+
+? ?if(x == NA_LOGICAL) {if(w == R_print.na_width) return CHAR(R_print.na_string);}
+
+with
+
+? ?if(x == NA_LOGICAL) ;
+
+
+By the way, the comment in 'formatLogical' implies that 5 "is the widest it can be, so stop". It is not true if R_print.na_width > 5 .
+
+The output of
+print(c(FALSE, NA), na.print = "******")
+is not as it should be.
+
+
+
+
+----------------
+On Thursday, 10 April 2025 at 10:54:03 pm GMT+7, Martin Maechler <maechler at stat.math.ethz.ch> wrote: 
+
+
+
+
+
+>>>>> Suharto Anggono Suharto Anggono via R-devel 
+>>>>>? ? on Thu, 10 Apr 2025 07:53:04 +0000 (UTC) writes:
+
+? ? > Chain of calls of C functions in coerce.c for as.character(<logical>) in R:
+
+? ? > do_asatomic
+? ? > ascommon
+? ? > coerceVector
+? ? > coerceToString
+? ? > StringFromLogical (for each element)
+
+? ? > The definition of 'StringFromLogical' in coerce.c :
+
+? ? > Chain of calls of C functions in coerce.c for as.character(<logical>) in R:
+? ? > 
+? ? > do_asatomic
+? ? > ascommon
+? ? > coerceVector
+? ? > coerceToString
+? ? > StringFromLogical (for each element)
+? ? > 
+? ? > The definition of 'StringFromLogical' in coerce.c :
+? ? > 
+? ? > attribute_hidden SEXP StringFromLogical(int x, int *warn)
+? ? > {
+? ? >? ? int w;
+? ? >? ? formatLogical(&x, 1, &w);
+? ? >? ? if (x == NA_LOGICAL) return NA_STRING;
+? ? >? ? else return mkChar(EncodeLogical(x, w));
+? ? > }
+? ? > 
+? ? > The definition of 'EncodeLogical' in printutils.c :
+? ? > 
+? ? > const char *EncodeLogical(int x, int w)
+? ? > {
+? ? >? ? static char buff[NB];
+? ? >? ? if(x == NA_LOGICAL) snprintf(buff, NB, "%*s", min(w, (NB-1)), CHAR(R_print.na_string));
+? ? >? ? else if(x) snprintf(buff, NB, "%*s", min(w, (NB-1)), "TRUE");
+? ? >? ? else snprintf(buff, NB, "%*s", min(w, (NB-1)), "FALSE");
+? ? >? ? buff[NB-1] = '\0';
+? ? >? ? return buff;
+? ? > }
+? ? > 
+? ? > > L <- sample(c(TRUE, FALSE), 10^7, replace = TRUE)
+? ? > > system.time(as.character(L))
+? ? >? ? user? system elapsed
+? ? >? ? 2.69? ? 0.02? ? 2.73
+? ? > > system.time(c("FALSE", "TRUE")[L+1])
+? ? >? ? user? system elapsed
+? ? >? ? 0.15? ? 0.04? ? 0.20
+? ? > > system.time(c("FALSE", "TRUE")[L+1L])
+? ? >? ? user? system elapsed
+? ? >? ? 0.08? ? 0.05? ? 0.13
+? ? > > L <- rep(NA, 10^7)
+? ? > > system.time(as.character(L))
+? ? >? ? user? system elapsed
+? ? >? ? 0.11? ? 0.00? ? 0.11
+? ? > > system.time(c("FALSE", "TRUE")[L+1])
+? ? >? ? user? system elapsed
+? ? >? ? 0.16? ? 0.06? ? 0.22
+? ? > > system.time(c("FALSE", "TRUE")[L+1L])
+? ? >? ? user? system elapsed
+? ? >? ? 0.09? ? 0.03? ? 0.12
+? ? > 
+? ? > `as.character` of a logical vector that is all NA is fast enough. 
+? ? > It appears that the call to 'formatLogical' inside > the C function
+? ? > 'StringFromLogical' does not introduce much? ? > slowdown. 
+
+
+? ? > I found that using string literal inside the C function 'StringFromLogical', by replacing
+? ? > EncodeLogical(x, w)
+? ? > with
+? ? > x ? "TRUE" : "FALSE"
+? ? > (and the call to 'formatLogical' is not needed anymore), make it faster.
+
+indeed! ... and we also notice that the 'w' argument is neither
+needed anymore, and that makes sense: At this point when you
+know you have a an R logical value there are only three
+possibilities and no reason ever to warn about the conversion.
+
+? ? > Alternatively, 
+or in addition !
+
+
+? ? > "fast path" could be introduced in 'EncodeLogical', potentially also benefits format() in R. 
+? ? > For example, without replacing existing code, the following fragment could be inserted.
+? ? > 
+? ? >? ? if(x == NA_LOGICAL) {if(w == R_print.na_width) return CHAR(R_print.na_string);}
+? ? >? ? else if(x) {if(w == 4) return "TRUE";}
+? ? >? ? else {if(w == 5) return "FALSE";}
+? ? > 
+? ? > However, with either of them, c("FALSE", "TRUE")[L+1L] is still faster than as.character(L) .
+? ? > 
+? ? > Precomputing or caching possible results of the C function 'StringFromLogical' allows as.character(L) to be as fast as c("FALSE", "TRUE")[L+1L] in R. For example, 'StringFromLogical' could be changed to
+? ? > 
+? ? > attribute_hidden SEXP StringFromLogical(int x, int *warn)
+? ? > {
+? ? >? ? static SEXP TrueCh, FalseCh;
+? ? >? ? if (x == NA_LOGICAL) return NA_STRING;
+? ? >? ? else if (x) return TrueCh ? TrueCh : (TrueCh = mkChar("TRUE"));
+? ? >? ? else return FalseCh ? FalseCh : (FalseCh = mkChar("FALSE"));
+
+? ? > }
+
+Indeed, and something along this line (storing the other two constant strings) was also 
+my thought when seeing the
+? mkChar(x ? "TRUE" : "FALSE)
+you implicitly proposed above.
+
+I'm looking into applying both speedups;
+thank you very much, Suharto!
+
+Martin
+
+
+--
+Martin Maechler
+ETH Zurich? and? R Core team
+
+
