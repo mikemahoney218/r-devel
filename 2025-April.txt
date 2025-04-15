@@ -5937,3 +5937,394 @@ Office: A 4.23
 Email: pd.mes at cbs.dk  Priv: PDalgd at gmail.com
 
 
+From m@ech|er @end|ng |rom @t@t@m@th@ethz@ch  Mon Apr 14 11:41:37 2025
+From: m@ech|er @end|ng |rom @t@t@m@th@ethz@ch (Martin Maechler)
+Date: Mon, 14 Apr 2025 11:41:37 +0200
+Subject: [Rd] table() and as.character() performance for logical values
+In-Reply-To: <670861846.967390.1744446446068@mail.yahoo.com>
+References: <2092175466.123741.1744271584635.ref@mail.yahoo.com>
+ <2092175466.123741.1744271584635@mail.yahoo.com>
+ <26615.59798.376511.472793@stat.math.ethz.ch>
+ <670861846.967390.1744446446068@mail.yahoo.com>
+Message-ID: <26620.55377.357212.82172@stat.math.ethz.ch>
+
+>>>>> Suharto Anggono Suharto Anggono 
+>>>>>     on Sat, 12 Apr 2025 08:27:26 +0000 (UTC) writes:
+
+    > For NA case (x == NA_LOGICAL), if R_print.na_width > NB-1 , the "fast path" for 'EncodeLogical' that I propose previously behaves differently from the general case that truncates at (NB-1).
+
+Yes; OTOH, NB = 1000  and as you mention below and show a nice
+example,  other parts of the current R sources assume that a
+logical never needs more than width 5.
+
+I think we really should check for  R_print.na_width   anyway
+and signal an error, typically from the C code called by R's
+    print.default(..., na.print = "<na_string>"),
+when it is "too large" .. which we'd need to define.
+Personally I cannot imagine a reasonable example that would use
+an NA print string longer than say 15 (= 2^4 -1 , otherwiese
+still somewhat arbitrary).
+
+    > To be consistent with the general case,
+    > if(w == R_print.na_width)
+    > can be replaced with
+    > if(w == R_print.na_width && w <= NB-1)
+    > or
+    > if(min(w, (NB-1)) == R_print.na_width)
+
+    > Or, just remove the "fast path" for NA case. For example, replace
+
+    > ? ?if(x == NA_LOGICAL) {if(w == R_print.na_width) return CHAR(R_print.na_string);}
+
+    > with
+
+    > ? ?if(x == NA_LOGICAL) ;
+
+
+    > By the way, the comment in 'formatLogical' implies that 5 "is the widest it can be, so stop". It is not true if R_print.na_width > 5 .
+
+    > The output of
+    > print(c(FALSE, NA), na.print = "******")
+    > is not as it should be.
+
+Indeed (and this has been the case "always" in R); I think this
+itself is an (almost unrelated) inconsistecy to be
+fixed by preventing too long NA print strings.
+
+Martin
+
+    > ----------------
+    > On Thursday, 10 April 2025 at 10:54:03 pm GMT+7, Martin Maechler <maechler at stat.math.ethz.ch> wrote: 
+
+
+>>>>> Suharto Anggono Suharto Anggono via R-devel 
+    >>>>>>     on Thu, 10 Apr 2025 07:53:04 +0000 (UTC) writes:
+
+    >     > Chain of calls of C functions in coerce.c for as.character(<logical>) in R:
+
+    >     > do_asatomic
+    >     > ascommon
+    >     > coerceVector
+    >     > coerceToString
+    >     > StringFromLogical (for each element)
+
+    >     > The definition of 'StringFromLogical' in coerce.c :
+
+[.....]
+
+
+From tdhock5 @end|ng |rom gm@||@com  Mon Apr 14 14:10:56 2025
+From: tdhock5 @end|ng |rom gm@||@com (Toby Hocking)
+Date: Mon, 14 Apr 2025 14:10:56 +0200
+Subject: [Rd] R does not build with conda libcurl
+Message-ID: <CALK03d2s7ssS9SELvLedHA0tUkcyqaEJu_0G9p7yAPtoM1WKzA@mail.gmail.com>
+
+Hi all,
+I'm not sure if this is an issue with conda or R.
+I expected that I should be able to build R from source, with a conda
+environment active.
+However, I observe that with conda 23.9.0, in an environment with libcurl
+package installed, I get a link error.
+The configure works fine:
+
+(base) hoct2726 at dinf-thock-02i:~/R/R-4.5.0$ ./configure --prefix=$HOME
+--with-cairo --with-blas --with-lapack --enable-R-shlib
+--with-valgrind-instrumentation=2 --enable-memory-profiling
+...
+R is now configured for x86_64-pc-linux-gnu
+
+  Source directory:            .
+  Installation directory:      /home/local/USHERBROOKE/hoct2726
+
+  C compiler:                  gcc -std=gnu2x  -g -O2
+  Fortran fixed-form compiler: gfortran  -g -O2
+
+  Default C++ compiler:        g++ -std=gnu++17  -g -O2
+  Fortran free-form compiler:  gfortran  -g -O2
+  Obj-C compiler:
+
+  Interfaces supported:        X11, tcltk
+  External libraries:          pcre2, readline, BLAS(generic),
+LAPACK(generic), curl, libdeflate
+  Additional capabilities:     PNG, JPEG, TIFF, NLS, cairo, ICU
+  Options enabled:             shared R library, R profiling, memory
+profiling, libdeflate for lazyload
+
+  Capabilities skipped:
+  Options not enabled:         shared BLAS
+
+  Recommended packages:        yes
+
+
+
+but I got an error from "make" --
+
+(base) hoct2726 at dinf-thock-02i:~/R/R-4.5.0$ make
+...
+make[3] : on entre dans le r?pertoire
+? /home/local/USHERBROOKE/hoct2726/R/R-4.5.0/src/main ?
+gcc -std=gnu2x -I../../src/extra -I../../src/extra/xdr -I.
+-I../../src/include -I../../src/include
+-I/home/local/USHERBROOKE/hoct2726/miniconda3/include -I/usr/local/include
+-I../../src/nmath -DHAVE_CONFIG_H   -fopenmp -fpic  -g -O2  -c Rmain.c -o
+Rmain.o
+gcc -std=gnu2x -Wl,--export-dynamic -fopenmp  -L"../../lib"
+-L/usr/local/lib -o R.bin Rmain.o  -lR
+/usr/bin/ld : ../../lib/libR.so : r?f?rence ind?finie vers
+? ucol_setAttribute_73 ?
+/usr/bin/ld : ../../lib/libR.so : r?f?rence ind?finie vers ? ucol_close_73 ?
+/usr/bin/ld : ../../lib/libR.so : r?f?rence ind?finie vers ? ucol_open_73 ?
+/usr/bin/ld : ../../lib/libR.so : r?f?rence ind?finie vers
+? uiter_setUTF8_73 ?
+/usr/bin/ld : ../../lib/libR.so : r?f?rence ind?finie vers
+? ucol_getLocaleByType_73 ?
+/usr/bin/ld : ../../lib/libR.so : r?f?rence ind?finie vers
+? ucol_setStrength_73 ?
+/usr/bin/ld : ../../lib/libR.so : r?f?rence ind?finie vers
+? u_versionToString_73 ?
+/usr/bin/ld : ../../lib/libR.so : r?f?rence ind?finie vers
+? ucol_strcollIter_73 ?
+/usr/bin/ld : ../../lib/libR.so : r?f?rence ind?finie vers
+? uloc_setDefault_73 ?
+/usr/bin/ld : ../../lib/libR.so : r?f?rence ind?finie vers
+? u_getVersion_73 ?
+collect2: error: ld returned 1 exit status
+make[3]: *** [Makefile:150 : R.bin] Erreur 1
+make[3] : on quitte le r?pertoire
+? /home/local/USHERBROOKE/hoct2726/R/R-4.5.0/src/main ?
+make[2]: *** [Makefile:141 : R] Erreur 2
+make[2] : on quitte le r?pertoire
+? /home/local/USHERBROOKE/hoct2726/R/R-4.5.0/src/main ?
+make[1]: *** [Makefile:28 : R] Erreur 1
+make[1] : on quitte le r?pertoire
+? /home/local/USHERBROOKE/hoct2726/R/R-4.5.0/src ?
+make: *** [Makefile:61 : R] Erreur 1
+
+
+It seems that the libcurl package in conda provides the curl-config command
+line program, which R is using to get this flag:
+-I/home/local/USHERBROOKE/hoct2726/miniconda3/include
+(it goes into CURL_CPPFLAGS variable in config.status)
+To fix the build, I did "conda remove libcurl" and then "make clean" and
+then "configure" and "make" worked.
+
+It would be more user-friendly if the R build could "just work" even when
+the user has activated a conda environment with libcurl package installed.
+Is this an issue that R could fix?
+
+Thanks
+Toby
+
+	[[alternative HTML version deleted]]
+
+
+From |kry|ov @end|ng |rom d|@root@org  Mon Apr 14 15:42:35 2025
+From: |kry|ov @end|ng |rom d|@root@org (Ivan Krylov)
+Date: Mon, 14 Apr 2025 16:42:35 +0300
+Subject: [Rd] R does not build with conda libcurl
+In-Reply-To: <CALK03d2s7ssS9SELvLedHA0tUkcyqaEJu_0G9p7yAPtoM1WKzA@mail.gmail.com>
+References: <CALK03d2s7ssS9SELvLedHA0tUkcyqaEJu_0G9p7yAPtoM1WKzA@mail.gmail.com>
+Message-ID: <20250414164235.251200dc@arachnoid>
+
+On Mon, 14 Apr 2025 14:10:56 +0200
+Toby Hocking <tdhock5 at gmail.com> wrote:
+
+> /usr/bin/ld : ../../lib/libR.so : r?f?rence ind?finie vers
+> ? u_getVersion_73 ?
+
+Strange that it's complaining about symbols from libicu when the
+problem is due to libcurl-related flags. What was the command line used
+to link libR.so somewhere above in the log? I think it's not being
+correctly linked with libicu, but since shared libraries are allowed to
+have undefined imports in them, this is only found out later, when
+linking the R.bin executable.
+
+> It seems that the libcurl package in conda provides the curl-config
+> command line program, which R is using to get this flag:
+> -I/home/local/USHERBROOKE/hoct2726/miniconda3/include
+
+With libcurl installed from conda, what do the following commands print?
+
+curl-config --built-shared
+curl-config --static-libs
+curl-config --libs
+
+> To fix the build, I did "conda remove libcurl" and then "make clean"
+> and then "configure" and "make" worked.
+
+It should also be possible to override the path to curl-config using
+the CURL_CONFIG environment variable.
+
+-- 
+Best regards,
+Ivan
+
+
+From bbo|ker @end|ng |rom gm@||@com  Mon Apr 14 23:49:42 2025
+From: bbo|ker @end|ng |rom gm@||@com (Ben Bolker)
+Date: Mon, 14 Apr 2025 17:49:42 -0400
+Subject: [Rd] 
+ Request for comment: namespace resolution in terms(<formula>,
+ specials=) [<pkg>::<name>, etc.]
+In-Reply-To: <83150b0c-eb4e-4c02-a15f-89311a78cd21@gmail.com>
+References: <83150b0c-eb4e-4c02-a15f-89311a78cd21@gmail.com>
+Message-ID: <bcabd6c0-9462-417c-8b97-d32d283c6d98@gmail.com>
+
+   I don't have any concerns about these changes, don't see any need to 
+preserve the old behaviour.
+
+   In lme4 and glmmTMB (and now broken out into a separate `reformulas` 
+package, I do this the hard way, walking down the parse trees of formula 
+objects and looking for specials, and not using the functionality here.
+
+   Mikael showed how I could use the *new* functionality instead:
+
+https://github.com/bbolker/reformulas/issues/4
+
+but honestly if I were going to change things in `reformulas` it would 
+be in the direction of streamlining and refactoring, not changing the 
+basic approach.
+
+   cheers
+    Ben Bolker
+
+
+On 2025-04-14 5:43 p.m., Mikael Jagan wrote:
+> [CC: maintainers of R packages survival, mgcv, lme4, RItools]
+> 
+> Dear R-devel subscribers,
+> 
+> If you have never used stats:::terms.formula or its 'specials' argument,
+> then feel free to stop reading or otherwise review help("terms.formula")
+> and help("terms.object").
+> 
+> Folks may have noticed a recent change in R-devel:
+> 
+>  ??? $ svn log -v -r 88066
+>      
+> ------------------------------------------------------------------------
+>  ??? r88066 | maechler | 2025-03-28 17:04:27 -0400 (Fri, 28 Mar 2025) | 
+> 1 line
+>  ??? Changed paths:
+>  ?????? M /trunk/doc/NEWS.Rd
+>  ?????? M /trunk/src/library/stats/src/model.c
+>  ?????? M /trunk/tests/reg-tests-1e.R
+> 
+>  ??? terms(<formula>, specials = "<non-syntactic>") now works
+>      
+> ------------------------------------------------------------------------
+> 
+> intended to resolve Bug 18568
+> 
+>  ??? https://bugs.r-project.org/show_bug.cgi?id=18568
+> 
+> which pointed out the following undesirable behaviour in R-release:
+> 
+>  ??? > attr(terms(~x1 +? s (x2, f) +? s (x3, g), specials = "s"), 
+> "specials")
+>  ??? $s
+>  ??? [1] 2 3
+> 
+>  ??? > attr(terms(~x1 + `|`(x2, f) + `|`(x3, g), specials = "|"), 
+> "specials")
+>  ??? $`|`
+>  ??? NULL
+> 
+> 
+> namely that non-syntactic names like "|" were not supported.  
+> Unfortunately,
+> the patch (r88066) broke one package on CRAN, RItools, which relied on the
+> following
+> 
+>  ??? > attr(terms(~x1 +? mgcv::s (x2, f), specials = "mgcv::s"), 
+> "specials")
+>  ??? $`mgcv::s`
+>  ??? [1] 2
+> 
+>  ??? > attr(terms(~x1 + `mgcv::s`(x2, f), specials = "mgcv::s"), 
+> "specials")
+>  ??? $`mgcv::s`
+>  ??? NULL
+> 
+> 
+> whereas in R-devel we see
+> 
+>  ??? > attr(terms(~x1 +? mgcv::s (x2, f), specials = "mgcv::s"), 
+> "specials")
+>  ??? $`mgcv::s`
+>  ??? NULL
+> 
+>  ??? > attr(terms(~x1 + `mgcv::s`(x2, f), specials = "mgcv::s"), 
+> "specials")
+>  ??? $`mgcv::s`
+>  ??? [1] 2
+> 
+> 
+> A strict interpretation of 'specials' as a list of *name*s of functions 
+> would
+> suggest that the old behaviour was "wrong" (and accidental, predating 
+> package
+> namespaces altogether) and that the new behaviour is "right".? After all,
+> `mgcv::s` (with backticks) is a name (of type "symbol", class "name") 
+> whereas
+> mgcv::s (without backticks) is a call (of type "language", class "call").
+> 
+> Martin and I are requesting comments from the community, especially R-core
+> members and package authors who use 'specials', on the following:
+> 
+>  ??? 1. Should the previous (long standing but undocumented, likely 
+> rarely used)
+>  ?????? behaviour be preserved going forward?
+>  ??? 2. If we pursue a more *robust* implementation of namespace 
+> resolution by
+>  ?????? stats:::terms.formula, not relying on details of how non- 
+> syntactic names
+>  ?????? are deparsed, then what should that look like?
+> 
+> (I say "likely rarely used" because stats:::terms.formula is called 
+> primarily by
+>  ?package *authors* to parse formulas of package *users*.? Only a subset 
+> of those
+>  ?packages will set 'specials', only a subset of *those* packages will set
+>  ?specials="<pkg>::<name>", and only one such package is known to be 
+> broken due
+>  ?to r88066.)
+> 
+> Relevant to (2) is an earlier thread
+> 
+>  ??? https://stat.ethz.ch/pipermail/r-devel/2025-March/083906.html
+> 
+> in which I proposed that we make use of an optional 'package' attribute of
+> 'specials', so that
+> 
+>  ??? specials = structure(c("s", "s"), package = c("", "mgcv"))
+> 
+> would match calls s(...) and mgcv::s(...) separately.? This attribute 
+> would be
+> preserved by the 'specials' component of the 'terms' object, e.g.,
+> 
+>  ??? > attr(terms(~x1 + s(x2, f) + mgcv::s(x3, g),
+>  ??? +??????????? specials = structure(c("s", "s"), package = c("", 
+> "mgcv"))),
+>  ??? +????? "specials")
+>  ??? $s
+>  ??? [1] 2
+> 
+>  ??? $s
+>  ??? [1] 3
+> 
+>  ??? attr(,"package")
+>  ??? [1] ""???? "mgcv"
+> 
+> A patch against R-devel (at r88141) implementing this proposal is attached.
+> 
+> Mikael
+
+-- 
+Dr. Benjamin Bolker
+Professor, Mathematics & Statistics and Biology, McMaster University
+Director, School of Computational Science and Engineering
+ > E-mail is sent at my convenience; I don't expect replies outside of 
+working hours.
+
+
